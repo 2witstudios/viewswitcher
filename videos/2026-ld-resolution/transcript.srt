@@ -1,0 +1,768 @@
+1
+00:00:00,000 --> 00:00:05,840
+ Okay, so I wanted to talk a little bit about the NCFCA LD resolution because it's a perfect
+
+2
+00:00:05,840 --> 00:00:10,440
+ example of a poorly worded resolution that kind of inevitably leads to awkward and confusing
+
+3
+00:00:10,440 --> 00:00:11,440
+ debates.
+
+4
+00:00:11,440 --> 00:00:15,720
+ But by analyzing the wording of the resolution, we'll cover one, debating from first principles
+
+5
+00:00:15,720 --> 00:00:20,440
+ like what debate actually is beneath the jargon, two, like how to interpret resolutions and
+
+6
+00:00:20,440 --> 00:00:24,280
+ three, why burdens determine like the wind conditions.
+
+7
+00:00:24,280 --> 00:00:29,900
+ So the NCFCA resolution is resolved, it is just for a criminal justice system to value
+
+8
+00:00:29,900 --> 00:00:33,040
+ retribution over rehabilitation.
+
+9
+00:00:33,040 --> 00:00:38,000
+ It is just for a criminal justice system to value retribution over rehabilitation.
+
+10
+00:00:38,000 --> 00:00:41,740
+ And before we get into the issues I have with this resolution, let's talk about like what
+
+11
+00:00:41,740 --> 00:00:43,240
+ debate is.
+
+12
+00:00:43,240 --> 00:00:47,680
+ At the end of the day, no matter what the style of debate you compete in, debate comes down
+
+13
+00:00:47,680 --> 00:00:54,260
+ to, this is the resolution, it is true because of my thesis and my thesis is true because
+
+14
+00:00:54,260 --> 00:00:55,260
+ of these warrants.
+
+15
+00:00:55,260 --> 00:01:01,280
+ Again, all debate, all competitive debate comes down to this resolution is true because
+
+16
+00:01:01,280 --> 00:01:04,640
+ of my thesis and my thesis is true because of these warrants.
+
+17
+00:01:04,640 --> 00:01:08,440
+ And when we forget that this is what debate is, we begin performing the words without
+
+18
+00:01:08,440 --> 00:01:13,640
+ understanding the purpose, definitions, resolution analysis, burdens, weighing mechanisms, values,
+
+19
+00:01:13,640 --> 00:01:16,480
+ criterians, what do they all actually mean, right?
+
+20
+00:01:16,480 --> 00:01:20,280
+ We teach that evidence alone does not make the argument and yet sometimes we miss that
+
+21
+00:01:20,280 --> 00:01:23,360
+ the jargon itself becomes evidence without substance.
+
+22
+00:01:23,360 --> 00:01:27,520
+ So let's break down what the resolution is like phrased by phrase.
+
+23
+00:01:27,520 --> 00:01:31,200
+ It's basically three phrases or four phrases, depending on how you want to break it up.
+
+24
+00:01:31,200 --> 00:01:35,360
+ But first, it is just, this is the initial moral claim and really what the resolution
+
+25
+00:01:35,360 --> 00:01:41,640
+ hinges on is we're asking the question, is it actually just to make this value, this value
+
+26
+00:01:41,640 --> 00:01:42,640
+ comparison?
+
+27
+00:01:42,640 --> 00:01:45,760
+ And then it's for a criminal justice system.
+
+28
+00:01:45,760 --> 00:01:46,760
+ This is the actor.
+
+29
+00:01:46,760 --> 00:01:51,280
+ So this is allows us to have some context for how we should define what justice is based
+
+30
+00:01:51,280 --> 00:01:53,820
+ on what the purpose of this actor is.
+
+31
+00:01:53,820 --> 00:02:00,520
+ And then finally, the moral claim of value, which is to value retribution over rehabilitation.
+
+32
+00:02:00,520 --> 00:02:05,680
+ It is just the moral claim for a criminal justice system, the actor, to value retribution
+
+33
+00:02:05,680 --> 00:02:07,680
+ over rehabilitation.
+
+34
+00:02:07,680 --> 00:02:10,000
+ Now, what actually has to be proved here?
+
+35
+00:02:10,000 --> 00:02:14,200
+ Well, that's the first thing we normally do after we read the resolution, right?
+
+36
+00:02:14,200 --> 00:02:16,200
+ We give the definitions.
+
+37
+00:02:16,200 --> 00:02:20,160
+ It should go without saying that the reason we define terms is because when I use a word
+
+38
+00:02:20,160 --> 00:02:24,340
+ and you use that same word, we may not actually mean the same thing.
+
+39
+00:02:24,340 --> 00:02:26,360
+ This is actually one of the biggest problems in society.
+
+40
+00:02:26,360 --> 00:02:31,400
+ We argue with each other without realizing that the underlying presuppositions that about
+
+41
+00:02:31,400 --> 00:02:33,600
+ reality are not the same.
+
+42
+00:02:33,600 --> 00:02:37,400
+ And so don't make the same mistake with LD because otherwise you're missing out on like
+
+43
+00:02:37,400 --> 00:02:39,200
+ the greatest lesson you can learn from it.
+
+44
+00:02:39,200 --> 00:02:41,520
+ This is what I mean by debating from first principles.
+
+45
+00:02:41,520 --> 00:02:45,640
+ A string of definitions, like it has much less use to the debate round if they cannot
+
+46
+00:02:45,640 --> 00:02:48,600
+ be synthesized into a thesis that affirms the resolution.
+
+47
+00:02:48,600 --> 00:02:50,600
+ Now, here's an example of that as the affirmative.
+
+48
+00:02:50,600 --> 00:02:52,120
+ So like the resolution is resolved.
+
+49
+00:02:52,120 --> 00:02:57,560
+ It is just for a criminal justice system to value retribution over rehabilitation.
+
+50
+00:02:57,560 --> 00:03:02,800
+ Just is defined as morally right to values defined as to consider more important.
+
+51
+00:03:02,800 --> 00:03:06,360
+ Retribution is defined as the philosophy that crime is a debt toward society and punishment
+
+52
+00:03:06,360 --> 00:03:08,520
+ is a payment of that crime.
+
+53
+00:03:08,520 --> 00:03:13,200
+ Rehabilitation is defined as the philosophy that treats crime as a disease that needs
+
+54
+00:03:13,200 --> 00:03:16,400
+ to be healed for the betterment of society.
+
+55
+00:03:16,400 --> 00:03:18,240
+ These are like very loose definitions.
+
+56
+00:03:18,240 --> 00:03:21,160
+ I wouldn't use these but I'm just trying to paint the picture.
+
+57
+00:03:21,160 --> 00:03:23,440
+ This debate is about what reflects justice better.
+
+58
+00:03:23,440 --> 00:03:27,280
+ This means that the definition of justice is what the debate is about.
+
+59
+00:03:27,280 --> 00:03:32,120
+ A lot of people say I don't like definition debate and I generally don't think they understand
+
+60
+00:03:32,120 --> 00:03:36,360
+ what value debate is or Lincoln Douglas debate is or really debate as a contract as a whole
+
+61
+00:03:36,360 --> 00:03:40,160
+ because definitions are the foundation of the framework.
+
+62
+00:03:40,160 --> 00:03:43,840
+ They determine whether or not your thesis is even valid or not or supports the resolution
+
+63
+00:03:43,840 --> 00:03:44,840
+ or not.
+
+64
+00:03:44,840 --> 00:03:47,280
+ So what is the resolution asking us to answer?
+
+65
+00:03:47,280 --> 00:03:51,320
+ If you say that it's asking us to answer the retribution not to be valued about rehabilitation,
+
+66
+00:03:51,320 --> 00:03:52,640
+ you would be wrong.
+
+67
+00:03:52,640 --> 00:03:57,120
+ The wording of this particular resolution is asking us what is just for a criminal justice
+
+68
+00:03:57,120 --> 00:03:59,200
+ system to operate from.
+
+69
+00:03:59,200 --> 00:04:03,600
+ So my thesis based on the definitions that I provided is it is morally right for a criminal
+
+70
+00:04:03,600 --> 00:04:08,320
+ justice system to prioritize punishing a criminal for their wrongdoing than restoring them to
+
+71
+00:04:08,320 --> 00:04:10,120
+ society.
+
+72
+00:04:10,120 --> 00:04:11,760
+ What does that look like in practice?
+
+73
+00:04:11,760 --> 00:04:16,040
+ Well it could mean that there are times even if a criminal could healthily be reintroduced
+
+74
+00:04:16,040 --> 00:04:22,000
+ back into society sooner that we would make them serve the full penalty and still be justified.
+
+75
+00:04:22,000 --> 00:04:28,560
+ That is just to allow or even force that criminal to face the entire penalty even if we could
+
+76
+00:04:28,560 --> 00:04:32,280
+ rehabilitate them into society sooner.
+
+77
+00:04:32,280 --> 00:04:37,160
+ So why do stating your thesis and knowing your thesis matter?
+
+78
+00:04:37,160 --> 00:04:39,600
+ Because you have to know what your burden is.
+
+79
+00:04:39,600 --> 00:04:40,600
+ What are burdens?
+
+80
+00:04:40,600 --> 00:04:41,760
+ They are the wind conditions.
+
+81
+00:04:41,760 --> 00:04:44,680
+ Your thesis in every argument is like a three leg table.
+
+82
+00:04:44,680 --> 00:04:48,840
+ It requires premises and warrants, assumptions to support or hold it up.
+
+83
+00:04:48,840 --> 00:04:52,760
+ If you remove even one of the legs, you no longer have a valid table.
+
+84
+00:04:52,760 --> 00:04:55,040
+ So here's why that's important.
+
+85
+00:04:55,040 --> 00:05:01,320
+ The negative has not actually proven the resolution false by saying both are just.
+
+86
+00:05:01,320 --> 00:05:06,960
+ Both are just can still include that retribution be valued over rehabilitation.
+
+87
+00:05:06,960 --> 00:05:11,080
+ If I say sometimes we should value retribution over rehabilitation and sometimes we should
+
+88
+00:05:11,080 --> 00:05:15,600
+ value rehabilitation over retribution, the statement that it is just to do the first
+
+89
+00:05:15,600 --> 00:05:17,440
+ has not been negated.
+
+90
+00:05:17,440 --> 00:05:21,160
+ Now the negative can argue that neither are just, and I'm not saying this is the best
+
+91
+00:05:21,160 --> 00:05:23,440
+ argument but I'm trying to get you to see how the logic works.
+
+92
+00:05:23,440 --> 00:05:28,520
+ If neither are just, then it cannot be just to value one over the other, right?
+
+93
+00:05:28,520 --> 00:05:33,680
+ If both are just, if valuing either higher situationally just, then it is entirely possible
+
+94
+00:05:33,680 --> 00:05:35,320
+ for the resolution to be true.
+
+95
+00:05:35,320 --> 00:05:38,840
+ So this is why the negative can't just run a balanced negative and say well both are actually
+
+96
+00:05:38,840 --> 00:05:44,280
+ good without making an extra claim that it is actually bad to ever value one over the
+
+97
+00:05:44,280 --> 00:05:45,280
+ other.
+
+98
+00:05:45,280 --> 00:05:48,720
+ Which is just kind of hard to argue because situationally, we make decisions all the time
+
+99
+00:05:48,720 --> 00:05:51,200
+ that prioritize one thing over another.
+
+100
+00:05:51,200 --> 00:05:53,040
+ We're trying to make a normative claim.
+
+101
+00:05:53,040 --> 00:05:56,800
+ And so that's why I think this resolution is worded poorly because it's very difficult
+
+102
+00:05:56,800 --> 00:05:58,480
+ for the negative.
+
+103
+00:05:58,480 --> 00:06:02,520
+ They do not have to prove that rehabilitation is better, but they do have to prove that
+
+104
+00:06:02,520 --> 00:06:07,880
+ choosing retribution over rehabilitation would not be just, right?
+
+105
+00:06:07,880 --> 00:06:13,000
+ The negative does not have to prove that rehabilitation is better, but they do have to prove that
+
+106
+00:06:13,000 --> 00:06:17,460
+ choosing retribution over rehabilitation would not be just.
+
+107
+00:06:17,460 --> 00:06:20,840
+ That's a moral or definitional claim about justice.
+
+108
+00:06:20,840 --> 00:06:24,600
+ And I think in an effort to try to center the debate around two forms of justice, the
+
+109
+00:06:24,600 --> 00:06:28,800
+ league actually just wrote a resolution that gave negative almost no, at least rhetorically
+
+110
+00:06:28,800 --> 00:06:30,400
+ reasonable ground to debate from.
+
+111
+00:06:30,400 --> 00:06:34,320
+ But here's a case that you can kind of think about as like how I would think about the
+
+112
+00:06:34,320 --> 00:06:36,400
+ negative or just one example of how to think about the negative.
+
+113
+00:06:36,400 --> 00:06:39,920
+ There's a kind of two point that I would make, I'm not saying make these your contentions,
+
+114
+00:06:39,920 --> 00:06:41,480
+ but just kind of hear the idea.
+
+115
+00:06:41,480 --> 00:06:44,080
+ The first point is that retribution is never fair.
+
+116
+00:06:44,080 --> 00:06:47,000
+ This idea of retribution is never fair.
+
+117
+00:06:47,000 --> 00:06:51,120
+ The idea that we can like proportionally assign a penalty for a crime is simply delusion.
+
+118
+00:06:51,120 --> 00:06:54,800
+ Like there's no moral code in the sky we can consult to decide how much we should punish
+
+119
+00:06:54,800 --> 00:06:55,800
+ a criminal for.
+
+120
+00:06:55,800 --> 00:06:58,360
+ Instead, we should measure justice based on utility.
+
+121
+00:06:58,360 --> 00:07:01,520
+ Like why preserve this idea of fairness when it can never be achieved in the first place?
+
+122
+00:07:01,520 --> 00:07:06,240
+ In fact, it actually leads to abuses, which is like the impact, which is like, for example,
+
+123
+00:07:06,240 --> 00:07:07,840
+ drug sentencing, right?
+
+124
+00:07:07,840 --> 00:07:12,240
+ Where political ideology and political motive can be the reason why certain sentences are
+
+125
+00:07:12,240 --> 00:07:15,120
+ high or low or enforced more or less.
+
+126
+00:07:15,120 --> 00:07:20,320
+ This actually allows for bad actors to do things in the name of being fair, or the name
+
+127
+00:07:20,320 --> 00:07:26,320
+ of being retributive, but because you can't actually measure what some one is actually,
+
+128
+00:07:26,320 --> 00:07:31,160
+ what penalty is actually should be given to a criminal, it just means that we're putting
+
+129
+00:07:31,160 --> 00:07:38,320
+ this subjective judgment into the hands of individuals in our legal system.
+
+130
+00:07:38,320 --> 00:07:42,880
+ When we could be basing it on something that's a lot more practical and verifiable, which
+
+131
+00:07:42,880 --> 00:07:48,400
+ is my second point, that rehabilitation provides achievable targets.
+
+132
+00:07:48,400 --> 00:07:50,560
+ Rehabilitation provides achievable targets.
+
+133
+00:07:50,560 --> 00:07:53,320
+ Justice should be defined by things we can actually live out in the real world.
+
+134
+00:07:53,320 --> 00:07:58,400
+ If we define justice by what good we can do for society by eliminating crime and developing
+
+135
+00:07:58,400 --> 00:08:02,480
+ healthy citizens, we can actually have metrics and goals we can hold our policies to.
+
+136
+00:08:02,480 --> 00:08:06,400
+ This is a better standard than a pie in the sky standard of whatever is proportional
+
+137
+00:08:06,400 --> 00:08:07,640
+ to the crime.
+
+138
+00:08:07,640 --> 00:08:08,880
+ What is proportional to the crime?
+
+139
+00:08:08,880 --> 00:08:10,240
+ Who gets to decide?
+
+140
+00:08:10,240 --> 00:08:14,280
+ This is why we need standards that are accountable to reality, like crime rates, like someone's
+
+141
+00:08:14,280 --> 00:08:19,040
+ likelihood to commit a crime again, like these are actually useful statistics.
+
+142
+00:08:19,040 --> 00:08:22,960
+ And then when people actually do commit crimes, again, we can then address them properly in
+
+143
+00:08:22,960 --> 00:08:25,200
+ order to, again, prevent more future crime.
+
+144
+00:08:25,200 --> 00:08:29,360
+ This is a much better way of thinking about justice, that justice, this idea that justice
+
+145
+00:08:29,360 --> 00:08:34,640
+ is about proportional sentencing, it sounds good until you realize that there's no such
+
+146
+00:08:34,640 --> 00:08:38,840
+ thing as proportional sentencing in the real world because no one actually knows what is
+
+147
+00:08:38,840 --> 00:08:41,480
+ proportional to each crime.
+
+148
+00:08:41,480 --> 00:08:44,040
+ That's kind of the approach that I would take as the negative, and that's just my first
+
+149
+00:08:44,040 --> 00:08:45,040
+ thoughts.
+
+150
+00:08:45,040 --> 00:08:46,040
+ I'm sure that there are other valid cases.
+
+151
+00:08:46,040 --> 00:08:50,680
+ There's a lot of different approaches you can take, but I generally think that a lot
+
+152
+00:08:50,680 --> 00:08:55,640
+ of the times the negatives in this season are going to provide cases that don't actually
+
+153
+00:08:55,640 --> 00:08:57,200
+ negate the resolution.
+
+154
+00:08:57,200 --> 00:09:01,440
+ And on the flip side, you're going to have affirmative teams that just define the resolution
+
+155
+00:09:01,440 --> 00:09:02,800
+ to be true by default as a truism.
+
+156
+00:09:02,800 --> 00:09:09,240
+ In fact, this is the round that I judged, the only LD round I've judged this year for
+
+157
+00:09:09,240 --> 00:09:14,320
+ NCFCA, the affirmative basically defined justice as giving people what they deserve, and then
+
+158
+00:09:14,320 --> 00:09:19,320
+ retribution is defined as giving people what they deserve, or what is proportionate to
+
+159
+00:09:19,320 --> 00:09:20,320
+ the crime.
+
+160
+00:09:20,320 --> 00:09:25,640
+ But that means the same thing, so you can't say it's just for retribution to be valued
+
+161
+00:09:25,640 --> 00:09:29,560
+ over rehabilitation because justice is retribution.
+
+162
+00:09:29,560 --> 00:09:33,800
+ You didn't actually prove anything anymore, you're just defining yourself into a win because
+
+163
+00:09:33,800 --> 00:09:38,720
+ you didn't realize that the debate itself is about how we should define justice.
+
+164
+00:09:38,720 --> 00:09:43,360
+ So this is why it has to be a definition debate, the resolution was framed as a definition
+
+165
+00:09:43,360 --> 00:09:46,640
+ debate about what is justice.
+
+166
+00:09:46,640 --> 00:09:51,200
+ You can't just kind of say that justice is the way that we think of justice in a retributive
+
+167
+00:09:51,200 --> 00:09:56,200
+ system, therefore retribution is more valuable because that's assuming the presuppositions
+
+168
+00:09:56,200 --> 00:09:57,200
+ of retribution.
+
+169
+00:09:57,200 --> 00:10:01,280
+ And so this is again why you have to think in terms of a table with three legs, like what
+
+170
+00:10:01,280 --> 00:10:06,240
+ actually requires, what is actually holding the argument up, what are the burdens.
+
+171
+00:10:06,240 --> 00:10:11,160
+ And on the flip side of that, that also means that if I know that my thesis is this three
+
+172
+00:10:11,160 --> 00:10:15,800
+ leg table, and these are the arguments that hold it up, that also means that I know what
+
+173
+00:10:15,800 --> 00:10:20,240
+ my opponent has to prove in order to make it not a table anymore, right?
+
+174
+00:10:20,240 --> 00:10:24,720
+ I know what arguments they have to prove to disprove the resolution because it's the
+
+175
+00:10:24,720 --> 00:10:29,960
+ same foundation or the same warrants or the same arguments that are holding up my thesis.
+
+176
+00:10:29,960 --> 00:10:33,720
+ So that's why understanding what your thesis is is so important is because it doesn't help
+
+177
+00:10:33,720 --> 00:10:35,640
+ you to understand your own arguments.
+
+178
+00:10:35,640 --> 00:10:39,160
+ It helps you understand what your opponent's arguments are too.
+
+179
+00:10:39,160 --> 00:10:42,440
+ Like if I am saying, it's kind of like an alibi, right?
+
+180
+00:10:42,440 --> 00:10:47,720
+ Like if I'm saying, if I'm being accused of a crime and it's like, well, this crime
+
+181
+00:10:47,720 --> 00:10:53,640
+ happened at the mall at 10 p.m., if I'm able to prove that I was actually somewhere else
+
+182
+00:10:53,640 --> 00:10:57,600
+ at 10 p.m., then I am not the one that committed the crime, right?
+
+183
+00:10:57,600 --> 00:11:02,360
+ That is the underlying leg of the argument that they're accusing me of committing this
+
+184
+00:11:02,360 --> 00:11:03,360
+ crime.
+
+185
+00:11:03,360 --> 00:11:07,920
+ And if you attack the presupposition or the warrant, which is, well, if you were there
+
+186
+00:11:07,920 --> 00:11:12,640
+ then you have committed the crime, then you've defeated the actual argument.
+
+187
+00:11:12,640 --> 00:11:15,840
+ This is how we need to understand our thesis and burdens when it comes to the resolution.
+
+188
+00:11:15,840 --> 00:11:19,960
+ I'm going to wrap this up because I feel like I'm now just kind of rambling, but I hope
+
+189
+00:11:19,960 --> 00:11:23,720
+ this helped you understand kind of how to interpret or think about debate a little bit
+
+190
+00:11:23,720 --> 00:11:28,160
+ differently and also how this resolution, how to think about what these words mean and
+
+191
+00:11:28,160 --> 00:11:33,960
+ how they build an argument and what actually has to be proven true or false to affirm or
+
+192
+00:11:33,960 --> 00:11:35,320
+ negate the resolution.
+
