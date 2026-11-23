@@ -70,7 +70,8 @@ post/            YouTube post pipeline (was daisy-video); see post/README.md
 ## Roadmap
 
 1. ~~Switcher, library, program page, OBS placement, skill~~ (this slice)
-2. Ask Claude from the switcher: a prompt on a scene runs headless Claude Code in the library
-3. Ink layer: InkCast Pencil drawing as a layer in `/program`
-4. Post pipeline on the Daisy brand (Fraunces / Instrument Sans, forest palette)
-5. Capacitor iPad app wrapping `apps/web`, with a native Pencil canvas
+2. Ink layer: InkCast Pencil drawing as a layer in `/program`
+3. Post pipeline on the Daisy brand (Fraunces / Instrument Sans, forest palette)
+4. Capacitor iPad app wrapping `apps/web`, with a native Pencil canvas
+
+Scenes are edited by talking to Claude Code (or any agent) in `~/Daisy Live Library`; its `daisy-scenes` skill covers the rules. The switcher only switches and organizes.
