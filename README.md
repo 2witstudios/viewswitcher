@@ -4,7 +4,7 @@ Everything for producing Daisy Debate video: **live** (scene switcher + OBS) and
 
 ## Live: how it works
 
-- Every on-air screen is a plain HTML file in the **Daisy Live Library** (`~/Daisy Live Library`, its own git repo).
+- Every on-air screen is a plain HTML file in the **Daisy Production Library** (`~/Daisy Production Library`, its own git repo).
 - The switcher (a web app on the Mac, opened on the iPad over Tailscale) shows the files as covers. Tap a cover to put it on air.
 - OBS has one scene with one browser source showing `/program`. Each scene file marks device boxes with `data-slot="Camera"` and similar. The server moves and crops those OBS sources into the boxes over obs-websocket.
 
@@ -15,7 +15,7 @@ OBS scene "Daisy Live"
 └─ Daisy Ground    color source #0d1812                             (bottom)
 ```
 
-Library layout, the stream-over-project override rule and the scene contract are in the library's skill: `~/Daisy Live Library/.claude/skills/daisy-scenes/SKILL.md`.
+Library layout, the stream-over-project override rule and the scene contract are in the library's skill: `~/Daisy Production Library/.claude/skills/daisy-scenes/SKILL.md`.
 
 ## Run it
 
@@ -30,7 +30,7 @@ Environment (all optional):
 
 | var | default |
 |---|---|
-| `DAISY_LIBRARY` | `~/Daisy Live Library` |
+| `DAISY_LIBRARY` | `~/Daisy Production Library` |
 | `PORT` | `7420` |
 | `HOST` | `127.0.0.1` (Tailscale serve proxies to it) |
 | `OBS_URL` / `OBS_PASSWORD` | `ws://127.0.0.1:4455` / none |
@@ -74,4 +74,4 @@ post/            YouTube post pipeline (was daisy-video); see post/README.md
 3. Post pipeline on the Daisy brand (Fraunces / Instrument Sans, forest palette)
 4. Capacitor iPad app wrapping `apps/web`, with a native Pencil canvas
 
-Scenes are edited by talking to Claude Code (or any agent) in `~/Daisy Live Library`; its `daisy-scenes` skill covers the rules. The switcher only switches and organizes.
+Scenes are edited by talking to Claude Code (or any agent) in `~/Daisy Production Library`; its `daisy-scenes` skill covers the rules. The switcher only switches and organizes.

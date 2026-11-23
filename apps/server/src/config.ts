@@ -6,7 +6,7 @@ const env = process.env;
 export const config = {
   port: Number(env.PORT ?? 7420),
   /** The content library agents edit: templates, assets, projects. */
-  library: resolve(env.DAISY_LIBRARY ?? join(homedir(), "Daisy Live Library")),
+  library: resolve(env.DAISY_LIBRARY ?? join(homedir(), "Daisy Production Library")),
   /** Built switcher/program SPA. */
   webDist: resolve(import.meta.dir, "../../web/dist"),
   obs: {
