@@ -1,0 +1,5 @@
+videos/*/build/
+__pycache__/
+*.pyc
+.DS_Store
+*.16k.wav
