@@ -37,9 +37,24 @@ const obs = new OBSClient({
     publishState();
   },
   onIdentified: () => {
-    if (lastSlots) applySlots(lastSlots.slots);
+    if (lastSlots) applyLatest();
   },
 }).start();
+
+// OBS placements run one at a time, and only the latest request is applied: overlapping
+// placements would interleave OBS requests and could leave sources from an older scene.
+let placementQueue = Promise.resolve();
+let placementSeq = 0;
+
+function applyLatest(): Promise<void> {
+  const seq = ++placementSeq;
+  placementQueue = placementQueue.then(async () => {
+    if (seq !== placementSeq || !lastSlots) return; // superseded
+    if (process.env.DAISY_LOG) console.log(`[place] ${lastSlots.path.split("/").slice(-2).join("/")}`);
+    await applySlots(lastSlots.slots);
+  });
+  return placementQueue;
+}
 
 async function applySlots(slots: Slot[]) {
   if (!obs.status.connected) {
@@ -85,6 +100,7 @@ async function api(req: Request, path: string): Promise<Response> {
   if (path === "/api/onair" && post) {
     const b = await body(req);
     inside(root, b.path);
+    if (process.env.DAISY_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
     state.onAir = { path: b.path, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
     state.warnings = [];
     await persist();
@@ -94,12 +110,15 @@ async function api(req: Request, path: string): Promise<Response> {
 
   if (path === "/api/program/slots" && post) {
     const b = await body(req);
-    if (b.path !== state.onAir?.path) return json({ ignored: true });
+    // Devices follow what the program page is *showing*, never what was just requested: the page
+    // always converges on the latest on-air scene, and its reports arrive in order, so the last
+    // placement always matches the final picture. (Ignoring "stale" reports here caused drift.)
+    if (process.env.DAISY_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
     const slots: Slot[] = (b.slots ?? []).map((s: Slot) => ({
       source: String(s.source), x: Number(s.x), y: Number(s.y), w: Number(s.w), h: Number(s.h),
     }));
     lastSlots = { path: b.path, slots };
-    await applySlots(slots);
+    await applyLatest();
     return json({ ok: true, warnings: state.warnings });
   }
 
