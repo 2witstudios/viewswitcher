@@ -1,0 +1,13 @@
+{
+  "name": "daisy-production",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter '@daisy/*' dev",
+    "build": "bun run --filter @daisy/web build",
+    "start": "bun run build && bun apps/server/src/index.ts",
+    "test": "bun test",
+    "obs:setup": "bun apps/server/src/obs-setup.ts"
+  }
+}
