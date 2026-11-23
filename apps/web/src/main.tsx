@@ -6,6 +6,11 @@ import { queryClient } from "./lib/live";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 
+// Surface client errors in the server log (OBS's browser source has no devtools).
+addEventListener("error", (e) => {
+  fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ where: location.pathname, error: e.message, at: `${e.filename}:${e.lineno}` }) }).catch(() => {});
+});
+
 const router = createRouter({ routeTree, defaultPreload: "intent" });
 
 declare module "@tanstack/react-router" {

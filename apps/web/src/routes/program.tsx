@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { sceneUrl, useLive } from "../lib/live";
 
+// Report errors to the server log: the OBS browser has no devtools by default.
+const report = (data: object) => fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ where: "program", ...data }) }).catch(() => {});
+if (typeof window !== "undefined") {
+  addEventListener("error", (e) => report({ error: e.message, at: `${e.filename}:${e.lineno}` }));
+  addEventListener("unhandledrejection", (e) => report({ error: String(e.reason) }));
+  report({ loaded: navigator.userAgent });
+}
+
 const WIPE_IN = 170;
 const WIPE_HOLD = 90;
 

@@ -5,7 +5,8 @@ import { config } from "./config";
 import { OBSClient, OBSRequestError } from "./obs";
 
 const obs = new OBSClient({ url: config.obs.url, password: config.obs.password }).start();
-const programUrl = `http://localhost:${config.port}/program`;
+// 127.0.0.1, not localhost: OBS's browser may resolve localhost to IPv6 (::1), which the server doesn't listen on.
+const programUrl = `http://127.0.0.1:${config.port}/program`;
 const { scene, programSource, devices } = config.obs;
 
 try {

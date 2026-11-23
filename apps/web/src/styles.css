@@ -15,7 +15,6 @@
   --display: "Fraunces", Georgia, serif;
   --text: "Instrument Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
-  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +26,9 @@ a { color: inherit; text-decoration: none; }
 :focus-visible { outline: 2px solid var(--yolk); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- shell */
-.app { min-height: 100vh; background: var(--bg); display: flex; flex-wrap: wrap; }
+/* Dark scheme for the switcher only. /program must keep the default scheme: Chromium paints an opaque
+   backdrop behind an iframe whose color-scheme differs from its embedder, which would hide OBS devices. */
+.app { min-height: 100vh; background: var(--bg); display: flex; flex-wrap: wrap; color-scheme: dark; }
 .main { flex: 999 1 560px; min-width: 0; padding: 28px 32px 64px; display: flex; flex-direction: column; gap: 28px; position: relative; }
 
 /* ---------------------------------------------------------------- sidebar (flat, compact) */

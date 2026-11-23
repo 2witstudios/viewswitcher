@@ -163,7 +163,14 @@ const server = Bun.serve({
       if (path === "/ws") {
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
-      if (path.startsWith("/api/")) return await api(req, path);
+      if (path.startsWith("/api/")) {
+        if (process.env.DAISY_LOG) console.log(`[http] ${req.method} ${path}`);
+        if (path === "/api/log" && req.method === "POST") {
+          console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
+          return json({ ok: true });
+        }
+        return await api(req, path);
+      }
       if (path.startsWith("/library/")) {
         return (await fileResponse(inside(config.library, path.slice("/library/".length)))) ?? new Response("Not found", { status: 404 });
       }
@@ -181,6 +188,7 @@ const server = Bun.serve({
   },
   websocket: {
     open(ws) {
+      if (process.env.DAISY_LOG) console.log("[ws] client connected");
       ws.subscribe("all");
       ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
     },
@@ -189,4 +197,4 @@ const server = Bun.serve({
 });
 
 console.log(`[daisy] http://localhost:${server.port}  library: ${config.library}`);
-console.log(`[daisy] OBS program browser source → http://localhost:${server.port}/program`);
+console.log(`[daisy] OBS program browser source → http://127.0.0.1:${server.port}/program`);

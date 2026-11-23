@@ -47,6 +47,10 @@ Environment (all optional):
 
 If a scene asks for a slot whose OBS source doesn't exist, the switcher shows a warning.
 
+**If scenes don't show in OBS** (the program source stays blank, even for a normal web page), turn off OBS → Settings → Advanced → Sources → "Enable Browser Source Hardware Acceleration" and restart OBS. On this Mac (OBS 32.1, macOS 26), OBS's embedded browser never starts with it on.
+
+Debugging the program page: run the server with `DAISY_LOG=1`. Requests, WebSocket connections and errors from the OBS browser (which has no devtools) are printed to the server log.
+
 ## iPad over Tailscale
 
 ```sh
