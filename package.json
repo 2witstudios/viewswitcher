@@ -9,5 +9,9 @@
     "start": "bun run build && bun apps/server/src/index.ts",
     "test": "bun test",
     "obs:setup": "bun apps/server/src/obs-setup.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "typescript": "^7.0.2"
   }
 }

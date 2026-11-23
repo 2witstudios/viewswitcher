@@ -1,0 +1,32 @@
+name: InkCast
+options:
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  InkCast:
+    type: application
+    platform: iOS
+    sources: [InkCast]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.inkcast.InkCast   # change to your own reverse-DNS id
+        TARGETED_DEVICE_FAMILY: "2"
+        SWIFT_VERSION: "5.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        # DEVELOPMENT_TEAM: XXXXXXXXXX                    # or pick your team in Xcode
+    info:
+      path: InkCast/Info.plist
+      properties:
+        CFBundleDisplayName: InkCast
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIStatusBarHidden: true
+        NSLocalNetworkUsageDescription: InkCast connects to the InkCast hub on your Mac to send your drawings to the stream.
+        NSBonjourServices:
+          - _inkcast._tcp
