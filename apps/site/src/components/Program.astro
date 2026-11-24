@@ -16,11 +16,9 @@ const devices = [...new Set(scenes.flatMap((s) => s.slots.map((d) => d.name)))];
 const placeOf = (sIdx: number, name: string) => scenes[sIdx]!.slots.find((d) => d.name === name);
 const hidden = { name: "", x: 1920 / 2, y: 1080 / 2, w: 0, h: 0, round: false };
 
-// Resolved by Vite against the project root, so it doesn't depend on where the build runs from.
-// The literal path must match site.demoVideo (checked below).
-const demo = import.meta.glob("/public/demo/viewswitcher-demo.mp4");
-if (site.demoVideo !== "/demo/viewswitcher-demo.mp4") throw new Error("site.demoVideo changed: update the glob in Program.astro");
-const hasVideo = Object.keys(demo).length > 0;
+// Set in astro.config.mjs (it checks public/demo/viewswitcher-demo.mp4 next to itself).
+if (site.demoVideo !== "/demo/viewswitcher-demo.mp4") throw new Error("site.demoVideo changed: update the check in astro.config.mjs");
+const hasVideo = __HAS_DEMO_VIDEO__;
 const poster = hasVideo ? (await getImage({ src: scenes[start]!.image, width: 1600, format: "webp" })).src : undefined;
 const sizes = "(min-width: 76rem) 75rem, calc(100vw - 2.5rem)";
 const slotData = JSON.stringify(scenes.map((s) => s.slots));
