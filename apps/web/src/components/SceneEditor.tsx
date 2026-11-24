@@ -145,6 +145,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   /** Bumped on every (re)load: element ids from before a reload may name different elements now. */
   const generation = useRef(0);
   const conflictOpen = useRef(false);
+  const frameMismatches = useRef(0);
 
   // ------------------------------------------------------------ loading
 
@@ -752,11 +753,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                 }
                 // The frame loads the scene on its own: if the file changed since the base was read, its ids
                 // aren't the base's. Read both again.
+                // (A scene without an <html> tag has no stamp to compare; then there's nothing to check.)
                 const b = baseRef.current;
-                if (b && d?.documentElement.dataset.vsHash !== b.hash) {
-                  void load();
+                const stamp = d?.documentElement.dataset.vsHash;
+                if (b && stamp !== undefined && stamp !== b.hash) {
+                  // Once is a file that just changed; again means it keeps changing: stop and say so.
+                  if (frameMismatches.current++ === 0) void load();
+                  else setLoadError("This scene keeps changing while it opens. Try again in a moment.");
                   return;
                 }
+                frameMismatches.current = 0;
                 setReady(true);
                 redraw();
               }}

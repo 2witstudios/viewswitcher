@@ -313,3 +313,30 @@ describe("/code-review findings on PR #1", () => {
     expect(setText(html, 0, "Tea at 10 AM")).toBe(`<p>Tea at 10&nbsp;AM</p>`);
   });
 });
+
+describe("/review round 2 findings on PR #1", () => {
+  const pos = (style: string) => {
+    const html = `<div style="${style}"></div>`;
+    return positionOf(html, scanElements(html)[0]!);
+  };
+  test("a /* inside a quoted value isn't a comment", () => {
+    expect(pos(`left:10px;--caption:'a/*';left:90px;--other:'*/';top:20px`)).toMatchObject({ left: 90, top: 20 });
+  });
+  test("a later !important px wins over an earlier !important that isn't px", () => {
+    expect(pos(`left:50%!important;left:10px!important;top:0px`)).toMatchObject({ left: 10 });
+    expect(pos(`left:10px!important;left:50%!important;top:0px`)).toBeNull();
+  });
+  test("retarget refuses identical twins when their number changed, and keeps order when it didn't", () => {
+    const prev = `<p>Notes</p><p>Notes</p>`;
+    expect(retarget(prev, `<p>Notes</p><p>Notes</p><p>Notes</p>`, { id: 1, text: "Mine" })).toBeNull();
+    const r = retarget(prev, `<h1>New</h1><p>Notes</p><p>Notes</p>`, { id: 1, text: "Mine" })!;
+    expect(r.id).toBe(2);
+  });
+  test("changedElements sees text swapped between nested panels, but not a moved panel's contents", () => {
+    const a = `<div id=a><section><p>A</p></section></div><div id=b><section><p>B</p></section></div>`;
+    const b = `<div id=a><section><p>B</p></section></div><div id=b><section><p>A</p></section></div>`;
+    expect(changedElements(a, b).length).toBe(2);
+    const moved = `<div id=a style="left: 9px"><section><p>A</p></section></div><div id=b><section><p>B</p></section></div>`;
+    expect(changedElements(a, moved)).toEqual([0]);
+  });
+});

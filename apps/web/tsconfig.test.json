@@ -1,0 +1,8 @@
+{
+  // The bun tests in src/ (run by `bun test`), typechecked with Bun's types:
+  // cd apps/web && bunx tsc -p tsconfig.test.json
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "types": ["bun"] },
+  "include": ["src/**/*.test.ts"],
+  "exclude": []
+}

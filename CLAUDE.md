@@ -8,4 +8,4 @@ Bun workspaces monorepo: a live-stream scene switcher that drives OBS (`apps/`, 
 - Library paths sent to and from clients start with the org id (`daisy/projects/...`). Every server path from a client goes through `inside()` / `plainName()` in `apps/server/src/paths.ts`.
 - `packages/shared` holds the pure logic both sides use (`resolveStream`, `coverTransform`, `obsColor`). Keep it dependency-free and tested (`bun test`).
 - `apps/web` must stay a static SPA (no SSR or server functions). The iPad app (`apps/ipad`) loads it from the server over its USB-C tunnel; deploy with `bun run ipad:deploy`.
-- Typecheck: `cd apps/web && bunx tsc --noEmit`, `cd apps/server && bunx tsc -p .`.
+- Typecheck: `cd apps/web && bunx tsc --noEmit && bunx tsc -p tsconfig.test.json`, `cd apps/server && bunx tsc -p .`.

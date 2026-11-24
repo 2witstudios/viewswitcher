@@ -12,5 +12,6 @@
     "types": ["vite/client"]
   },
   "include": ["src"],
+  // Tests run under bun, not the browser: they're typechecked by tsconfig.test.json.
   "exclude": ["src/**/*.test.ts"]
 }

@@ -228,9 +228,26 @@ export function textOf(html: string, el: ScannedElement): string {
 export function positionOf(html: string, el: ScannedElement): { left: number; top: number; leftAt: [number, number]; topAt: [number, number] } | null {
   const style = el.attrs.find((a) => a.name === "style" && a.valueStart >= 0);
   if (!style) return null;
-  // Comments become spaces (same length, so offsets hold).
-  const value = html.slice(style.valueStart, style.valueEnd).replace(/\/\*[\s\S]*?(\*\/|$)/g, (c) => " ".repeat(c.length));
-  // Split into declarations at ";" outside quotes, parentheses and comments, the way CSS does.
+  // Comments (outside quotes) become spaces of the same length, so offsets hold.
+  const raw = html.slice(style.valueStart, style.valueEnd);
+  let value = "";
+  for (let i = 0, quote = ""; i < raw.length; i++) {
+    const c = raw[i]!;
+    if (quote) {
+      value += c;
+      if (c === "\\" && i + 1 < raw.length) value += raw[++i];
+      else if (c === quote) quote = "";
+    } else if (c === "/" && raw[i + 1] === "*") {
+      const close = raw.indexOf("*/", i + 2);
+      const stop = close === -1 ? raw.length : close + 2;
+      value += " ".repeat(stop - i);
+      i = stop - 1;
+    } else {
+      if (c === '"' || c === "'") quote = c;
+      value += c;
+    }
+  }
+  // Split into declarations at ";" outside quotes and parentheses, the way CSS does.
   const decls: [number, number][] = [];
   let from = 0, depth = 0, quote = "";
   for (let i = 0; i < value.length; i++) {
@@ -239,10 +256,7 @@ export function positionOf(html: string, el: ScannedElement): { left: number; to
       if (c === "\\") i++;
       else if (c === quote) quote = "";
     } else if (c === '"' || c === "'") quote = c;
-    else if (c === "/" && value[i + 1] === "*") {
-      const close = value.indexOf("*/", i + 2);
-      i = close === -1 ? value.length : close + 1;
-    } else if (c === "(") depth++;
+    else if (c === "(") depth++;
     else if (c === ")") depth = Math.max(0, depth - 1);
     else if (c === ";" && depth === 0) {
       decls.push([from, i]);
@@ -250,28 +264,20 @@ export function positionOf(html: string, el: ScannedElement): { left: number; to
     }
   }
   decls.push([from, value.length]);
-  // The declaration that wins: !important over normal, then the last one.
+  // The declaration that wins: !important over normal, then the last one. If the winner isn't
+  // plain px (%, calc(), var()), the element can't be dragged.
   const pick = (prop: string) => {
-    let best: { important: boolean; at: [number, number]; n: number } | null = null;
-    let unsupported = false;
+    let win: { important: boolean; px: { at: [number, number]; n: number } | null } | null = null;
     for (const [a, b] of decls) {
       const m = /^(\s*)([-\w]+)(\s*:\s*)([\s\S]*?)(\s*)$/.exec(value.slice(a, b));
       if (!m || m[2]!.toLowerCase() !== prop) continue;
-      const v = /^(-?\d+(?:\.\d+)?)px(\s*!\s*important)?$/i.exec(m[4]!);
       const important = /!\s*important$/i.test(m[4]!);
-      if (best?.important && !important) continue;
-      if (!v) {
-        // A winning value that isn't plain px (%, calc(), var()) can't be dragged.
-        unsupported = true;
-        best = null;
-        if (important) return null;
-        continue;
-      }
-      unsupported = false;
+      if (win?.important && !important) continue;
+      const v = /^(-?\d+(?:\.\d+)?)px(\s*!\s*important)?$/i.exec(m[4]!);
       const at = style.valueStart + a + m[1]!.length + m[2]!.length + m[3]!.length;
-      best = { important, at: [at, at + v[1]!.length], n: Number(v[1]) };
+      win = { important, px: v ? { at: [at, at + v[1]!.length], n: Number(v[1]) } : null };
     }
-    return unsupported ? null : best;
+    return win?.px ?? null;
   };
   const l = pick("left");
   const t = pick("top");
@@ -371,8 +377,12 @@ export function untagForEdit(tagged: string): string {
 /** What makes an element itself (not its children): its start tag, plus its text when it's a leaf. */
 /** What makes an element itself: its start tag, its text when it's a leaf, and the start tag it sits in. */
 function signature(html: string, el: ScannedElement, els: ScannedElement[]) {
-  const parent = el.parent === null ? "" : html.slice(els[el.parent]!.start, els[el.parent]!.openEnd);
-  return `${html.slice(el.start, el.openEnd)}\u0000${el.leaf ? textOf(html, el) : ""}\u0000${parent}`;
+  // Every enclosing start tag, minus its style (a moved panel shouldn't mark everything inside it).
+  const chain: string[] = [];
+  for (let up = el.parent; up !== null; up = els[up]!.parent) {
+    chain.push(html.slice(els[up]!.start, els[up]!.openEnd).replace(/\sstyle\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/i, ""));
+  }
+  return `${html.slice(el.start, el.openEnd)}\u0000${el.leaf ? textOf(html, el) : ""}\u0000${chain.join("\u0001")}`;
 }
 
 /** Ids in `next` whose start tag or text isn't in `prev`: what someone else changed. */
@@ -395,27 +405,31 @@ export function changedElements(prev: string, next: string): number[] {
 }
 
 /**
- * Find element `id` of `prev` in `next`, or null when it can't be told apart. Candidates have the
- * same start tag (and can take the edit); among them, one with the same text (for text) and the same
- * enclosing start tag wins, nearest by position among same-tag elements. With no such match, only a
- * single remaining candidate is trusted: never replay onto a guess.
+ * Find element `id` of `prev` in `next`, or null when it can't be told apart. A match has the same
+ * start tag, the same text (for a text edit) and the same enclosing start tag; among identical twins,
+ * the same one in order, only if the number of twins didn't change. With no match, a single
+ * remaining element with that start tag is trusted. Never replays onto a guess.
  */
 export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit | null {
   const a = scanElements(prev);
   const el = a[edit.id];
   if (!el) return null;
-  const nth = a.filter((e) => e.tag === el.tag).indexOf(el);
   const open = prev.slice(el.start, el.openEnd);
   const parentOpen = (html: string, els: ScannedElement[], e: ScannedElement) =>
     e.parent === null ? "" : html.slice(els[e.parent]!.start, els[e.parent]!.openEnd);
   const text = el.leaf ? textOf(prev, el) : null;
   const b = scanElements(next);
   const sameTag = b.filter((e) => e.tag === el.tag);
-  const fits = (e: ScannedElement) => ("text" in edit ? e.leaf : positionOf(next, e) !== null);
-  const sameOpen = sameTag.filter((e) => next.slice(e.start, e.openEnd) === open && fits(e));
-  const nearest = (list: ScannedElement[]) =>
-    [...list].sort((x, y) => Math.abs(sameTag.indexOf(x) - nth) - Math.abs(sameTag.indexOf(y) - nth))[0];
-  const exact = sameOpen.filter((e) => (text === null || (e.leaf && textOf(next, e) === text)) && parentOpen(next, b, e) === parentOpen(prev, a, el));
-  const pick = exact.length ? nearest(exact) : sameOpen.length === 1 ? sameOpen[0] : undefined;
+  const fits = (html: string, e: ScannedElement) => ("text" in edit ? e.leaf : positionOf(html, e) !== null);
+  const sameOpen = sameTag.filter((e) => next.slice(e.start, e.openEnd) === open && fits(next, e));
+  const twin = (html: string, els: ScannedElement[], e: ScannedElement) =>
+    html.slice(e.start, e.openEnd) === open && (text === null || (e.leaf && textOf(html, e) === text)) && parentOpen(html, els, e) === parentOpen(prev, a, el);
+  const exact = sameOpen.filter((e) => twin(next, b, e));
+  // Identical twins (same tag, text and parent): the same one in order, but only if their number
+  // didn't change. If it did, there's no telling which is ours.
+  const twinsBefore = a.filter((e) => e.tag === el.tag && fits(prev, e) && twin(prev, a, e));
+  let pick: ScannedElement | undefined;
+  if (exact.length && exact.length === twinsBefore.length) pick = exact[twinsBefore.indexOf(el)];
+  else if (!exact.length && sameOpen.length === 1) pick = sameOpen[0];
   return pick ? { ...edit, id: pick.id } : null;
 }
