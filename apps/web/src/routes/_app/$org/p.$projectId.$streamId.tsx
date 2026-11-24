@@ -22,12 +22,13 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     if (!project || !stream) return <p className="empty">That stream doesn't exist any more.</p>;
 
     const { own, shared } = resolveStream(project, stream);
+    const transition = project.transition ?? data.transition;
     const onAirPath = state?.onAir?.path;
     const goLive = (s: Scene) => () =>
       attempt(() => api.putOnAir({ path: s.path, label: `${s.label} · ${stream.name}`, projectId, streamId }));
-    const fileItems = (s: Scene, hint: string): MenuItem[] => [
-      { label: "Open the file", hint, run: () => attempt(() => api.open(s.path)) },
-      { label: "Copy path", hint: s.path, run: () => void copy(s.path) },
+    const fileItems = (path: string, hint: string): MenuItem[] => [
+      { label: "Open the file", hint, run: () => attempt(() => api.open(path)) },
+      { label: "Copy path", hint: path, run: () => void copy(path) },
     ];
 
     return (
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 live={s.path === onAirPath}
                 onActivate={goLive(s)}
                 menu={[
-                  ...fileItems(s, "Changes this stream only"),
+                  ...fileItems(s.path, "Changes this stream only"),
                   { label: "Duplicate", hint: "Copy inside this stream", run: () => attempt(() => api.duplicate(s.path), "Duplicated") },
                   ...(s.overrides
                     ? [{
@@ -102,10 +103,46 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                     run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
-                  ...fileItems(s, "Changes it for every stream"),
+                  ...fileItems(s.path, "Changes it for every stream"),
                 ]}
               />
             ))}
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-head">
+            <h2>TRANSITION</h2>
+            <span>{project.transition ? `${project.name}'s own` : transition ? "the org's, shared by projects without their own" : "none: scenes switch through the ground color"}</span>
+          </div>
+          <div className="grid">
+            {transition ? (
+              <SceneTile
+                label={project.transition ? "Transition (custom)" : "Transition"}
+                path={transition}
+                badge="TRANSITION"
+                menu={[
+                  ...(project.transition
+                    ? [{
+                        label: "Go back to the org's transition",
+                        hint: "Deletes this project's copy",
+                        run: async () => {
+                          if (!confirm(`Delete ${project.name}'s own transition and use the org's?`)) return;
+                          await attempt(() => api.revertTransition(org, projectId), "Back to the org's transition");
+                        },
+                      }]
+                    : [{
+                        label: "Customize for this project",
+                        hint: "Copies the org's transition into the project first",
+                        run: () => attempt(() => api.customizeTransition(org, projectId), `${project.name} now has its own transition`),
+                      }]),
+                  "divider",
+                  ...fileItems(transition, project.transition ? "Changes it for this project" : "Changes it for every project that doesn't have its own"),
+                ]}
+              />
+            ) : (
+              <p className="empty">No transition yet. Ask your agent to make {org}/templates/_shared/transition.html (every project) or {org}/projects/{projectId}/transition.html (this one).</p>
+            )}
           </div>
         </section>
       </>

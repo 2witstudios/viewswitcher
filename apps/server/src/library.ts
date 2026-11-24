@@ -1,6 +1,6 @@
 import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { slugify } from "@viewswitcher/shared";
+import { slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
@@ -120,9 +120,38 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
       streams.push({ id: sid, name: s.name, date: s.date, scenes: await scenesIn(root, rel, "stream", p.order, prefix) });
     }
     streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
-    projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix), streams });
+    const transition = (await exists(join(root, "projects", id, TRANSITION))) ? `${prefix}projects/${id}/${TRANSITION}` : null;
+    projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix), streams, transition });
   }
-  return { org, templates, assets, projects };
+  const transition = (await exists(join(root, ORG_TRANSITION))) ? `${prefix}${ORG_TRANSITION}` : null;
+  return { org, templates, assets, projects, transition };
+}
+
+// ---------------------------------------------------------------- transitions
+// A transition is an HTML page shown full screen while scenes switch. The org's default lives in
+// templates/_shared/transition.html; a project can have its own projects/<id>/transition.html.
+
+const TRANSITION = "transition.html";
+const ORG_TRANSITION = `templates/_shared/${TRANSITION}`;
+
+/** The transition to play when `scenePath` goes on air, or null for a plain ground-color wipe. */
+export async function resolveTransition(libraryRoot: string, scenePath: string): Promise<string | null> {
+  for (const path of transitionCandidates(scenePath)) if (await exists(inside(libraryRoot, path))) return path;
+  return null;
+}
+
+/** Give a project its own transition, starting from the org's. */
+export async function customizeTransition(root: string, projectId: string) {
+  const dest = join(projectDir(root, projectId), TRANSITION);
+  if (await exists(dest)) return;
+  const src = join(root, ORG_TRANSITION);
+  if (!(await exists(src))) throw new PathError("This org has no transition to start from yet");
+  await copyFile(src, dest);
+}
+
+/** Back to the org's transition: deletes the project's own. */
+export async function revertTransition(root: string, projectId: string) {
+  await rm(join(projectDir(root, projectId), TRANSITION), { force: true });
 }
 
 // ---------------------------------------------------------------- mutations

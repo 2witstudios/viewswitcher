@@ -51,3 +51,12 @@ export function obsColor(hex: string): number {
 
 /** The org a library path belongs to: its first segment. */
 export const orgOf = (path: string) => path.split("/")[0] ?? "";
+
+/** Where a scene's transition can live, most specific first: its project's transition.html, then the org's default. */
+export function transitionCandidates(path: string): string[] {
+  const [org, kind, project] = path.split("/");
+  const found = [];
+  if (kind === "projects" && project) found.push(`${org}/projects/${project}/transition.html`);
+  found.push(`${org}/templates/_shared/transition.html`);
+  return found;
+}

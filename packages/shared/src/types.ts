@@ -26,6 +26,8 @@ export type Project = {
   name: string;
   scenes: Scene[];
   streams: Stream[];
+  /** This project's own transition (projects/<id>/transition.html), overriding the org's; null when it uses the org's. */
+  transition: string | null;
 };
 
 export type AssetKind = "image" | "video" | "audio" | "other";
@@ -54,6 +56,8 @@ export type Library = {
   templates: Scene[];
   assets: Asset[];
   projects: Project[];
+  /** The org's default transition (templates/_shared/transition.html), or null for a plain cut through the ground color. */
+  transition: string | null;
 };
 
 /** A device hole in a scene, in 1920×1080 scene pixels. */
@@ -70,6 +74,8 @@ export type OnAir = {
   org: string;
   /** The org's ground color, for the program page's transitions. */
   ground?: string;
+  /** The transition page played when switching to this scene (see transitionCandidates); null for a plain ground-color wipe. */
+  transition?: string | null;
   label: string;
   projectId?: string;
   streamId?: string;

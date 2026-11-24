@@ -10,3 +10,13 @@ for (const el of document.querySelectorAll("[data-countdown]")) {
   draw();
   setInterval(() => { left = left > 0 ? left - 1 : total; draw(); }, 1000);
 }
+
+// Transition pages: the switcher posts {viewswitcher: "transition"} as the transition starts.
+// This restarts the "play" class on <html>, so CSS like `.play .bar { animation: … }` runs every time.
+addEventListener("message", (e) => {
+  if (e.data?.viewswitcher !== "transition") return;
+  const root = document.documentElement;
+  root.classList.remove("play");
+  void root.offsetWidth; // restart animations
+  root.classList.add("play");
+});

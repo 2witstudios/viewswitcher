@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Transition</title>
+<!-- Plays full screen while one scene switches to another. The switcher fades it in, holds it, then fades
+     out onto the new scene. Animate on `.play` (restarted every switch). How long it stays fully on screen: -->
+<meta name="viewswitcher:hold" content="120">
+<link rel="stylesheet" href="/library/{{ORG_ID}}/templates/_shared/theme.css">
+<style>
+  /* Unlike scenes, a transition covers everything, so it paints its own background. */
+  body { background: var(--ground); }
+  .name { font-size: 64px; }
+  .bar { width: 240px; height: 6px; border-radius: 3px; background: var(--accent); }
+  .play .name { animation: rise 320ms ease-out; }
+  .play .bar { animation: grow 360ms cubic-bezier(.2, .8, .2, 1); }
+  @keyframes rise { from { transform: translateY(12px); opacity: 0.6; } }
+  @keyframes grow { from { width: 0; } }
+</style>
+</head>
+<body>
+<main class="scene">
+  <div class="abs" style="inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px">
+    <h1 class="display name">{{ORG_NAME}}</h1>
+    <div class="bar"></div>
+  </div>
+</main>
+<script src="/library/{{ORG_ID}}/templates/_shared/scene.js"></script>
+</body>
+</html>

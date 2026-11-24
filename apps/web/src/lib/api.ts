@@ -31,6 +31,8 @@ export const api = {
     post<{ name: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
   customize: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/customize", { org, projectId, streamId, name }),
   revert: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { org, projectId, streamId, name }),
+  customizeTransition: (org: string, projectId: string) => post("/api/transition/customize", { org, projectId }),
+  revertTransition: (org: string, projectId: string) => post("/api/transition/revert", { org, projectId }),
   duplicate: (path: string) => post("/api/scenes/duplicate", { path }),
   open: (path: string) => post("/api/open", { path }),
 

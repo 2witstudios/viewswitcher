@@ -16,7 +16,7 @@ if (typeof window !== "undefined") {
 }
 
 const WIPE_IN = 170;
-const WIPE_HOLD = 90;
+const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -40,6 +40,12 @@ export const Route = createFileRoute("/program")({
     const [frames, setFrames] = useState<[string | null, string | null]>([null, null]);
     const [front, setFront] = useState(0);
     const [wipe, setWipe] = useState(false);
+    const [transitionSrc, setTransitionSrc] = useState<string | null>(null);
+    const transitionRef = useRef<HTMLIFrameElement>(null);
+    const transitionLoaded = useRef<string | null>(null); // transition URL in the frame (without &load)
+    // The transition of the scene going on air (read by the loop, so an edit applies from the next switch).
+    const wantedTransition = useRef<string | null>(null);
+    wantedTransition.current = onAir?.transition ? sceneUrl(onAir.transition, versions) : null;
     const [scale, setScale] = useState(1);
     const refs = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
 
@@ -57,8 +63,8 @@ export const Route = createFileRoute("/program")({
       return () => removeEventListener("resize", fit);
     }, []);
 
-    /** Put `url` into frame `i` and wait for it to load (or time out). */
-    const loadInto = (i: number, url: string) =>
+    /** Give a frame `url` via `put` and wait for it to load (or time out). */
+    const load = (url: string, put: (src: string) => void) =>
       new Promise<void>((resolve) => {
         const src = `${url}&load=${++seq.current}`;
         const done = () => {
@@ -67,12 +73,28 @@ export const Route = createFileRoute("/program")({
         };
         waiters.current.set(src, done);
         setTimeout(done, LOAD_TIMEOUT);
-        setFrames((f) => (i === 0 ? [src, f[1]] : [f[0], src]));
+        put(src);
       });
+    const loadInto = (i: number, url: string) => load(url, (src) => setFrames((f) => (i === 0 ? [src, f[1]] : [f[0], src])));
 
-    const onLoad = (i: number) => {
-      const src = refs[i].current?.getAttribute("src");
+    /** Make sure the transition frame holds `url` (null: no transition page, just the ground color). */
+    const loadTransition = async (url: string | null) => {
+      if (url === transitionLoaded.current) return;
+      transitionLoaded.current = url;
+      if (url) await load(url, setTransitionSrc);
+      else setTransitionSrc(null);
+    };
+
+    const onLoad = (frame: HTMLIFrameElement | null) => {
+      const src = frame?.getAttribute("src");
       if (src) waiters.current.get(src)?.();
+    };
+
+    /** How long the transition page wants to stay fully on screen. */
+    const holdFor = () => {
+      const meta = transitionRef.current?.contentDocument?.querySelector<HTMLMetaElement>('meta[name="viewswitcher:hold"]');
+      const ms = Number(meta?.content);
+      return Number.isFinite(ms) && ms >= 0 ? Math.min(ms, 5000) : WIPE_HOLD;
     };
 
     const run = async () => {
@@ -82,11 +104,13 @@ export const Route = createFileRoute("/program")({
         while (desired.current && desired.current.url !== shown.current?.url) {
           const job = desired.current;
           const back = 1 - frontRef.current;
-          await loadInto(back, job.url);
+          await Promise.all([loadInto(back, job.url), loadTransition(wantedTransition.current)]);
           if (desired.current !== job) continue; // superseded while loading: go straight to the newer one
           const slots = refs[back].current ? readSlots(refs[back].current!) : [];
           const firstShow = shown.current === null;
           if (!firstShow) {
+            // Tell the transition page to play (it can animate on the "play" class; see scene.js).
+            transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
             setWipe(true);
             await sleep(WIPE_IN);
           }
@@ -95,7 +119,7 @@ export const Route = createFileRoute("/program")({
           setFront(back);
           shown.current = job;
           if (!firstShow) {
-            await sleep(WIPE_HOLD);
+            await sleep(holdFor());
             setWipe(false);
           }
         }
@@ -121,14 +145,13 @@ export const Route = createFileRoute("/program")({
         <div className="program-stage" style={{ transform: `scale(${scale})` }}>
           {frames.map((src, i) =>
             src ? (
-              <iframe key={i} ref={refs[i]} title={`Program ${i}`} src={src} onLoad={() => onLoad(i)}
+              <iframe key={i} ref={refs[i]} title={`Program ${i}`} src={src} onLoad={() => onLoad(refs[i].current)}
                 style={{ visibility: i === front ? "visible" : "hidden" }} />
             ) : null,
           )}
-          {/* Transition card: the on-air org's ground color and mark (falls back to the ViewSwitcher mark). */}
+          {/* Transition: the scene's transition page (project's, else the org's), over the org's ground color. */}
           <div className={`wipe${wipe ? " on" : ""}`} aria-hidden="true" style={{ "--ground": onAir?.ground } as CSSProperties}>
-            <img key={onAir?.org} src={onAir ? `/library/${onAir.org}/templates/_shared/brand/mark.svg` : "/icon.svg"} alt=""
-              onError={(e) => { if (!e.currentTarget.src.endsWith("/icon.svg")) e.currentTarget.src = "/icon.svg"; }} />
+            {transitionSrc && <iframe ref={transitionRef} title="Transition" src={transitionSrc} tabIndex={-1} onLoad={() => onLoad(transitionRef.current)} />}
           </div>
         </div>
       </div>

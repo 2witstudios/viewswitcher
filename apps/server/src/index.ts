@@ -18,6 +18,7 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 
 const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { onAir: OnAir | null }, () => ({ onAir: null }));
 const state: LiveState = { onAir: saved.onAir, obs: { connected: false, recording: false, streaming: false }, warnings: [] };
+if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
 
 function publish(msg: ServerMessage) {
@@ -105,9 +106,18 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   if (rel.startsWith(".git") || rel.startsWith(".viewswitcher") || rel.includes("/.") || rel.endsWith("~")) return;
   changed.add(rel);
   clearTimeout(flushTimer);
-  flushTimer = setTimeout(() => {
-    publish({ t: "library:changed", paths: [...changed] });
+  flushTimer = setTimeout(async () => {
+    const paths = [...changed];
     changed = new Set();
+    publish({ t: "library:changed", paths });
+    // A transition file appeared or went away: re-pick the one for the scene on air.
+    if (state.onAir && paths.some((p) => p.endsWith("transition.html"))) {
+      const transition = await lib.resolveTransition(config.library, state.onAir.path);
+      if (transition !== state.onAir.transition) {
+        state.onAir.transition = transition;
+        publishState();
+      }
+    }
   }, 120);
 });
 
@@ -135,7 +145,8 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     inside(root, b.path);
     if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
     const o = await lib.readOrg(root, orgOf(b.path));
-    state.onAir = { path: b.path, org: o.id, ground: o.ground, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
+    const transition = await lib.resolveTransition(root, b.path);
+    state.onAir = { path: b.path, org: o.id, ground: o.ground, transition, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
     state.warnings = [];
     await persist();
     publishState();
@@ -171,6 +182,16 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/scenes/customize" && post) {
     const b = await body(req);
     return json(await lib.customize(org(b.org), b.projectId, b.streamId, b.name));
+  }
+  if (path === "/api/transition/customize" && post) {
+    const b = await body(req);
+    await lib.customizeTransition(org(b.org), b.projectId);
+    return json({ ok: true });
+  }
+  if (path === "/api/transition/revert" && post) {
+    const b = await body(req);
+    await lib.revertTransition(org(b.org), b.projectId);
+    return json({ ok: true });
   }
   if (path === "/api/scenes/revert" && post) {
     const b = await body(req);

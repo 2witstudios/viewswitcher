@@ -14,9 +14,9 @@ A scene switcher for live streams on macOS. Every on-air screen is a plain HTML 
 ├─ daisy/  personal/  bible-study/  pagespace/  …   one folder per org
 │  ├─ org.json                     { name, accent, ground }
 │  ├─ BRAND.md                     the org's brand rules, for agents
-│  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, brand/mark.svg}
+│  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, transition.html, brand/mark.svg}
 │  ├─ assets/
-│  └─ projects/<project>/{project.json, scenes/*.html, streams/<MM-DD-slug>/*.html}
+│  └─ projects/<project>/{project.json, transition.html?, scenes/*.html, streams/<MM-DD-slug>/*.html}
 └─ .claude/skills/viewswitcher-scenes/SKILL.md
 ```
 
@@ -28,6 +28,8 @@ OBS scene "ViewSwitcher"
 ├─ Camera · Screen · iPad                                                 (moved per scene)
 └─ ViewSwitcher Ground    color source, set to the on-air org's ground     (bottom)
 ```
+
+**Transitions** are pages too. Switching scenes briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else just the ground color. The switcher shows the transition on the Templates page and on each stream page, where "Customize for this project" gives a project its own.
 
 New orgs are created from the org menu in the sidebar. They start from `apps/server/starter/`: neutral templates using the org's name and accent color, ready to be branded.
 

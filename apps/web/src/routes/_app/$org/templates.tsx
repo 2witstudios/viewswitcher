@@ -31,6 +31,20 @@ export const Route = createFileRoute("/_app/$org/templates")({
             })}
           </div>
         </section>
+
+        <section className="section">
+          <div className="section-head"><h2>TRANSITION</h2><span>plays between scenes · projects can have their own</span></div>
+          <div className="grid">
+            {data?.transition ? (
+              <SceneTile label="Transition" path={data.transition} badge="TRANSITION" menu={[
+                { label: "Open the file", hint: "Changes it for every project that doesn't have its own", run: () => attempt(() => api.open(data.transition!)) },
+                { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
+              ]} />
+            ) : (
+              <p className="empty">No transition yet: scenes switch through the plain ground color. Ask your agent to make {org}/templates/_shared/transition.html.</p>
+            )}
+          </div>
+        </section>
       </>
     );
   },

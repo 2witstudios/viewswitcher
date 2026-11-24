@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { coverTransform, obsColor, orgOf, resolveStream, shortDate, slugify } from "./index";
+import { coverTransform, obsColor, orgOf, resolveStream, shortDate, slugify, transitionCandidates } from "./index";
 import type { Project, Scene, Stream } from "./types";
 
 const scene = (name: string, origin: Scene["origin"], dir: string): Scene => ({
@@ -75,5 +75,12 @@ describe("orgs", () => {
   });
   test("a path's org is its first folder", () => {
     expect(orgOf("daisy/projects/ld/scenes/teaching.html")).toBe("daisy");
+  });
+  test("a scene's transition: its project's first, then the org's", () => {
+    expect(transitionCandidates("daisy/projects/ld/streams/09-14-x/teaching.html")).toEqual([
+      "daisy/projects/ld/transition.html",
+      "daisy/templates/_shared/transition.html",
+    ]);
+    expect(transitionCandidates("daisy/templates/brb.html")).toEqual(["daisy/templates/_shared/transition.html"]);
   });
 });
