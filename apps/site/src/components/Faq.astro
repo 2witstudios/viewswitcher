@@ -1,0 +1,40 @@
+---
+import { github } from "../site.config";
+const faqs = [
+  { q: "Do I need OBS?", a: "Yes. OBS does the compositing and the streaming; ViewSwitcher tells it what to show and where your devices go, through the WebSocket server built into OBS 28 and later. You set OBS up once." },
+  { q: "Is it Mac only?", a: "The server runs on a Mac, and the USB-C link to the iPad needs macOS. The switcher itself is a web page, so any browser on your network can switch scenes too." },
+  { q: "Does it work on Windows?", a: "Not today. The OBS setup and the iPad link are built for macOS. If you'd use it on Windows, say so in a GitHub issue." },
+  { q: "Which agents can write scenes?", a: "Any coding agent that can edit files in a folder: Claude Code, Codex, Cursor and others. The library includes a skill that explains the scene format and your brand; Claude Code picks it up on its own, and you can point other agents at it. You can also write the HTML yourself." },
+  { q: "Can a church use it?", a: "Yes. Bible Study, above, is one of the libraries it runs today. A series maps onto a project, each service onto a stream, and there's no yearly seat fee. It doesn't include a song lyrics or scripture database." },
+  { q: "Does the iPad need Wi-Fi?", a: "Not while it's plugged into the Mac: the app switches over the USB-C cable. Unplugged, it connects over your network to an address you save." },
+  { q: "What does it cost?", a: "ViewSwitcher is free and open source. The iPad app is coming to the App Store." },
+];
+---
+<section class="section mist" id="faq" aria-labelledby="faq-title">
+  <div class="wrap grid">
+    <div class="section-head">
+      <h2 id="faq-title">Questions</h2>
+      <p class="lede">Something else? <a href={`${github}/issues`}>Ask on GitHub</a>.</p>
+    </div>
+    <div class="list">
+      {faqs.map((f) => (
+        <details>
+          <summary><h3>{f.q}</h3></summary>
+          <p>{f.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>
+<style>
+  .grid { display: grid; gap: 1rem; align-items: start; }
+  @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5rem; } }
+  details { border-top: 1px solid var(--rule); }
+  details:last-child { border-bottom: 1px solid var(--rule); }
+  summary { list-style: none; cursor: pointer; padding-block: 1.25rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ""; flex: none; width: 0.6rem; height: 0.6rem; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg) translateY(-25%); transition: transform 160ms ease; }
+  details[open] summary::after { transform: rotate(-135deg) translateY(-25%); }
+  details p { color: var(--ink-2); padding-bottom: 1.4rem; max-width: 38rem; }
+  @media (prefers-reduced-motion: reduce) { summary::after { transition: none; } }
+</style>

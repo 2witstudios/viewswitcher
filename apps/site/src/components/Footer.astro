@@ -1,0 +1,20 @@
+---
+import Mark from "./Mark.astro";
+import { github } from "../site.config";
+---
+<footer class="wrap">
+  <a class="brand" href="/"><Mark size={24} /><span>ViewSwitcher</span></a>
+  <nav aria-label="Footer">
+    <a href={github}>GitHub</a>
+    <a href={`${github}/releases`}>Releases</a>
+    <a href={`${github}/issues`}>Contact and bugs</a>
+  </nav>
+  <p class="quiet">A scene switcher for OBS on the Mac. No cookies, no tracking.</p>
+</footer>
+<style>
+  footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; padding-block: 2.5rem 3rem; }
+  .brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; font: 700 1.0625rem/1 var(--display); letter-spacing: -0.02em; }
+  nav { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+  nav a { color: var(--ink-2); }
+  .quiet { flex-basis: 100%; }
+</style>

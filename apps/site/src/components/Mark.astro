@@ -1,0 +1,12 @@
+---
+// The two-screens mark (apps/web/public/icon.svg) in graphite and white.
+interface Props { size?: number; tone?: "ink" | "light" }
+const { size = 28, tone = "ink" } = Astro.props;
+const back = tone === "ink" ? "#8b909c" : "#a3a8b5";
+const front = tone === "ink" ? "#16181e" : "#f4f5f7";
+const edge = tone === "ink" ? "#ffffff" : "#0b0c0f";
+---
+<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <rect x="7.5" y="4" width="13.5" height="10" rx="2.6" stroke={back} stroke-width="1.8" fill="none" />
+  <rect x="3" y="10" width="13.5" height="10" rx="2.6" fill={front} stroke={edge} stroke-width="1.6" paint-order="stroke" />
+</svg>

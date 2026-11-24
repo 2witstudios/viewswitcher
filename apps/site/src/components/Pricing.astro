@@ -1,0 +1,41 @@
+---
+import { github } from "../site.config";
+---
+<section class="section" id="pricing" aria-labelledby="pricing-title">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="pricing-title">Free and open source</h2>
+      <p class="lede">The switcher, the server, the scene format and the agent skill are free and open source. Read the code, run it, change it.</p>
+    </div>
+    <div class="plans">
+      <article>
+        <h3>ViewSwitcher</h3>
+        <p class="price">Free</p>
+        <ul>
+          <li>The switcher and server for your Mac</li>
+          <li>Unlimited orgs, projects, streams and scenes</li>
+          <li>Automatic camera, screen and iPad placement in OBS</li>
+          <li>Switch from any browser on your network</li>
+        </ul>
+        <a href={github}>Source on GitHub</a>
+      </article>
+      <article>
+        <h3>ViewSwitcher for iPad</h3>
+        <p class="price">Coming to the App Store</p>
+        <ul>
+          <li>Switch scenes from the iPad over a USB-C cable</li>
+          <li>No Wi-Fi needed while it's plugged in</li>
+          <li>Falls back to your network when it isn't</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+<style>
+  .plans { display: grid; gap: 1.25rem; }
+  @media (min-width: 48rem) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  article { border: 1px solid var(--rule); border-radius: 14px; padding: clamp(1.5rem, 3vw, 2.25rem); display: grid; gap: 1rem; align-content: start; }
+  .price { font: 700 clamp(1.6rem, 3vw, 2.1rem)/1.1 var(--display); letter-spacing: -0.025em; }
+  ul { margin: 0; padding-left: 1.1rem; color: var(--ink-2); display: grid; gap: 0.4rem; }
+  article a { font-weight: 600; justify-self: start; }
+</style>
