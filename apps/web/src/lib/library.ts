@@ -11,7 +11,7 @@ export function useOrgId(): string | undefined {
   return (useParams({ strict: false }) as { org?: string }).org;
 }
 
-export function useLibrary(org = useOrgId()) {
+export function useLibrary(org: string | undefined) {
   return useQuery({ queryKey: ["library", org], queryFn: () => api.library(org!), enabled: !!org });
 }
 
