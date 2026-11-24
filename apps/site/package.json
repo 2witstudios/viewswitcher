@@ -1,0 +1,25 @@
+{
+  "name": "viewswitcher-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 4321",
+    "build": "astro build",
+    "preview": "astro preview --port 4321",
+    "check": "astro check",
+    "shots": "bun scripts/shots.ts",
+    "og": "bun scripts/og.ts"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.6",
+    "@fontsource-variable/instrument-sans": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "astro": "^7.4.13"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "playwright-core": "^1.65.1",
+    "sharp": "^0.35.5",
+    "typescript": "^6"
+  }
+}

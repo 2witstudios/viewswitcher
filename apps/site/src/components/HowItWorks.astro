@@ -1,0 +1,61 @@
+---
+import { Picture } from "astro:assets";
+import SceneFrame from "./SceneFrame.astro";
+import { scene } from "../lib/scenes";
+const covers = ["daisy-starting", "daisy-teaching", "daisy-whiteboard", "daisy-brb"].map(scene);
+---
+<section class="section mist" id="how" aria-labelledby="how-title">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="how-title">How it works</h2>
+      <p class="lede">OBS keeps doing the compositing and the streaming. ViewSwitcher decides what's on screen and where your devices go.</p>
+    </div>
+    <ol class="steps">
+      <li>
+        <div class="vis prompt" aria-hidden="true">
+          <p class="you">Make a teaching scene for Daisy Debate: the screen share on the left, the camera top right, today's path under it.</p>
+          <p class="agent">Wrote <code>scenes/teaching.html</code> with a Screen box and a Camera box.</p>
+        </div>
+        <h3><span class="n">1</span>Ask your agent for a scene</h3>
+        <p>Describe the screen you want to Claude Code or any coding agent. It writes an HTML file in your library and marks where each device goes.</p>
+      </li>
+      <li>
+        <div class="vis tiles on-dark" aria-hidden="true">
+          {covers.map((c, i) => (
+            <div class:list={["tile", { live: i === 1 }]}>
+              <Picture src={c.image} alt="" widths={[240, 360]} sizes="10rem" formats={["webp"]} fallbackFormat="jpg" loading="lazy" decoding="async" />
+              {i === 1 && <span class="badge"><i class="dot"></i>On air</span>}
+            </div>
+          ))}
+        </div>
+        <h3><span class="n">2</span>Tap it on the iPad</h3>
+        <p>Every scene shows up as a cover. Tap one on the iPad, plugged into the Mac with USB-C, or click it in any browser.</p>
+      </li>
+      <li>
+        <div class="vis"><SceneFrame id="daisy-teaching" alt="The Daisy Debate teaching scene on air, with the camera and screen in their boxes" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
+        <h3><span class="n">3</span>Your camera lands in place</h3>
+        <p>The scene goes on air in OBS, and ViewSwitcher moves and crops your camera, screen and iPad sources into its boxes. Nothing to rebuild in OBS for each layout.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+<style>
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 3rem 2rem; }
+  @media (min-width: 60rem) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .steps li { display: grid; gap: 0.85rem; align-content: start; }
+  .steps p { color: var(--ink-2); max-width: 30rem; }
+  h3 { display: flex; align-items: baseline; gap: 0.6rem; margin-top: 0.75rem; }
+  .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
+  .vis :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
+  .prompt { background: var(--paper); border: 1px solid var(--rule); padding: 1.1rem; display: grid; align-content: center; gap: 0.75rem; font-size: 0.9375rem; line-height: 1.45; }
+  .prompt .you { background: var(--mist); border-radius: 10px; padding: 0.7rem 0.85rem; color: var(--ink); }
+  .prompt .agent { color: var(--ink-2); padding-inline: 0.85rem; }
+  .prompt code { font-size: 0.8125rem; word-break: break-all; color: var(--ink); }
+  .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
+  .tile { position: relative; }
+  .tile :global(img) { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }
+  .tile.live :global(img) { outline-color: var(--live); }
+  .badge { position: absolute; left: 0.4rem; bottom: 0.4rem; display: inline-flex; align-items: center; gap: 0.35rem; background: var(--monitor); color: var(--on-monitor); font: 600 0.75rem/1 var(--text); padding: 0.3rem 0.5rem; border-radius: 999px; }
+  .dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--live); display: inline-block; }
+</style>

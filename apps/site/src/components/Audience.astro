@@ -1,0 +1,34 @@
+---
+import SceneFrame from "./SceneFrame.astro";
+const shows = [
+  { id: "daisy-teaching", kind: "Debate coaching", org: "Daisy Debate", body: "Lincoln-Douglas classes with the day's path beside the camera. This week's stream swaps in its own title and current step." },
+  { id: "bible-study-teaching", kind: "Bible study", org: "Bible Study", body: "The passage or slides on the screen, the camera beside them, and a notes panel for chat." },
+  { id: "personal-whiteboard", kind: "Teaching", org: "Personal", body: "Draw on the iPad full screen while the camera sits in a circle in the corner." },
+  { id: "pagespace-teaching", kind: "Product streams", org: "PageSpace", body: "Demo the app on the screen share with the camera and a note panel next to it." },
+];
+---
+<section class="section mist" id="who" aria-labelledby="who-title">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="who-title">For shows that come back every week</h2>
+      <p class="lede">The same set of scenes, a new topic each time. These four are real scenes from the libraries ViewSwitcher runs today, rendered straight from their files.</p>
+    </div>
+    <ul class="shows">
+      {shows.map((s) => (
+        <li>
+          <SceneFrame id={s.id} alt={`${s.org}: ${s.kind.toLowerCase()} scene`} sizes="(min-width: 60rem) 36rem, calc(100vw - 2.5rem)" class="rounded" />
+          <h3>{s.kind} <span class="org">{s.org}</span></h3>
+          <p>{s.body}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
+<style>
+  .shows { list-style: none; margin: 0; padding: 0; display: grid; gap: 3rem 2rem; }
+  @media (min-width: 48rem) { .shows { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .shows li { display: grid; gap: 0.6rem; align-content: start; }
+  .shows :global(.rounded) { border-radius: 12px; margin-bottom: 0.6rem; }
+  .org { font: 500 0.9375rem var(--text); color: var(--ink-3); letter-spacing: 0; margin-left: 0.35rem; }
+  .shows p { color: var(--ink-2); max-width: 34rem; }
+</style>

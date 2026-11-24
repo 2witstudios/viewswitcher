@@ -1,0 +1,44 @@
+---
+import SceneFrame from "./SceneFrame.astro";
+const features = [
+  { title: "Scenes your agent writes", body: "A scene is a plain 1920×1080 HTML page in a folder you own. Ask for changes in words, or edit the file yourself. Your library includes an agent skill that teaches the scene format, your brand and the rules, so new scenes match the old ones." },
+  { title: "Camera, screen and iPad placed for you", body: "A scene marks a box with data-slot=\"Camera\" (or Screen, or iPad). When it goes on air, ViewSwitcher moves and crops that OBS source to fit the box, round ones included." },
+  { title: "iPad over USB-C", body: "The iPad app talks to the Mac over the cable, so switching doesn't depend on the room's Wi-Fi. Unplugged, it uses a network address you save, such as your Tailscale address." },
+  { title: "Orgs, projects and streams", body: "Each brand or channel is an org with its own templates, colors and assets. A project is a series that shares scenes; a stream is one dated episode that can replace any of them, like this week's title card." },
+  { title: "Edit text and move things", soon: true, body: "Retype a title in place, or drag a panel or the camera box, on the Mac or the iPad. On a scene that's on air the change shows on stream as you make it, and the file keeps the agent's formatting." },
+  { title: "Transitions", body: "Switching fades through the org's background color by default. If a show wants its own transition, ask your agent for one, for the whole org or for one project." },
+];
+---
+<section class="section" id="features" aria-labelledby="features-title">
+  <div class="wrap grid">
+    <div class="side">
+      <div class="section-head">
+        <h2 id="features-title">What it does</h2>
+        <p class="lede">The parts that set up a show once, then let you run it with one hand.</p>
+      </div>
+      <figure>
+        <SceneFrame id="bible-study-teaching" alt="Bible Study's teaching scene: a screen box, a camera box, a notes panel and a title bar" sizes="(min-width: 60rem) 30rem, calc(100vw - 2.5rem)" class="rounded" />
+        <figcaption class="quiet">Bible Study's teaching scene. Its title, notes and boxes are the kind of thing the editor lets you retype and drag.</figcaption>
+      </figure>
+    </div>
+    <ul class="list">
+      {features.map((f) => (
+        <li>
+          <h3>{f.title}{f.soon && <span class="soon">In progress</span>}</h3>
+          <p>{f.body}</p>
+        </li>
+      ))}
+    </ul>
+  </div>
+</section>
+<style>
+  .grid { display: grid; gap: 3rem; }
+  @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5rem; } .side { position: sticky; top: 2rem; align-self: start; } }
+  figure { margin: 0; display: grid; gap: 0.75rem; }
+  .side :global(.rounded) { border-radius: 12px; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; }
+  .list li { display: grid; gap: 0.5rem; padding-block: 1.6rem; border-top: 1px solid var(--rule); }
+  .list li:last-child { border-bottom: 1px solid var(--rule); }
+  .list p { color: var(--ink-2); }
+  .soon { margin-left: 0.6rem; vertical-align: 0.15em; font: 600 0.75rem/1 var(--text); color: var(--ink-2); border: 1px solid var(--rule); border-radius: 999px; padding: 0.3rem 0.55rem; }
+</style>

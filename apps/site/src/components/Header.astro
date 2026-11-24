@@ -1,0 +1,21 @@
+---
+import Mark from "./Mark.astro";
+import { github } from "../site.config";
+---
+<header class="top wrap">
+  <a class="brand" href="/" aria-label="ViewSwitcher home"><Mark size={30} /><span>ViewSwitcher</span></a>
+  <nav aria-label="Sections">
+    <a class="hide-sm" href="#how">How it works</a>
+    <a class="hide-sm" href="#features">Features</a>
+    <a class="hide-sm" href="#faq">FAQ</a>
+    <a href={github}>GitHub</a>
+  </nav>
+</header>
+<style>
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.25rem; }
+  .brand { display: inline-flex; align-items: center; gap: 0.6rem; text-decoration: none; font: 700 1.1875rem/1 var(--display); letter-spacing: -0.02em; }
+  nav { display: flex; gap: 1.5rem; font-size: 0.9375rem; }
+  nav a { text-decoration: none; color: var(--ink-2); padding-block: 0.5rem; }
+  nav a:hover { color: var(--ink); text-decoration: underline; }
+  @media (max-width: 40rem) { .hide-sm { display: none; } }
+</style>

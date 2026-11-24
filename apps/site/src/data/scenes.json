@@ -1,0 +1,103 @@
+{
+  "daisy-starting": {
+    "slots": []
+  },
+  "daisy-teaching": {
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "round": false
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "round": false
+      }
+    ]
+  },
+  "daisy-whiteboard": {
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 1564,
+        "y": 724,
+        "w": 300,
+        "h": 300,
+        "round": true
+      }
+    ]
+  },
+  "daisy-chapter": {
+    "slots": []
+  },
+  "daisy-brb": {
+    "slots": []
+  },
+  "bible-study-teaching": {
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "round": false
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "round": false
+      }
+    ]
+  },
+  "personal-whiteboard": {
+    "slots": [
+      {
+        "name": "iPad",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "round": false
+      },
+      {
+        "name": "Camera",
+        "x": 1564,
+        "y": 724,
+        "w": 300,
+        "h": 300,
+        "round": true
+      }
+    ]
+  },
+  "pagespace-teaching": {
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "round": false
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "round": false
+      }
+    ]
+  }
+}

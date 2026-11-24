@@ -1,0 +1,10 @@
+---
+import Icon from "./Icon.astro";
+import { cta } from "../site.config";
+---
+<div class="actions">
+  <a class="btn btn-primary" href={cta.primary.href}>
+    <Icon name={cta.state === "download" ? "download" : "github"} />{cta.primary.label}
+  </a>
+  <a class="btn btn-secondary" href={cta.secondary.href}>{cta.secondary.label}</a>
+</div>
