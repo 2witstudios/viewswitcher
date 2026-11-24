@@ -17,6 +17,9 @@
   --measure: 36rem;
   --wide: 76rem;
   --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  /* viewport-fit=cover: keep content clear of the notch, rounded corners and home indicator. */
+  --safe-l: max(var(--gutter), env(safe-area-inset-left, 0px));
+  --safe-r: max(var(--gutter), env(safe-area-inset-right, 0px));
   color-scheme: light;
 }
 
@@ -41,15 +44,15 @@ h1 { font-size: clamp(2.35rem, 5.6vw, 4.25rem); line-height: 1.02; letter-spacin
 h2 { font-size: clamp(1.85rem, 3.6vw, 2.75rem); line-height: 1.08; letter-spacing: -0.03em; }
 h3 { font-size: 1.25rem; line-height: 1.25; letter-spacing: -0.015em; font-weight: 600; }
 
-.wrap { width: min(100% - 2 * var(--gutter), var(--wide)); margin-inline: auto; }
+.wrap { width: min(100% - var(--safe-l) - var(--safe-r), var(--wide)); margin-inline: max(var(--safe-l), (100% - var(--wide)) / 2) max(var(--safe-r), (100% - var(--wide)) / 2); }
 .section { padding-block: clamp(4rem, 9vw, 7.5rem); }
 .section.mist { background: var(--mist); }
 .lede { font-size: 1.1875rem; line-height: 1.55; color: var(--ink-2); max-width: var(--measure); }
 .section-head { display: grid; gap: 1rem; margin-bottom: clamp(2.5rem, 5vw, 3.5rem); max-width: 44rem; }
 .quiet { color: var(--ink-3); font-size: 0.9375rem; }
 
-.skip { position: absolute; left: 1rem; top: -4rem; background: var(--ink); color: var(--paper); padding: 0.6rem 1rem; border-radius: 8px; z-index: 10; }
-.skip:focus { top: 1rem; }
+.skip { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: -4rem; background: var(--ink); color: var(--paper); padding: 0.6rem 1rem; border-radius: 8px; z-index: 10; }
+.skip:focus { top: max(1rem, env(safe-area-inset-top, 0px)); }
 
 /* Buttons: one primary (graphite), one plain link-button. */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.5rem; }

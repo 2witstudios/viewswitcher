@@ -12,7 +12,7 @@ import { github } from "../site.config";
   <p class="quiet">A one-click scene switcher for OBS, on the Mac. No cookies, no tracking.</p>
 </footer>
 <style>
-  footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; padding-block: 2.5rem 3rem; }
+  footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; padding-block: 2.5rem calc(3rem + env(safe-area-inset-bottom, 0px)); }
   .brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; font: 700 1.0625rem/1 var(--display); letter-spacing: -0.02em; }
   nav { display: flex; flex-wrap: wrap; gap: 1.5rem; }
   nav a { color: var(--ink-2); }
