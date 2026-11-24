@@ -16,15 +16,16 @@ body { width: 1920px; height: 1080px; font-family: Inter, sans-serif; background
 .canvas { position: relative; display: grid; place-items: center; }
 .board { width: 900px; height: 640px; background: #fff; border-radius: 6px; box-shadow: 0 10px 40px #0000001a; padding: 48px; display: grid; grid-template-rows: auto auto 1fr; gap: 26px; position: relative; }
 .board .nav { display: flex; justify-content: space-between; align-items: center; font-size: 18px; color: #6b7280; } .board .nav b { color: #1d2129; font-size: 22px; }
-.hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; }
+.hero { margin-bottom: 26px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; }
 .hero h1 { font-size: 46px; line-height: 1.05; letter-spacing: -.02em; } .hero p { color: #6b7280; font-size: 19px; margin-top: 14px; line-height: 1.45; }
 .btn { display: inline-block; margin-top: 22px; background: #1d2129; color: #fff; border-radius: 10px; padding: 14px 22px; font-weight: 600; font-size: 18px; }
 .img { height: 250px; border-radius: 14px; background: linear-gradient(135deg, #5ad1a8, #3a7bd5 70%, #283c86); }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; } .cards div { border: 1px solid #e3e6ea; border-radius: 12px; padding: 18px; font-size: 16px; color: #6b7280; } .cards b { display: block; color: #1d2129; font-size: 19px; margin-bottom: 6px; }
-.sel { position: absolute; left: 44px; top: 128px; width: 438px; height: 210px; border: 2px solid #3b82f6; }
+.sel { position: relative; outline: 2px solid #3b82f6; outline-offset: 8px; }
 .sel::before, .sel::after { content: ""; position: absolute; width: 12px; height: 12px; background: #fff; border: 2px solid #3b82f6; }
-.sel::before { left: -8px; top: -8px; } .sel::after { right: -8px; bottom: -8px; }
-.tag { position: absolute; left: 44px; top: 96px; background: #3b82f6; color: #fff; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+.sel::before { left: -16px; top: -16px; } .sel::after { right: -16px; bottom: -16px; }
+.tag { position: absolute; left: 0; top: -34px; color: #6b7280; font-size: 16px; }
+.sel b { position: absolute; left: -10px; bottom: -42px; background: #3b82f6; color: #fff; font-size: 14px; font-weight: 500; padding: 4px 8px; border-radius: 4px; white-space: nowrap; }
 .cursor { position: absolute; left: 1060px; top: 520px; } .cursor span { background: #f97316; color: #fff; font-size: 15px; padding: 4px 10px; border-radius: 6px; margin-left: 16px; }
 .panel { background: #fff; border-left: 1px solid #e3e6ea; padding: 24px; font-size: 17px; display: grid; gap: 14px; align-content: start; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .row div { border: 1px solid #e3e6ea; border-radius: 8px; padding: 10px 12px; } .row span { color: #8a919e; margin-right: 8px; }
@@ -36,9 +37,9 @@ body { width: 1920px; height: 1080px; font-family: Inter, sans-serif; background
   <div class="side"><h4>Layers</h4><div class="layer"><i></i>Navigation</div><div class="layer on"><i></i>Hero</div><div class="layer" style="padding-left:36px"><i></i>Headline</div><div class="layer" style="padding-left:36px"><i></i>Button</div><div class="layer" style="padding-left:36px"><i></i>Image</div><div class="layer"><i></i>Feature cards</div><div class="layer"><i></i>Footer</div><h4>Pages</h4><div class="layer">Home</div><div class="layer">Pricing</div></div>
   <div class="canvas"><div class="board">
     <div class="nav"><b>Harbor</b><span>Product · Pricing · About &nbsp; <b style="font-size:18px">Sign in</b></span></div>
-    <div class="hero"><div><h1>Plan trips together, in one place.</h1><p>Shared itineraries, budgets and maps for the whole group.</p><span class="btn">Start planning</span></div><div class="img"></div></div>
+    <div class="hero"><div class="sel"><b>Text block · 412 × 236</b><h1>Plan trips together, in one place.</h1><p>Shared itineraries, budgets and maps for the whole group.</p><span class="btn">Start planning</span></div><div class="img"></div></div>
     <div class="cards"><div><b>Shared lists</b>Everyone adds ideas</div><div><b>Budgets</b>Split costs fairly</div><div><b>Maps</b>See the whole trip</div></div>
-    <div class="tag">Hero · Auto layout</div><div class="sel"></div>
+    <div class="tag">Landing page · Desktop</div>
   </div>
   <div class="cursor"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M2 2l7 18 3-7 7-3z" fill="#f97316"/></svg><span>Lena</span></div></div>
   <div class="panel"><h4>Hero</h4><div class="row"><div><span>W</span>860</div><div><span>H</span>250</div></div><div class="row"><div><span>Gap</span>36</div><div><span>Pad</span>0</div></div><h4>Fill</h4><div class="sw"><i style="background:#5ad1a8"></i><i style="background:#3a7bd5"></i><i style="background:#283c86"></i><i style="background:#1d2129"></i></div><h4>Text</h4><div class="row"><div>Inter</div><div>46 / Bold</div></div><h4>Effects</h4><div class="row"><div>Shadow</div><div>Y 10 · B 40</div></div></div>
