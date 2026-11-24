@@ -25,6 +25,19 @@ function publish(msg: ServerMessage) {
 }
 const publishState = () => publish({ t: "state", state });
 
+// The web build being served. Pages (OBS's program source, the iPad, browsers) reload when it changes,
+// so a rebuild reaches OBS without anyone refreshing its browser source.
+const readBuild = () =>
+  readFile(join(config.webDist, "index.html"), "utf8").then((html) => html.match(/\/assets\/index-[\w-]+\.js/)?.[0] ?? "", () => "");
+let build = await readBuild();
+setInterval(async () => {
+  const next = await readBuild();
+  if (next === build) return;
+  build = next;
+  if (process.env.VIEWSWITCHER_LOG) console.log("[build] switcher rebuilt, reloading pages");
+  publish({ t: "build", build });
+}, 2000);
+
 async function persist() {
   await mkdir(join(config.library, ".viewswitcher"), { recursive: true });
   await writeFile(stateFile, JSON.stringify({ onAir: state.onAir }, null, 2));
@@ -234,13 +247,14 @@ const server = Bun.serve({
       if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
       ws.subscribe("all");
       ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
+      ws.send(JSON.stringify({ t: "build", build } satisfies ServerMessage));
     },
     message() {},
   },
 });
 
-console.log(`[daisy] http://localhost:${server.port}  library: ${config.library}`);
-console.log(`[daisy] OBS program browser source → http://127.0.0.1:${server.port}/program`);
+console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
+console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
 if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });

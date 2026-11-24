@@ -90,4 +90,6 @@ export type LiveState = {
 /** Server → client WebSocket messages. */
 export type ServerMessage =
   | { t: "state"; state: LiveState }
-  | { t: "library:changed"; paths: string[] };
+  | { t: "library:changed"; paths: string[] }
+  /** The entry script of the switcher build being served; a page running a different one reloads. "" when nothing is built. */
+  | { t: "build"; build: string };

@@ -28,6 +28,8 @@ export const appLink = inApp ? (location.hostname === "127.0.0.1" ? "USB" : "Net
 // connector page: it picks whichever link works now (USB-C or the network) and returns here.
 const BACK_TO_CONNECTOR_MS = 4000;
 let downTimer: ReturnType<typeof setTimeout> | undefined;
+/** The built entry script this page runs (undefined under the Vite dev server, which never reloads this way). */
+const ownBuild = typeof document !== "undefined" ? document.querySelector<HTMLScriptElement>('script[src*="/assets/index-"]')?.getAttribute("src") ?? undefined : undefined;
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -45,6 +47,7 @@ function connect() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data) as ServerMessage;
     if (msg.t === "state") set({ state: msg.state });
+    if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
     if (msg.t === "library:changed") {
       const versions = { ...live.versions };
       for (const p of msg.paths) {
