@@ -58,10 +58,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         liveClient?.stop()
         guard !stopped, let s = server, s.owned else { return .terminateNow }
         server = nil
-        Task {
+        // While AppKit waits for the reply it runs the main run loop in its modal mode, where main-actor
+        // tasks don't run: stop off the main actor, and reply through a run-loop block in common modes.
+        Task.detached {
             await s.stop()
-            stopped = true
-            NSApp.reply(toApplicationShouldTerminate: true)
+            CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) {
+                MainActor.assumeIsolated {
+                    self.stopped = true
+                    NSApp.reply(toApplicationShouldTerminate: true)
+                }
+            }
+            CFRunLoopWakeUp(CFRunLoopGetMain())
         }
         return .terminateLater
     }
@@ -341,7 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.lastUndoRoute = "native"
             NSApp.sendAction(redo ? Selector(("redo:")) : Selector(("undo:")), to: nil, from: nil)
         }
-        guard let web = switcher?.webView, web.window?.isKeyWindow == true else { return native() }
+        guard let web = switcher?.webView, web.window?.isVisible == true else { return native() }
         let typed = NSApp.currentEvent.map { $0.type == .keyDown && $0.charactersIgnoringModifiers?.lowercased() == "z" } ?? false
         if typed {
             web.evaluateJavaScript(ShellBridge.focusEditableScript) { [weak self] r, _ in

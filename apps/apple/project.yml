@@ -65,8 +65,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
-        # Sparkle's EdDSA public key (the private half is in the login keychain; see README.md).
-        SPARKLE_PUBLIC_KEY: PENDING_GENERATE_KEYS
+        # Sparkle EdDSA public key; the private half is in the login keychain (account "viewswitcher"; see README.md).
+        SPARKLE_PUBLIC_KEY: hI8q9sOz72oOMceNPz4m2eELKkEFd2kGt+QkezqFw7Y=
         COMBINE_HIDPI_IMAGES: YES
       configs:
         Release:

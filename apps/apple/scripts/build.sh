@@ -4,7 +4,8 @@
 #   bun run mac:build                 signed with the Developer ID for $TEAM if it's in the keychain, else ad hoc
 #   bun run mac:build --unsigned      ad hoc signature only
 #   bun run mac:build --app           just build/export/ViewSwitcher.app, no dmg (for scripts/e2e.ts)
-#   bun run mac:release               signed, notarized and stapled, plus the Sparkle appcast; fails if any of that can't happen
+#   bun run mac:release               signed, notarized and stapled; fails if any of that can't happen
+# Every dmg build also writes build/appcast/appcast.xml (Sparkle, EdDSA-signed).
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
 #
@@ -115,11 +116,17 @@ fi
 
 step "Verify the app"
 codesign --verify --deep --strict --verbose=2 "$APP"
-lipo -archs "$APP/Contents/MacOS/ViewSwitcher" | grep -q "x86_64 arm64" || { echo "the app isn't universal" >&2; exit 1; }
-lipo -archs "$APP/Contents/Helpers/viewswitcher-server" | grep -q "x86_64 arm64" || { echo "the sidecar isn't universal" >&2; exit 1; }
-codesign -d --entitlements - --xml "$APP/Contents/Helpers/viewswitcher-server" 2>/dev/null | grep -q allow-jit || { echo "the sidecar lost its allow-jit entitlement" >&2; exit 1; }
-codesign -dv "$APP/Contents/Helpers/viewswitcher-server" 2>&1 | grep -q "flags=0x10000(runtime)" || { echo "the sidecar isn't on the hardened runtime" >&2; exit 1; }
-[ -n "$IDENTITY" ] && codesign -dv "$APP" 2>&1 | grep -q "TeamIdentifier=$TEAM"
+# (Each check reads the whole output first: grep -q would close the pipe early, and pipefail would call that a failure.)
+has() { local out; out="$("${@:2}" 2>&1 || true)"; [[ "$out" == *"$1"* ]]; }
+has "x86_64 arm64" lipo -archs "$APP/Contents/MacOS/ViewSwitcher" || { echo "the app isn't universal" >&2; exit 1; }
+has "x86_64 arm64" lipo -archs "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't universal" >&2; exit 1; }
+has "com.apple.security.cs.allow-jit" codesign -d --entitlements - --xml "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar lost its allow-jit entitlement" >&2; exit 1; }
+has "flags=0x10000(runtime)" codesign -dv "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't on the hardened runtime" >&2; exit 1; }
+has "flags=0x10000(runtime)" codesign -dv "$APP" || { echo "the app isn't on the hardened runtime" >&2; exit 1; }
+if [ -n "$IDENTITY" ]; then
+  has "TeamIdentifier=$TEAM" codesign -dv "$APP" || { echo "the app isn't signed by $TEAM" >&2; exit 1; }
+  has "TeamIdentifier=$TEAM" codesign -dv "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't signed by $TEAM" >&2; exit 1; }
+fi
 
 if [ "$RELEASE" = 1 ]; then
   step "Notarize and staple the app"
@@ -151,15 +158,22 @@ fi
 [ -n "$IDENTITY" ] && codesign --verify --strict "$DMG"
 
 # ---------------------------------------------------------------- the appcast
-if [ "$RELEASE" = 1 ]; then
-  step "Sparkle appcast (signed with the EdDSA key in the login keychain)"
-  GEN="$DD/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
-  FEED="$BUILD/appcast"
-  rm -rf "$FEED" && mkdir -p "$FEED"
-  cp "$DMG" "$FEED/"
-  "$GEN" --download-url-prefix "https://github.com/2witstudios/viewswitcher/releases/download/v$VERSION/" "$FEED"
-  grep -q 'sparkle:edSignature' "$FEED/appcast.xml" || { echo "appcast.xml has no EdDSA signature" >&2; exit 1; }
-fi
+step "Sparkle appcast"
+# Signed with ViewSwitcher's EdDSA key (login keychain, account viewswitcher). generate_keys owns the
+# keychain item, so it exports the key (no keychain prompt) into a private temp folder, generate_appcast
+# reads it on stdin, and it's deleted at once (and by the trap if anything fails). Never in the repo.
+SPARKLE="$DD/SourcePackages/artifacts/sparkle/Sparkle/bin"
+FEED="$BUILD/appcast"
+rm -rf "$FEED" && mkdir -p "$FEED"
+cp "$DMG" "$FEED/"
+KEYDIR="$(mktemp -d)"
+trap 'rm -rf "$KEYDIR"' EXIT
+chmod 700 "$KEYDIR"
+"$SPARKLE/generate_keys" --account viewswitcher -x "$KEYDIR/key" >/dev/null
+"$SPARKLE/generate_appcast" --ed-key-file - --download-url-prefix "https://github.com/2witstudios/viewswitcher/releases/download/v$VERSION/" "$FEED" < "$KEYDIR/key"
+rm -rf "$KEYDIR"
+rm -f "$FEED/ViewSwitcher.dmg"
+has 'sparkle:edSignature' cat "$FEED/appcast.xml" || { echo "appcast.xml has no EdDSA signature" >&2; exit 1; }
 
 if [ "$PUBLISH" = 1 ]; then
   step "Draft GitHub release v$VERSION"

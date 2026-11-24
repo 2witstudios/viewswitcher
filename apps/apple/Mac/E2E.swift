@@ -93,6 +93,9 @@ final class E2E {
         case "key":
             // A typed key, through the normal event path: {"key": "z", "mods": ["cmd", "shift"]}
             guard let w, let key = cmd["key"] as? String else { throw Failure("no window") }
+            NSApp.activate(ignoringOtherApps: true)
+            w.window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(300))
             let names = cmd["mods"] as? [String] ?? []
             var mods: NSEvent.ModifierFlags = []
             if names.contains("cmd") { mods.insert(.command) }
@@ -106,12 +109,40 @@ final class E2E {
         case "click":
             // A left click at page coordinates (top-left origin), through the window's hit-testing.
             guard let w, let x = cmd["x"] as? Double, let y = cmd["y"] as? Double else { throw Failure("no window") }
+            NSApp.activate(ignoringOtherApps: true)
+            w.window.makeKeyAndOrderFront(nil)
+            try? await Task.sleep(for: .milliseconds(300))
             let p = NSPoint(x: x, y: w.window.frame.height - y)
             for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                 let e = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: w.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
                 NSApp.postEvent(e, atStart: false)
             }
             return true
+        case "snapshot":
+            // The window as it looks, for the PR's screenshots when screencapture has no Screen
+            // Recording permission: WebKit's snapshot of the page, with the title bar's own views (the
+            // traffic lights) drawn over it where they really are.
+            guard let w, let path = cmd["path"] as? String else { throw Failure("no window") }
+            let page = try await w.webView.takeSnapshot(configuration: nil)
+            let size = w.webView.bounds.size
+            let scale = w.window.backingScaleFactor
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { throw Failure("no bitmap") }
+            rep.size = size
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+            w.window.backgroundColor.setFill()
+            NSRect(origin: .zero, size: size).fill()
+            page.draw(in: NSRect(origin: .zero, size: size))
+            if !w.window.styleMask.contains(.fullScreen), let close = w.window.standardWindowButton(.closeButton), let bar = close.superview {
+                let r = bar.convert(bar.bounds, to: nil)
+                if let barRep = bar.bitmapImageRepForCachingDisplay(in: bar.bounds) {
+                    bar.cacheDisplay(in: bar.bounds, to: barRep)
+                    barRep.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                }
+            }
+            NSGraphicsContext.restoreGraphicsState()
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            return [size.width, size.height]
         case "open": app.openWindow(); return true
         case "close": w?.window.performClose(nil); return true
         case "fullscreen": w?.window.toggleFullScreen(nil); return true
