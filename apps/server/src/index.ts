@@ -6,6 +6,7 @@ import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
 import { config } from "./config";
 import * as lib from "./library";
+import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
@@ -13,7 +14,17 @@ import { createSlotOrder } from "./slot-order";
 import { editScene, parseEdit, readForEdit, scenePath } from "./scene-edit";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
-await mkdir(config.library, { recursive: true });
+// A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
+const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
+if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
+  const did = [
+    firstRun.copied.length && `added ${firstRun.copied.join(", ")}`,
+    firstRun.updated.length && `updated ${firstRun.updated.join(", ")}`,
+    firstRun.git && "git init",
+    firstRun.org && `created org "${firstRun.org}"`,
+  ].filter(Boolean);
+  console.log(`[library] ${did.join("; ")}`);
+}
 const stateFile = join(config.library, ".viewswitcher", "state.json");
 
 // ---------------------------------------------------------------- live state
