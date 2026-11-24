@@ -1,0 +1,9 @@
+---
+// The two-screens mark (apps/web/public/icon.svg) in graphite and white.
+interface Props { size?: number }
+const { size = 28 } = Astro.props;
+---
+<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <rect x="7.5" y="4" width="13.5" height="10" rx="2.6" stroke="#8b909c" stroke-width="1.8" fill="none" />
+  <rect x="3" y="10" width="13.5" height="10" rx="2.6" fill="#16181e" stroke="#ffffff" stroke-width="1.6" paint-order="stroke" />
+</svg>

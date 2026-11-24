@@ -1,0 +1,17 @@
+/* A rendered scene with stand-ins where the devices land. Radii scale with the frame (cqw). */
+.frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; container-type: inline-size; background: var(--monitor); }
+.frame > picture, .frame > picture img, .frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.device {
+  position: absolute; overflow: hidden; border-radius: calc(18 / 1920 * 100cqw);
+  display: grid; place-items: center; color: #c4c8d2;
+  font: 600 max(9px, calc(18 / 1920 * 100cqw))/1 var(--text); letter-spacing: 0.08em;
+}
+.device.round { border-radius: 50%; }
+.device span { display: inline-flex; align-items: center; gap: 0.5em; }
+.device svg { width: 1.3em; height: 1.3em; }
+.device-Camera { background: radial-gradient(120% 90% at 50% 30%, #3a3f4b, #1f2229 70%); }
+.device-Screen, .device-iPad {
+  background:
+    linear-gradient(160deg, #2b2f39, #23262e);
+  color: #a3a8b5;
+}
