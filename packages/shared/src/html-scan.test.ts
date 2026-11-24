@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  applyEdits, changedElements, decodeEntities, positionOf, retarget, scanElements, setPosition, setText, snapMove, tagForEdit, textOf,
+  applyEdits, changedElements, decodeEntities, positionOf, retarget, scanElements, setPosition, setText, snapMove, tagForEdit, textOf, untagForEdit,
 } from "./index";
 
 const starter = join(import.meta.dir, "../../../apps/server/starter/templates");
@@ -109,6 +109,7 @@ describe("scanElements", () => {
     // Tagging adds exactly one data-vs per element and nothing else.
     const tagged = tagForEdit(html);
     expect(tagged.replace(/ data-vs="\d+"/g, "")).toBe(html);
+    expect(untagForEdit(tagged)).toBe(html);
     expect(scanElements(tagged).map((e) => e.tag)).toEqual(els.map((e) => e.tag));
     expect(scanElements(tagged).map((e) => e.leaf)).toEqual(els.map((e) => e.leaf));
   });
@@ -237,5 +238,14 @@ describe("snapMove", () => {
     const s = snapMove({ x: 905, y: 1000 - 76, w: 100, h: 150 }, []);
     expect(s.x).toBe(910); // center 960
     expect(s.y).toBe(930); // bottom 1080
+  });
+});
+
+describe("untagForEdit", () => {
+  test("removes only the ids tagging added, even when the text mentions data-vs", () => {
+    const html = `<p title=' data-vs="7"'>about data-vs="1"</p><img src=x>`;
+    const tagged = tagForEdit(html);
+    expect(tagged).toBe(`<p data-vs="0" title=' data-vs="7"'>about data-vs="1"</p><img data-vs="1" src=x>`);
+    expect(untagForEdit(tagged)).toBe(html);
   });
 });

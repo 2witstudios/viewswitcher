@@ -1,6 +1,17 @@
+import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
+
+/** The ••• menu item that opens the scene editor. */
+export function useEditItem(): (path: string, hint?: string) => MenuItem {
+  const navigate = useNavigate();
+  return (path, hint = "Retype text and move things, right here") => ({
+    label: "Edit text and layout",
+    hint,
+    run: () => void navigate({ to: "/$org/edit", params: { org: path.split("/")[0]! }, search: { path } }),
+  });
+}
 
 /** An album-style cover: a live, scaled render of the scene file. */
 export function SceneTile({ label, path, live, badge, onActivate, menu }: {

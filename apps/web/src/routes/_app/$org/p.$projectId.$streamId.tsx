@@ -3,7 +3,7 @@ import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageHead } from "../../../components/PageHead";
-import { SceneTile } from "../../../components/SceneTile";
+import { SceneTile, useEditItem } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
 import { useLibrary } from "../../../lib/library";
@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     const { data } = useLibrary(org);
     const { state } = useLive();
     const [adding, setAdding] = useState(false);
+    const editItem = useEditItem();
 
     const project = data?.projects.find((p) => p.id === projectId);
     const stream = project?.streams.find((s) => s.id === streamId);
@@ -49,6 +50,8 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 live={s.path === onAirPath}
                 onActivate={goLive(s)}
                 menu={[
+                  editItem(s.path, "Changes this stream only"),
+                  "divider",
                   ...fileItems(s.path, "Changes this stream only"),
                   { label: "Duplicate", hint: "Copy inside this stream", run: () => attempt(() => api.duplicate(s.path), "Duplicated") },
                   ...(s.overrides
@@ -103,6 +106,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                     run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
+                  editItem(s.path, "Changes it for every stream"),
                   ...fileItems(s.path, "Changes it for every stream"),
                 ]}
               />

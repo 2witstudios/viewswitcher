@@ -298,6 +298,19 @@ export function tagForEdit(html: string): string {
   return out;
 }
 
+/** The file `tagForEdit` started from: removes exactly the ids it added, nothing else. */
+export function untagForEdit(tagged: string): string {
+  const els = scanElements(tagged);
+  let out = tagged;
+  for (let k = els.length - 1; k >= 0; k--) {
+    const el = els[k]!;
+    const at = el.start + 1 + el.tag.length;
+    const attr = ` data-vs="${el.id}"`;
+    if (out.startsWith(attr, at)) out = out.slice(0, at) + out.slice(at + attr.length);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- conflicts
 
 /** What makes an element itself (not its children): its start tag, plus its text when it's a leaf. */

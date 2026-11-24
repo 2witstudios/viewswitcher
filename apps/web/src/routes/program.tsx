@@ -3,10 +3,12 @@
 // Switching is a single serialized loop, so it's deterministic however fast scenes are tapped:
 // only one transition runs at a time, and when it finishes it checks for a newer request and runs again.
 // Requests that are superseded while loading are dropped; the screen always ends on the latest one.
+// A new version of the scene already on air (a saved edit) swaps in without the transition, and the
+// scene editor's live previews apply to the on-air frame in place.
 import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { sceneUrl, useLive } from "../lib/live";
+import { onScenePreview, sceneUrl, useLive } from "../lib/live";
 
 // Report errors to the server log: the OBS browser has no devtools by default.
 const report = (data: object) => fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ where: "program", ...data }) }).catch(() => {});
@@ -35,7 +37,8 @@ export const Route = createFileRoute("/program")({
   component: function Program() {
     const { state, versions } = useLive();
     const onAir = state?.onAir ?? null;
-    const target = onAir ? sceneUrl(onAir.path, versions) : null;
+    // Scenes load with data-vs element ids (?edit) so the editor's live previews can find their element.
+    const target = onAir ? sceneUrl(onAir.path, versions, false, true) : null;
 
     const [frames, setFrames] = useState<[string | null, string | null]>([null, null]);
     const [front, setFront] = useState(0);
@@ -108,7 +111,9 @@ export const Route = createFileRoute("/program")({
           if (desired.current !== job) continue; // superseded while loading: go straight to the newer one
           const slots = refs[back].current ? readSlots(refs[back].current!) : [];
           const firstShow = shown.current === null;
-          if (!firstShow) {
+          // Same scene, new version (an edit was saved): swap frames with no transition.
+          const wipeIt = !firstShow && shown.current?.path !== job.path;
+          if (wipeIt) {
             // Tell the transition page to play (it can animate on the "play" class; see scene.js).
             transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
             setWipe(true);
@@ -118,7 +123,7 @@ export const Route = createFileRoute("/program")({
           frontRef.current = back;
           setFront(back);
           shown.current = job;
-          if (!firstShow) {
+          if (wipeIt) {
             await sleep(holdFor());
             setWipe(false);
           }
@@ -132,6 +137,30 @@ export const Route = createFileRoute("/program")({
         if (desired.current && desired.current.url !== shown.current?.url) run();
       }
     };
+
+    // Live edits from the scene editor: change the on-air frame's DOM (never the file). When a moved
+    // element is or holds a device slot, report the slots again (at most ~30 times a second) so OBS follows it.
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      return onScenePreview((path, edit) => {
+        if (path !== shown.current?.path) return;
+        const frame = refs[frontRef.current].current;
+        const el = frame?.contentDocument?.querySelector<HTMLElement>(`[data-vs="${edit.id}"]`);
+        if (!frame || !el) return;
+        if ("text" in edit) {
+          el.textContent = edit.text;
+          return;
+        }
+        el.style.left = `${edit.left}px`;
+        el.style.top = `${edit.top}px`;
+        if (!el.matches("[data-slot]") && !el.querySelector("[data-slot]")) return;
+        if (timer) return;
+        timer = setTimeout(() => {
+          timer = undefined;
+          if (shown.current?.path === path) api.reportSlots({ path, slots: readSlots(frame) }).catch(() => {});
+        }, 33);
+      });
+    }, []);
 
     useEffect(() => {
       if (!target || !onAir) return;

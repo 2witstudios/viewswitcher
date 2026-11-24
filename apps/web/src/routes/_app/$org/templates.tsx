@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHead } from "../../../components/PageHead";
-import { SceneTile } from "../../../components/SceneTile";
+import { SceneTile, useEditItem } from "../../../components/SceneTile";
 import { attempt, type MenuItem } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
 import { useLibrary } from "../../../lib/library";
@@ -9,6 +9,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
   component: function Templates() {
     const { org } = Route.useParams();
     const { data } = useLibrary(org);
+    const editItem = useEditItem();
     return (
       <>
         <PageHead crumb="Starting points. Templates never go on air." title="Templates" />
@@ -17,6 +18,8 @@ export const Route = createFileRoute("/_app/$org/templates")({
           <div className="grid">
             {data?.templates.map((t) => {
               const menu: MenuItem[] = [
+                editItem(t.path),
+                "divider",
                 ...(data.projects.map((p) => ({
                   label: `Add to ${p.name}`,
                   hint: "Copies it into the project's shared scenes",

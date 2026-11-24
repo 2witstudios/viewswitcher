@@ -1,4 +1,7 @@
-import type { Library, LiveState, Org } from "@viewswitcher/shared";
+import type { Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
+
+/** The scene editor saving against a version of the file that isn't the latest any more. */
+export class SceneConflict extends Error {}
 
 async function post<T = unknown>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -33,7 +36,23 @@ export const api = {
   revert: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { org, projectId, streamId, name }),
   customizeTransition: (org: string, projectId: string) => post("/api/transition/customize", { org, projectId }),
   revertTransition: (org: string, projectId: string) => post("/api/transition/revert", { org, projectId }),
-  duplicate: (path: string) => post("/api/scenes/duplicate", { path }),
+  duplicate: (path: string) => post<{ name: string }>("/api/scenes/duplicate", { path }),
+
+  /** The scene tagged with data-vs ids, and the hash of the file it came from. */
+  sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
+    const res = await fetch(`/library/${path}?edit`, { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status === 404 ? "This scene doesn't exist any more" : res.statusText);
+    return { html: await res.text(), hash: res.headers.get("x-scene-hash") ?? "" };
+  },
+  /** Save edits made against the version `hash`. Throws SceneConflict if the file changed since. */
+  editScene: async (path: string, hash: string, edits: SceneEdit[]): Promise<{ hash: string }> => {
+    const res = await fetch("/api/scene/edit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, edits }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+    if (!res.ok) throw new Error(data.error ?? res.statusText);
+    return data;
+  },
+  previewScene: (path: string, edit: SceneEdit) => post("/api/scene/preview", { path, edit }),
   open: (path: string) => post("/api/open", { path }),
 
   toggleRecord: () => post("/api/obs/record"),

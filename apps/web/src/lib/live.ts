@@ -1,5 +1,5 @@
 // One WebSocket to the server: live state (on air, OBS, warnings) and file-change versions.
-import type { LiveState, ServerMessage } from "@viewswitcher/shared";
+import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
@@ -13,6 +13,14 @@ type Live = {
 };
 
 let live: Live = { connected: false, state: null, versions: {} };
+
+type PreviewListener = (path: string, edit: SceneEdit) => void;
+const previewListeners = new Set<PreviewListener>();
+/** Live changes from the scene editor (never saved): the program page applies them to the on-air scene. */
+export function onScenePreview(listener: PreviewListener) {
+  previewListeners.add(listener);
+  return () => void previewListeners.delete(listener);
+}
 const listeners = new Set<() => void>();
 const set = (patch: Partial<Live>) => {
   live = { ...live, ...patch };
@@ -47,6 +55,7 @@ function connect() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data) as ServerMessage;
     if (msg.t === "state") set({ state: msg.state });
+    if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.edit));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
     if (msg.t === "library:changed") {
       const versions = { ...live.versions };
@@ -68,8 +77,11 @@ export function useLive(): Live {
   );
 }
 
-/** URL for a library file that changes whenever the file (or the shared theme) changes. */
-export function sceneUrl(path: string, versions: Record<string, number>, preview = false) {
+/**
+ * URL for a library file that changes whenever the file (or the shared theme) changes.
+ * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
+ */
+export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
-  return `/library/${path}?${preview ? "preview&" : ""}v=${v}`;
+  return `/library/${path}?${edit ? "edit&" : ""}${preview ? "preview&" : ""}v=${v}`;
 }
