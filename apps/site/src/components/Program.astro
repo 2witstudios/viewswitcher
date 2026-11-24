@@ -4,8 +4,6 @@
 // which is what ViewSwitcher does to the real OBS sources. When SITE-11's recording exists at
 // site.demoVideo, the monitor plays it instead (poster: the first scene).
 import { Picture, getImage } from "astro:assets";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
 import Device from "./Device.astro";
 import { HERO } from "../data/scene-list";
 import { scene, box } from "../lib/scenes";
@@ -18,9 +16,11 @@ const devices = [...new Set(scenes.flatMap((s) => s.slots.map((d) => d.name)))];
 const placeOf = (sIdx: number, name: string) => scenes[sIdx]!.slots.find((d) => d.name === name);
 const hidden = { name: "", x: 1920 / 2, y: 1080 / 2, w: 0, h: 0, round: false };
 
-// Astro builds from the project root (apps/site), locally and on Vercel.
-const videoFile = resolve("public" + site.demoVideo);
-const hasVideo = existsSync(videoFile);
+// Resolved by Vite against the project root, so it doesn't depend on where the build runs from.
+// The literal path must match site.demoVideo (checked below).
+const demo = import.meta.glob("/public/demo/viewswitcher-demo.mp4");
+if (site.demoVideo !== "/demo/viewswitcher-demo.mp4") throw new Error("site.demoVideo changed: update the glob in Program.astro");
+const hasVideo = Object.keys(demo).length > 0;
 const poster = hasVideo ? (await getImage({ src: scenes[start]!.image, width: 1600, format: "webp" })).src : undefined;
 const sizes = "(min-width: 76rem) 75rem, calc(100vw - 2.5rem)";
 const slotData = JSON.stringify(scenes.map((s) => s.slots));
@@ -41,7 +41,7 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
         {scenes.map((s, i) => (
           <Picture src={s.image} alt={`${s.org} ${s.name} scene, rendered from its library`} widths={[640, 960, 1280, 1600]} sizes={sizes}
             formats={["webp"]} fallbackFormat="jpg" loading={i === start ? "eager" : "lazy"} fetchpriority={i === start ? "high" : "auto"}
-            decoding={i === start ? "sync" : "async"} class:list={["shot", { on: i === start }]} data-shot={i} />
+            decoding={i === start ? "sync" : "async"} class:list={["shot", { on: i === start }]} data-shot={i} aria-hidden={i === start ? undefined : "true"} />
         ))}
         {devices.map((name) => {
           const at = placeOf(start, name);
@@ -118,7 +118,13 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
     const pct = (v: number, of: number) => `${(v / of) * 100}%`;
 
     const show = (i: number) => {
-      shots.forEach((s) => s.classList.toggle("on", Number(s.dataset.shot) === i));
+      shots.forEach((s) => {
+        const on = Number(s.dataset.shot) === i;
+        s.classList.toggle("on", on);
+        // Only the scene on air is announced; the stacked hidden ones are not.
+        const img = s.tagName === "IMG" ? s : s.querySelector("img");
+        if (on) img?.removeAttribute("aria-hidden"); else img?.setAttribute("aria-hidden", "true");
+      });
       covers.forEach((c) => c.setAttribute("aria-pressed", String(Number(c.dataset.cover) === i)));
       now.textContent = covers[i]!.textContent!.trim();
       for (const m of movers) {

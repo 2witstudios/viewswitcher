@@ -47,11 +47,14 @@ const HIDE_LABELS = `.preview .slot { background: transparent !important; } .pre
 
 type Slot = { name: string; x: number; y: number; w: number; h: number; round: boolean };
 const out: Record<string, { slots: Slot[] }> = {};
+// Render everything first and write only when every scene succeeded, so the images and
+// scenes.json never disagree after a failed run.
+const images: Record<string, Buffer> = {};
 
-const browser = await chromium.launch({ channel: "chrome" });
+let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 try {
+  browser = await chromium.launch({ channel: "chrome" });
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
-  await mkdir(join(site, "src/assets/scenes"), { recursive: true });
   for (const scene of SCENES) {
     const res = await page.goto(`${base}/library/${scene.path}?preview`, { waitUntil: "networkidle" });
     if (!res?.ok()) throw new Error(`${scene.path}: HTTP ${res?.status()}`);
@@ -64,15 +67,16 @@ try {
       return { name: (el as HTMLElement).dataset.slot!, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), round: radius === "50%" };
     }));
     const png = await page.screenshot({ type: "png" });
-    const file = join(site, "src/assets/scenes", `${scene.id}.webp`);
-    await sharp(png).webp({ quality: 88, effort: 6 }).toFile(file);
+    images[scene.id] = await sharp(png).webp({ quality: 88, effort: 6 }).toBuffer();
     out[scene.id] = { slots };
     console.log(`${scene.id.padEnd(22)} ${scene.path}  slots: ${slots.map((s) => s.name).join(", ") || "none"}`);
   }
 } finally {
-  await browser.close();
-  server?.kill();
+  await browser?.close();
+  server?.kill(); // also on failure (e.g. Chrome missing), so nothing is left on the port
 }
 
+await mkdir(join(site, "src/assets/scenes"), { recursive: true });
+for (const [id, webp] of Object.entries(images)) await writeFile(join(site, "src/assets/scenes", `${id}.webp`), new Uint8Array(webp));
 await writeFile(join(site, "src/data/scenes.json"), JSON.stringify(out, null, 2) + "\n");
 console.log(`wrote ${Object.keys(out).length} scenes`);
