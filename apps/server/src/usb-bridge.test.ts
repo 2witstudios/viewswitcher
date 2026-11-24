@@ -24,7 +24,7 @@ async function fakeUsbmuxd(socketPath: string) {
     },
   };
   const server = net.createServer((sock) => {
-    let buf = Buffer.alloc(0);
+    let buf: Buffer = Buffer.alloc(0);
     const onData = (chunk: Buffer) => {
       buf = concat(buf, chunk);
       const one = decodeOne(buf);
