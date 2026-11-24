@@ -7,7 +7,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, SceneConflict } from "../lib/api";
 import { useLibrary } from "../lib/library";
-import { useLive } from "../lib/live";
+import { libraryUrl, useLive } from "../lib/live";
 import { createSceneSaver } from "../lib/scene-saver";
 import { attempt, toast } from "./ui";
 
@@ -132,6 +132,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   const [selected, setSelected] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
+  /** `at`: when a long-press opened it (the release of that press must not pick an item); 0 otherwise. */
   const [menu, setMenu] = useState<{ x: number; y: number; hit: Hit; at: number } | null>(null);
   const [editing, setEditing] = useState<{ id: number; original: string; gen: number } | null>(null);
   const [drag, setDrag] = useState<{ id: number; left: number; top: number; guides: { x: number[]; y: number[] } } | null>(null);
@@ -296,14 +297,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     save([edit], before ? [{ before, after: edit }] : []);
   };
 
+  // Undo and "is this a change?" compare with what's on screen now, not the last saved base: a save
+  // may still be on its way.
   const setPos = (id: number, left: number, top: number) => {
-    const b = baseRef.current;
-    const was = b ? valueIn(b, { id, left, top }) : null;
-    if (!was || !("left" in was) || (was.left === left && was.top === top)) {
-      applyDom({ id, left, top });
+    const now = posNow(id);
+    const next = { id, left: Math.round(left), top: Math.round(top) };
+    if (!now || (now.left === next.left && now.top === next.top)) {
+      applyDom(next);
       return;
     }
-    change({ id, left: Math.round(left), top: Math.round(top) }, was);
+    change(next, { id, ...now });
   };
 
   const doUndo = () => {
@@ -346,8 +349,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     el.removeAttribute("contenteditable");
     el.blur();
     const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-    const before = valueIn(b, { id: editing.id, text: "" });
-    if (!commit || !text || !before || !("text" in before)) {
+    const before = { id: editing.id, text: editing.original.replace(/\s+/g, " ").trim() };
+    if (!commit || !text) {
       if (commit && !text) toast("Text can't be empty: put back what was there");
       el.textContent = editing.original;
       preview({ id: editing.id, text: editing.original });
@@ -447,11 +450,11 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const r = overlay.current!.getBoundingClientRect();
     return { x: (e.clientX - r.left) / scaleRef.current, y: (e.clientY - r.top) / scaleRef.current };
   };
-  const openMenu = (cx: number, cy: number, h: Hit) => {
+  const openMenu = (cx: number, cy: number, h: Hit, longPress = false) => {
     const r = overlay.current!.getBoundingClientRect();
     if (h.leaf === null && h.move === null) return;
     // Just off the finger, so the touch that opened it can't land on an item.
-    setMenu({ x: cx - r.left + 10, y: cy - r.top + 10, hit: h, at: performance.now() });
+    setMenu({ x: cx - r.left + 10, y: cy - r.top + 10, hit: h, at: longPress ? performance.now() : 0 });
     if (h.move !== null) setSelected(h.move);
   };
 
@@ -465,7 +468,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (h.leaf !== null || h.move !== null) {
       g.timer = setTimeout(() => {
         g.long = true;
-        openMenu(g.cx, g.cy, h);
+        openMenu(g.cx, g.cy, h, true);
       }, LONG_PRESS_MS);
     }
     gesture.current = g;
@@ -524,9 +527,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       const { id, start, last, gen } = g.drag;
       setDrag(null);
       if (last.left !== start.left || last.top !== start.top) {
-        const b = baseRef.current;
-        const before = b ? valueIn(b, { id, left: 0, top: 0 }) : null;
-        save([{ id, ...last }], before ? [{ before, after: { id, ...last } }] : [], gen);
+        save([{ id, ...last }], [{ before: { id, ...start }, after: { id, ...last } }], gen);
       }
       return;
     }
@@ -598,10 +599,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!now) return;
     if (!nudge.current || nudge.current.id !== selected) {
       flushNudge();
-      const b = baseRef.current;
-      const before = b ? valueIn(b, { id: selected, left: 0, top: 0 }) : null;
-      if (!before) return;
-      nudge.current = { id: selected, before, last: now, gen: generation.current };
+      nudge.current = { id: selected, before: { id: selected, ...now }, last: now, gen: generation.current };
     }
     const step = e.shiftKey ? 10 : 1;
     const next = { id: selected, left: now.left + dir[0] * step, top: now.top + dir[1] * step };
@@ -740,7 +738,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
               key={frameKey}
               ref={frame}
               title={`${place.title} (editing)`}
-              src={`/library/${path}?edit&preview&k=${frameKey}`}
+              src={`${libraryUrl(path)}?edit&preview&k=${frameKey}`}
               onLoad={() => {
                 // Editor-only styling inside the scene (never saved): no browser focus ring while typing.
                 const d = frame.current?.contentDocument;
@@ -912,7 +910,12 @@ function PositionBar({ name, pos, canPutBack, onSet, onPutBack }: {
     setX(String(pos.left));
     setY(String(pos.top));
   }, [pos.left, pos.top]);
+  const cancelled = useRef(false);
   const commit = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
     const l = Number(x), t = Number(y);
     if (!Number.isFinite(l) || !Number.isFinite(t) || x.trim() === "" || y.trim() === "") {
       setX(String(pos.left));
@@ -926,6 +929,7 @@ function PositionBar({ name, pos, canPutBack, onSet, onPutBack }: {
     if (e.key === "Escape") {
       setX(String(pos.left));
       setY(String(pos.top));
+      cancelled.current = true; // the blur below must not save what was typed
       (e.target as HTMLInputElement).blur();
     }
   };

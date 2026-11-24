@@ -166,7 +166,9 @@ export const Route = createFileRoute("/program")({
         if (timer) return;
         timer = setTimeout(() => {
           timer = undefined;
-          if (shown.current?.path === path) api.reportSlots({ path, slots: readSlots(frame) }).catch(() => {});
+          // The frame on screen now: a saved version may have swapped in during these 33 ms.
+          const now = refs[frontRef.current].current;
+          if (now && shown.current?.path === path) api.reportSlots({ path, slots: readSlots(now) }).catch(() => {});
         }, 33);
       });
       return () => {

@@ -260,3 +260,46 @@ describe("version stamp (PR #1 architecture #1, #2)", () => {
     expect(tagForEdit(html, `"><script>`)).toContain(`data-vs-hash="script"`);
   });
 });
+
+describe("CodeRabbit findings on PR #1", () => {
+  const pos = (style: string) => {
+    const html = `<div style="${style}"></div>`;
+    return positionOf(html, scanElements(html)[0]!);
+  };
+  test("positionOf ignores left/top inside quoted values and comments", () => {
+    expect(pos(`left:10px;top:20px;--caption:'a;left:90px;'`)).toMatchObject({ left: 10, top: 20 });
+    expect(pos(`left:10px;/* left:99px; */top:20px`)).toMatchObject({ left: 10, top: 20 });
+    const html = `<div style="left:10px;top:20px;--caption:'a;left:90px;'"></div>`;
+    expect(setPosition(html, 0, 5, 6)).toBe(`<div style="left:5px;top:6px;--caption:'a;left:90px;'"></div>`);
+  });
+  test("positionOf patches the declaration that wins (!important, else the last)", () => {
+    const html = `<div style="left:10px!important;left:20px;top:30px"></div>`;
+    expect(positionOf(html, scanElements(html)[0]!)).toMatchObject({ left: 10, top: 30 });
+    expect(setPosition(html, 0, 1, 2)).toBe(`<div style="left:1px!important;left:20px;top:2px"></div>`);
+    expect(pos(`left:10px;left:20px;top:0px`)).toMatchObject({ left: 20 });
+    expect(pos(`left:10px;left:50%;top:0px`)).toBeNull(); // the winning value isn't px
+    expect(pos(`left:10px !important;left:50%;top:0px`)).toMatchObject({ left: 10 });
+  });
+  test("<xmp> and friends are raw text: nothing inside is tagged", () => {
+    const html = `<xmp><b>example</b></xmp><p>x</p>`;
+    expect(scanElements(html).map((e) => e.tag)).toEqual(["xmp", "p"]);
+    expect(untagForEdit(tagForEdit(html))).toBe(html);
+  });
+  test("text can't be saved empty", () => {
+    expect(() => setText(`<p>x</p>`, 0, "   ")).toThrow();
+  });
+  test("changedElements notices text swapped between two panels", () => {
+    const a = `<div id="a"><p>A</p></div><div id="b"><p>B</p></div>`;
+    const b = `<div id="a"><p>B</p></div><div id="b"><p>A</p></div>`;
+    expect(changedElements(a, b).length).toBe(2);
+    expect(changedElements(a, a)).toEqual([]);
+  });
+  test("retarget never replays onto a guess", () => {
+    const prev = `<p>Title</p><p>Notes</p>`;
+    const next = `<p>Intro</p><p>Title</p><p>Notes</p>`;
+    const r = retarget(prev, next, { id: 1, text: "Mine" })!;
+    expect(textOf(next, scanElements(next)[r.id]!)).toBe("Notes");
+    // The agent changed that very text, and other <p>s look the same: can't tell which.
+    expect(retarget(prev, `<p>Intro</p><p>Title</p><p>Agenda</p>`, { id: 1, text: "Mine" })).toBeNull();
+  });
+});

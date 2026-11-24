@@ -33,9 +33,9 @@ export type ScannedElement = {
 
 const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 /** Elements whose content is never markup. */
-const RAW = new Set(["script", "style", "textarea", "title"]);
+const RAW = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript"]);
 /** Leaf text in these is not something to edit on screen. */
-const NOT_TEXT = new Set(["script", "style", "textarea", "title", "html", "head", "body", "svg"]);
+const NOT_TEXT = new Set(["script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "noscript", "html", "head", "body", "svg"]);
 
 const isSpace = (c: string | undefined) => c === " " || c === "\n" || c === "\t" || c === "\r" || c === "\f";
 const isNameStart = (c: string | undefined) => !!c && /[A-Za-z]/.test(c);
@@ -217,22 +217,55 @@ export function textOf(html: string, el: ScannedElement): string {
 export function positionOf(html: string, el: ScannedElement): { left: number; top: number; leftAt: [number, number]; topAt: [number, number] } | null {
   const style = el.attrs.find((a) => a.name === "style" && a.valueStart >= 0);
   if (!style) return null;
-  const value = html.slice(style.valueStart, style.valueEnd);
-  const find = (prop: string): [number, number, number] | null => {
-    const re = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*(-?\\d+(?:\\.\\d+)?)px\\s*(?:;|$|!)`, "gi");
-    let found: [number, number, number] | null = null;
-    for (let m = re.exec(value); m; m = re.exec(value)) {
-      // The last declaration wins, as in CSS.
-      const at = style.valueStart + m.index + m[0].indexOf(m[1]!, m[0].indexOf(":"));
-      found = [Number(m[1]), at, at + m[1]!.length];
-      re.lastIndex = m.index + m[0].length - 1;
+  // Comments become spaces (same length, so offsets hold).
+  const value = html.slice(style.valueStart, style.valueEnd).replace(/\/\*[\s\S]*?(\*\/|$)/g, (c) => " ".repeat(c.length));
+  // Split into declarations at ";" outside quotes, parentheses and comments, the way CSS does.
+  const decls: [number, number][] = [];
+  let from = 0, depth = 0, quote = "";
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i]!;
+    if (quote) {
+      if (c === "\\") i++;
+      else if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === "/" && value[i + 1] === "*") {
+      const close = value.indexOf("*/", i + 2);
+      i = close === -1 ? value.length : close + 1;
+    } else if (c === "(") depth++;
+    else if (c === ")") depth = Math.max(0, depth - 1);
+    else if (c === ";" && depth === 0) {
+      decls.push([from, i]);
+      from = i + 1;
     }
-    return found;
+  }
+  decls.push([from, value.length]);
+  // The declaration that wins: !important over normal, then the last one.
+  const pick = (prop: string) => {
+    let best: { important: boolean; at: [number, number]; n: number } | null = null;
+    let unsupported = false;
+    for (const [a, b] of decls) {
+      const m = /^(\s*)([-\w]+)(\s*:\s*)([\s\S]*?)(\s*)$/.exec(value.slice(a, b));
+      if (!m || m[2]!.toLowerCase() !== prop) continue;
+      const v = /^(-?\d+(?:\.\d+)?)px(\s*!\s*important)?$/i.exec(m[4]!);
+      const important = /!\s*important$/i.test(m[4]!);
+      if (best?.important && !important) continue;
+      if (!v) {
+        // A winning value that isn't plain px (%, calc(), var()) can't be dragged.
+        unsupported = true;
+        best = null;
+        if (important) return null;
+        continue;
+      }
+      unsupported = false;
+      const at = style.valueStart + a + m[1]!.length + m[2]!.length + m[3]!.length;
+      best = { important, at: [at, at + v[1]!.length], n: Number(v[1]) };
+    }
+    return unsupported ? null : best;
   };
-  const l = find("left");
-  const t = find("top");
+  const l = pick("left");
+  const t = pick("top");
   if (!l || !t) return null;
-  return { left: l[0], top: t[0], leftAt: [l[1], l[2]], topAt: [t[1], t[2]] };
+  return { left: l.n, top: t.n, leftAt: l.at, topAt: t.at };
 }
 
 // ---------------------------------------------------------------- edits
@@ -252,6 +285,8 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
     if (!el.leaf) throw new EditError(`<${el.tag}> isn't plain text`);
     if (typeof edit.text !== "string") throw new EditError("Text must be a string");
     const text = edit.text.replace(/[\r\n]+/g, " ");
+    // Empty text would leave nothing to click (or edit) next time.
+    if (!text.trim()) throw new EditError("Text can't be empty");
     if (textOf(html, el) === text.replace(/[ \t\n\r\f]+/g, " ").trim()) return [];
     // Keep the source's own leading and trailing whitespace (indentation).
     const inner = html.slice(el.innerStart, el.innerEnd);
@@ -323,18 +358,24 @@ export function untagForEdit(tagged: string): string {
 // ---------------------------------------------------------------- conflicts
 
 /** What makes an element itself (not its children): its start tag, plus its text when it's a leaf. */
-const signature = (html: string, el: ScannedElement) => html.slice(el.start, el.openEnd) + (el.leaf ? `\u0000${textOf(html, el)}` : "");
+/** What makes an element itself: its start tag, its text when it's a leaf, and the start tag it sits in. */
+function signature(html: string, el: ScannedElement, els: ScannedElement[]) {
+  const parent = el.parent === null ? "" : html.slice(els[el.parent]!.start, els[el.parent]!.openEnd);
+  return `${html.slice(el.start, el.openEnd)}\u0000${el.leaf ? textOf(html, el) : ""}\u0000${parent}`;
+}
 
 /** Ids in `next` whose start tag or text isn't in `prev`: what someone else changed. */
 export function changedElements(prev: string, next: string): number[] {
   const before = new Map<string, number>();
-  for (const el of scanElements(prev)) {
-    const s = signature(prev, el);
+  const a = scanElements(prev);
+  for (const el of a) {
+    const s = signature(prev, el, a);
     before.set(s, (before.get(s) ?? 0) + 1);
   }
   const changed: number[] = [];
-  for (const el of scanElements(next)) {
-    const s = signature(next, el);
+  const b = scanElements(next);
+  for (const el of b) {
+    const s = signature(next, el, b);
     const left = before.get(s) ?? 0;
     if (left > 0) before.set(s, left - 1);
     else changed.push(el.id);
@@ -343,8 +384,10 @@ export function changedElements(prev: string, next: string): number[] {
 }
 
 /**
- * Find element `id` of `prev` in `next` by its position among elements with the same tag,
- * preferring an identical start tag. Null if there's no such element or it can't take the edit.
+ * Find element `id` of `prev` in `next`, or null when it can't be told apart. Candidates have the
+ * same start tag (and can take the edit); among them, one with the same text (for text) and the same
+ * enclosing start tag wins, nearest by position among same-tag elements. With no such match, only a
+ * single remaining candidate is trusted: never replay onto a guess.
  */
 export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit | null {
   const a = scanElements(prev);
@@ -352,12 +395,16 @@ export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit
   if (!el) return null;
   const nth = a.filter((e) => e.tag === el.tag).indexOf(el);
   const open = prev.slice(el.start, el.openEnd);
+  const parentOpen = (html: string, els: ScannedElement[], e: ScannedElement) =>
+    e.parent === null ? "" : html.slice(els[e.parent]!.start, els[e.parent]!.openEnd);
+  const text = el.leaf ? textOf(prev, el) : null;
   const b = scanElements(next);
   const sameTag = b.filter((e) => e.tag === el.tag);
   const fits = (e: ScannedElement) => ("text" in edit ? e.leaf : positionOf(next, e) !== null);
   const sameOpen = sameTag.filter((e) => next.slice(e.start, e.openEnd) === open && fits(e));
-  const byDistance = (list: ScannedElement[]) =>
+  const nearest = (list: ScannedElement[]) =>
     [...list].sort((x, y) => Math.abs(sameTag.indexOf(x) - nth) - Math.abs(sameTag.indexOf(y) - nth))[0];
-  const pick = byDistance(sameOpen) ?? (sameTag[nth] && fits(sameTag[nth]!) ? sameTag[nth] : undefined);
+  const exact = sameOpen.filter((e) => (text === null || (e.leaf && textOf(next, e) === text)) && parentOpen(next, b, e) === parentOpen(prev, a, el));
+  const pick = exact.length ? nearest(exact) : sameOpen.length === 1 ? sameOpen[0] : undefined;
   return pick ? { ...edit, id: pick.id } : null;
 }

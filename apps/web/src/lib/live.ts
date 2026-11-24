@@ -83,5 +83,10 @@ export function useLive(): Live {
  */
 export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
-  return `/library/${path}?${edit ? "edit&" : ""}${preview ? "preview&" : ""}v=${v}`;
+  return `${libraryUrl(path)}?${edit ? "edit&" : ""}${preview ? "preview&" : ""}v=${v}`;
+}
+
+/** /library/<path> with each segment encoded, so a "#", "?" or "%" in a file name survives. */
+export function libraryUrl(path: string) {
+  return `/library/${path.split("/").map(encodeURIComponent).join("/")}`;
 }

@@ -1,4 +1,5 @@
 import type { Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
+import { libraryUrl } from "./live";
 
 /** The scene editor saving against a version of the file that isn't the latest any more. */
 export class SceneConflict extends Error {}
@@ -40,7 +41,7 @@ export const api = {
 
   /** The scene tagged with data-vs ids, and the hash of the file it came from. */
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
-    const res = await fetch(`/library/${path}?edit`, { cache: "no-store" });
+    const res = await fetch(`${libraryUrl(path)}?edit`, { cache: "no-store" });
     if (!res.ok) throw new Error(res.status === 404 ? "This scene doesn't exist any more" : res.statusText);
     const hash = res.headers.get("x-scene-hash");
     if (!hash) throw new Error("This scene can't be edited here. Open the file instead.");

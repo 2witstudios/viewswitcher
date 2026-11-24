@@ -58,6 +58,8 @@ describe("editScene (EDIT-4)", () => {
     await expect(editScene(root, SCENE, hash, [])).rejects.toThrow();
     await expect(editScene(root, SCENE, hash, [{ id: 0, text: "x" }])).rejects.toThrow(); // <html> isn't text
     await expect(editScene(root, SCENE, hash, [{ id: 1, left: "a", top: 1 }])).rejects.toThrow();
+    await expect(editScene(root, SCENE, hash, [{ id: null, text: "x" }])).rejects.toThrow(); // not element 0
+    await expect(editScene(root, SCENE, hash, [{ id: "3", text: "x" }])).rejects.toThrow();
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
   });
 });
@@ -113,7 +115,7 @@ describe("over HTTP", () => {
   let base = "";
   beforeAll(async () => {
     proc = Bun.spawn(["bun", join(import.meta.dir, "index.ts")], {
-      env: { ...process.env, PORT: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: root, VIEWSWITCHER_LOG: "" },
+      env: { ...process.env, HOST: "127.0.0.1", PORT: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: root, VIEWSWITCHER_LOG: "" },
       stdout: "pipe", stderr: "ignore",
     });
     const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();

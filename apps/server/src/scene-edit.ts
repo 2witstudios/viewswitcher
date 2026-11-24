@@ -26,8 +26,9 @@ export async function readForEdit(root: string, path: string) {
 
 /** Check one edit's shape: {id, text} or {id, left, top}. */
 export function parseEdit(e: any): SceneEdit {
-  const id = Number(e?.id);
-  if (!Number.isInteger(id) || id < 0) throw new EditError("Each edit needs an element id");
+  // A real number only: Number(null) or Number("") would quietly become element 0.
+  const id = e?.id;
+  if (typeof id !== "number" || !Number.isInteger(id) || id < 0) throw new EditError("Each edit needs an element id");
   if (typeof e.text === "string") {
     if (e.text.length > 2000) throw new EditError("That text is too long for a scene");
     return { id, text: e.text };
