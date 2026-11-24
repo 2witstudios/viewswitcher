@@ -3,7 +3,7 @@
 // iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects
 // Mac → iPad. So this keeps a few idle tunnels open to the app's listener (iPad port 7421).
 // When the iPad's WebView makes a request, the app hands it an idle tunnel; the first bytes
-// arrive here, and we pipe that tunnel to the Daisy server and open a replacement.
+// arrive here, and we pipe that tunnel to the ViewSwitcher server and open a replacement.
 // One tunnel per HTTP connection or WebSocket, so there is no multiplexing protocol.
 import { existsSync } from "node:fs";
 import net from "node:net";

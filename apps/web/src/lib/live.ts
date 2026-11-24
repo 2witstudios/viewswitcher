@@ -1,5 +1,5 @@
 // One WebSocket to the server: live state (on air, OBS, warnings) and file-change versions.
-import type { LiveState, ServerMessage } from "@daisy/shared";
+import type { LiveState, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
@@ -8,7 +8,7 @@ export const queryClient = new QueryClient({ defaultOptions: { queries: { staleT
 type Live = {
   connected: boolean;
   state: LiveState | null;
-  /** Bumped per library path when its file changes; `*` bumps for shared theme changes. */
+  /** Bumped per library path when its file changes; `*` bumps when any org's shared theme changes. */
   versions: Record<string, number>;
 };
 
@@ -49,7 +49,7 @@ function connect() {
       const versions = { ...live.versions };
       for (const p of msg.paths) {
         versions[p] = (versions[p] ?? 0) + 1;
-        if (p.startsWith("templates/_shared")) versions["*"] = (versions["*"] ?? 0) + 1;
+        if (p.includes("templates/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
       }
       set({ versions });
       queryClient.invalidateQueries({ queryKey: ["library"] });

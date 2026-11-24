@@ -75,6 +75,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>ViewSwitcher connects to the Daisy server on your Mac when the USB-C cable isn't plugged in.</string>
+	<string>ViewSwitcher connects to the ViewSwitcher server on your Mac when the USB-C cable isn't plugged in.</string>
 </dict>
 </plist>

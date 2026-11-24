@@ -5,10 +5,10 @@ export function Mark({ size = 22 }: { size?: number }) {
 }
 
 export const MoreIcon = () => (
-  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="#a7c09c"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="#a3a8b5"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
 );
 export const PlusIcon = ({ size = 14 }: { size?: number }) => (
-  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#a7c09c" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#a3a8b5" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 );
 
 export type MenuItem = { label: string; hint?: string; run: () => void | Promise<void> } | "divider";

@@ -4,7 +4,7 @@
 // only one transition runs at a time, and when it finishes it checks for a newer request and runs again.
 // Requests that are superseded while loading are dropped; the screen always ends on the latest one.
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { sceneUrl, useLive } from "../lib/live";
 
@@ -125,7 +125,11 @@ export const Route = createFileRoute("/program")({
                 style={{ visibility: i === front ? "visible" : "hidden" }} />
             ) : null,
           )}
-          <div className={`wipe${wipe ? " on" : ""}`} aria-hidden="true"><img src="/icon.svg" alt="" /></div>
+          {/* Transition card: the on-air org's ground color and mark (falls back to the ViewSwitcher mark). */}
+          <div className={`wipe${wipe ? " on" : ""}`} aria-hidden="true" style={{ "--ground": onAir?.ground } as CSSProperties}>
+            <img key={onAir?.org} src={onAir ? `/library/${onAir.org}/templates/_shared/brand/mark.svg` : "/icon.svg"} alt=""
+              onError={(e) => { if (!e.currentTarget.src.endsWith("/icon.svg")) e.currentTarget.src = "/icon.svg"; }} />
+          </div>
         </div>
       </div>
     );

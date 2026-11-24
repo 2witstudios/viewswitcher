@@ -1,0 +1,45 @@
+/* {{ORG_NAME}} scene theme (ViewSwitcher starter). Every scene links this file.
+   Change the tokens to rebrand every scene at once. */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Instrument+Sans:wght@400..700&display=swap");
+
+:root {
+  --ground: {{GROUND}};    /* OBS paints this behind every scene; keep in sync with org.json */
+  --panel: #191b22;
+  --line: #2a2d37;
+  --accent: {{ACCENT}};
+  --on-accent: #0e0f13;
+  --text: #f4f5f7;
+  --muted: #a3a8b5;
+  --quiet: #6e7380;
+  --display: "Space Grotesk", "Helvetica Neue", sans-serif;
+  --body: "Instrument Sans", system-ui, sans-serif;
+}
+
+/* Scenes are transparent: OBS shows the ground color and the devices underneath. */
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+.scene { position: relative; width: 1920px; height: 1080px; overflow: hidden; color: var(--text); font-family: var(--body); }
+
+.display { font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; line-height: 0.95; margin: 0; }
+.kicker { font-weight: 600; letter-spacing: 0.28em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.panel { background: var(--panel); border-radius: 18px; }
+.chip { display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; letter-spacing: 0.2em; font-size: 15px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); flex: none; }
+.abs { position: absolute; }
+
+/* Device slots: <div class="slot" data-slot="Camera" style="left:…; top:…; width:…; height:…">.
+   The server moves the OBS source with that name into this box (cover-fit, cropped).
+   The box stays transparent; rounded corners are masked with the ground color. */
+.slot { position: absolute; overflow: hidden; --radius: 18px; }
+.slot::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); box-shadow: 0 0 0 2000px var(--ground); }
+.slot.round { --radius: 50%; }
+.slot.square { --radius: 0; }
+
+/* Preview mode (switcher covers, ?preview): paint the ground and label the holes. */
+.preview body { background: var(--ground); }
+.preview .slot { background: #00000055; }
+.preview .slot::before {
+  content: attr(data-slot); position: absolute; inset: 0; display: grid; place-items: center;
+  border: 2px dashed var(--line); border-radius: var(--radius);
+  font: 600 18px/1 var(--body); letter-spacing: 0.28em; text-transform: uppercase; color: var(--quiet);
+}

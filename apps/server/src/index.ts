@@ -1,17 +1,18 @@
-// Daisy Production server: the switcher API, the library files, live state, and OBS.
+// ViewSwitcher server: the switcher API, the library files, live state, and OBS.
 import { watch } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
-import type { LiveState, OnAir, ServerMessage, Slot } from "@daisy/shared";
+import { obsColor, orgOf } from "@viewswitcher/shared";
+import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
 import { config } from "./config";
 import * as lib from "./library";
 import { OBSClient } from "./obs";
-import { inside, PathError } from "./paths";
+import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 await mkdir(config.library, { recursive: true });
-const stateFile = join(config.library, ".daisy", "state.json");
+const stateFile = join(config.library, ".viewswitcher", "state.json");
 
 // ---------------------------------------------------------------- live state
 
@@ -25,7 +26,7 @@ function publish(msg: ServerMessage) {
 const publishState = () => publish({ t: "state", state });
 
 async function persist() {
-  await mkdir(join(config.library, ".daisy"), { recursive: true });
+  await mkdir(join(config.library, ".viewswitcher"), { recursive: true });
   await writeFile(stateFile, JSON.stringify({ onAir: state.onAir }, null, 2));
 }
 
@@ -38,6 +39,7 @@ const obs = new OBSClient({
     publishState();
   },
   onIdentified: () => {
+    groundShown = null;
     if (lastSlots) applyLatest();
   },
 }).start();
@@ -51,18 +53,28 @@ function applyLatest(): Promise<void> {
   const seq = ++placementSeq;
   placementQueue = placementQueue.then(async () => {
     if (seq !== placementSeq || !lastSlots) return; // superseded
-    if (process.env.DAISY_LOG) console.log(`[place] ${lastSlots.path.split("/").slice(-2).join("/")}`);
-    await applySlots(lastSlots.slots);
+    if (process.env.VIEWSWITCHER_LOG) console.log(`[place] ${lastSlots.path.split("/").slice(-2).join("/")}`);
+    await applySlots(lastSlots.path, lastSlots.slots);
   });
   return placementQueue;
 }
 
-async function applySlots(slots: Slot[]) {
+// The OBS ground color follows the org of the scene being shown.
+let groundShown: string | null = null;
+async function applyGround(path: string) {
+  const org = await lib.readOrg(config.library, orgOf(path)).catch(() => null);
+  if (!org || org.ground === groundShown) return;
+  await obs.request("SetInputSettings", { inputName: config.obs.groundSource, inputSettings: { color: obsColor(org.ground) } });
+  groundShown = org.ground;
+}
+
+async function applySlots(path: string, slots: Slot[]) {
   if (!obs.status.connected) {
     state.warnings = [];
     return publishState();
   }
   try {
+    await applyGround(path).catch(() => {}); // a missing ground source isn't worth a warning
     state.warnings = await placeDevices(obs, slots, config.obs);
   } catch (e) {
     state.warnings = [`Couldn't place sources in OBS: ${(e as Error).message}`];
@@ -77,7 +89,7 @@ let flushTimer: ReturnType<typeof setTimeout> | undefined;
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
   const rel = filename.split(sep).join("/");
-  if (rel.startsWith(".git") || rel.startsWith(".daisy") || rel.includes("/.") || rel.endsWith("~")) return;
+  if (rel.startsWith(".git") || rel.startsWith(".viewswitcher") || rel.includes("/.") || rel.endsWith("~")) return;
   changed.add(rel);
   clearTimeout(flushTimer);
   flushTimer = setTimeout(() => {
@@ -91,18 +103,26 @@ watch(config.library, { recursive: true }, (_event, filename) => {
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 
-async function api(req: Request, path: string): Promise<Response> {
+async function api(req: Request, path: string, url: URL): Promise<Response> {
   const root = config.library;
   const post = req.method === "POST";
+  /** One org's folder; every mutation below works inside it. */
+  const org = (id: unknown) => inside(root, plainName(String(id ?? "")));
 
-  if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root));
+  if (path === "/api/orgs" && req.method === "GET") return json(await lib.listOrgs(root));
+  if (path === "/api/orgs" && post) {
+    const b = await body(req);
+    return json(await lib.createOrg(root, config.starter, b.name, b.accent, b.ground));
+  }
+  if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
 
   if (path === "/api/onair" && post) {
     const b = await body(req);
     inside(root, b.path);
-    if (process.env.DAISY_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
-    state.onAir = { path: b.path, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
+    if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
+    const o = await lib.readOrg(root, orgOf(b.path));
+    state.onAir = { path: b.path, org: o.id, ground: o.ground, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
     state.warnings = [];
     await persist();
     publishState();
@@ -114,7 +134,7 @@ async function api(req: Request, path: string): Promise<Response> {
     // Devices follow what the program page is *showing*, never what was just requested: the page
     // always converges on the latest on-air scene, and its reports arrive in order, so the last
     // placement always matches the final picture. (Ignoring "stale" reports here caused drift.)
-    if (process.env.DAISY_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
+    if (process.env.VIEWSWITCHER_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
     const slots: Slot[] = (b.slots ?? []).map((s: Slot) => ({
       source: String(s.source), x: Number(s.x), y: Number(s.y), w: Number(s.w), h: Number(s.h),
     }));
@@ -125,23 +145,23 @@ async function api(req: Request, path: string): Promise<Response> {
 
   if (path === "/api/projects" && post) {
     const b = await body(req);
-    return json(await lib.createProject(root, b.name, b.templates ?? []));
+    return json(await lib.createProject(org(b.org), b.name, b.templates ?? []));
   }
   if (path === "/api/streams" && post) {
     const b = await body(req);
-    return json(await lib.createStream(root, b.projectId, b.name, b.date));
+    return json(await lib.createStream(org(b.org), b.projectId, b.name, b.date));
   }
   if (path === "/api/scenes/from-template" && post) {
     const b = await body(req);
-    return json(await lib.addFromTemplate(root, b.template, b.projectId, b.streamId));
+    return json(await lib.addFromTemplate(org(b.org), b.template, b.projectId, b.streamId));
   }
   if (path === "/api/scenes/customize" && post) {
     const b = await body(req);
-    return json(await lib.customize(root, b.projectId, b.streamId, b.name));
+    return json(await lib.customize(org(b.org), b.projectId, b.streamId, b.name));
   }
   if (path === "/api/scenes/revert" && post) {
     const b = await body(req);
-    await lib.revert(root, b.projectId, b.streamId, b.name);
+    await lib.revert(org(b.org), b.projectId, b.streamId, b.name);
     return json({ ok: true });
   }
   if (path === "/api/scenes/duplicate" && post) {
@@ -150,14 +170,17 @@ async function api(req: Request, path: string): Promise<Response> {
   }
   if (path === "/api/assets" && post) {
     const form = await req.formData();
+    const orgId = plainName(String(form.get("org") ?? ""));
     const saved = [];
-    for (const f of form.getAll("file")) if (f instanceof File && f.size > 0) saved.push(await lib.saveAsset(root, f));
+    for (const f of form.getAll("file")) {
+      if (f instanceof File && f.size > 0) saved.push({ path: `${orgId}/${(await lib.saveAsset(org(orgId), f)).path}` });
+    }
     return json({ saved });
   }
   if (path === "/api/open" && post) {
     const b = await body(req);
     const abs = inside(root, b.path);
-    const app = process.env.DAISY_EDITOR;
+    const app = process.env.VIEWSWITCHER_EDITOR;
     Bun.spawn(app ? ["open", "-a", app, abs] : ["open", "-t", abs], { stdout: "ignore", stderr: "ignore" });
     return json({ ok: true });
   }
@@ -184,12 +207,12 @@ const server = Bun.serve({
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
       if (path.startsWith("/api/")) {
-        if (process.env.DAISY_LOG) console.log(`[http] ${req.method} ${path}`);
+        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });
         }
-        return await api(req, path);
+        return await api(req, path, url);
       }
       if (path.startsWith("/library/")) {
         return (await fileResponse(inside(config.library, path.slice("/library/".length)))) ?? new Response("Not found", { status: 404 });
@@ -208,7 +231,7 @@ const server = Bun.serve({
   },
   websocket: {
     open(ws) {
-      if (process.env.DAISY_LOG) console.log("[ws] client connected");
+      if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
       ws.subscribe("all");
       ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
     },
@@ -220,4 +243,4 @@ console.log(`[daisy] http://localhost:${server.port}  library: ${config.library}
 console.log(`[daisy] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
-if (process.env.DAISY_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });
+if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });

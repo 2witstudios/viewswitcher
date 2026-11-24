@@ -12,9 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as ProgramRouteImport } from './routes/program'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppAssetsRouteImport } from './routes/_app/assets'
-import { Route as AppTemplatesRouteImport } from './routes/_app/templates'
-import { Route as AppPProjectIdStreamIdRouteImport } from './routes/_app/p.$projectId.$streamId'
+import { Route as AppOrgRouteImport } from './routes/_app/$org'
+import { Route as AppOrgIndexRouteImport } from './routes/_app/$org/index'
+import { Route as AppOrgAssetsRouteImport } from './routes/_app/$org/assets'
+import { Route as AppOrgTemplatesRouteImport } from './routes/_app/$org/templates'
+import { Route as AppOrgPProjectIdStreamIdRouteImport } from './routes/_app/$org/p.$projectId.$streamId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -30,59 +32,89 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppAssetsRoute = AppAssetsRouteImport.update({
+const AppOrgRoute = AppOrgRouteImport.update({
+  id: '/$org',
+  path: '/$org',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrgIndexRoute = AppOrgIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppOrgRoute,
+} as any)
+const AppOrgAssetsRoute = AppOrgAssetsRouteImport.update({
   id: '/assets',
   path: '/assets',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppOrgRoute,
 } as any)
-const AppTemplatesRoute = AppTemplatesRouteImport.update({
+const AppOrgTemplatesRoute = AppOrgTemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => AppOrgRoute,
 } as any)
-const AppPProjectIdStreamIdRoute = AppPProjectIdStreamIdRouteImport.update({
-  id: '/p/$projectId/$streamId',
-  path: '/p/$projectId/$streamId',
-  getParentRoute: () => AppRoute,
-} as any)
+const AppOrgPProjectIdStreamIdRoute =
+  AppOrgPProjectIdStreamIdRouteImport.update({
+    id: '/p/$projectId/$streamId',
+    path: '/p/$projectId/$streamId',
+    getParentRoute: () => AppOrgRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/program': typeof ProgramRoute
-  '/assets': typeof AppAssetsRoute
-  '/templates': typeof AppTemplatesRoute
-  '/p/$projectId/$streamId': typeof AppPProjectIdStreamIdRoute
+  '/$org': typeof AppOrgRouteWithChildren
+  '/$org/assets': typeof AppOrgAssetsRoute
+  '/$org/templates': typeof AppOrgTemplatesRoute
+  '/$org/': typeof AppOrgIndexRoute
+  '/$org/p/$projectId/$streamId': typeof AppOrgPProjectIdStreamIdRoute
 }
 export interface FileRoutesByTo {
   '/program': typeof ProgramRoute
-  '/assets': typeof AppAssetsRoute
-  '/templates': typeof AppTemplatesRoute
   '/': typeof AppIndexRoute
-  '/p/$projectId/$streamId': typeof AppPProjectIdStreamIdRoute
+  '/$org/assets': typeof AppOrgAssetsRoute
+  '/$org/templates': typeof AppOrgTemplatesRoute
+  '/$org': typeof AppOrgIndexRoute
+  '/$org/p/$projectId/$streamId': typeof AppOrgPProjectIdStreamIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/program': typeof ProgramRoute
-  '/_app/assets': typeof AppAssetsRoute
-  '/_app/templates': typeof AppTemplatesRoute
+  '/_app/$org': typeof AppOrgRouteWithChildren
   '/_app/': typeof AppIndexRoute
-  '/_app/p/$projectId/$streamId': typeof AppPProjectIdStreamIdRoute
+  '/_app/$org/assets': typeof AppOrgAssetsRoute
+  '/_app/$org/templates': typeof AppOrgTemplatesRoute
+  '/_app/$org/': typeof AppOrgIndexRoute
+  '/_app/$org/p/$projectId/$streamId': typeof AppOrgPProjectIdStreamIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/program' | '/assets' | '/templates' | '/p/$projectId/$streamId'
+    | '/'
+    | '/program'
+    | '/$org'
+    | '/$org/assets'
+    | '/$org/templates'
+    | '/$org/'
+    | '/$org/p/$projectId/$streamId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/program' | '/assets' | '/templates' | '/' | '/p/$projectId/$streamId'
+  to:
+    | '/program'
+    | '/'
+    | '/$org/assets'
+    | '/$org/templates'
+    | '/$org'
+    | '/$org/p/$projectId/$streamId'
   id:
     | '__root__'
     | '/_app'
     | '/program'
-    | '/_app/assets'
-    | '/_app/templates'
+    | '/_app/$org'
     | '/_app/'
-    | '/_app/p/$projectId/$streamId'
+    | '/_app/$org/assets'
+    | '/_app/$org/templates'
+    | '/_app/$org/'
+    | '/_app/$org/p/$projectId/$streamId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -113,42 +145,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/assets': {
-      id: '/_app/assets'
+    '/_app/$org': {
+      id: '/_app/$org'
+      path: '/$org'
+      fullPath: '/$org'
+      preLoaderRoute: typeof AppOrgRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/$org/': {
+      id: '/_app/$org/'
+      path: '/'
+      fullPath: '/$org/'
+      preLoaderRoute: typeof AppOrgIndexRouteImport
+      parentRoute: typeof AppOrgRoute
+    }
+    '/_app/$org/assets': {
+      id: '/_app/$org/assets'
       path: '/assets'
-      fullPath: '/assets'
-      preLoaderRoute: typeof AppAssetsRouteImport
-      parentRoute: typeof AppRoute
+      fullPath: '/$org/assets'
+      preLoaderRoute: typeof AppOrgAssetsRouteImport
+      parentRoute: typeof AppOrgRoute
     }
-    '/_app/templates': {
-      id: '/_app/templates'
+    '/_app/$org/templates': {
+      id: '/_app/$org/templates'
       path: '/templates'
-      fullPath: '/templates'
-      preLoaderRoute: typeof AppTemplatesRouteImport
-      parentRoute: typeof AppRoute
+      fullPath: '/$org/templates'
+      preLoaderRoute: typeof AppOrgTemplatesRouteImport
+      parentRoute: typeof AppOrgRoute
     }
-    '/_app/p/$projectId/$streamId': {
-      id: '/_app/p/$projectId/$streamId'
+    '/_app/$org/p/$projectId/$streamId': {
+      id: '/_app/$org/p/$projectId/$streamId'
       path: '/p/$projectId/$streamId'
-      fullPath: '/p/$projectId/$streamId'
-      preLoaderRoute: typeof AppPProjectIdStreamIdRouteImport
-      parentRoute: typeof AppRoute
+      fullPath: '/$org/p/$projectId/$streamId'
+      preLoaderRoute: typeof AppOrgPProjectIdStreamIdRouteImport
+      parentRoute: typeof AppOrgRoute
     }
   }
 }
 
+interface AppOrgRouteChildren {
+  AppOrgAssetsRoute: typeof AppOrgAssetsRoute
+  AppOrgTemplatesRoute: typeof AppOrgTemplatesRoute
+  AppOrgIndexRoute: typeof AppOrgIndexRoute
+  AppOrgPProjectIdStreamIdRoute: typeof AppOrgPProjectIdStreamIdRoute
+}
+
+const AppOrgRouteChildren: AppOrgRouteChildren = {
+  AppOrgAssetsRoute: AppOrgAssetsRoute,
+  AppOrgTemplatesRoute: AppOrgTemplatesRoute,
+  AppOrgIndexRoute: AppOrgIndexRoute,
+  AppOrgPProjectIdStreamIdRoute: AppOrgPProjectIdStreamIdRoute,
+}
+
+const AppOrgRouteWithChildren =
+  AppOrgRoute._addFileChildren(AppOrgRouteChildren)
+
 interface AppRouteChildren {
-  AppAssetsRoute: typeof AppAssetsRoute
-  AppTemplatesRoute: typeof AppTemplatesRoute
+  AppOrgRoute: typeof AppOrgRouteWithChildren
   AppIndexRoute: typeof AppIndexRoute
-  AppPProjectIdStreamIdRoute: typeof AppPProjectIdStreamIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAssetsRoute: AppAssetsRoute,
-  AppTemplatesRoute: AppTemplatesRoute,
+  AppOrgRoute: AppOrgRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
-  AppPProjectIdStreamIdRoute: AppPProjectIdStreamIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

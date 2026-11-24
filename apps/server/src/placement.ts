@@ -1,6 +1,6 @@
 // Places OBS device sources into a scene's data-slot boxes.
-import { coverTransform } from "@daisy/shared";
-import type { Slot } from "@daisy/shared";
+import { coverTransform } from "@viewswitcher/shared";
+import type { Slot } from "@viewswitcher/shared";
 import type { OBSClient } from "./obs";
 
 type Options = { scene: string; devices: string[] };

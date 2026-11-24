@@ -1,18 +1,18 @@
-import { resolveStream, shortDate } from "@daisy/shared";
-import type { Scene } from "@daisy/shared";
+import { resolveStream, shortDate } from "@viewswitcher/shared";
+import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { PageHead } from "../../components/PageHead";
-import { SceneTile } from "../../components/SceneTile";
-import { attempt, Menu, type MenuItem, PlusIcon } from "../../components/ui";
-import { api, copy } from "../../lib/api";
-import { useLibrary } from "../../lib/library";
-import { useLive } from "../../lib/live";
+import { PageHead } from "../../../components/PageHead";
+import { SceneTile } from "../../../components/SceneTile";
+import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
+import { api, copy } from "../../../lib/api";
+import { useLibrary } from "../../../lib/library";
+import { useLive } from "../../../lib/live";
 
-export const Route = createFileRoute("/_app/p/$projectId/$streamId")({
+export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
   component: function StreamPage() {
-    const { projectId, streamId } = Route.useParams();
-    const { data } = useLibrary();
+    const { org, projectId, streamId } = Route.useParams();
+    const { data } = useLibrary(org);
     const { state } = useLive();
     const [adding, setAdding] = useState(false);
 
@@ -56,7 +56,7 @@ export const Route = createFileRoute("/_app/p/$projectId/$streamId")({
                         hint: "Deletes this stream's copy",
                         run: async () => {
                           if (!confirm(`Delete this stream's ${s.label} and use the project's?`)) return;
-                          await attempt(() => api.revert(projectId, streamId, s.name), "Back to the project version");
+                          await attempt(() => api.revert(org, projectId, streamId, s.name), "Back to the project version");
                         },
                       }]
                     : []),
@@ -75,8 +75,8 @@ export const Route = createFileRoute("/_app/p/$projectId/$streamId")({
                   onClose={() => setAdding(false)}
                   items={data.templates.map((t) => ({
                     label: t.label,
-                    hint: `Copy templates/${t.name}.html into this stream`,
-                    run: () => attempt(() => api.addFromTemplate(t.name, projectId, streamId), `Added ${t.label}`),
+                    hint: `Copy ${t.path} into this stream`,
+                    run: () => attempt(() => api.addFromTemplate(org, t.name, projectId, streamId), `Added ${t.label}`),
                   }))}
                 />
               )}
@@ -99,7 +99,7 @@ export const Route = createFileRoute("/_app/p/$projectId/$streamId")({
                   {
                     label: "Customize for this stream",
                     hint: "Copies it into this stream first",
-                    run: () => attempt(() => api.customize(projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
+                    run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
                   ...fileItems(s, "Changes it for every stream"),

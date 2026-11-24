@@ -1,4 +1,4 @@
-import type { Library, LiveState } from "@daisy/shared";
+import type { Library, LiveState, Org } from "@viewswitcher/shared";
 
 async function post<T = unknown>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, {
@@ -12,27 +12,34 @@ async function post<T = unknown>(path: string, body?: unknown): Promise<T> {
 }
 
 export const api = {
-  library: async (): Promise<Library> => (await fetch("/api/library")).json(),
+  orgs: async (): Promise<Org[]> => (await fetch("/api/orgs")).json(),
+  createOrg: (name: string, accent?: string) => post<{ orgId: string }>("/api/orgs", { name, accent }),
+  library: async (org: string): Promise<Library> => {
+    const res = await fetch(`/api/library?org=${encodeURIComponent(org)}`);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
+    return res.json();
+  },
   state: async (): Promise<LiveState> => (await fetch("/api/state")).json(),
 
   putOnAir: (b: { path: string; label: string; projectId?: string; streamId?: string }) => post("/api/onair", b),
   reportSlots: (b: { path: string; slots: unknown[] }) => post("/api/program/slots", b),
 
-  createProject: (name: string, templates: string[]) => post<{ projectId: string }>("/api/projects", { name, templates }),
-  createStream: (projectId: string, name: string, date: string) =>
-    post<{ projectId: string; streamId: string }>("/api/streams", { projectId, name, date }),
-  addFromTemplate: (template: string, projectId: string, streamId?: string) =>
-    post<{ name: string }>("/api/scenes/from-template", { template, projectId, streamId }),
-  customize: (projectId: string, streamId: string, name: string) => post("/api/scenes/customize", { projectId, streamId, name }),
-  revert: (projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { projectId, streamId, name }),
+  createProject: (org: string, name: string, templates: string[]) => post<{ projectId: string }>("/api/projects", { org, name, templates }),
+  createStream: (org: string, projectId: string, name: string, date: string) =>
+    post<{ projectId: string; streamId: string }>("/api/streams", { org, projectId, name, date }),
+  addFromTemplate: (org: string, template: string, projectId: string, streamId?: string) =>
+    post<{ name: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
+  customize: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/customize", { org, projectId, streamId, name }),
+  revert: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { org, projectId, streamId, name }),
   duplicate: (path: string) => post("/api/scenes/duplicate", { path }),
   open: (path: string) => post("/api/open", { path }),
 
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
 
-  upload: async (files: FileList | File[]) => {
+  upload: async (org: string, files: FileList | File[]) => {
     const form = new FormData();
+    form.append("org", org);
     for (const f of Array.from(files)) form.append("file", f);
     const res = await fetch("/api/assets", { method: "POST", body: form });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Upload failed");

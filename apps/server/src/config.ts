@@ -17,16 +17,20 @@ function localObsPassword(): string | undefined {
 
 export const config = {
   port: Number(env.PORT ?? 7420),
-  /** The content library agents edit: templates, assets, projects. */
-  library: resolve(env.DAISY_LIBRARY ?? join(homedir(), "Daisy Production Library")),
+  /** The content library agents edit: one folder per org, each with templates, assets, projects. */
+  library: resolve(env.VIEWSWITCHER_LIBRARY ?? join(homedir(), "ViewSwitcher Library")),
+  /** Copied into each new org: neutral templates and theme. */
+  starter: resolve(import.meta.dir, "../starter"),
   /** Built switcher/program SPA. */
   webDist: resolve(import.meta.dir, "../../web/dist"),
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
     password: env.OBS_PASSWORD ?? localObsPassword(),
     /** The one OBS scene that holds the program browser source and the devices. */
-    scene: env.OBS_SCENE ?? "Daisy Live",
-    programSource: env.OBS_PROGRAM_SOURCE ?? "Daisy Program",
+    scene: env.OBS_SCENE ?? "ViewSwitcher",
+    programSource: env.OBS_PROGRAM_SOURCE ?? "ViewSwitcher Program",
+    /** Color source under everything; set to the on-air org's ground color. */
+    groundSource: env.OBS_GROUND_SOURCE ?? "ViewSwitcher Ground",
     /** OBS sources that scenes can place with data-slot. Hidden when a scene doesn't use them. */
     devices: (env.OBS_DEVICES ?? "Camera,Screen,iPad").split(",").map((s) => s.trim()).filter(Boolean),
   },

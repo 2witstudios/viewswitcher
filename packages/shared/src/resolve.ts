@@ -39,3 +39,15 @@ export function shortDate(iso: string): string {
   if (!y || !m || !d) return iso;
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
+
+/** "#0d1812" → OBS color (ABGR as an unsigned int, opaque). */
+export function obsColor(hex: string): number {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) throw new Error(`Not a #rrggbb color: ${hex}`);
+  const n = parseInt(m[1]!, 16);
+  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+  return ((0xff << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+/** The org a library path belongs to: its first segment. */
+export const orgOf = (path: string) => path.split("/")[0] ?? "";

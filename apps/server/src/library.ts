@@ -1,7 +1,7 @@
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { slugify } from "@daisy/shared";
-import type { Asset, AssetKind, Library, Project, Scene, SceneOrigin, Stream } from "@daisy/shared";
+import { slugify } from "@viewswitcher/shared";
+import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
 const KINDS: Record<string, AssetKind> = {
@@ -27,7 +27,7 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[] = []): Promise<Scene[]> {
+async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string): Promise<Scene[]> {
   let files: string[] = [];
   try {
     files = (await readdir(join(root, rel))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
@@ -39,16 +39,64 @@ async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: s
       const name = f.slice(0, -5);
       const html = await readFile(join(root, rel, f), "utf8").catch(() => "");
       const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim();
-      return { name, label: title || name.replace(/-/g, " "), path: `${rel}/${f}`, origin } satisfies Scene;
+      return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin } satisfies Scene;
     }),
   );
   const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length);
   return scenes.sort((a, b) => rank(a.name) - rank(b.name) || a.label.localeCompare(b.label));
 }
 
-export async function scanLibrary(root: string): Promise<Library> {
+// ---------------------------------------------------------------- orgs
+// The library root holds one folder per org (a brand or channel). Each org has its own
+// templates/, assets/ and projects/, plus org.json { name, accent, ground }.
+
+const ORG_DEFAULTS = { accent: "#8b7bff", ground: "#0e0f13" };
+
+export async function readOrg(root: string, id: string): Promise<Org> {
+  const dir = inside(root, plainName(id));
+  const meta = await readJson(join(dir, "org.json"), { name: id, ...ORG_DEFAULTS });
+  return { id, name: meta.name, accent: meta.accent, ground: meta.ground };
+}
+
+export async function listOrgs(root: string): Promise<Org[]> {
+  const ids = [];
+  for (const id of await dirs(root)) if (await exists(join(root, id, "org.json"))) ids.push(id);
+  const orgs = await Promise.all(ids.map((id) => readOrg(root, id)));
+  return orgs.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A new org from the starter kit: neutral templates that use the org's own name and colors. */
+export async function createOrg(root: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
+  if (!name?.trim()) throw new PathError("An org needs a name");
+  const base = slugify(name);
+  let id = base, n = 2;
+  while (await exists(join(root, id))) id = `${base}-${n++}`;
+  const dir = join(root, id);
+  await cp(starter, dir, { recursive: true });
+  const vars: Record<string, string> = { ORG_ID: id, ORG_NAME: name.trim(), ORG_INITIAL: name.trim()[0]!.toUpperCase(), ACCENT: accent, GROUND: ground };
+  const fill = async (path: string) => {
+    for (const e of await readdir(path, { withFileTypes: true })) {
+      const p = join(path, e.name);
+      if (e.isDirectory()) await fill(p);
+      else if (/\.(html|css|json|md|js|svg)$/.test(e.name)) {
+        const text = await readFile(p, "utf8");
+        await writeFile(p, text.replace(/\{\{(\w+)\}\}/g, (m, k) => vars[k] ?? m));
+      }
+    }
+  };
+  await fill(dir);
+  await mkdir(join(dir, "assets"), { recursive: true });
+  await mkdir(join(dir, "projects"), { recursive: true });
+  return { orgId: id };
+}
+
+/** One org's content. `root` is the library root; every returned path starts with the org id. */
+export async function scanLibrary(libraryRoot: string, orgId: string): Promise<Library> {
+  const org = await readOrg(libraryRoot, orgId);
+  const root = inside(libraryRoot, plainName(orgId));
+  const prefix = `${org.id}/`;
   const meta = await readJson(join(root, "templates/_shared/order.json"), { order: [] as string[] });
-  const templates = await scenesIn(root, "templates", "template", meta.order);
+  const templates = await scenesIn(root, "templates", "template", meta.order, prefix);
 
   let assets: Asset[] = [];
   try {
@@ -56,7 +104,7 @@ export async function scanLibrary(root: string): Promise<Library> {
     assets = await Promise.all(
       names.map(async (name) => {
         const s = await stat(join(root, "assets", name));
-        return { name, path: `assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s.size };
+        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s.size };
       }),
     );
     assets = assets.filter((a) => a.size > 0).sort((a, b) => a.name.localeCompare(b.name));
@@ -69,12 +117,12 @@ export async function scanLibrary(root: string): Promise<Library> {
     for (const sid of await dirs(join(root, "projects", id, "streams"))) {
       const rel = `projects/${id}/streams/${sid}`;
       const s = await readJson(join(root, rel, "stream.json"), { name: sid, date: "" });
-      streams.push({ id: sid, name: s.name, date: s.date, scenes: await scenesIn(root, rel, "stream", p.order) });
+      streams.push({ id: sid, name: s.name, date: s.date, scenes: await scenesIn(root, rel, "stream", p.order, prefix) });
     }
     streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
-    projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order), streams });
+    projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix), streams });
   }
-  return { templates, assets, projects };
+  return { org, templates, assets, projects };
 }
 
 // ---------------------------------------------------------------- mutations

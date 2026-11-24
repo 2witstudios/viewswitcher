@@ -1,10 +1,10 @@
 {
-  "name": "Daisy Live",
-  "short_name": "Daisy Live",
+  "name": "ViewSwitcher",
+  "short_name": "ViewSwitcher",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a120d",
-  "theme_color": "#0a120d",
+  "background_color": "#0b0c0f",
+  "theme_color": "#0b0c0f",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
     { "src": "/icon-180.png", "sizes": "180x180", "type": "image/png" }

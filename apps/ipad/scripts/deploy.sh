@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build ViewSwitcher, sign it with your team, install it on the USB-connected iPad, and launch it.
-#   bun run viewswitcher:deploy            (first connected iPad)
-#   DEVICE=<id> bun run viewswitcher:deploy
+#   bun run ipad:deploy            (first connected iPad)
+#   DEVICE=<id> bun run ipad:deploy
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

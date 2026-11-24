@@ -1,5 +1,5 @@
 {
-  "name": "daisy-production",
+  "name": "viewswitcher",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -7,13 +7,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '@daisy/*' dev",
-    "build": "bun run --filter @daisy/web build",
+    "dev": "bun run --filter '@viewswitcher/*' dev",
+    "build": "bun run --filter @viewswitcher/web build",
     "start": "bun run build && bun apps/server/src/index.ts",
     "test": "bun test",
     "obs:setup": "bun apps/server/src/obs-setup.ts",
-    "viewswitcher:sync": "bun run --filter @daisy/viewswitcher sync",
-    "viewswitcher:deploy": "bash apps/viewswitcher/scripts/deploy.sh"
+    "ipad:sync": "bun run --filter @viewswitcher/ipad sync",
+    "ipad:deploy": "bash apps/ipad/scripts/deploy.sh"
   },
   "devDependencies": {
     "@types/bun": "^1.4.5",

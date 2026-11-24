@@ -10,13 +10,13 @@
       },
     },
     "apps/server": {
-      "name": "@daisy/server",
+      "name": "@viewswitcher/server",
       "dependencies": {
-        "@daisy/shared": "workspace:*",
+        "@viewswitcher/shared": "workspace:*",
       },
     },
     "apps/viewswitcher": {
-      "name": "@daisy/viewswitcher",
+      "name": "@viewswitcher/viewswitcher",
       "dependencies": {
         "@capacitor/core": "8.6.2",
         "@capacitor/ios": "8.6.2",
@@ -26,11 +26,11 @@
       },
     },
     "apps/web": {
-      "name": "@daisy/web",
+      "name": "@viewswitcher/web",
       "dependencies": {
-        "@daisy/shared": "workspace:*",
         "@tanstack/react-query": "^5.108.4",
         "@tanstack/react-router": "^1.170.46",
+        "@viewswitcher/shared": "workspace:*",
         "react": "^19.3.1",
         "react-dom": "^19.3.1",
       },
@@ -45,7 +45,7 @@
       },
     },
     "packages/shared": {
-      "name": "@daisy/shared",
+      "name": "@viewswitcher/shared",
     },
   },
   "packages": {
@@ -86,14 +86,6 @@
     "@capacitor/core": ["@capacitor/core@8.6.2", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-UEb9crRuqEAe2Iu2eGOEuQ8rLQxpwg7ZZIpl17UJoytEpnV1e4oXXW0K7yYS2NsCOGmJjyLeKjNlgG7tkAoX8g=="],
 
     "@capacitor/ios": ["@capacitor/ios@8.6.2", "", { "peerDependencies": { "@capacitor/core": "^8.6.0" } }, "sha512-YnVm0lRA1mQWK0SKd2bdJIOG+PXRRDDdndZ1+nGqeiob+QmHZmb4wWo5gVpWhoHO37pGi2qzH5w5WGvfKrs+Gg=="],
-
-    "@daisy/server": ["@daisy/server@workspace:apps/server"],
-
-    "@daisy/shared": ["@daisy/shared@workspace:packages/shared"],
-
-    "@daisy/viewswitcher": ["@daisy/viewswitcher@workspace:apps/viewswitcher"],
-
-    "@daisy/web": ["@daisy/web@workspace:apps/web"],
 
     "@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
 
@@ -244,6 +236,14 @@
     "@typescript/typescript-win32-arm64": ["@typescript/typescript-win32-arm64@7.0.2", "", { "os": "win32", "cpu": "arm64" }, "sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ=="],
 
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
+
+    "@viewswitcher/server": ["@viewswitcher/server@workspace:apps/server"],
+
+    "@viewswitcher/shared": ["@viewswitcher/shared@workspace:packages/shared"],
+
+    "@viewswitcher/viewswitcher": ["@viewswitcher/viewswitcher@workspace:apps/viewswitcher"],
+
+    "@viewswitcher/web": ["@viewswitcher/web@workspace:apps/web"],
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@6.3.0", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0 || ^0.3.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": ">=0.152.0 <0.157.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-H9E955aVvD2F4zNHCw4eIZbIfF6xKldlh7MNu+hSU7xwQzh65lI/N+CJWqmfhi0PEjDXIt/H7T7J/4wU63KJiw=="],
 

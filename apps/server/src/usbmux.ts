@@ -144,7 +144,7 @@ export function decodeOne(buf: Buffer): { message: { tag: number; body: PlistDic
   return { message: { tag: buf.readUInt32LE(12), body }, rest: buf.subarray(len) };
 }
 
-const client = { ClientVersionString: "daisy-production", ProgName: "daisy-production" };
+const client = { ClientVersionString: "viewswitcher", ProgName: "viewswitcher" };
 
 export const listenMessage = () => encodeMessage({ MessageType: "Listen", ...client });
 

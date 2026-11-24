@@ -1,16 +1,28 @@
 // One-time OBS setup: `bun run obs:setup`.
-// Creates the "Daisy Live" scene with the program browser source on top, and switches OBS to it.
+// Creates the "ViewSwitcher" scene with the program browser source on top, and switches OBS to it.
 // Safe to run again (e.g. after adding devices, to put the browser source back on top).
+// Renames the old Daisy-era scene and sources if it finds them, so devices placed in them carry over.
 import { config } from "./config";
 import { OBSClient, OBSRequestError } from "./obs";
 
 const obs = new OBSClient({ url: config.obs.url, password: config.obs.password }).start();
 // 127.0.0.1, not localhost: OBS's browser may resolve localhost to IPv6 (::1), which the server doesn't listen on.
 const programUrl = `http://127.0.0.1:${config.port}/program`;
-const { scene, programSource, devices } = config.obs;
+const { scene, programSource, groundSource: groundName, devices } = config.obs;
+const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy Ground" };
 
 try {
   await obs.ready();
+
+  const renamed = async (request: string, from: string, to: string, key: string, newKey: string) => {
+    try {
+      await obs.request(request, { [key]: from, [newKey]: to });
+      console.log(`Renamed "${from}" → "${to}".`);
+    } catch {} // not there, or the new name is already taken
+  };
+  await renamed("SetSceneName", LEGACY.scene, scene, "sceneName", "newSceneName");
+  await renamed("SetInputName", LEGACY.program, programSource, "inputName", "newInputName");
+  await renamed("SetInputName", LEGACY.ground, groundName, "inputName", "newInputName");
 
   try {
     await obs.request("CreateScene", { sceneName: scene });
@@ -33,13 +45,14 @@ try {
     console.log(`Created browser source "${programSource}" → ${programUrl}`);
   }
 
-  // The ground color every scene sits on (scenes are transparent; see theme.css --ground).
-  const groundName = "Daisy Ground";
-  const ground = { color: 0xff12180d /* #0d1812 as OBS ABGR */, width: 1920, height: 1080 };
+  // The ground color every scene sits on (scenes are transparent). The server recolors it to the
+  // on-air org's ground (org.json) whenever a scene from another org goes on air.
+  const ground = { color: 0xff130f0e /* #0e0f13, the default ground */, width: 1920, height: 1080 };
   let groundId: number;
   try {
     ({ sceneItemId: groundId } = await obs.request("GetSceneItemId", { sceneName: scene, sourceName: groundName }));
-    await obs.request("SetInputSettings", { inputName: groundName, inputSettings: ground });
+    // Keep its color: the server sets it to the on-air org's ground.
+    await obs.request("SetInputSettings", { inputName: groundName, inputSettings: { width: ground.width, height: ground.height } });
   } catch {
     ({ sceneItemId: groundId } = await obs.request("CreateInput", {
       sceneName: scene, inputName: groundName, inputKind: "color_source_v3", inputSettings: ground, sceneItemEnabled: true,

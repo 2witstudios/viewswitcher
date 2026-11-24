@@ -1,5 +1,5 @@
 {
-  "name": "@daisy/web",
+  "name": "@viewswitcher/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@daisy/shared": "workspace:*",
+    "@viewswitcher/shared": "workspace:*",
     "@tanstack/react-query": "^5.108.4",
     "@tanstack/react-router": "^1.170.46",
     "react": "^19.3.1",

@@ -1,24 +1,25 @@
-import type { AssetKind } from "@daisy/shared";
+import type { AssetKind } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { type DragEvent, useRef, useState } from "react";
-import { PageHead } from "../../components/PageHead";
-import { attempt, Menu, MoreIcon, PlusIcon } from "../../components/ui";
-import { api, copy } from "../../lib/api";
-import { useLibrary } from "../../lib/library";
+import { PageHead } from "../../../components/PageHead";
+import { attempt, Menu, MoreIcon, PlusIcon } from "../../../components/ui";
+import { api, copy } from "../../../lib/api";
+import { useLibrary } from "../../../lib/library";
 
 const FILTERS: [AssetKind | "all", string][] = [["all", "All"], ["image", "Images"], ["video", "Video"], ["audio", "Audio"]];
 const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
-export const Route = createFileRoute("/_app/assets")({
+export const Route = createFileRoute("/_app/$org/assets")({
   component: function Assets() {
-    const { data } = useLibrary();
+    const { org } = Route.useParams();
+    const { data } = useLibrary(org);
     const [filter, setFilter] = useState<AssetKind | "all">("all");
     const [menu, setMenu] = useState<string | null>(null);
     const [dragging, setDragging] = useState(false);
     const input = useRef<HTMLInputElement>(null);
     const assets = data?.assets ?? [];
 
-    const upload = (files: FileList | null) => files?.length && attempt(() => api.upload(files), `Uploaded ${files.length} file${files.length > 1 ? "s" : ""}`);
+    const upload = (files: FileList | null) => files?.length && attempt(() => api.upload(org, files), `Uploaded ${files.length} file${files.length > 1 ? "s" : ""}`);
     const onDrop = (e: DragEvent) => {
       e.preventDefault();
       setDragging(false);
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_app/assets")({
     return (
       <div className={dragging ? "dropzone" : undefined} style={{ display: "contents" }}
         onDragOver={(e) => (e.preventDefault(), setDragging(true))} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
-        <PageHead crumb="Your uploads. Use them in any template, project or stream." title="Assets" />
+        <PageHead crumb={`Uploads for ${data?.org.name ?? org}. Use them in any of its templates, projects or streams.`} title="Assets" />
         <div className="filters">
           {FILTERS.map(([k, label]) => (
             <button key={k} type="button" className={`filter${filter === k ? " on" : ""}`} aria-pressed={filter === k} onClick={() => setFilter(k)}>

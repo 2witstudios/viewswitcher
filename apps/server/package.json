@@ -1,11 +1,11 @@
 {
-  "name": "@daisy/server",
+  "name": "@viewswitcher/server",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts"
   },
   "dependencies": {
-    "@daisy/shared": "workspace:*"
+    "@viewswitcher/shared": "workspace:*"
   }
 }

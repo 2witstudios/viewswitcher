@@ -1,10 +1,10 @@
 import Foundation
 import Network
 
-/// The iPad end of the USB-C link to the Daisy server.
+/// The iPad end of the USB-C link to the ViewSwitcher server.
 ///
 /// iOS gives apps no network over the cable. The only path is usbmuxd, and it only connects
-/// Mac → iPad, so the Daisy server keeps a few idle "tunnel" connections open to this app on
+/// Mac → iPad, so the ViewSwitcher server keeps a few idle "tunnel" connections open to this app on
 /// 127.0.0.1:7421 (see apps/server/src/usb-bridge.ts). The WebView talks to 127.0.0.1:7420 here;
 /// each of its connections is paired with one idle tunnel and piped through to the Mac.
 final class UsbTunnel {
@@ -14,7 +14,7 @@ final class UsbTunnel {
     static let tunnelPort: NWEndpoint.Port = 7421 // what the Mac connects to over usbmuxd
     private static let waitForTunnel: TimeInterval = 4
 
-    private let queue = DispatchQueue(label: "daisy.usbtunnel")
+    private let queue = DispatchQueue(label: "viewswitcher.usbtunnel")
     private var localListener: NWListener?
     private var tunnelListener: NWListener?
     private var idle: [Link] = []          // tunnels from the Mac, waiting for a request

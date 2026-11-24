@@ -6,7 +6,7 @@ export type Scene = {
   name: string;
   /** From the file's <title>, else the name. */
   label: string;
-  /** Library-relative path, e.g. "projects/ld-2026/scenes/teaching.html". */
+  /** Library-relative path, starting with the org, e.g. "daisy/projects/ld-2026/scenes/teaching.html". */
   path: string;
   origin: SceneOrigin;
 };
@@ -37,7 +37,20 @@ export type Asset = {
   size: number;
 };
 
+/** A brand or channel with its own templates, assets and projects: a top-level library folder. */
+export type Org = {
+  /** Folder name, e.g. "daisy". */
+  id: string;
+  name: string;
+  /** Highlight color for this org in the switcher. */
+  accent: string;
+  /** Painted behind every scene in OBS and used for slot corner masks. */
+  ground: string;
+};
+
+/** One org's content. */
 export type Library = {
+  org: Org;
   templates: Scene[];
   assets: Asset[];
   projects: Project[];
@@ -54,6 +67,9 @@ export type Slot = {
 
 export type OnAir = {
   path: string;
+  org: string;
+  /** The org's ground color, for the program page's transitions. */
+  ground?: string;
   label: string;
   projectId?: string;
   streamId?: string;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { coverTransform, resolveStream, shortDate, slugify } from "./index";
+import { coverTransform, obsColor, orgOf, resolveStream, shortDate, slugify } from "./index";
 import type { Project, Scene, Stream } from "./types";
 
 const scene = (name: string, origin: Scene["origin"], dir: string): Scene => ({
@@ -64,5 +64,16 @@ describe("helpers", () => {
   });
   test("shortDate", () => {
     expect(shortDate("2026-12-04")).toBe("Dec 4");
+  });
+});
+
+describe("orgs", () => {
+  test("OBS colors are opaque ABGR", () => {
+    expect(obsColor("#0d1812")).toBe(0xff12180d);
+    expect(obsColor("ffffff")).toBe(0xffffffff);
+    expect(() => obsColor("red")).toThrow();
+  });
+  test("a path's org is its first folder", () => {
+    expect(orgOf("daisy/projects/ld/scenes/teaching.html")).toBe("daisy");
   });
 });

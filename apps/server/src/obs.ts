@@ -1,6 +1,6 @@
 // Minimal obs-websocket v5 client (built into OBS 28+). No dependencies.
 import { createHash } from "node:crypto";
-import type { ObsStatus } from "@daisy/shared";
+import type { ObsStatus } from "@viewswitcher/shared";
 
 const sha256b64 = (s: string) => createHash("sha256").update(s).digest("base64");
 
