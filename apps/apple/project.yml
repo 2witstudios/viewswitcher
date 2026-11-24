@@ -141,6 +141,17 @@ targets:
         TARGETED_DEVICE_FAMILY: "2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
+  ViewSwitcher iPad UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [iPadUITests]
+    dependencies:
+      - target: ViewSwitcher iPad
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "2"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
 schemes:
   ViewSwitcher:
     build:
@@ -157,5 +168,8 @@ schemes:
     build:
       targets:
         ViewSwitcher iPad: all
+    test:
+      targets:
+        - ViewSwitcher iPad UITests
     run:
       config: Debug

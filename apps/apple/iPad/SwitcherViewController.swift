@@ -62,11 +62,38 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         #endif
         webView = web
         view = web
+        #if DEBUG
+        // Screenshots only (scripts/ipad-shots.sh): VIEWSWITCHER_WEB_WIDTH lays the web view out at a
+        // Split View width against the window's left edge, as the left app of a split would be.
+        if let w = ProcessInfo.processInfo.environment["VIEWSWITCHER_WEB_WIDTH"].flatMap(Double.init) {
+            let container = UIView()
+            container.backgroundColor = .black
+            web.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(web)
+            NSLayoutConstraint.activate([
+                web.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                web.topAnchor.constraint(equalTo: container.topAnchor),
+                web.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                web.widthAnchor.constraint(equalToConstant: w),
+            ])
+            view = container
+        }
+        #endif
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        webView.load(URLRequest(url: Self.connector))
+        webView.load(URLRequest(url: Self.start))
+    }
+
+    /// The connector; in a Debug build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7435) opens that
+    /// server directly instead, for the simulator, which shares the Mac's ports and would otherwise
+    /// find whatever switcher runs on the Mac's 7420.
+    static var start: URL {
+        #if DEBUG
+        if let s = ProcessInfo.processInfo.environment["VIEWSWITCHER_SERVER"], let u = URL(string: s) { return u }
+        #endif
+        return connector
     }
 
     // ------------------------------------------------------------ navigation

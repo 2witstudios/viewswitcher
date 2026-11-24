@@ -6,7 +6,7 @@ import UIKit
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Start the USB-C tunnel before the web view loads the connector page.
-        UsbTunnel.shared.start()
+        if UsbTunnel.enabled { UsbTunnel.shared.start() }
         return true
     }
 

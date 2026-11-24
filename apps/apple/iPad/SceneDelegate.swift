@@ -9,11 +9,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = SwitcherViewController()
         window.makeKeyAndVisible()
         self.window = window
+        #if DEBUG
+        debugGeometry(windowScene)
+        #endif
     }
+
+    #if DEBUG
+    /// For screenshots in the simulator: VIEWSWITCHER_ORIENTATION=portrait|landscape.
+    private func debugGeometry(_ scene: UIWindowScene) {
+        let env = ProcessInfo.processInfo.environment
+        if let o = env["VIEWSWITCHER_ORIENTATION"] {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: o == "portrait" ? .portrait : .landscapeLeft))
+        }
+    }
+    #endif
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         // iOS may have torn the tunnel's sockets down while the app was in the background.
-        UsbTunnel.shared.restart()
+        if UsbTunnel.enabled { UsbTunnel.shared.restart() }
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
