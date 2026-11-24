@@ -18,8 +18,16 @@ export function scenePath(root: string, path: unknown): string {
 }
 
 /** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
+/** The scene's real file, which must be inside the library even when the path goes through a link. */
+async function realScene(root: string, path: unknown) {
+  const real = await realpath(scenePath(root, path));
+  const back = relative(await realpath(root), real);
+  if (back === "" || back.startsWith("..") || isAbsolute(back)) throw new PathError("This scene is a link to a file outside the library");
+  return real;
+}
+
 export async function readForEdit(root: string, path: string) {
-  const text = await readFile(scenePath(root, path), "utf8");
+  const text = await readFile(await realScene(root, path), "utf8");
   const hash = sceneHash(text);
   return { html: tagForEdit(text, hash), hash };
 }
@@ -55,10 +63,10 @@ export function editScene(
   hooks: { beforeReplace?: () => Promise<void> } = {},
 ): Promise<EditResult> {
   const run = async (): Promise<EditResult> => {
-    const abs = scenePath(root, path);
-    if (!Array.isArray(edits) || edits.length === 0 || edits.length > 100) throw new EditError("No edits to save");
+    if (!Array.isArray(edits) || edits.length === 0) throw new EditError("No edits to save");
+    if (edits.length > 100) throw new EditError("Too many edits at once");
     const parsed = edits.map(parseEdit);
-    const real = await realpath(abs);
+    const real = await realScene(root, path);
     const read = await stat(real);
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);
@@ -66,8 +74,6 @@ export function editScene(
     const next = applyEdits(text, parsed);
     if (next === text) return { ok: true, hash: current, changed: false };
     // A linked scene is written where it really lives (so the link stays a link), never outside the library.
-    const back = relative(await realpath(root), real);
-    if (back.startsWith("..") || isAbsolute(back)) throw new PathError("This scene is a link to a file outside the library");
     // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
     // The watcher ignores dot-files.
     const tmp = join(dirname(real), `.${basename(real)}.vs-${process.pid}-${Date.now()}`);

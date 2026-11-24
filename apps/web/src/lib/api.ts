@@ -1,9 +1,10 @@
 import type { Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
 import { libraryUrl } from "./live";
 
-/** Preview order: rises with time, so a later editor (or a later preview from this one) always sorts after. */
+/** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
+const previewSession = Math.random().toString(36).slice(2);
 let previewSeq = 0;
-const nextPreviewSeq = () => (previewSeq = Math.max(previewSeq + 1, Date.now() * 1000));
+const nextPreviewSeq = () => ++previewSeq;
 
 /** The scene editor saving against a version of the file that isn't the latest any more. */
 export class SceneConflict extends Error {}
@@ -60,10 +61,10 @@ export const api = {
     return data;
   },
   /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
-  previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, seq: nextPreviewSeq() }),
+  previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, session: previewSession, seq: nextPreviewSeq() }),
   /** The same, from a page that's going away (survives pagehide). */
   previewSceneBeacon: (path: string, hash: string, edit: SceneEdit) =>
-    navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, seq: nextPreviewSeq() })], { type: "application/json" })),
+    navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, session: previewSession, seq: nextPreviewSeq() })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
   toggleRecord: () => post("/api/obs/record"),

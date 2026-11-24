@@ -60,6 +60,7 @@ describe("editScene (EDIT-4)", () => {
     await expect(editScene(root, SCENE, hash, [{ id: 1, left: "a", top: 1 }])).rejects.toThrow();
     await expect(editScene(root, SCENE, hash, [{ id: null, text: "x" }])).rejects.toThrow(); // not element 0
     await expect(editScene(root, SCENE, hash, [{ id: "3", text: "x" }])).rejects.toThrow();
+    await expect(editScene(root, SCENE, hash, Array.from({ length: 101 }, () => ({ id: 1, text: "x" })))).rejects.toThrow("Too many edits at once");
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
   });
 });
@@ -88,6 +89,9 @@ describe("saving keeps the file what it was (PR #1 review)", () => {
     await writeFile(outside, "<p>outside</p>");
     await symlink(outside, join(root, "acme/templates/out.html"));
     await expect(editScene(root, "acme/templates/out.html", sceneHash("<p>outside</p>"), [{ id: 0, text: "x" }])).rejects.toThrow();
+    // Round 3: nor is it read for editing, and a stale save doesn't reveal its hash.
+    await expect(readForEdit(root, "acme/templates/out.html")).rejects.toThrow();
+    await expect(editScene(root, "acme/templates/out.html", "stale", [{ id: 0, text: "x" }])).rejects.toThrow();
     expect(await readFile(outside, "utf8")).toBe("<p>outside</p>");
     await rm(outside);
   });
@@ -187,8 +191,8 @@ describe("over HTTP", () => {
       };
     });
     await new Promise((r) => (ws.onopen = r));
-    expect((await post("/api/scene/preview", { path: SCENE, hash: "h1", seq: 7, edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
-    expect(await got).toEqual({ t: "scene:preview", path: SCENE, hash: "h1", seq: 7, edit: { id: 3, left: 10, top: 20 } });
+    expect((await post("/api/scene/preview", { path: SCENE, hash: "h1", session: "s1", seq: 7, edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
+    expect(await got).toEqual({ t: "scene:preview", path: SCENE, hash: "h1", session: "s1", seq: 7, edit: { id: 3, left: 10, top: 20 } });
     ws.close();
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
     expect((await post("/api/scene/preview", { path: SCENE, edit: { id: 3 } })).status).toBe(400);

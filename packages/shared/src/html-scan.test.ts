@@ -256,7 +256,9 @@ describe("version stamp (PR #1 architecture #1, #2)", () => {
     const tagged = tagForEdit(html, "abc123");
     expect(tagged).toBe(`<!doctype html><html data-vs="0" data-vs-hash="abc123" lang="en"><body data-vs="1"><p data-vs="2">x</p></body></html>`);
     expect(untagForEdit(tagged)).toBe(html);
-    expect(tagForEdit(`<p>x</p>`, "abc")).toBe(`<p data-vs="0">x</p>`);
+    expect(tagForEdit(`<p>x</p>`, "abc")).toBe(`<p data-vs="0" data-vs-hash="abc">x</p>`); // a fragment: its first element
+    expect(untagForEdit(tagForEdit(`<link rel=x><p>x</p>`, "abc"))).toBe(`<link rel=x><p>x</p>`);
+    expect(tagForEdit(`<link rel=x><p>x</p>`, "abc")).toContain(`<p data-vs="1" data-vs-hash="abc">`);
     expect(tagForEdit(html, `"><script>`)).toContain(`data-vs-hash="script"`);
   });
 });
@@ -326,11 +328,19 @@ describe("/review round 2 findings on PR #1", () => {
     expect(pos(`left:50%!important;left:10px!important;top:0px`)).toMatchObject({ left: 10 });
     expect(pos(`left:10px!important;left:50%!important;top:0px`)).toBeNull();
   });
-  test("retarget refuses identical twins when their number changed, and keeps order when it didn't", () => {
+  test("retarget refuses identical twins, whatever their number", () => {
     const prev = `<p>Notes</p><p>Notes</p>`;
     expect(retarget(prev, `<p>Notes</p><p>Notes</p><p>Notes</p>`, { id: 1, text: "Mine" })).toBeNull();
-    const r = retarget(prev, `<h1>New</h1><p>Notes</p><p>Notes</p>`, { id: 1, text: "Mine" })!;
-    expect(r.id).toBe(2);
+    expect(retarget(prev, `<h1>New</h1><p>Notes</p><p>Notes</p>`, { id: 1, text: "Mine" })).toBeNull();
+    // Round 3: the agent deleted the first twin and appended a new one: index order would pick the new one.
+    expect(retarget(`<p>Notes</p><p>Notes</p><p>Other</p>`, `<p>Notes</p><p>Other</p><p>Notes</p>`, { id: 1, text: "Mine" })).toBeNull();
+    // One on each side still works.
+    expect(retarget(`<p>Notes</p>`, `<h1>New</h1><p>Notes</p>`, { id: 0, text: "Mine" })).toEqual({ id: 1, text: "Mine" });
+  });
+  test("retarget doesn't fall back to another element with the same start tag (round 3)", () => {
+    const prev = `<section><span class="kicker">Notes</span></section><section><span class="kicker">Agenda</span></section>`;
+    const next = `<section><span class="kicker">Agenda</span></section>`;
+    expect(retarget(prev, next, { id: 1, text: "Mine" })).toBeNull();
   });
   test("changedElements sees text swapped between nested panels, but not a moved panel's contents", () => {
     const a = `<div id=a><section><p>A</p></section></div><div id=b><section><p>B</p></section></div>`;

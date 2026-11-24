@@ -7,6 +7,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, SceneConflict } from "../lib/api";
 import { useLibrary } from "../lib/library";
+import { type PreviewDoc, shownVersion } from "../lib/apply-preview";
 import { libraryUrl, useLive } from "../lib/live";
 import { createSceneSaver } from "../lib/scene-saver";
 import { attempt, toast } from "./ui";
@@ -121,6 +122,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     setBaseState(b);
   };
   const [loadError, setLoadError] = useState("");
+  /** A scene is open but couldn't be read again: say so, with Reload, and keep everything else. */
+  const [stuck, setStuck] = useState<string | null>(null);
   const [frameKey, setFrameKey] = useState(0);
   const [ready, setReady] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -160,6 +163,17 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       });
       setBase(b);
       setLoadError("");
+      setStuck(null);
+      // Anything in progress refers to ids from the old version: end it (unsaved, it's stale anyway).
+      editingRef.current = null;
+      setEditing(null);
+      setMenu(null);
+      setSelected(null);
+      setHover(null);
+      setDrag(null);
+      gesture.current = null;
+      if (nudge.current) clearTimeout(nudge.current.timer);
+      nudge.current = null;
       // An open conflict follows the newest version: its marks and Apply my change again use it.
       if (conflictOpen.current) setConflict((c) => (c ? { ...c, latest: b, changed: changedElements(c.prev.source, b.source) } : c));
       setReady(false);
@@ -167,8 +181,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       return b;
     } catch (e) {
       // With a scene already open, a failed reload is a message, not the end of the editor.
-      if (baseRef.current) toast(`Couldn't reload the scene: ${(e as Error).message}`);
-      else setLoadError((e as Error).message);
+      if (baseRef.current) {
+        setReady(false);
+        setStuck(`Couldn't read the scene again: ${(e as Error).message}`);
+      } else setLoadError((e as Error).message);
       return null;
     }
   }, [path]);
@@ -304,6 +320,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   /** Change an element now: on screen, live on stream, and saved. */
   const change = (edit: SceneEdit, before: SceneEdit | null) => {
+    flushNudge(); // a pending nudge saves first, so it can't land after (and over) this change
     applyDom(edit);
     preview(edit);
     save([edit], before ? [{ before, after: edit }] : []);
@@ -322,6 +339,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
 
   const doUndo = () => {
+    flushNudge();
     const last = undo[undo.length - 1];
     if (!last) return;
     setUndo((u) => u.slice(0, -1));
@@ -523,6 +541,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         return r ? [r] : [];
       });
       const p = toScene({ clientX: g.cx, clientY: g.cy });
+      flushNudge();
       g.drag = { id, start, rect, others, x0: p.x, y0: p.y, last: start, gen: generation.current };
       setSelected(id);
       setHover(null);
@@ -649,13 +668,14 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const moved = edits.map((e) => retarget(prev.source, latest.source, e));
     conflictOpen.current = false;
     setConflict(null);
-    if (moved.some((m) => m === null)) {
-      toast("That part of the scene isn't in the new version, so your change can't go there");
-      return;
-    }
+    // The ones that can be placed go through; the others are said so. (Their earlier live previews
+    // were on the old version, which the stream already replaced.)
+    const lost = moved.filter((m) => m === null).length;
+    if (lost) toast(lost === moved.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
     // Several lost changes to one element (a drag, then a nudge) become its last one.
     const last = new Map<string, SceneEdit>();
-    for (const e of moved as SceneEdit[]) last.set(`${e.id}:${"text" in e ? "t" : "p"}`, e);
+    for (const e of moved) if (e) last.set(`${e.id}:${"text" in e ? "t" : "p"}`, e);
+    if (!last.size) return;
     const again = [...last.values()];
     const entries = again.flatMap((e) => {
       const before = valueIn(latest, e);
@@ -778,11 +798,11 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                 // aren't the base's. Read both again.
                 // (A scene without an <html> tag has no stamp to compare; then there's nothing to check.)
                 const b = baseRef.current;
-                const stamp = d?.documentElement.dataset.vsHash;
+                const stamp = d ? shownVersion(d as unknown as PreviewDoc) : undefined;
                 if (b && stamp !== undefined && stamp !== b.hash) {
-                  // Once is a file that just changed; again means it keeps changing: stop and say so.
+                  // Once is a file that just changed; again means it keeps changing: stop and offer Reload.
                   if (frameMismatches.current++ === 0) void load();
-                  else setLoadError("This scene keeps changing while it opens. Try again in a moment.");
+                  else setStuck("This scene keeps changing while it opens.");
                   return;
                 }
                 frameMismatches.current = 0;
@@ -867,6 +887,17 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                 </div>
               </>
             )}
+            {stuck && (
+              <div className="conflict stuck" role="alert">
+                <div className="head"><div><b>{stuck}</b><p>Nothing you've saved is lost.</p></div></div>
+                <div className="actions">
+                  <button type="button" className="btn primary" onClick={() => {
+                    frameMismatches.current = 0;
+                    void load();
+                  }}>Reload</button>
+                </div>
+              </div>
+            )}
             {conflict && (
               <div className="conflict" role="alertdialog" aria-label="This scene changed while you were editing"
                 // Stay clear of what changed: low on the stage when the change is in the top half.
@@ -949,6 +980,12 @@ function PositionBar({ name, pos, canPutBack, onSet, onPutBack }: {
     }
     const l = Number(x), t = Number(y);
     if (!Number.isFinite(l) || !Number.isFinite(t) || x.trim() === "" || y.trim() === "") {
+      setX(String(pos.left));
+      setY(String(pos.top));
+      return;
+    }
+    if (Math.abs(l) > 100_000 || Math.abs(t) > 100_000) {
+      toast("That's far outside the scene (1920 × 1080)");
       setX(String(pos.left));
       setY(String(pos.top));
       return;

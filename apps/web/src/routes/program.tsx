@@ -148,14 +148,14 @@ export const Route = createFileRoute("/program")({
     // without a save (the editor went away mid-drag), reload the frame so the stream matches the file.
     useEffect(() => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const latest = new Map<string, number>(); // newest preview seq applied, per version and element
+      const latest = new Map<string, number>(); // newest preview seq applied, per editor, version and element
       const off = onScenePreview((path, hash, edit, order) => {
         const job = shown.current;
         if (!job || path !== job.path) return;
         // Previews are separate requests and can arrive out of order: never step back to an older one.
-        const key = `${hash}:${edit.id}:${"text" in edit ? "t" : "p"}`;
-        if (order <= (latest.get(key) ?? -1)) return;
-        latest.set(key, order);
+        const key = `${order.session}:${hash}:${edit.id}:${"text" in edit ? "t" : "p"}`;
+        if (order.seq <= (latest.get(key) ?? -1)) return;
+        latest.set(key, order.seq);
         const frame = refs[frontRef.current].current;
         const doc = frame?.contentDocument;
         if (!frame || !doc) return;

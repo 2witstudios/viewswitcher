@@ -27,6 +27,15 @@ describe("applyPreview", () => {
     expect(panel.style.left).toBe("1px");
     expect(applyPreview(doc(undefined, { 3: el() }), "", { id: 3, text: "x" })).toBeNull();
   });
+  test("a fragment's stamp on its first element counts (round 3)", () => {
+    const t = el();
+    const d: PreviewDoc = {
+      documentElement: { dataset: {} },
+      querySelector: (s) => (s === "[data-vs-hash]" ? { ...el(), dataset: { vsHash: "v1" } } : s.includes('"3"') ? t : null),
+    };
+    expect(applyPreview(d, "v1", { id: 3, text: "new" })).toEqual({ slotMoved: false });
+    expect(t.textContent).toBe("new");
+  });
   test("never puts text into an element with children (it would wipe them, slots included)", () => {
     const parent = el(2);
     expect(applyPreview(doc("v1", { 5: parent }), "v1", { id: 5, text: "x" })).toBeNull();

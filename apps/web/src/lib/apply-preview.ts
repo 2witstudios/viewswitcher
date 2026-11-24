@@ -3,7 +3,15 @@ import type { SceneEdit } from "@viewswitcher/shared";
 
 /** The bits of an element and document this needs (so it can be tested without a browser). */
 export type PreviewTarget = { textContent: string | null; childElementCount: number; style: { left: string; top: string }; matches(sel: string): boolean; querySelector(sel: string): unknown };
-export type PreviewDoc = { documentElement: { dataset: Record<string, string | undefined> }; querySelector(sel: string): PreviewTarget | null };
+export type PreviewDoc = {
+  documentElement: { dataset: Record<string, string | undefined> };
+  querySelector(sel: string): (PreviewTarget & { dataset?: Record<string, string | undefined> }) | null;
+};
+
+/** The version a frame shows: stamped on <html>, or on a bare fragment's first element. */
+export function shownVersion(doc: PreviewDoc): string | undefined {
+  return doc.documentElement.dataset.vsHash ?? doc.querySelector("[data-vs-hash]")?.dataset?.vsHash;
+}
 
 /**
  * Apply `edit` if it was made against the version the frame shows (`hash` = its data-vs-hash), and
@@ -11,7 +19,7 @@ export type PreviewDoc = { documentElement: { dataset: Record<string, string | u
  * Returns whether it touched a device slot (so the slots need reporting again), or null if skipped.
  */
 export function applyPreview(doc: PreviewDoc, hash: string, edit: SceneEdit): { slotMoved: boolean } | null {
-  const shown = doc.documentElement.dataset.vsHash;
+  const shown = shownVersion(doc);
   if (!shown || shown !== hash) return null;
   const el = doc.querySelector(`[data-vs="${Number(edit.id)}"]`);
   if (!el) return null;

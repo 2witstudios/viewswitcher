@@ -339,17 +339,24 @@ export const setText = (html: string, id: number, text: string) => applyEdits(ht
 export const setPosition = (html: string, id: number, left: number, top: number) => applyEdits(html, [{ id, left, top }]);
 
 /** The scene with data-vs="<id>" on every start tag, for the editor and the program page. Never written to disk. */
+/** Where the version stamp goes: the root <html>, else (a bare fragment) the first top-level element. */
+function stampedElement(els: ScannedElement[]): number | null {
+  const html = els.find((e) => e.tag === "html" && e.parent === null);
+  return (html ?? els.find((e) => e.parent === null && !["script", "style", "link", "meta", "title"].includes(e.tag)) ?? null)?.id ?? null;
+}
+
 /**
- * With `hash`, the <html> element also carries data-vs-hash="<hash>": the version those ids belong to,
- * so a page showing it can tell whether an edit's ids are for what it shows.
+ * With `hash`, the <html> element (or a fragment's first element) also carries data-vs-hash="<hash>":
+ * the version those ids belong to, so a page showing it can tell whether an edit's ids are for it.
  */
 export function tagForEdit(html: string, hash?: string): string {
   const els = scanElements(html);
+  const stampAt = stampedElement(els);
   let out = html;
   for (let k = els.length - 1; k >= 0; k--) {
     const el = els[k]!;
     const at = el.start + 1 + el.tag.length;
-    const stamp = hash && el.tag === "html" && el.parent === null ? ` data-vs-hash="${hash.replace(/[^\w-]/g, "")}"` : "";
+    const stamp = hash && el.id === stampAt ? ` data-vs-hash="${hash.replace(/[^\w-]/g, "")}"` : "";
     out = `${out.slice(0, at)} data-vs="${el.id}"${stamp}${out.slice(at)}`;
   }
   return out;
@@ -358,6 +365,7 @@ export function tagForEdit(html: string, hash?: string): string {
 /** The file `tagForEdit` started from: removes exactly the ids it added, nothing else. */
 export function untagForEdit(tagged: string): string {
   const els = scanElements(tagged);
+  const stampAt = stampedElement(els);
   let out = tagged;
   for (let k = els.length - 1; k >= 0; k--) {
     const el = els[k]!;
@@ -365,7 +373,7 @@ export function untagForEdit(tagged: string): string {
     const attr = ` data-vs="${el.id}"`;
     if (!out.startsWith(attr, at)) continue;
     let end = at + attr.length;
-    const stamp = el.tag === "html" ? /^ data-vs-hash="[\w-]*"/.exec(out.slice(end)) : null;
+    const stamp = el.id === stampAt ? /^ data-vs-hash="[\w-]*"/.exec(out.slice(end)) : null;
     if (stamp) end += stamp[0].length;
     out = out.slice(0, at) + out.slice(end);
   }
@@ -405,10 +413,9 @@ export function changedElements(prev: string, next: string): number[] {
 }
 
 /**
- * Find element `id` of `prev` in `next`, or null when it can't be told apart. A match has the same
- * start tag, the same text (for a text edit) and the same enclosing start tag; among identical twins,
- * the same one in order, only if the number of twins didn't change. With no match, a single
- * remaining element with that start tag is trusted. Never replays onto a guess.
+ * Find element `id` of `prev` in `next`: the one element with the same start tag, the same text (for
+ * a text edit) and the same enclosing start tag. Null when there's none, or more than one: the
+ * editor then says the change can't go there. Never replays onto a guess.
  */
 export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit | null {
   const a = scanElements(prev);
@@ -424,12 +431,8 @@ export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit
   const sameOpen = sameTag.filter((e) => next.slice(e.start, e.openEnd) === open && fits(next, e));
   const twin = (html: string, els: ScannedElement[], e: ScannedElement) =>
     html.slice(e.start, e.openEnd) === open && (text === null || (e.leaf && textOf(html, e) === text)) && parentOpen(html, els, e) === parentOpen(prev, a, el);
+  // Exactly one element that's the same in every way we can see. Twins (or none) can't be told apart.
   const exact = sameOpen.filter((e) => twin(next, b, e));
-  // Identical twins (same tag, text and parent): the same one in order, but only if their number
-  // didn't change. If it did, there's no telling which is ours.
-  const twinsBefore = a.filter((e) => e.tag === el.tag && fits(prev, e) && twin(prev, a, e));
-  let pick: ScannedElement | undefined;
-  if (exact.length && exact.length === twinsBefore.length) pick = exact[twinsBefore.indexOf(el)];
-  else if (!exact.length && sameOpen.length === 1) pick = sameOpen[0];
+  const pick = exact.length === 1 ? exact[0] : undefined;
   return pick ? { ...edit, id: pick.id } : null;
 }

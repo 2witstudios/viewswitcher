@@ -224,3 +224,4 @@ a { color: inherit; text-decoration: none; }
   .editor-bottom { padding: 12px; }
   .editor-top { padding: 0 10px; gap: 8px; }
 }
+.conflict.stuck .actions, .conflict.stuck .head p { margin-left: 0; }
