@@ -21,6 +21,13 @@ export type SetupReport = {
   log: string[];
   /** Devices to add to the scene by hand (names must match exactly). */
   missing: string[];
+  /** Whether OBS was switched to the scene (never while it's streaming or recording). */
+  switched: boolean;
+};
+
+export type SetupOptions = {
+  /** Switch OBS's program to the scene. Pass false while OBS is live: setup must never cut the stream. */
+  switchProgram?: boolean;
 };
 
 const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy Ground" };
@@ -28,7 +35,7 @@ const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy G
 // 127.0.0.1, not localhost: OBS's browser may resolve localhost to IPv6 (::1), which the server doesn't listen on.
 export const programUrl = (port: number) => `http://127.0.0.1:${port}/program`;
 
-export async function setupObs(obs: ObsRequester, names: SetupNames, port: number): Promise<SetupReport> {
+export async function setupObs(obs: ObsRequester, names: SetupNames, port: number, { switchProgram = true }: SetupOptions = {}): Promise<SetupReport> {
   const { scene, programSource, groundSource, devices } = names;
   const url = programUrl(port);
   const log: string[] = [];
@@ -81,11 +88,15 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
   const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: scene });
   await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: groundId, sceneItemIndex: 0 });
   await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: itemId, sceneItemIndex: sceneItems.length - 1 });
-  await obs.request("SetCurrentProgramScene", { sceneName: scene });
-  log.push(`OBS is on "${scene}" with "${programSource}" on top.`);
+  if (switchProgram) {
+    await obs.request("SetCurrentProgramScene", { sceneName: scene });
+    log.push(`OBS is on "${scene}" with "${programSource}" on top.`);
+  } else {
+    log.push(`"${scene}" is ready with "${programSource}" on top. OBS is live, so it stays on its current scene: switch to "${scene}" in OBS when you're ready.`);
+  }
 
   const present = new Set(sceneItems.map((i) => i.sourceName));
-  return { log, missing: devices.filter((d) => !present.has(d)) };
+  return { log, missing: devices.filter((d) => !present.has(d)), switched: switchProgram };
 }
 
 /** Whether OBS has what the switcher needs: the scene, both sources (the program pointing here), and the devices. */

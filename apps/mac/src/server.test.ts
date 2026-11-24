@@ -1,10 +1,10 @@
 // The Mac app's server lifecycle, with stand-in servers on free ports (never 7420).
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connectOrStart, PortTakenError, probe, ServerStartError } from "./server";
+import { connectOrStart, LOG_MAX_BYTES, PortTakenError, probe, ServerStartError } from "./server";
 
 const freePort = () =>
   new Promise<number>((resolve) => {
@@ -71,6 +71,15 @@ describe("connectOrStart (MAC-6)", () => {
     const err = await connectOrStart(`http://127.0.0.1:${port}`, launch(port, `console.error("library folder is not writable"); process.exit(3)`)).catch((e) => e);
     expect(err).toBeInstanceOf(ServerStartError);
     expect(err.message).toContain("library folder is not writable");
+  });
+
+  test("a server log over the limit starts fresh", async () => {
+    writeFileSync(logFile, "x".repeat(LOG_MAX_BYTES + 1));
+    const port = await freePort();
+    const s = await connectOrStart(`http://127.0.0.1:${port}`, launch(port));
+    await s.stop();
+    expect(statSync(logFile).size).toBeLessThan(10_000);
+    expect(readFileSync(logFile, "utf8")).toContain("up");
   });
 
   test("a crash after starting is reported through onExit", async () => {

@@ -82,6 +82,35 @@ try {
   check((await app.evaluate(() => (globalThis as any).viewswitcherE2E.trayTitle())).includes("Be right back"), "menu bar title: the on-air scene");
   check(!(await app.evaluate(({ app }) => app.getLoginItemSettings().openAtLogin)), "not opening at login by default");
 
+  // ------------------------------------------------------------ the page may change things; other sites may not
+  const fromPage = await page.evaluate(async (path) => (await fetch("/api/onair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, label: "Be right back" }) })).status, orgScene);
+  check(fromPage === 200, "a POST from the switcher's own page is accepted");
+  const evil = await fetch(`${BASE}/api/obs/stream`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "text/plain" }, body: "{}" });
+  check(evil.status === 403, "a cross-site POST (Origin: https://evil.example) is refused with 403");
+
+  // ------------------------------------------------------------ permissions and navigation are locked down
+  const perms = await page.evaluate(async () => ({
+    notifications: await Notification.requestPermission(),
+    geolocation: (await navigator.permissions.query({ name: "geolocation" })).state,
+  }));
+  check(perms.notifications === "denied" && perms.geolocation === "denied", `browser permissions are denied (${JSON.stringify(perms)})`);
+  await app.evaluate(({ shell }) => {
+    (globalThis as any).opened = [];
+    shell.openExternal = async (url: string) => void (globalThis as any).opened.push(url);
+  });
+  await page.evaluate(() => {
+    const a = document.createElement("a");
+    a.href = "file:///System/Applications/Calculator.app";
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.open("x-apple.systempreferences:com.apple.preference.security");
+    window.open("https://example.com/");
+  });
+  await sleep(600);
+  const opened = await app.evaluate(() => (globalThis as any).opened as string[]);
+  check(page.url().startsWith(BASE) && JSON.stringify(opened) === JSON.stringify(["https://example.com/"]), `only http(s) leaves the window, in the browser (opened: ${JSON.stringify(opened)})`);
+
   // ------------------------------------------------------------ Undo forwards to the page
   await page.evaluate(() => {
     (window as any).__keys = [];
@@ -136,9 +165,21 @@ try {
   await closed2;
   await sleep(800);
   check(await answers(), "after Quit, the server it didn't start is still running");
+
+  // The attached server goes away while the app runs: the menu offers Restart Server, which starts the bundled one.
+  app = await launch();
+  await app.firstWindow();
+  check((await app.evaluate(() => (globalThis as any).viewswitcherE2E.server()?.owned)) === false, "attached again");
   own.kill();
   await own.exited;
-  check(await until(async () => listeners().length === 0, 5000), "(test server stopped)");
+  check(await until(async () => (await trayLabels(app)).includes("Restart Server"), 8000), "the attached server stops: the menu offers Restart Server");
+  await app.evaluate(() => (globalThis as any).viewswitcherE2E.trayMenu().items.find((i: { label: string }) => i.label === "Restart Server").click());
+  check(await until(answers), "Restart Server brings a server back");
+  check(await app.evaluate(() => (globalThis as any).viewswitcherE2E.server()?.owned), "…the app's own, which Quit stops");
+  const closed3 = app.waitForEvent("close");
+  await app.evaluate(({ app }) => app.quit());
+  await closed3;
+  check(await until(async () => listeners().length === 0, 8000), `port ${PORT} free`);
 
   // ------------------------------------------------------------ the app dies: its server follows
   app = await launch();

@@ -27,6 +27,8 @@ export const config = {
   webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
   /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
+  /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
+  allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
     password: env.OBS_PASSWORD ?? localObsPassword(),

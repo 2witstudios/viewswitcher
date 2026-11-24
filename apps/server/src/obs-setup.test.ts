@@ -53,6 +53,17 @@ describe("setupObs (MAC-3)", () => {
     expect(order(obs)).toEqual(["ViewSwitcher Ground", "Camera", "ViewSwitcher Program"]);
   });
 
+  test("while OBS is live, setup prepares the scene but never switches the program to it", async () => {
+    const obs = fakeObs({ scenes: { "Starting soon": [] } });
+    await obs.request("SetCurrentProgramScene", { sceneName: "Starting soon" });
+    const r = await setupObs(obs, names, PORT, { switchProgram: false });
+    expect(obs.program()).toBe("Starting soon");
+    expect(r.switched).toBe(false);
+    expect(order(obs)).toEqual(["ViewSwitcher Ground", "ViewSwitcher Program"]);
+    expect((await setupObs(obs, names, PORT)).switched).toBe(true);
+    expect(obs.program()).toBe("ViewSwitcher");
+  });
+
   test("an OBS error other than 'already exists' surfaces", async () => {
     const obs = fakeObs();
     const broken: ObsRequester = { request: (t, d) => (t === "CreateScene" ? Promise.reject(new OBSRequestError(t, 500, "boom")) : obs.request(t, d)) };

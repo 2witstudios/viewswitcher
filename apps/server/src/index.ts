@@ -9,6 +9,7 @@ import * as lib from "./library";
 import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
+import { originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
@@ -287,7 +288,8 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     // so no website can rearrange OBS mid-stream (the general fix for other endpoints is ISSUE-10).
     if (!req.headers.get("content-type")?.startsWith("application/json")) return json({ error: "Expected application/json" }, 415);
     if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
-    const report = await setupObs(obs, config.obs, config.port);
+    // While streaming or recording, setup never switches OBS's program scene (it would cut the stream).
+    const report = await setupObs(obs, config.obs, config.port, { switchProgram: !obs.status.streaming && !obs.status.recording });
     state.obsSetup = await checkObsSetup(obs, config.obs, config.port);
     publishState();
     return json(report);
@@ -316,6 +318,14 @@ const server = Bun.serve({
       }
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
+        // Another website in a browser on this Mac must not be able to change anything (see origin.ts).
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          const ok = originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins });
+          if (!ok) {
+            if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
+            return json({ error: "Not allowed from this page" }, 403);
+          }
+        }
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });

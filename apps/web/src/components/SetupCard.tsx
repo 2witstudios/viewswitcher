@@ -32,10 +32,13 @@ export function SetupCard() {
     rerender((n) => n + 1);
   };
   const setUp = async () => {
+    const live = state?.obs.streaming || state?.obs.recording;
+    if (live && !confirm(`OBS is ${state?.obs.streaming ? "streaming" : "recording"}. Set up the ViewSwitcher scene anyway? OBS will stay on the scene it's showing now.`)) return;
     setBusy(true);
     try {
       const r = await api.setupObs();
-      toast(r.missing.length ? `OBS is set up. Add ${r.missing.join(", ")} next.` : "OBS is set up");
+      const next = r.missing.length ? ` Add ${r.missing.join(", ")} next.` : "";
+      toast(r.switched ? `OBS is set up.${next}` : `The ViewSwitcher scene is ready; switch to it in OBS when you're ready.${next}`);
     } catch (e) {
       toast((e as Error).message);
     } finally {

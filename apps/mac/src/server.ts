@@ -2,7 +2,7 @@
 // (e.g. `bun run dev`), otherwise start the bundled one and own it. Only a server this app started
 // is ever stopped. No Electron imports, so `bun test` covers it.
 import { type ChildProcess, spawn } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 export type Probe = "viewswitcher" | "other" | "none";
@@ -46,6 +46,8 @@ export class PortTakenError extends Error {
 
 export class ServerStartError extends Error {}
 
+export const LOG_MAX_BYTES = 5 * 1024 * 1024;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Attach to a running ViewSwitcher server at `base`, or start one with `launch` and wait until it answers. */
@@ -58,6 +60,10 @@ export async function connectOrStart(base: string, launch: Launch, readyTimeoutM
 
 async function start(base: string, launch: Launch, readyTimeoutMs: number): Promise<Server> {
   mkdirSync(dirname(launch.logFile), { recursive: true });
+  // Start a fresh log once it gets big, so it never grows forever.
+  try {
+    if (statSync(launch.logFile).size > LOG_MAX_BYTES) writeFileSync(launch.logFile, "");
+  } catch {}
   const log = (text: string) => {
     try {
       appendFileSync(launch.logFile, text);
