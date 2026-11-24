@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import WebKit
 import ViewSwitcherKit
 
@@ -88,6 +89,15 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
     }
 
     func load() { webView.load(URLRequest(url: base.appendingPathComponent(""))) }
+
+    /// After Restart Server: stay on the page that was open (the editor, a stream) when it's on the server.
+    func reloadCurrent() {
+        if let url = webView.url, NavigationPolicy.mac(url, server: base, mainFrame: true) == .allow, url.scheme?.hasPrefix("http") == true {
+            webView.load(URLRequest(url: url))
+        } else {
+            load()
+        }
+    }
 
     func show() {
         if !window.isVisible { window.makeKeyAndOrderFront(nil) }
@@ -294,6 +304,9 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.canChooseFiles = true
+        // The page's only file input is the assets page (accept="image/*,video/*,audio/*"), which
+        // WKOpenPanelParameters doesn't pass on.
+        panel.allowedContentTypes = [.image, .movie, .audio]
         panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
     }
 }

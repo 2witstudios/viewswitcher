@@ -47,5 +47,9 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(NavigationPolicy.iPad(u("viewswitcher://elsewhere/"), mainFrame: true), .deny)
         XCTAssertEqual(NavigationPolicy.iPad(u("file:///"), mainFrame: true), .deny)
         XCTAssertEqual(NavigationPolicy.iPad(u("tel:123"), mainFrame: true), .deny)
+        // Only the one-time hand-over page on the Capacitor build's origin.
+        XCTAssertEqual(NavigationPolicy.iPad(u("capacitor://localhost/migrate"), mainFrame: true), .allow)
+        XCTAssertEqual(NavigationPolicy.iPad(u("capacitor://localhost/"), mainFrame: true), .deny)
+        XCTAssertEqual(NavigationPolicy.mac(u("capacitor://localhost/migrate"), server: server, mainFrame: true), .deny)
     }
 }

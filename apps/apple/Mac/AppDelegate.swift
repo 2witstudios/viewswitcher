@@ -23,6 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // One ViewSwitcher at a time: a second launch brings the first one forward.
         if let other = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
             .first(where: { $0.processIdentifier != getpid() }), !Env.e2e {
+            // Opening it again delivers a reopen event, so it shows its window (applicationShouldHandleReopen).
+            if let url = other.bundleURL {
+                NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, _ in exit(0) }
+                return
+            }
             other.activate()
             exit(0)
         }
@@ -110,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Task {
             if await startServer(atLaunch: false) {
                 watchState()
-                switcher?.load()
+                switcher?.reloadCurrent()
             }
             restarting = false
             renderStatus()
@@ -119,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// The menu bar follows the live state over the server's WebSocket, like any switcher page.
     func watchState() {
-        liveClient?.stop()
+        liveClient?.close()
         let client = LiveClient(base: Env.base)
         client.onState = { [weak self] state in
             self?.live = state
@@ -273,6 +278,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func checkForUpdates() { updater?.checkForUpdates(nil) }
+
+    /// Check for Updates… is enabled only with a running updater (not in Debug, with updates off, or without a key).
+    @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        item.action == #selector(checkForUpdates) ? updater != nil : true
+    }
 
     // ------------------------------------------------------------ app menu
 

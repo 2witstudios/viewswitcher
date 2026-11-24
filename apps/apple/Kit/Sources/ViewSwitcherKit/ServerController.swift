@@ -123,6 +123,11 @@ public final class Server: @unchecked Sendable {
         let (wasStopping, pending) = lock.withLock { () -> (Bool, [CheckedContinuation<Void, Never>]) in
             exitCode = code
             try? log?.write(contentsOf: Data("--- server exited (\(code))\n".utf8))
+            try? log?.close()
+            log = nil
+            // Break the handler cycles (process → handler → server → process) once it's gone.
+            process?.terminationHandler = nil
+            (process?.standardOutput as? Pipe)?.fileHandleForReading.readabilityHandler = nil
             let w = waiters
             waiters = []
             return (stopping, w)

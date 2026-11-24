@@ -34,6 +34,12 @@ public final class LiveClient {
         task = nil
     }
 
+    /// Stop for good and release the session (the client isn't used again).
+    public func close() {
+        stop()
+        session.invalidateAndCancel()
+    }
+
     /// Drop the current socket and connect again now.
     public func restart() {
         stop()

@@ -56,6 +56,8 @@ public enum NavigationPolicy {
         let scheme = url.scheme?.lowercased()
         if scheme == connectorScheme { return url.host?.lowercased() == "connector" ? .allow : .deny }
         if scheme == "about" { return .allow }
+        // The one-time hand-over from the Capacitor build's origin (CapacitorMigration in the app).
+        if scheme == "capacitor" { return url.host?.lowercased() == "localhost" && url.path == "/migrate" ? .allow : .deny }
         guard isWeb(url) else { return .deny }
         return iPadHostAllowed(url.host) ? .allow : .openInBrowser(url)
     }

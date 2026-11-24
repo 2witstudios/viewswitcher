@@ -24,8 +24,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
     #endif
 
+    private var wasInBackground = false
+
+    func sceneDidEnterBackground(_ scene: UIScene) { wasInBackground = true }
+
     func sceneWillEnterForeground(_ scene: UIScene) {
-        // iOS may have torn the tunnel's sockets down while the app was in the background.
+        // iOS may have torn the tunnel's sockets down while the app was in the background. (UIKit
+        // also calls this on the first launch, when the tunnel has only just started: leave it then.)
+        guard wasInBackground else { return }
+        wasInBackground = false
         if UsbTunnel.enabled { UsbTunnel.shared.restart() }
     }
 

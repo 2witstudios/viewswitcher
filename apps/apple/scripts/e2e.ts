@@ -90,9 +90,12 @@ const state = () => cmd<State>("state");
 const evalJs = <T = any>(js: string) => cmd<T>("eval", { js });
 
 type App = { proc: ReturnType<typeof Bun.spawn>; exited: boolean };
+/** Every app process this script started: cleanup kills only these, never another copy (say, an installed one serving 7420). */
+const started: ReturnType<typeof Bun.spawn>[] = [];
 async function launch(): Promise<App> {
   for (const f of readdirSync(control)) rmSync(join(control, f), { force: true });
   const proc = Bun.spawn([exe], { env, stdout: "ignore", stderr: "ignore" });
+  started.push(proc);
   const app = { proc, exited: false };
   proc.exited.then(() => (app.exited = true));
   if (!(await until(() => state(), 20_000))) throw new Error("the app didn't come up");
@@ -303,12 +306,13 @@ try {
   // ------------------------------------------------------------ the port is someone else's
   const squatter = Bun.serve({ hostname: "127.0.0.1", port: Number(PORT), fetch: () => new Response("not us", { status: 404 }) });
   const proc = Bun.spawn([exe], { env, stdout: "ignore", stderr: "ignore" });
+  started.push(proc);
   const ended = await Promise.race([proc.exited.then(() => true), sleep(15_000).then(() => false)]);
   squatter.stop(true);
   check(ended, "a port held by another app: the app says so and quits");
 } finally {
   for (const pid of listeners()) if (command(pid).startsWith(sidecar) || /apps\/server\/src\/index\.ts/.test(command(pid))) process.kill(pid, "SIGTERM");
-  Bun.spawnSync(["pkill", "-f", exe]);
+  for (const p of started) if (p.exitCode === null && p.signalCode === null) p.kill("SIGTERM");
   rmSync(library, { recursive: true, force: true });
   rmSync(control, { recursive: true, force: true });
 }

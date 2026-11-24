@@ -38,10 +38,28 @@
   const status = document.getElementById("status");
   const net = document.getElementById("net");
   const read = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
+  // Hosts the app shows (ViewSwitcherKit NavigationPolicy.iPadHostAllowed); anything else would open Safari.
+  const usable = (v) => {
+    try {
+      const u = new URL(v);
+      const h = u.hostname.toLowerCase();
+      return /^https?:$/.test(u.protocol) && (h === "127.0.0.1" || h === "localhost" || h.endsWith(".ts.net") || h.endsWith(".local"));
+    } catch { return false; }
+  };
+  // The address saved by the Capacitor build, handed over once by the app (#network=…).
+  const handed = new URLSearchParams(location.hash.slice(1)).get("network");
+  if (handed !== null) {
+    if (!read() && handed) { try { localStorage.setItem(KEY, handed); } catch {} }
+    history.replaceState(null, "", location.pathname);
+  }
   net.value = read();
   document.getElementById("form").addEventListener("submit", (e) => {
     e.preventDefault();
     const v = net.value.trim().replace(/\/+$/, "");
+    if (v && !usable(v)) {
+      status.textContent = "Use your Mac's Tailscale (…ts.net) or .local address.";
+      return;
+    }
     try { localStorage.setItem(KEY, v); } catch {}
     net.blur();
     check();
@@ -57,15 +75,16 @@
     } catch { return false; } finally { clearTimeout(t); }
   }
 
-  let busy = false;
+  let busy = false, leaving = false;
   async function check() {
-    if (busy) return;
+    if (busy || leaving) return;
     busy = true;
     try {
-      const network = read();
+      const network = usable(read()) ? read() : "";
       for (const [base, how] of [[USB, "USB-C"], ...(network ? [[network, "the network"]] : [])]) {
         if (await reachable(base)) {
           status.textContent = `Connected over ${how}…`;
+          leaving = true;
           location.replace(`${base}/`);
           return;
         }

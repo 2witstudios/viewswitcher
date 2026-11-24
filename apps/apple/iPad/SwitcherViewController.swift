@@ -29,6 +29,29 @@ final class ConnectorScheme: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
+/// Serves capacitor://localhost/migrate once, on the first launch after the Capacitor build: a page on
+/// that old origin reads the network address it saved and hands it to the connector (#network=…).
+/// Same bundle id, same web data store, so the old origin's localStorage is still there.
+final class CapacitorMigration: NSObject, WKURLSchemeHandler {
+    static let url = URL(string: "capacitor://localhost/migrate")!
+    static let doneKey = "migratedCapacitorNetwork"
+
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        let html = """
+        <!doctype html><meta charset="utf-8"><script>
+        let v = ""; try { v = localStorage.getItem("viewswitcher.network") || ""; } catch {}
+        location.replace("\(NavigationPolicy.connectorScheme)://connector/#network=" + encodeURIComponent(v));
+        </script>
+        """
+        let data = Data(html.utf8)
+        task.didReceive(URLResponse(url: task.request.url ?? Self.url, mimeType: "text/html", expectedContentLength: data.count, textEncodingName: "utf-8"))
+        task.didReceive(data)
+        task.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+}
+
 /// The iPad's one screen: a web view from edge to edge. The page keeps its controls inside the safe
 /// area itself (viewport-fit=cover and env(safe-area-inset-*) in apps/web/src/styles.css, MAC-13a),
 /// so its own background reaches every edge in each orientation, Split View and Stage Manager.
@@ -44,6 +67,7 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         // The switcher treats a page as the iPad app by this (apps/web/src/lib/client-kind.ts).
         config.applicationNameForUserAgent = "ViewSwitcher-iPad/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0")"
         config.setURLSchemeHandler(ConnectorScheme(), forURLScheme: NavigationPolicy.connectorScheme)
+        config.setURLSchemeHandler(CapacitorMigration(), forURLScheme: "capacitor")
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.addUserScript(WKUserScript(source: ShellBridge.userScript(ShellInfo(kind: .ipad)), injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -93,6 +117,10 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         #if DEBUG
         if let s = ProcessInfo.processInfo.environment["VIEWSWITCHER_SERVER"], let u = URL(string: s) { return u }
         #endif
+        if !UserDefaults.standard.bool(forKey: CapacitorMigration.doneKey) {
+            UserDefaults.standard.set(true, forKey: CapacitorMigration.doneKey)
+            return CapacitorMigration.url
+        }
         return connector
     }
 
