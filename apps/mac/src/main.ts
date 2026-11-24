@@ -39,21 +39,24 @@ function launch(): Launch {
   return { command: process.env.BUN ?? "bun", args: [join(repo, "apps/server/src/index.ts")], env, logFile };
 }
 
-async function startServer() {
+/** At launch a server that can't start ends the app; from Restart Server it only says why. */
+async function startServer({ atLaunch }: { atLaunch: boolean }) {
   try {
     server = await connectOrStart(BASE, launch());
   } catch (e) {
     const port = e instanceof PortTakenError;
     dialog.showErrorBox(port ? "Port in use" : "ViewSwitcher couldn't start", (e as Error).message + (port ? "" : `\n\nServer log: ${logFile}`));
-    quitting = true;
-    app.quit();
+    if (atLaunch) {
+      quitting = true;
+      app.quit();
+    }
     return false;
   }
   server.onExit = (code) => {
     server = null;
     live = null;
     renderTray();
-    if (!quitting) new Notification({ title: "ViewSwitcher server stopped", body: `It exited (${code}). Use Restart server in the menu bar.` }).show();
+    if (!quitting) new Notification({ title: "ViewSwitcher server stopped", body: `It exited (${code}). Use Restart Server in the menu bar.` }).show();
   };
   return true;
 }
@@ -94,6 +97,12 @@ function openWindow() {
   // Frames (scene previews, the editor) may load web pages, but never file: or app URL schemes.
   win.webContents.on("will-frame-navigate", (e) => {
     if (!e.isMainFrame && !frameSchemeAllowed(e.url)) e.preventDefault();
+  });
+  // The server can be starting (Dock click during launch) or restarting: keep retrying instead of
+  // leaving a connection-refused page up. -3 is an aborted load (a navigation replaced it): not a failure.
+  win.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 || !url.startsWith(BASE)) return;
+    setTimeout(() => win?.webContents.loadURL(`${BASE}/`), 1000);
   });
   win.loadURL(`${BASE}/`);
   // Closing hides the window; the server keeps serving OBS and the iPad.
@@ -189,7 +198,7 @@ function renderTray() {
     { label: "Open Library Folder", click: openLibrary, enabled: !!server },
     { label: s.obsReady ? "Set Up OBS Again" : "Set Up OBS…", click: setUpObs, enabled: !!live?.obs.connected },
     { type: "separator" },
-    ...(server ? [] : [{ label: "Restart Server", click: restartServer } satisfies MenuItemConstructorOptions]),
+    ...(server ? [] : [{ label: restarting ? "Starting Server…" : "Restart Server", click: restartServer, enabled: !restarting } satisfies MenuItemConstructorOptions]),
     {
       label: "Open at Login",
       type: "checkbox",
@@ -210,10 +219,19 @@ if (process.env.VIEWSWITCHER_E2E === "1") {
   Object.assign(globalThis, { viewswitcherE2E: { trayMenu: () => trayMenu, trayTitle: () => tray?.getTitle(), server: () => server && { owned: server.owned } } });
 }
 
+let restarting = false;
 async function restartServer() {
-  if (await startServer()) {
-    watchState();
-    win?.reload();
+  if (restarting || server) return; // a second click while one is starting would race it for the port
+  restarting = true;
+  renderTray();
+  try {
+    if (await startServer({ atLaunch: false })) {
+      watchState();
+      win?.reload();
+    }
+  } finally {
+    restarting = false;
+    renderTray();
   }
 }
 
@@ -307,7 +325,7 @@ if (!app.requestSingleInstanceLock()) {
     appMenu();
     tray = new Tray(icon(false));
     renderTray();
-    if (!(await startServer())) return;
+    if (!(await startServer({ atLaunch: true }))) return;
     watchState();
     renderTray();
     openWindow();

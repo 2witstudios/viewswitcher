@@ -180,10 +180,16 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
-  // For the Mac app's menu (Open Library Folder). Only to local requests: a Tailscale-served
-  // switcher has no use for this Mac's folder paths.
+  // For the Mac app's menu (Open Library Folder): the one response with an absolute path in it.
+  // Only for this Mac: the connection must come from loopback, be addressed to a loopback host, and
+  // carry no proxy headers (tailscale serve also connects from 127.0.0.1, but adds X-Forwarded-For).
   if (path === "/api/info" && req.method === "GET") {
-    if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.get("host") ?? "")) return json({ error: "Not found" }, 404);
+    const peer = server.requestIP(req)?.address ?? "";
+    const local =
+      ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) &&
+      /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(req.headers.get("host") ?? "") &&
+      !req.headers.has("x-forwarded-for") && !req.headers.has("x-forwarded-host") && !req.headers.has("forwarded");
+    if (!local) return json({ error: "Not found" }, 404);
     return json({ library: root, port: server.port });
   }
 
