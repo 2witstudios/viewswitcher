@@ -179,6 +179,12 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
+  // For the Mac app's menu (Open Library Folder). Only to local requests: a Tailscale-served
+  // switcher has no use for this Mac's folder paths.
+  if (path === "/api/info" && req.method === "GET") {
+    if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.get("host") ?? "")) return json({ error: "Not found" }, 404);
+    return json({ library: root, port: server.port });
+  }
 
   if (path === "/api/onair" && post) {
     const b = await body(req);
@@ -356,6 +362,20 @@ const server = Bun.serve({
 
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
+
+// Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
+// so the port is never left held by an orphan.
+const parent = Number(process.env.VIEWSWITCHER_PARENT_PID);
+if (parent > 1) {
+  setInterval(() => {
+    try {
+      process.kill(parent, 0);
+    } catch {
+      console.log("[viewswitcher] the Mac app is gone; stopping");
+      process.exit(0);
+    }
+  }, 2000).unref();
+}
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
 if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) {
