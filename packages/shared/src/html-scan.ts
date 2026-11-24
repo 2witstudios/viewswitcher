@@ -287,13 +287,18 @@ export const setText = (html: string, id: number, text: string) => applyEdits(ht
 export const setPosition = (html: string, id: number, left: number, top: number) => applyEdits(html, [{ id, left, top }]);
 
 /** The scene with data-vs="<id>" on every start tag, for the editor and the program page. Never written to disk. */
-export function tagForEdit(html: string): string {
+/**
+ * With `hash`, the <html> element also carries data-vs-hash="<hash>": the version those ids belong to,
+ * so a page showing it can tell whether an edit's ids are for what it shows.
+ */
+export function tagForEdit(html: string, hash?: string): string {
   const els = scanElements(html);
   let out = html;
   for (let k = els.length - 1; k >= 0; k--) {
     const el = els[k]!;
     const at = el.start + 1 + el.tag.length;
-    out = `${out.slice(0, at)} data-vs="${el.id}"${out.slice(at)}`;
+    const stamp = hash && el.tag === "html" && el.parent === null ? ` data-vs-hash="${hash.replace(/[^\w-]/g, "")}"` : "";
+    out = `${out.slice(0, at)} data-vs="${el.id}"${stamp}${out.slice(at)}`;
   }
   return out;
 }
@@ -306,7 +311,11 @@ export function untagForEdit(tagged: string): string {
     const el = els[k]!;
     const at = el.start + 1 + el.tag.length;
     const attr = ` data-vs="${el.id}"`;
-    if (out.startsWith(attr, at)) out = out.slice(0, at) + out.slice(at + attr.length);
+    if (!out.startsWith(attr, at)) continue;
+    let end = at + attr.length;
+    const stamp = el.tag === "html" ? /^ data-vs-hash="[\w-]*"/.exec(out.slice(end)) : null;
+    if (stamp) end += stamp[0].length;
+    out = out.slice(0, at) + out.slice(end);
   }
   return out;
 }

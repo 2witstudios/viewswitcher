@@ -42,7 +42,9 @@ export const api = {
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
     const res = await fetch(`/library/${path}?edit`, { cache: "no-store" });
     if (!res.ok) throw new Error(res.status === 404 ? "This scene doesn't exist any more" : res.statusText);
-    return { html: await res.text(), hash: res.headers.get("x-scene-hash") ?? "" };
+    const hash = res.headers.get("x-scene-hash");
+    if (!hash) throw new Error("This scene can't be edited here. Open the file instead.");
+    return { html: await res.text(), hash };
   },
   /** Save edits made against the version `hash`. Throws SceneConflict if the file changed since. */
   editScene: async (path: string, hash: string, edits: SceneEdit[]): Promise<{ hash: string }> => {
@@ -52,7 +54,11 @@ export const api = {
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data;
   },
-  previewScene: (path: string, edit: SceneEdit) => post("/api/scene/preview", { path, edit }),
+  /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
+  previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit }),
+  /** The same, from a page that's going away (survives pagehide). */
+  previewSceneBeacon: (path: string, hash: string, edit: SceneEdit) =>
+    navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
   toggleRecord: () => post("/api/obs/record"),

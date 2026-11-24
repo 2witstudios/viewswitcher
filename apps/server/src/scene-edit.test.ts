@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scanElements, textOf } from "@viewswitcher/shared";
+import { scanElements, textOf, untagForEdit } from "@viewswitcher/shared";
 import { editScene, readForEdit, sceneHash } from "./scene-edit";
 
 const starter = join(import.meta.dir, "../starter");
@@ -25,8 +25,8 @@ describe("readForEdit (EDIT-3)", () => {
     const { mtimeMs } = await stat(abs);
     const { html, hash } = await readForEdit(root, SCENE);
     expect(hash).toBe(sceneHash(before));
-    expect(html).toContain(`<html data-vs="0" lang="en">`);
-    expect(html.replace(/ data-vs="\d+"/g, "")).toBe(before);
+    expect(html).toContain(`<html data-vs="0" data-vs-hash="${hash}" lang="en">`);
+    expect(untagForEdit(html)).toBe(before);
     expect(await readFile(abs, "utf8")).toBe(before);
     expect((await stat(abs)).mtimeMs).toBe(mtimeMs);
   });
@@ -91,6 +91,23 @@ describe("saving keeps the file what it was (PR #1 review)", () => {
   });
 });
 
+describe("a write that lands while saving (PR #1 architecture #5)", () => {
+  test("someone else's save between read and replace wins; this one is a 409", async () => {
+    const SC = "acme/templates/starting-soon.html";
+    const abs = join(root, SC);
+    const before = await readFile(abs, "utf8");
+    const id = scanElements(before).find((e) => e.leaf && e.tag !== "title")!.id;
+    const theirs = before.replace("</body>", "<!-- agent -->\n</body>");
+    const r = await editScene(root, SC, sceneHash(before), [{ id, text: "Mine" }], {
+      beforeReplace: () => writeFile(abs, theirs),
+    });
+    expect(r).toEqual({ ok: false, conflict: true, hash: sceneHash(theirs) });
+    expect(await readFile(abs, "utf8")).toBe(theirs);
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(join(root, "acme/templates"))).filter((f) => f.includes(".vs-"))).toEqual([]);
+  });
+});
+
 describe("over HTTP", () => {
   let proc: ReturnType<typeof Bun.spawn> | null = null;
   let base = "";
@@ -148,6 +165,16 @@ describe("over HTTP", () => {
     expect((await post("/api/scene/edit", { path: "../x.html", hash, edits: [{ id: 1, text: "x" }] })).status).toBe(400);
   });
 
+  test("?edit falls back to the plain file when the scene can't be tagged (PR #1 architecture #4)", async () => {
+    // An org folder name the editor refuses (plainName) must still show on the program page.
+    await cp(join(root, "acme"), join(root, "_odd"), { recursive: true });
+    const plain = await readFile(join(root, "_odd/templates/brb.html"), "utf8");
+    const res = await fetch(`${base}/library/_odd/templates/brb.html?edit`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-scene-hash")).toBeNull();
+    expect(await res.text()).toBe(plain);
+  });
+
   test("POST /api/scene/preview broadcasts and writes nothing", async () => {
     const before = await readFile(join(root, SCENE), "utf8");
     const ws = new WebSocket(`${base.replace("http", "ws")}/ws`);
@@ -158,8 +185,8 @@ describe("over HTTP", () => {
       };
     });
     await new Promise((r) => (ws.onopen = r));
-    expect((await post("/api/scene/preview", { path: SCENE, edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
-    expect(await got).toEqual({ t: "scene:preview", path: SCENE, edit: { id: 3, left: 10, top: 20 } });
+    expect((await post("/api/scene/preview", { path: SCENE, hash: "h1", edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
+    expect(await got).toEqual({ t: "scene:preview", path: SCENE, hash: "h1", edit: { id: 3, left: 10, top: 20 } });
     ws.close();
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
     expect((await post("/api/scene/preview", { path: SCENE, edit: { id: 3 } })).status).toBe(400);

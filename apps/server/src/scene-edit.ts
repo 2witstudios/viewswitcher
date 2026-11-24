@@ -1,7 +1,7 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
-import { chmod, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
-import { relative, isAbsolute } from "node:path";
+import { chmod, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { applyEdits, EditError, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
@@ -20,7 +20,8 @@ export function scenePath(root: string, path: unknown): string {
 /** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
 export async function readForEdit(root: string, path: string) {
   const text = await readFile(scenePath(root, path), "utf8");
-  return { html: tagForEdit(text), hash: sceneHash(text) };
+  const hash = sceneHash(text);
+  return { html: tagForEdit(text, hash), hash };
 }
 
 /** Check one edit's shape: {id, text} or {id, left, top}. */
@@ -47,26 +48,38 @@ let queue: Promise<unknown> = Promise.resolve();
  * Apply `edits` (ids from the version with `hash`) and write the file once. If the file's hash
  * isn't `hash` any more, nothing is written and the result carries the current hash.
  */
-export function editScene(root: string, path: string, hash: string, edits: unknown[]): Promise<EditResult> {
+export function editScene(
+  root: string, path: string, hash: string, edits: unknown[],
+  /** Tests only: runs between reading the file and replacing it. */
+  hooks: { beforeReplace?: () => Promise<void> } = {},
+): Promise<EditResult> {
   const run = async (): Promise<EditResult> => {
     const abs = scenePath(root, path);
     if (!Array.isArray(edits) || edits.length === 0 || edits.length > 100) throw new EditError("No edits to save");
     const parsed = edits.map(parseEdit);
-    const text = await readFile(abs, "utf8");
+    const real = await realpath(abs);
+    const read = await stat(real);
+    const text = await readFile(real, "utf8");
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
     const next = applyEdits(text, parsed);
     if (next === text) return { ok: true, hash: current, changed: false };
     // A linked scene is written where it really lives (so the link stays a link), never outside the library.
-    const real = await realpath(abs);
     const back = relative(await realpath(root), real);
     if (back.startsWith("..") || isAbsolute(back)) throw new PathError("This scene is a link to a file outside the library");
     // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
     // The watcher ignores dot-files.
-    const dir = real.slice(0, real.lastIndexOf("/"));
-    const tmp = `${dir}/.${real.slice(dir.length + 1)}.vs-${process.pid}-${Date.now()}`;
+    const tmp = join(dirname(real), `.${basename(real)}.vs-${process.pid}-${Date.now()}`);
     await writeFile(tmp, next);
-    await chmod(tmp, (await stat(real)).mode & 0o7777);
+    await chmod(tmp, read.mode & 0o7777);
+    await hooks.beforeReplace?.();
+    // Someone else saved while this one was being written: theirs wins, this one is a conflict.
+    const now = await stat(real).catch(() => null);
+    if (!now || now.mtimeMs !== read.mtimeMs || now.size !== read.size) {
+      await rm(tmp, { force: true });
+      const latest = await readFile(real, "utf8").catch(() => "");
+      return { ok: false, conflict: true, hash: sceneHash(latest) };
+    }
     await rename(tmp, real);
     return { ok: true, hash: sceneHash(next), changed: true };
   };

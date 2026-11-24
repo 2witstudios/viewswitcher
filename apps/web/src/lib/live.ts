@@ -14,7 +14,7 @@ type Live = {
 
 let live: Live = { connected: false, state: null, versions: {} };
 
-type PreviewListener = (path: string, edit: SceneEdit) => void;
+type PreviewListener = (path: string, hash: string, edit: SceneEdit) => void;
 const previewListeners = new Set<PreviewListener>();
 /** Live changes from the scene editor (never saved): the program page applies them to the on-air scene. */
 export function onScenePreview(listener: PreviewListener) {
@@ -55,7 +55,7 @@ function connect() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data) as ServerMessage;
     if (msg.t === "state") set({ state: msg.state });
-    if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.edit));
+    if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.hash, msg.edit));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
     if (msg.t === "library:changed") {
       const versions = { ...live.versions };

@@ -8,6 +8,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
+import { applyPreview } from "../lib/apply-preview";
 import { onScenePreview, sceneUrl, useLive } from "../lib/live";
 
 // Report errors to the server log: the OBS browser has no devtools by default.
@@ -20,6 +21,8 @@ if (typeof window !== "undefined") {
 const WIPE_IN = 170;
 const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
+/** A live preview that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
+const PREVIEW_BACKSTOP_MS = 5000;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Job = { url: string; path: string };
@@ -58,6 +61,7 @@ export const Route = createFileRoute("/program")({
     const running = useRef(false);
     const seq = useRef(0);
     const waiters = useRef<Map<string, () => void>>(new Map()); // frame src → resolve on load
+    const backstop = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
       const fit = () => setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
@@ -138,28 +142,37 @@ export const Route = createFileRoute("/program")({
       }
     };
 
-    // Live edits from the scene editor: change the on-air frame's DOM (never the file). When a moved
-    // element is or holds a device slot, report the slots again (at most ~30 times a second) so OBS follows it.
+    // Live edits from the scene editor: change the on-air frame's DOM (never the file), only when the
+    // edit was made against the version this frame shows. When a moved element is or holds a device
+    // slot, report the slots again (at most ~30 times a second) so OBS follows it. If previews stop
+    // without a save (the editor went away mid-drag), reload the frame so the stream matches the file.
     useEffect(() => {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      return onScenePreview((path, edit) => {
-        if (path !== shown.current?.path) return;
+      const off = onScenePreview((path, hash, edit) => {
+        const job = shown.current;
+        if (!job || path !== job.path) return;
         const frame = refs[frontRef.current].current;
-        const el = frame?.contentDocument?.querySelector<HTMLElement>(`[data-vs="${edit.id}"]`);
-        if (!frame || !el) return;
-        if ("text" in edit) {
-          el.textContent = edit.text;
-          return;
-        }
-        el.style.left = `${edit.left}px`;
-        el.style.top = `${edit.top}px`;
-        if (!el.matches("[data-slot]") && !el.querySelector("[data-slot]")) return;
+        const doc = frame?.contentDocument;
+        if (!frame || !doc) return;
+        const applied = applyPreview(doc as unknown as Parameters<typeof applyPreview>[0], hash, edit);
+        if (!applied) return;
+        clearTimeout(backstop.current);
+        backstop.current = setTimeout(() => {
+          if (shown.current !== job) return; // a saved version already replaced it
+          desired.current = { url: `${job.url}&fresh=${++seq.current}`, path: job.path };
+          run();
+        }, PREVIEW_BACKSTOP_MS);
+        if (!applied.slotMoved) return;
         if (timer) return;
         timer = setTimeout(() => {
           timer = undefined;
           if (shown.current?.path === path) api.reportSlots({ path, slots: readSlots(frame) }).catch(() => {});
         }, 33);
       });
+      return () => {
+        off();
+        clearTimeout(backstop.current);
+      };
     }, []);
 
     useEffect(() => {

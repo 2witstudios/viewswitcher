@@ -19,6 +19,7 @@ const DRAG_START_PX = 6; // screen px before a press becomes a drag
 const SNAP_PX = 7; // screen px
 const PREVIEW_MS = 33; // live previews: about one per frame
 const NUDGE_SAVE_MS = 500;
+const HEARTBEAT_MS = 2000; // resend an unsaved live change, so the program page knows the editor is still here
 
 type Base = { source: string; hash: string; els: ScannedElement[] };
 type UndoEntry = { before: SceneEdit; after: SceneEdit };
@@ -227,7 +228,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   const pending = useRef(new Map<number, SceneEdit>());
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The latest live change not saved yet (typing, mid-drag, nudging); resent as a heartbeat. */
+  const unsaved = useRef<SceneEdit | null>(null);
   const preview = (edit: SceneEdit) => {
+    unsaved.current = edit;
     if (!onAirRef.current) return;
     pending.current.set(edit.id * 2 + ("text" in edit ? 0 : 1), edit);
     if (previewTimer.current) return;
@@ -238,7 +242,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         previewTimer.current = undefined;
         return;
       }
-      for (const e of edits) api.previewScene(path, e).catch(() => {});
+      const hash = baseRef.current?.hash ?? "";
+      for (const e of edits) api.previewScene(path, hash, e).catch(() => {});
       previewTimer.current = setTimeout(flush, PREVIEW_MS);
     };
     flush();
@@ -279,7 +284,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       },
     });
   }
-  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn?: number) => saverRef.current!(edits, undoEntries, madeIn);
+  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn?: number) => {
+    unsaved.current = null;
+    return saverRef.current!(edits, undoEntries, madeIn);
+  };
 
   /** Change an element now: on screen, live on stream, and saved. */
   const change = (edit: SceneEdit, before: SceneEdit | null) => {
@@ -396,12 +404,34 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     };
   }, [editing]);
 
-  // Leaving mid-edit puts the on-air scene back the way it was.
+  // Leaving mid-change (navigating away, closing the tab, the iPad losing its cable) puts the on-air
+  // scene back the way the file has it. A beacon survives pagehide.
   const editingRef = useRef(editing);
   editingRef.current = editing;
-  useEffect(() => () => {
+  const revertLive = useRef(() => {});
+  revertLive.current = () => {
+    const b = baseRef.current;
+    if (!onAirRef.current || !b) return;
+    const g = gesture.current?.drag;
+    const n = nudge.current;
     const e = editingRef.current;
-    if (e && onAirRef.current) api.previewScene(path, { id: e.id, text: e.original }).catch(() => {});
+    const back: SceneEdit | null = e ? { id: e.id, text: e.original } : g ? { id: g.id, ...g.start } : n ? n.before : null;
+    if (back) api.previewSceneBeacon(path, b.hash, back);
+  };
+  useEffect(() => {
+    const onHide = () => revertLive.current();
+    window.addEventListener("pagehide", onHide);
+    // Keep an unsaved change alive on stream while the editor is here (the program page drops one that goes quiet).
+    const beat = setInterval(() => {
+      const u = unsaved.current;
+      const b = baseRef.current;
+      if (u && b && onAirRef.current && (editingRef.current || gesture.current?.drag || nudge.current)) api.previewScene(path, b.hash, u).catch(() => {});
+    }, HEARTBEAT_MS);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      clearInterval(beat);
+      revertLive.current();
+    };
   }, [path]);
 
   // ------------------------------------------------------------ pointer: select, drag, long-press, double-tap
@@ -719,6 +749,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                   style.id = "vs-editor-style";
                   style.textContent = "[contenteditable]{outline:none;caret-color:currentColor;cursor:text}[contenteditable]::selection{background:rgba(244,245,247,.28)}";
                   d.head.append(style);
+                }
+                // The frame loads the scene on its own: if the file changed since the base was read, its ids
+                // aren't the base's. Read both again.
+                const b = baseRef.current;
+                if (b && d?.documentElement.dataset.vsHash !== b.hash) {
+                  void load();
+                  return;
                 }
                 setReady(true);
                 redraw();

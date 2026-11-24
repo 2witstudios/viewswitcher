@@ -231,7 +231,8 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/scene/preview" && post) {
     const b = await body(req);
     scenePath(root, b.path);
-    publish({ t: "scene:preview", path: b.path, edit: parseEdit(b.edit) });
+    // The hash names the file version the edit's ids belong to; pages showing another version ignore it.
+    publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit) });
     return json({ ok: true });
   }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));
@@ -267,14 +268,18 @@ const server = Bun.serve({
       if (path.startsWith("/library/")) {
         if (url.searchParams.has("edit") && path.endsWith(".html")) {
           // The scene with data-vs element ids, for the editor and the program page; the file is only read.
-          const scene = await readForEdit(config.library, path.slice("/library/".length)).catch((e) => {
-            if (e instanceof PathError) throw e;
+          // If it can't be tagged for any reason, serve the plain file: the program shows the scene and
+          // live previews simply don't apply to it.
+          const rel = path.slice("/library/".length);
+          const scene = await readForEdit(config.library, rel).catch((e) => {
+            if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
             return null;
           });
-          if (!scene) return new Response("Not found", { status: 404 });
-          return new Response(scene.html, {
-            headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" },
-          });
+          if (scene) {
+            return new Response(scene.html, {
+              headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" },
+            });
+          }
         }
         return (await fileResponse(inside(config.library, path.slice("/library/".length)))) ?? new Response("Not found", { status: 404 });
       }

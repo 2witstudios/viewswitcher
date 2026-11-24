@@ -249,3 +249,14 @@ describe("untagForEdit", () => {
     expect(untagForEdit(tagged)).toBe(html);
   });
 });
+
+describe("version stamp (PR #1 architecture #1, #2)", () => {
+  test("tagForEdit stamps the hash on <html> only, and untagForEdit removes it", () => {
+    const html = `<!doctype html><html lang="en"><body><p>x</p></body></html>`;
+    const tagged = tagForEdit(html, "abc123");
+    expect(tagged).toBe(`<!doctype html><html data-vs="0" data-vs-hash="abc123" lang="en"><body data-vs="1"><p data-vs="2">x</p></body></html>`);
+    expect(untagForEdit(tagged)).toBe(html);
+    expect(tagForEdit(`<p>x</p>`, "abc")).toBe(`<p data-vs="0">x</p>`);
+    expect(tagForEdit(html, `"><script>`)).toContain(`data-vs-hash="script"`);
+  });
+});
