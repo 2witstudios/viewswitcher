@@ -159,11 +159,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         if (p) origins.current.set(e.id, { left: p.left, top: p.top });
       });
       setBase(b);
+      setLoadError("");
+      // An open conflict follows the newest version: its marks and Apply my change again use it.
+      if (conflictOpen.current) setConflict((c) => (c ? { ...c, latest: b, changed: changedElements(c.prev.source, b.source) } : c));
       setReady(false);
       setFrameKey((k) => k + 1);
       return b;
     } catch (e) {
-      setLoadError((e as Error).message);
+      // With a scene already open, a failed reload is a message, not the end of the editor.
+      if (baseRef.current) toast(`Couldn't reload the scene: ${(e as Error).message}`);
+      else setLoadError((e as Error).message);
       return null;
     }
   }, [path]);
@@ -228,24 +233,30 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   // ------------------------------------------------------------ live preview (on air only) and saving
 
-  const pending = useRef(new Map<number, SceneEdit>());
+  const pending = useRef(new Map<number, { edit: SceneEdit; gen: number }>());
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** The latest live change not saved yet (typing, mid-drag, nudging); resent as a heartbeat. */
-  const unsaved = useRef<SceneEdit | null>(null);
-  const preview = (edit: SceneEdit) => {
-    unsaved.current = edit;
+  const unsaved = useRef<{ edit: SceneEdit; gen: number } | null>(null);
+  /**
+   * Show a change live on stream. `gen` is the generation its id came from (when the drag, typing or
+   * nudge started). After a reload the ids may name other elements, so an older one is never sent:
+   * the hash it would carry is the new version's, which the program page would accept.
+   */
+  const preview = (edit: SceneEdit, gen = generation.current) => {
+    if (gen !== generation.current) return;
+    unsaved.current = { edit, gen };
     if (!onAirRef.current) return;
-    pending.current.set(edit.id * 2 + ("text" in edit ? 0 : 1), edit);
+    pending.current.set(edit.id * 2 + ("text" in edit ? 0 : 1), { edit, gen });
     if (previewTimer.current) return;
     const flush = () => {
-      const edits = [...pending.current.values()];
+      const items = [...pending.current.values()].filter((p) => p.gen === generation.current);
       pending.current.clear();
-      if (!edits.length) {
+      if (!items.length) {
         previewTimer.current = undefined;
         return;
       }
       const hash = baseRef.current?.hash ?? "";
-      for (const e of edits) api.previewScene(path, hash, e).catch(() => {});
+      for (const p of items) api.previewScene(path, hash, p.edit).catch(() => {});
       previewTimer.current = setTimeout(flush, PREVIEW_MS);
     };
     flush();
@@ -345,6 +356,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!editing) return;
     const el = node(editing.id);
     const b = baseRef.current;
+    editingRef.current = null; // finished: leaving now mustn't put the old text back on air
     setEditing(null);
     if (!el || !b) return;
     el.removeAttribute("contenteditable");
@@ -356,7 +368,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!commit || !text) {
       if (commit && !text) toast("Text can't be empty: put back what was there");
       el.textContent = editing.original;
-      preview({ id: editing.id, text: editing.original });
+      preview({ id: editing.id, text: editing.original }, editing.gen);
       redraw();
       return;
     }
@@ -378,7 +390,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const d = doc();
     if (!el || !d) return;
     const onInput = () => {
-      preview({ id: editing.id, text: el.textContent ?? "" });
+      preview({ id: editing.id, text: el.textContent ?? "" }, editing.gen);
       redraw();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -421,8 +433,9 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const g = gesture.current?.drag;
     const n = nudge.current;
     const e = editingRef.current;
-    const back: SceneEdit | null = e ? { id: e.id, text: e.original } : g ? { id: g.id, ...g.start } : n ? n.before : null;
-    if (back) api.previewSceneBeacon(path, b.hash, back);
+    const back = e ? { edit: { id: e.id, text: e.original }, gen: e.gen } : g ? { edit: { id: g.id, ...g.start }, gen: g.gen } : n ? { edit: n.before, gen: n.gen } : null;
+    // A change from before a reload was never shown on this version, so there's nothing to put back.
+    if (back && back.gen === generation.current) api.previewSceneBeacon(path, b.hash, back.edit);
   };
   useEffect(() => {
     const onHide = () => revertLive.current();
@@ -431,11 +444,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const beat = setInterval(() => {
       const u = unsaved.current;
       const b = baseRef.current;
-      if (u && b && onAirRef.current && (editingRef.current || gesture.current?.drag || nudge.current)) api.previewScene(path, b.hash, u).catch(() => {});
+      if (u && b && u.gen === generation.current && onAirRef.current && (editingRef.current || gesture.current?.drag || nudge.current)) {
+        api.previewScene(path, b.hash, u.edit).catch(() => {});
+      }
     }, HEARTBEAT_MS);
     return () => {
       window.removeEventListener("pagehide", onHide);
       clearInterval(beat);
+      // A pending nudge is saved first (so the stream doesn't snap back before it lands); then
+      // anything still unfinished goes back to what the file has.
+      flushNudgeRef.current();
       revertLive.current();
     };
   }, [path]);
@@ -517,7 +535,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (next.left === d.last.left && next.top === d.last.top) return;
     d.last = next;
     applyDom({ id: d.id, ...next });
-    preview({ id: d.id, ...next });
+    preview({ id: d.id, ...next }, d.gen);
     setDrag({ id: d.id, ...next, guides: s.guides });
   };
 
@@ -554,7 +572,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     clearTimeout(g.timer);
     if (g.drag) {
       applyDom({ id: g.drag.id, ...g.drag.start });
-      preview({ id: g.drag.id, ...g.drag.start });
+      preview({ id: g.drag.id, ...g.drag.start }, g.drag.gen);
       setDrag(null);
     }
   };
@@ -573,7 +591,6 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
   const flushNudgeRef = useRef(flushNudge);
   flushNudgeRef.current = flushNudge;
-  useEffect(() => () => flushNudgeRef.current(), []);
 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
@@ -607,7 +624,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const step = e.shiftKey ? 10 : 1;
     const next = { id: selected, left: now.left + dir[0] * step, top: now.top + dir[1] * step };
     applyDom(next);
-    preview(next);
+    preview(next, nudge.current.gen);
     nudge.current.last = { left: next.left, top: next.top };
     clearTimeout(nudge.current.timer);
     nudge.current.timer = setTimeout(flushNudge, NUDGE_SAVE_MS);
@@ -627,7 +644,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   const applyAgain = () => {
     if (!conflict) return;
-    const { edits, prev, latest } = conflict;
+    const { edits, prev } = conflict;
+    const latest = baseRef.current ?? conflict.latest; // the newest version, if it moved on again
     const moved = edits.map((e) => retarget(prev.source, latest.source, e));
     conflictOpen.current = false;
     setConflict(null);
@@ -635,7 +653,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       toast("That part of the scene isn't in the new version, so your change can't go there");
       return;
     }
-    const again = moved as SceneEdit[];
+    // Several lost changes to one element (a drag, then a nudge) become its last one.
+    const last = new Map<string, SceneEdit>();
+    for (const e of moved as SceneEdit[]) last.set(`${e.id}:${"text" in e ? "t" : "p"}`, e);
+    const again = [...last.values()];
     const entries = again.flatMap((e) => {
       const before = valueIn(latest, e);
       return before ? [{ before, after: e }] : [];
@@ -661,6 +682,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   // ------------------------------------------------------------ actions
 
   const leave = () => {
+    // Done or Back while typing saves what was typed, as Return would.
+    if (editing) finishEdit(true);
     flushNudge();
     if (window.history.length > 1) router.history.back();
     else navigate({ to: "/$org", params: { org } });

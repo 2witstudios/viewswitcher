@@ -340,3 +340,10 @@ describe("/review round 2 findings on PR #1", () => {
     expect(changedElements(a, moved)).toEqual([0]);
   });
 });
+
+describe("/code-review round 2 on PR #1", () => {
+  test("names with digits decode (&frac12;, &sup2;)", () => {
+    expect(decodeEntities("&frac12; &sup2; &frac34;")).toBe("½ ² ¾");
+    expect(setText(`<p>&frac12; cup</p>`, 0, "½ cup")).toBe(`<p>&frac12; cup</p>`);
+  });
+});

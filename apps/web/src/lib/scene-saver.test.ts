@@ -86,6 +86,28 @@ describe("createSceneSaver", () => {
     expect(s.file()).not.toContain("Dropped late");
   });
 
+  test("a handler that throws doesn't stop later saves", async () => {
+    let calls = 0;
+    const save = createSceneSaver<{ hash: string }, null>({
+      base: () => ({ hash: "h" }),
+      generation: () => 1,
+      send: async () => {
+        if (++calls === 1) throw new Error("network");
+        return { hash: "h" };
+      },
+      isConflict: () => false,
+      onSaved: () => {},
+      onConflict: async () => {},
+      onStale: () => {},
+      onError: async () => {
+        throw new Error("handler failed");
+      },
+    });
+    await save([{ id: 1, text: "a" }], null).catch(() => {});
+    await save([{ id: 1, text: "b" }], null);
+    expect(calls).toBe(2);
+  });
+
   test("edits made after the reload save normally", async () => {
     const s = setup();
     const para = idOf(teaching, "Key point, link or question for chat.");

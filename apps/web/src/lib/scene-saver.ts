@@ -20,10 +20,10 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
   onStale: (edits: SceneEdit[]) => void;
   onError: (e: unknown) => Promise<void>;
 }) {
-  let queue: Promise<void> = Promise.resolve();
+  let queue: Promise<unknown> = Promise.resolve();
   /** `madeIn`: the generation the edit's ids came from, when it started before this call (a drag, typing). */
   return (edits: SceneEdit[], meta: M, madeIn = opts.generation()): Promise<void> => {
-    queue = queue.then(async () => {
+    const next = queue.then(async () => {
       if (opts.generation() !== madeIn) return opts.onStale(edits);
       const b = opts.base();
       if (!b) return;
@@ -35,6 +35,8 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
         else await opts.onError(e);
       }
     });
-    return queue;
+    // A handler that throws mustn't stop every later save.
+    queue = next.catch(() => {});
+    return next;
   };
 }
