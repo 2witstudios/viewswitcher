@@ -1,3 +1,5 @@
+import type { SceneEdit } from "./html-scan";
+
 /** Where a scene file lives in the library. */
 export type SceneOrigin = "template" | "project" | "stream";
 
@@ -97,5 +99,7 @@ export type LiveState = {
 export type ServerMessage =
   | { t: "state"; state: LiveState }
   | { t: "library:changed"; paths: string[] }
+  /** The scene editor showing a change live (never written): the program page applies it to the on-air scene if `path` matches. */
+  | { t: "scene:preview"; path: string; edit: SceneEdit }
   /** The entry script of the switcher build being served; a page running a different one reloads. "" when nothing is built. */
   | { t: "build"; build: string };
