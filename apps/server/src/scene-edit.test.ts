@@ -114,6 +114,20 @@ describe("a write that lands while saving (PR #1 architecture #5)", () => {
   });
 });
 
+describe("no staged copy is left behind (PR #1 round 5)", () => {
+  test("a failure between staging and replacing removes the temp file", async () => {
+    const SC = "acme/templates/ending.html";
+    const before = await readFile(join(root, SC), "utf8");
+    const id = scanElements(before).find((e) => e.leaf && e.tag !== "title")!.id;
+    await expect(editScene(root, SC, sceneHash(before), [{ id, text: "Bye" }], {
+      beforeReplace: async () => { throw new Error("disk full"); },
+    })).rejects.toThrow("disk full");
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(join(root, "acme/templates"))).filter((f) => f.includes(".vs-"))).toEqual([]);
+    expect(await readFile(join(root, SC), "utf8")).toBe(before);
+  });
+});
+
 describe("over HTTP", () => {
   let proc: ReturnType<typeof Bun.spawn> | null = null;
   let base = "";

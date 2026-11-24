@@ -45,7 +45,7 @@ function setup() {
       throw e;
     },
   });
-  return { save, sent, stale, conflicts, saved, file: () => file, agentWrites: (f: (s: string) => string) => void (file = f(file)) };
+  return { save, idle: save.idle, sent, stale, conflicts, saved, file: () => file, agentWrites: (f: (s: string) => string) => void (file = f(file)) };
 }
 
 describe("createSceneSaver", () => {
@@ -106,6 +106,17 @@ describe("createSceneSaver", () => {
     await save([{ id: 1, text: "a" }], null).catch(() => {});
     await save([{ id: 1, text: "b" }], null);
     expect(calls).toBe(2);
+  });
+
+  test("idle() waits for every queued save, including ones queued meanwhile (round 5)", async () => {
+    const s = setup();
+    const title = idOf(teaching, "Today's topic");
+    s.save([{ id: title, text: "One" }], null);
+    const idle = s.idle();
+    s.save([{ id: title, text: "Two" }], null);
+    await idle;
+    expect(s.saved).toHaveLength(2);
+    expect(s.file()).toContain(">Two</h2>");
   });
 
   test("edits made after the reload save normally", async () => {

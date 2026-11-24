@@ -22,7 +22,7 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
 }) {
   let queue: Promise<unknown> = Promise.resolve();
   /** `madeIn`: the generation the edit's ids came from, when it started before this call (a drag, typing). */
-  return (edits: SceneEdit[], meta: M, madeIn = opts.generation()): Promise<void> => {
+  const save = (edits: SceneEdit[], meta: M, madeIn = opts.generation()): Promise<void> => {
     const next = queue.then(async () => {
       if (opts.generation() !== madeIn) return opts.onStale(edits);
       const b = opts.base();
@@ -39,4 +39,13 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
     queue = next.catch(() => {});
     return next;
   };
+  /** Resolves once the queue is empty: every save so far (and any queued meanwhile) has finished. */
+  const idle = async () => {
+    let seen: Promise<unknown>;
+    do {
+      seen = queue;
+      await seen;
+    } while (seen !== queue);
+  };
+  return Object.assign(save, { idle });
 }

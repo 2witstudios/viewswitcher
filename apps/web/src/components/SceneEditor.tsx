@@ -289,22 +289,23 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   useEffect(() => () => clearTimeout(previewTimer.current), []);
 
   // Save edits one at a time against the version their ids came from (see lib/scene-saver.ts).
-  const saverRef = useRef<((edits: SceneEdit[], undo: UndoEntry[], madeIn?: number) => Promise<void>) | null>(null);
+  const saverRef = useRef<ReturnType<typeof createSceneSaver<Base, UndoEntry[]>> | null>(null);
   if (!saverRef.current) {
     saverRef.current = createSceneSaver<Base, UndoEntry[]>({
       base: () => baseRef.current,
       generation: () => generation.current,
       send: (hash, edits) => api.editScene(path, hash, edits),
       isConflict: (e) => e instanceof SceneConflict,
-      onSaved: (b, edits, hash, undoEntries) => {
+      onSaved: (b, edits, hash) => {
         const source = applyEdits(b.source, edits);
         setBase({ source, hash, els: scanElements(source) });
-        if (undoEntries.length) setUndo((u) => [...u, ...undoEntries]);
       },
       // The conflict opens when the latest version has loaded (now, or after Reload if this read fails),
       // so the lost changes are never dropped silently.
       onConflict: async (edits, b) => {
-        pendingConflict.current = { edits, prev: b };
+        // A reload that failed earlier left a pending conflict on this same version: add to it.
+        if (pendingConflict.current) pendingConflict.current.edits.push(...edits);
+        else pendingConflict.current = { edits, prev: b };
         await load();
       },
       // Queued behind the change that hit the conflict: their ids are from the same old version,
@@ -321,8 +322,12 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       },
     });
   }
-  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn?: number) => {
+  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn = generation.current) => {
     unsaved.current = null;
+    // Undo is in the order changes were made, so its entry goes on now, not when the server answers.
+    // (A conflict or failed save reloads, and every reload clears Undo.) A change from before a
+    // reload gets none: its ids are the old version's.
+    if (undoEntries.length && madeIn === generation.current) setUndo((u) => [...u, ...undoEntries]);
     return saverRef.current!(edits, undoEntries, madeIn);
   };
 
@@ -397,10 +402,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     el.blur();
     // Collapse only HTML whitespace, as the server does: a non-breaking space is part of the text.
     const collapse = collapseHtmlSpace;
-    const text = collapse(el.textContent ?? "");
-    const before = { id: editing.id, text: collapse(editing.original) };
-    if (!commit || !text) {
-      if (commit && !text) toast("Text can't be empty: put back what was there");
+    // Browsers type a space at the start or end of editable text as U+00A0. That's typing, not text:
+    // drop it at an edge unless the original had one there.
+    const original = collapse(editing.original);
+    let text = collapse(el.textContent ?? "");
+    if (!original.startsWith("\u00a0")) text = text.replace(/^\u00a0+/, "");
+    if (!original.endsWith("\u00a0")) text = text.replace(/\u00a0+$/, "");
+    text = collapse(text);
+    const before = { id: editing.id, text: original };
+    if (!commit || !text.trim()) {
+      if (commit && !text.trim()) toast("Text can't be empty: put back what was there");
       el.textContent = editing.original;
       preview({ id: editing.id, text: editing.original }, editing.gen);
       redraw();
@@ -723,10 +734,23 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   // ------------------------------------------------------------ actions
 
-  const leave = () => {
-    // Done or Back while typing saves what was typed, as Return would.
+  const [leaving, setLeaving] = useState(false);
+  /** Every queued save has finished, and none of them hit a conflict (that screen is up instead). */
+  const settle = async () => {
+    setLeaving(true);
+    try {
+      await saverRef.current!.idle();
+    } finally {
+      setLeaving(false);
+    }
+    return !conflictOpen.current && !pendingConflict.current;
+  };
+  const leave = async () => {
+    // Done or Back while typing saves what was typed, as Return would. Then wait for the saves to
+    // land: if one hits a conflict, stay so it can be dealt with.
     if (editing) finishEdit(true);
     flushNudge();
+    if (!(await settle())) return;
     if (window.history.length > 1) router.history.back();
     else navigate({ to: "/$org", params: { org } });
   };
@@ -742,6 +766,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         preview(n.before, n.gen);
       }
       if (editing) finishEdit(false);
+      // Changes already made are saved before copying, so the copy has them (and a conflict stays here).
+      if (!(await settle())) return;
       const { name } = await api.duplicate(path);
       const copyPath = `${path.slice(0, path.lastIndexOf("/"))}/${name}.html`;
       toast("Editing a copy: it isn't on air");
@@ -797,7 +823,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         <div style={{ flex: 1 }} />
         <button type="button" className="btn ghost" disabled={!undo.length || !!conflict} onClick={doUndo}>{Icon.undo}Undo</button>
         <button type="button" className="btn" onClick={() => attempt(() => api.open(path))}>{Icon.code}Open the file</button>
-        <button type="button" className="btn primary" onClick={leave}>Done</button>
+        <button type="button" className="btn primary" disabled={leaving} onClick={leave}>{leaving ? "Saving…" : "Done"}</button>
       </header>
 
       {onAir && (

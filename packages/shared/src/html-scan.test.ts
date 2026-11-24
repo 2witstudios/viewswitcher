@@ -368,3 +368,15 @@ describe("/code-review round 4 on PR #1", () => {
     expect(setText(literal, 0, " y")).toBe(`<p>&nbsp;y</p>`); // not doubled
   });
 });
+
+describe("round 5 on PR #1", () => {
+  test("text that's only spaces is empty, a lone non-breaking space included", () => {
+    expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();
+    expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();
+  });
+  test("unknown names stay literal, Object.prototype's included", () => {
+    expect(decodeEntities("&toString; &constructor; &amp;")).toBe("&toString; &constructor; &");
+    const html = `<p>&toString;</p>`;
+    expect(textOf(html, scanElements(html)[0]!)).toBe("&toString;");
+  });
+});

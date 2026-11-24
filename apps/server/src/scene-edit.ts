@@ -77,21 +77,28 @@ export function editScene(
     // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
     // The watcher ignores dot-files.
     const tmp = join(dirname(real), `.${basename(real)}.vs-${process.pid}-${Date.now()}`);
-    await writeFile(tmp, next);
-    await chmod(tmp, read.mode & 0o7777);
-    await hooks.beforeReplace?.();
-    // Someone else saved while this one was being written: theirs wins, this one is a conflict. Checked
-    // by stat and by content, right before the rename. (Plain files have no compare-and-swap, so a
-    // write landing between this check and the rename itself can't be caught without a lock the agent
-    // would also have to honour; this leaves only that instant.)
-    const now = await stat(real).catch(() => null);
-    const there = now && now.mtimeMs === read.mtimeMs && now.size === read.size ? await readFile(real, "utf8").catch(() => null) : null;
-    if (there === null || sceneHash(there) !== current) {
-      await rm(tmp, { force: true });
-      const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
-      return { ok: false, conflict: true, hash: sceneHash(latest) };
+    let replaced = false;
+    try {
+      await writeFile(tmp, next);
+      await chmod(tmp, read.mode & 0o7777);
+      await hooks.beforeReplace?.();
+      // Someone else saved while this one was being written: theirs wins, this one is a conflict. Checked
+      // by stat and by content, right before the rename. (Plain files have no compare-and-swap, so a
+      // write landing between this check and the rename itself can't be caught without a lock the agent
+      // would also have to honour; this leaves only that instant.)
+      const now = await stat(real).catch(() => null);
+      const there = now && now.mtimeMs === read.mtimeMs && now.size === read.size ? await readFile(real, "utf8").catch(() => null) : null;
+      if (there === null || sceneHash(there) !== current) {
+        await rm(tmp, { force: true });
+        const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
+        return { ok: false, conflict: true, hash: sceneHash(latest) };
+      }
+      await rename(tmp, real);
+      replaced = true;
+    } finally {
+      // Whatever happened (a conflict, a failed chmod or rename), no staged copy is left behind.
+      if (!replaced) await rm(tmp, { force: true }).catch(() => {});
     }
-    await rename(tmp, real);
     return { ok: true, hash: sceneHash(next), changed: true };
   };
   const result = queue.then(run, run);

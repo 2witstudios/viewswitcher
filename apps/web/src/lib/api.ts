@@ -31,7 +31,7 @@ export const api = {
   state: async (): Promise<LiveState> => (await fetch("/api/state")).json(),
 
   putOnAir: (b: { path: string; label: string; projectId?: string; streamId?: string }) => post("/api/onair", b),
-  reportSlots: (b: { path: string; slots: unknown[] }) => post("/api/program/slots", b),
+  reportSlots: (b: { path: string; slots: unknown[]; page?: string; seq?: number }) => post("/api/program/slots", b),
 
   createProject: (org: string, name: string, templates: string[]) => post<{ projectId: string }>("/api/projects", { org, name, templates }),
   createStream: (org: string, projectId: string, name: string, date: string) =>

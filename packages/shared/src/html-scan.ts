@@ -211,16 +211,17 @@ export function decodeEntities(text: string): string {
       const code = ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
       return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
     }
-    return NAMED[ref] ?? m; // names are case-sensitive: &Eacute; isn't &eacute;
+    // Names are case-sensitive (&Eacute; isn't &eacute;); only the table's own entries, never Object.prototype's.
+    return Object.hasOwn(NAMED, ref) ? NAMED[ref]! : m;
   });
 }
 
 const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;");
 
-/** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
 /** Collapse and trim HTML whitespace only. (JS trim() would also eat U+00A0, a non-breaking space, which is text.) */
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
+/** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
 export function textOf(html: string, el: ScannedElement): string {
   return collapseHtmlSpace(decodeEntities(html.slice(el.innerStart, el.innerEnd)));
 }
@@ -306,7 +307,7 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
     if (typeof edit.text !== "string") throw new EditError("Text must be a string");
     const text = edit.text.replace(/[\r\n]+/g, " ");
     // Empty text would leave nothing to click (or edit) next time.
-    if (!collapseHtmlSpace(text)) throw new EditError("Text can't be empty");
+    if (!text.trim()) throw new EditError("Text can't be empty"); // JS trim: a lone &nbsp; is empty too
     if (textOf(html, el) === collapseHtmlSpace(text)) return [];
     // Keep the source's own leading and trailing whitespace (indentation).
     const inner = html.slice(el.innerStart, el.innerEnd);

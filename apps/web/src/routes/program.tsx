@@ -9,6 +9,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { applyPreview, type PreviewDoc, shownVersion } from "../lib/apply-preview";
+import { freshUrl, shouldBackstop } from "../lib/backstop";
 import { onScenePreview, sceneUrl, useLive } from "../lib/live";
 
 // Report errors to the server log: the OBS browser has no devtools by default.
@@ -23,6 +24,12 @@ const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="views
 const LOAD_TIMEOUT = 6000;
 /** A live preview that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
 const PREVIEW_BACKSTOP_MS = 5000;
+
+// Slot reports are numbered per page, so the server applies them in the order they were made (live
+// drag reports go out every 33 ms and can swap on the way).
+const slotPage = Math.random().toString(36).slice(2);
+let slotSeq = 0;
+const slotOrder = () => ({ page: slotPage, seq: ++slotSeq });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Job = { url: string; path: string };
@@ -123,7 +130,7 @@ export const Route = createFileRoute("/program")({
             setWipe(true);
             await sleep(WIPE_IN);
           }
-          await api.reportSlots({ path: job.path, slots }).catch(() => {});
+          await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
           frontRef.current = back;
           setFront(back);
           shown.current = job;
@@ -172,9 +179,9 @@ export const Route = createFileRoute("/program")({
         if (!applied) return;
         clearTimeout(backstop.current);
         backstop.current = setTimeout(() => {
-          // A saved version already replaced it, or the operator asked for another scene meanwhile.
-          if (shown.current !== job || desired.current !== job) return;
-          desired.current = { url: `${job.url}&fresh=${++seq.current}`, path: job.path };
+          // Not if a saved version replaced it, or the operator asked for another scene meanwhile.
+          if (!shouldBackstop(shown.current, desired.current, job)) return;
+          desired.current = { url: freshUrl(job.url, ++seq.current), path: job.path };
           run();
         }, PREVIEW_BACKSTOP_MS);
         if (!applied.slotMoved) return;
@@ -183,7 +190,7 @@ export const Route = createFileRoute("/program")({
           timer = undefined;
           // The frame on screen now: a saved version may have swapped in during these 33 ms.
           const now = refs[frontRef.current].current;
-          if (now && shown.current?.path === path) api.reportSlots({ path, slots: readSlots(now) }).catch(() => {});
+          if (now && shown.current?.path === path) api.reportSlots({ path, slots: readSlots(now), ...slotOrder() }).catch(() => {});
         }, 33);
       });
       return () => {

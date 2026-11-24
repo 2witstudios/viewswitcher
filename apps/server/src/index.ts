@@ -9,6 +9,7 @@ import * as lib from "./library";
 import { OBSClient } from "./obs";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
+import { createSlotOrder } from "./slot-order";
 import { editScene, parseEdit, readForEdit, scenePath } from "./scene-edit";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
@@ -21,6 +22,7 @@ const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { o
 const state: LiveState = { onAir: saved.onAir, obs: { connected: false, recording: false, streaming: false }, warnings: [] };
 if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
+const acceptSlots = createSlotOrder();
 
 function publish(msg: ServerMessage) {
   server.publish("all", JSON.stringify(msg));
@@ -157,8 +159,10 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/program/slots" && post) {
     const b = await body(req);
     // Devices follow what the program page is *showing*, never what was just requested: the page
-    // always converges on the latest on-air scene, and its reports arrive in order, so the last
-    // placement always matches the final picture. (Ignoring "stale" reports here caused drift.)
+    // always converges on the latest on-air scene, so its last report matches the final picture.
+    // (Ignoring "stale" reports by scene caused drift.) Reports are numbered per page; one that
+    // arrives after a newer one from the same page (a live drag's 33 ms reports can swap) is ignored.
+    if (!acceptSlots(b.page, b.seq)) return json({ ok: true, stale: true, warnings: state.warnings });
     if (process.env.VIEWSWITCHER_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
     const slots: Slot[] = (b.slots ?? []).map((s: Slot) => ({
       source: String(s.source), x: Number(s.x), y: Number(s.y), w: Number(s.w), h: Number(s.h),
