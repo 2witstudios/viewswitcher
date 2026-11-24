@@ -9,3 +9,9 @@ post/build/
 __pycache__/
 .pu/
 .scratch/
+apps/apple/*.xcodeproj/
+apps/apple/build/
+apps/apple/Kit/.build/
+apps/apple/Kit/.swiftpm/
+apps/apple/Mac/Info.plist
+apps/apple/iPad/Info.plist

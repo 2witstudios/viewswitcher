@@ -1,0 +1,161 @@
+# ViewSwitcher for Apple platforms (MAC-10): one project, generated with XcodeGen.
+#   cd apps/apple && xcodegen      (the .xcodeproj is gitignored; scripts/*.sh run this for you)
+# Targets: ViewSwitcher (macOS 14+, the Mac app around the bundled server), ViewSwitcher iPad
+# (iPadOS 17+, the switcher over USB-C or the network) and the shared ViewSwitcherKit package (Kit/).
+name: ViewSwitcher
+options:
+  bundleIdPrefix: com.twowitstudios
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    DEVELOPMENT_TEAM: M96WTV3CKX
+    MARKETING_VERSION: "0.1.0"
+    # Sparkle compares CFBundleVersion, so it follows the version (bump MARKETING_VERSION for a release).
+    CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
+    SWIFT_VERSION: "5.10"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEAD_CODE_STRIPPING: YES
+packages:
+  ViewSwitcherKit:
+    path: Kit
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.6
+targets:
+  ViewSwitcher:
+    type: application
+    platform: macOS
+    sources:
+      - path: Mac
+        excludes: ["*.entitlements", "Info.plist"]
+    dependencies:
+      - package: ViewSwitcherKit
+      - package: Sparkle
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleDisplayName: ViewSwitcher
+        CFBundleName: ViewSwitcher
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.video
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: Copyright © 2026 2wit Studios
+        NSPrincipalClass: NSApplication
+        # The switcher is plain http on 127.0.0.1.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        # Sparkle (MAC-15): the appcast on the latest published GitHub release (ViewSwitcherKit.UpdateFeed).
+        SUFeedURL: https://github.com/2witstudios/viewswitcher/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true
+        SUScheduledCheckInterval: 21600
+        SUVerifyUpdateBeforeExtraction: true
+    entitlements:
+      path: Mac/ViewSwitcher.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher.mac
+        PRODUCT_NAME: ViewSwitcher
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        # Sparkle's EdDSA public key (the private half is in the login keychain; see README.md).
+        SPARKLE_PUBLIC_KEY: PENDING_GENERATE_KEYS
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        Release:
+          ARCHS: "arm64 x86_64"
+          ONLY_ACTIVE_ARCH: NO
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+          OTHER_CODE_SIGN_FLAGS: --timestamp
+    postBuildScripts:
+      # The server and what it serves (scripts/build.sh puts them in build/payload; see README.md):
+      # Contents/Helpers/viewswitcher-server (signed by build.sh with its own entitlements) and
+      # Contents/Resources/{web,starter,library-kit}. A Debug build without a payload runs the
+      # server from the checkout instead (VIEWSWITCHER_REPO, set by scripts/dev.sh).
+      - name: Embed server payload
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          payload="$SRCROOT/build/payload"
+          contents="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH"
+          if [ ! -x "$payload/viewswitcher-server" ]; then
+            if [ "$CONFIGURATION" = "Release" ]; then
+              echo "error: no server payload in $payload; build with scripts/build.sh (bun run mac:build)"; exit 1
+            fi
+            echo "note: no server payload; this Debug build runs the server from the checkout"; exit 0
+          fi
+          mkdir -p "$contents/Helpers" "$contents/Resources"
+          ditto "$payload/viewswitcher-server" "$contents/Helpers/viewswitcher-server"
+          for d in web starter library-kit; do rm -rf "$contents/Resources/$d"; ditto "$payload/$d" "$contents/Resources/$d"; done
+  ViewSwitcher iPad:
+    type: application
+    platform: iOS
+    sources:
+      - path: iPad
+        excludes: ["Info.plist", "Connector"]
+      - path: iPad/Connector
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: ViewSwitcherKit
+    info:
+      path: iPad/Info.plist
+      properties:
+        CFBundleDisplayName: ViewSwitcher
+        CFBundleName: ViewSwitcher
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        # Split View, Slide Over and Stage Manager (MAC-13a) need every orientation and no full-screen lock.
+        UIRequiresFullScreen: false
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        # The switcher is plain http from 127.0.0.1 (the USB-C tunnel) or the LAN.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: ViewSwitcher connects to the ViewSwitcher server on your Mac when the USB-C cable isn't plugged in.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher
+        PRODUCT_NAME: ViewSwitcher
+        TARGETED_DEVICE_FAMILY: "2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  ViewSwitcher:
+    build:
+      targets:
+        ViewSwitcher: all
+    test:
+      targets:
+        - package: ViewSwitcherKit/ViewSwitcherKitTests
+    run:
+      config: Debug
+    archive:
+      config: Release
+  ViewSwitcher iPad:
+    build:
+      targets:
+        ViewSwitcher iPad: all
+    run:
+      config: Debug
