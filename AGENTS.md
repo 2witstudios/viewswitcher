@@ -17,9 +17,14 @@ Rules for the code are in CLAUDE.md; what the product is, in README.md. Planning
 
 Statuses on the board: To Do, In Progress, In Review, Blocked, Done.
 
+## Workstreams
+
+Scene editor (EDIT) first and landing page (SITE) in parallel; Mac app (MAC) after EDIT merges. The Product map holds the order.
+
 ## Task codes
 
 - `EDIT`: scene editor (plan `w13aum9pua3d4mtflq0i2h4x`)
+- `SITE`: landing page, viewswitcher.com (plan `y1qa9qp2ltfjsepjmetpmsgw`)
 - `MAC`: Mac app (plan `gz7zkvlaofixz6ljsljdj6sh`)
 - `ISSUE`: bugs, debt and loose ends found outside a slice
 
