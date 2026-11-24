@@ -84,6 +84,13 @@ a { color: inherit; text-decoration: none; }
 .out-btn.on { background: var(--live); border-color: var(--live); }
 .out-btn.on .dot { background: var(--cream); }
 .out-btn:disabled { opacity: 0.45; cursor: default; }
+.setup-card { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 24px; padding: 18px 20px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--raised); }
+.setup-text { flex: 1 1 360px; display: flex; flex-direction: column; gap: 6px; }
+.setup-text h2 { margin: 0; font-family: var(--display); font-size: 19px; font-weight: 700; }
+.setup-text p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.setup-text ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.6; color: var(--ink-muted); }
+.setup-text b { color: var(--cream); font-weight: 600; }
+.setup-actions { display: flex; gap: 8px; }
 .warnings { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border-radius: 12px; background: #3a2a12; color: #ffc56b; font-size: 14px; line-height: 1.4; }
 
 /* ---------------------------------------------------------------- grids */

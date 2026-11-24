@@ -1,0 +1,77 @@
+import { useState } from "react";
+import { api } from "../lib/api";
+import { useLive } from "../lib/live";
+import { cardKey, setupCard } from "../lib/setup-card";
+import { toast } from "./ui";
+
+const DEVICE_KIND: Record<string, string> = { Camera: "Video Capture Device", Screen: "macOS Screen Capture", iPad: "Video Capture Device (the iPad over USB)" };
+
+// "Not now" lasts for this visit when OBS is offline or unset; for missing devices it sticks
+// (someone without an iPad shouldn't be asked every time), until the list of missing ones changes.
+const store = (key: string) => (key.startsWith("devices:") ? localStorage : sessionStorage);
+const dismissed = (key: string) => {
+  try {
+    return store(key).getItem(`vs-setup-hidden:${key}`) === "1";
+  } catch {
+    return false;
+  }
+};
+
+/** Shown while OBS, or the switcher's scene and sources in it, are missing (MAC-3). */
+export function SetupCard() {
+  const { state, connected } = useLive();
+  const [busy, setBusy] = useState(false);
+  const [, rerender] = useState(0);
+  const card = connected && state ? setupCard(state) : null;
+  if (!card || dismissed(cardKey(card))) return null;
+
+  const hide = () => {
+    try {
+      store(cardKey(card)).setItem(`vs-setup-hidden:${cardKey(card)}`, "1");
+    } catch {}
+    rerender((n) => n + 1);
+  };
+  const setUp = async () => {
+    setBusy(true);
+    try {
+      const r = await api.setupObs();
+      toast(r.missing.length ? `OBS is set up. Add ${r.missing.join(", ")} next.` : "OBS is set up");
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="setup-card" aria-label="OBS setup">
+      {card.kind === "connect" && (
+        <div className="setup-text">
+          <h2>Connect OBS</h2>
+          <p>Open OBS, then turn on <b>Tools → WebSocket Server Settings → Enable WebSocket server</b>. The switcher connects by itself.</p>
+        </div>
+      )}
+      {card.kind === "setup" && (
+        <div className="setup-text">
+          <h2>Set up OBS</h2>
+          <p>Adds a "ViewSwitcher" scene to OBS with the program page on top and the background color underneath, and switches OBS to it.</p>
+        </div>
+      )}
+      {card.kind === "devices" && (
+        <div className="setup-text">
+          <h2>Add your devices in OBS</h2>
+          <p>In the "ViewSwitcher" scene, add these sources with exactly these names, then press Set up OBS again to put the program page back on top:</p>
+          <ul>
+            {card.missing.map((d) => <li key={d}><b>{d}</b>{DEVICE_KIND[d] ? `: ${DEVICE_KIND[d]}` : ""}</li>)}
+          </ul>
+        </div>
+      )}
+      <div className="setup-actions">
+        {card.kind !== "connect" && (
+          <button type="button" className="btn primary" disabled={busy} onClick={setUp}>{busy ? "Setting up…" : card.kind === "setup" ? "Set up OBS" : "Set up OBS again"}</button>
+        )}
+        <button type="button" className="btn ghost" onClick={hide}>Not now</button>
+      </div>
+    </section>
+  );
+}

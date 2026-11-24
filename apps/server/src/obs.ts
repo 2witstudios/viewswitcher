@@ -4,8 +4,8 @@ import type { ObsStatus } from "@viewswitcher/shared";
 
 const sha256b64 = (s: string) => createHash("sha256").update(s).digest("base64");
 
-// EventSubscription bitflags: General | Scenes | Outputs
-const EVENTS = 1 | 4 | 64;
+// EventSubscription bitflags: General | Scenes | Inputs | Outputs | SceneItems
+const EVENTS = 1 | 4 | 8 | 64 | 128;
 
 export class OBSRequestError extends Error {
   constructor(readonly requestType: string, readonly code: number, comment?: string) {
@@ -18,6 +18,8 @@ type Options = {
   password?: string;
   onStatus?: (s: ObsStatus) => void;
   onIdentified?: () => void;
+  /** Every OBS event (op 5), e.g. to notice sources being added or removed. */
+  onEvent?: (eventType: string, eventData: Record<string, unknown>) => void;
   log?: boolean;
 };
 
@@ -97,7 +99,7 @@ export class OBSClient {
       }
       case 2:
         if (this.opts.log) console.log("[obs] connected");
-        this.status = { ...this.status, connected: true };
+        this.update({ connected: true }); // published now, not only once refresh() has answered
         for (const w of this.waiters.splice(0)) w();
         this.refresh();
         this.opts.onIdentified?.();
@@ -105,6 +107,7 @@ export class OBSClient {
       case 5:
         if (msg.d.eventType === "RecordStateChanged") this.update({ recording: !!msg.d.eventData?.outputActive });
         if (msg.d.eventType === "StreamStateChanged") this.update({ streaming: !!msg.d.eventData?.outputActive });
+        this.opts.onEvent?.(msg.d.eventType, msg.d.eventData ?? {});
         return;
       case 7: {
         const p = this.pending.get(msg.d.requestId);

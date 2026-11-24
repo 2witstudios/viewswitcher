@@ -8,6 +8,7 @@ import { config } from "./config";
 import * as lib from "./library";
 import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
+import { checkObsSetup, setupObs } from "./obs-setup";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
@@ -30,7 +31,13 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 // ---------------------------------------------------------------- live state
 
 const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { onAir: OnAir | null }, () => ({ onAir: null }));
-const state: LiveState = { onAir: saved.onAir, obs: { connected: false, recording: false, streaming: false }, warnings: [] };
+const state: LiveState = {
+  onAir: saved.onAir,
+  obs: { connected: false, recording: false, streaming: false },
+  obsSetup: null,
+  usb: { enabled: false, attached: false, connected: false },
+  warnings: [],
+};
 if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
 const acceptSlots = createSlotOrder();
@@ -64,13 +71,32 @@ const obs = new OBSClient({
   log: true,
   onStatus: (s) => {
     state.obs = s;
+    if (!s.connected) state.obsSetup = null;
     publishState();
   },
   onIdentified: () => {
     groundShown = null;
+    recheckSetup();
     if (lastSlots) applyLatest();
   },
+  onEvent: (type, data) => {
+    if (SETUP_EVENTS.has(type) || (type === "InputSettingsChanged" && data.inputName === config.obs.programSource)) recheckSetup();
+  },
 }).start();
+
+// Whether OBS has the scene and sources the switcher needs; the switcher shows a setup card until it does.
+// Rechecked when OBS connects, after "Set up OBS", and when scenes or sources come and go in OBS.
+const SETUP_EVENTS = new Set(["SceneCreated", "SceneRemoved", "SceneNameChanged", "SceneItemCreated", "SceneItemRemoved", "InputNameChanged", "InputRemoved"]);
+let setupTimer: ReturnType<typeof setTimeout> | undefined;
+function recheckSetup() {
+  clearTimeout(setupTimer);
+  setupTimer = setTimeout(async () => {
+    const next = await checkObsSetup(obs, config.obs, config.port).catch(() => null);
+    if (JSON.stringify(next) === JSON.stringify(state.obsSetup)) return;
+    state.obsSetup = next;
+    publishState();
+  }, 300);
+}
 
 // OBS placements run one at a time, and only the latest request is applied: overlapping
 // placements would interleave OBS requests and could leave sources from an older scene.
@@ -250,6 +276,13 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), session: String(b.session ?? "").slice(0, 40), seq: Number(b.seq) || 0 });
     return json({ ok: true });
   }
+  if (path === "/api/obs/setup" && post) {
+    if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
+    const report = await setupObs(obs, config.obs, config.port);
+    state.obsSetup = await checkObsSetup(obs, config.obs, config.port);
+    publishState();
+    return json(report);
+  }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));
   if (path === "/api/obs/stream" && post) return json(await obs.request("ToggleStream"));
 
@@ -325,4 +358,13 @@ console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.l
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
-if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });
+if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) {
+  state.usb.enabled = true;
+  startUsbBridge({
+    serverPort: config.port,
+    onStatus: (s) => {
+      state.usb = { enabled: true, ...s };
+      publishState();
+    },
+  });
+}

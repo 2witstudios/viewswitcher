@@ -12,21 +12,39 @@ import { concat, connectMessage, decodeMessages, decodeOne, listenMessage, resul
 const POOL = 4;
 const RETRY_MS = 1000;
 
-type Options = { serverPort: number; devicePort?: number; log?: (msg: string) => void };
+/** What the bridge sees: an iPad plugged in, and the ViewSwitcher app on it with tunnels ready. */
+export type BridgeStatus = { attached: boolean; connected: boolean };
+
+type Options = {
+  serverPort: number;
+  devicePort?: number;
+  log?: (msg: string) => void;
+  /** Called whenever attached/connected changes (for LiveState.usb). */
+  onStatus?: (status: BridgeStatus) => void;
+  /** usbmuxd's socket; a fake one in tests. */
+  socketPath?: string;
+};
 
 export function usbAvailable() {
   return process.platform === "darwin" && existsSync(USBMUXD_SOCKET);
 }
 
-export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => console.log(`[usb] ${m}`) }: Options) {
-  const devices = new Map<number, { stop: () => void }>();
+export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => console.log(`[usb] ${m}`), onStatus, socketPath = USBMUXD_SOCKET }: Options) {
+  const devices = new Map<number, { stop: () => void; ready: () => boolean | null }>();
+  let last: BridgeStatus = { attached: false, connected: false };
+  const report = () => {
+    const now = { attached: devices.size > 0, connected: [...devices.values()].some((d) => d.ready() === true) };
+    if (now.attached === last.attached && now.connected === last.connected) return;
+    last = now;
+    onStatus?.(now);
+  };
   let listener: net.Socket | null = null;
   let stopped = false;
 
   function listen() {
     if (stopped) return;
     let buf: Buffer = Buffer.alloc(0);
-    const sock = net.createConnection(USBMUXD_SOCKET);
+    const sock = net.createConnection(socketPath);
     listener = sock;
     sock.on("connect", () => sock.write(u8(listenMessage())));
     // @types/node types a socket's chunk as string | Buffer (a string only after setEncoding, which we never call).
@@ -40,10 +58,12 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
         if (body.MessageType === "Attached" && props.ConnectionType === "USB" && !devices.has(id)) {
           log(`device ${id} attached over USB`);
           devices.set(id, device(id));
+          report();
         } else if (body.MessageType === "Detached" && devices.has(id)) {
           log(`device ${id} detached`);
           devices.get(id)!.stop();
           devices.delete(id);
+          report();
         }
       }
     });
@@ -51,6 +71,7 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
     sock.on("close", () => {
       for (const d of devices.values()) d.stop();
       devices.clear();
+      report();
       if (!stopped) setTimeout(listen, 2000);
     });
   }
@@ -66,6 +87,7 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
     const setReady = (r: boolean) => {
       if (ready === r) return;
       ready = r;
+      queueMicrotask(report); // (on the first tunnel, before devices.set has run)
       log(r ? `device ${id}: ViewSwitcher connected, tunnels ready` : `device ${id}: waiting for ViewSwitcher to open`);
     };
 
@@ -84,7 +106,7 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
       opening++;
       let state: "connecting" | "idle" | "piped" | "dead" = "connecting";
       let buf: Buffer = Buffer.alloc(0);
-      const tunnel = net.createConnection(USBMUXD_SOCKET);
+      const tunnel = net.createConnection(socketPath);
       sockets.add(tunnel);
       tunnel.setNoDelay(true);
 
@@ -151,6 +173,7 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
 
     fill();
     return {
+      ready: () => ready,
       stop() {
         alive = false;
         clearTimeout(retry);

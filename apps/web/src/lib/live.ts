@@ -2,6 +2,7 @@
 import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
+import { clientKind } from "./client-kind";
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } });
 
@@ -27,8 +28,8 @@ const set = (patch: Partial<Live>) => {
   listeners.forEach((l) => l());
 };
 
-/** Running inside the ViewSwitcher iPad app (its WebView appends this to the user agent). */
-export const inApp = typeof navigator !== "undefined" && navigator.userAgent.includes("ViewSwitcher");
+/** Running inside the ViewSwitcher iPad app (by its user agent; the Mac app's window is not this). */
+export const inApp = typeof navigator !== "undefined" && clientKind(navigator.userAgent) === "ipad";
 /** How the app reaches the Mac: its USB-C tunnel serves the switcher on 127.0.0.1. */
 export const appLink = inApp ? (location.hostname === "127.0.0.1" ? "USB" : "Network") : null;
 

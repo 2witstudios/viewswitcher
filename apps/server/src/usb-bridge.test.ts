@@ -1,0 +1,112 @@
+// The USB bridge against a fake usbmuxd on a temp socket: no iPad, and nothing touches the real
+// /var/run/usbmuxd (where a live bridge may be running).
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import net from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type BridgeStatus, startUsbBridge } from "./usb-bridge";
+import { concat, decodeOne, encodeMessage, u8 } from "./usbmux";
+
+/** A usbmuxd that reports one iPad; its app accepts tunnels while `appOpen`. */
+async function fakeUsbmuxd(socketPath: string) {
+  const tunnels = new Set<net.Socket>();
+  let listener: net.Socket | null = null;
+  const fake = {
+    appOpen: true,
+    tunnels,
+    attach: () => listener?.write(u8(encodeMessage({ MessageType: "Attached", DeviceID: 7, Properties: { ConnectionType: "USB", DeviceID: 7 } }))),
+    detach: () => listener?.write(u8(encodeMessage({ MessageType: "Detached", DeviceID: 7 }))),
+    /** The app quits: idle tunnels close and new ones are refused. */
+    quitApp() {
+      fake.appOpen = false;
+      for (const t of tunnels) t.destroy();
+    },
+  };
+  const server = net.createServer((sock) => {
+    let buf = Buffer.alloc(0);
+    const onData = (chunk: Buffer) => {
+      buf = concat(buf, chunk);
+      const one = decodeOne(buf);
+      if (!one) return;
+      sock.off("data", onData);
+      const type = one.message.body.MessageType;
+      if (type === "Listen") {
+        listener = sock;
+        sock.write(u8(encodeMessage({ MessageType: "Result", Number: 0 })));
+      } else if (type === "Connect") {
+        sock.write(u8(encodeMessage({ MessageType: "Result", Number: fake.appOpen ? 0 : 3 })));
+        if (fake.appOpen) tunnels.add(sock);
+        else sock.end();
+      }
+    };
+    sock.on("data", onData);
+    sock.on("close", () => tunnels.delete(sock));
+    sock.on("error", () => {});
+  });
+  await new Promise<void>((r) => server.listen(socketPath, r));
+  return { fake, close: () => new Promise<void>((r) => server.close(() => r())) };
+}
+
+const until = async (check: () => boolean, ms = 3000) => {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error("timed out");
+    await Bun.sleep(10);
+  }
+};
+
+const cleanup: (() => unknown)[] = [];
+afterEach(async () => {
+  for (const c of cleanup.splice(0).reverse()) await c();
+});
+
+describe("usb bridge status (MAC-4)", () => {
+  test("reports the iPad attached and the app connected, then each going away", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const { fake, close } = await fakeUsbmuxd(join(dir, "usbmuxd"));
+    cleanup.push(close);
+    const seen: BridgeStatus[] = [];
+    const bridge = startUsbBridge({ serverPort: 1, socketPath: join(dir, "usbmuxd"), log: () => {}, onStatus: (s) => seen.push(s) });
+    cleanup.push(() => bridge.stop());
+    const now = () => seen.at(-1) ?? { attached: false, connected: false };
+
+    await Bun.sleep(50);
+    expect(now()).toEqual({ attached: false, connected: false });
+    fake.attach();
+    await until(() => now().connected);
+    expect(now()).toEqual({ attached: true, connected: true });
+    await until(() => fake.tunnels.size === 4); // the idle pool
+
+    fake.quitApp();
+    await until(() => !now().connected);
+    expect(now()).toEqual({ attached: true, connected: false });
+
+    fake.appOpen = true; // the app comes back: the bridge's retry finds it
+    await until(() => now().connected);
+
+    fake.detach();
+    await until(() => !now().attached);
+    expect(now()).toEqual({ attached: false, connected: false });
+  });
+
+  test("an iPad request on an idle tunnel reaches the server", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const { fake, close } = await fakeUsbmuxd(join(dir, "usbmuxd"));
+    cleanup.push(close);
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("hello from the Mac") });
+    cleanup.push(() => server.stop(true));
+    const bridge = startUsbBridge({ serverPort: server.port!, socketPath: join(dir, "usbmuxd"), log: () => {} });
+    cleanup.push(() => bridge.stop());
+    await Bun.sleep(50);
+    fake.attach();
+    await until(() => fake.tunnels.size > 0);
+    const tunnel = [...fake.tunnels][0]!;
+    let reply = "";
+    tunnel.on("data", (c) => (reply += c.toString()));
+    tunnel.write("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    await until(() => reply.includes("hello from the Mac"));
+  });
+});

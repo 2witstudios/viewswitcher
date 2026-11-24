@@ -6,7 +6,8 @@ const config: CapacitorConfig = {
   appId: "com.twowitstudios.viewswitcher",
   appName: "ViewSwitcher",
   webDir: "www",
-  appendUserAgent: "ViewSwitcher",
+  // The switcher treats a page as the iPad app by this (apps/web/src/lib/client-kind.ts); the Mac app sends ViewSwitcher-Mac.
+  appendUserAgent: "ViewSwitcher-iPad",
   backgroundColor: "#0b0c0f",
   server: {
     allowNavigation: ["127.0.0.1", "*.ts.net", "*.local"],

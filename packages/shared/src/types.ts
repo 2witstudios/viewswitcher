@@ -89,9 +89,34 @@ export type ObsStatus = {
   streaming: boolean;
 };
 
+/** What OBS has of what the switcher needs (see "Set up OBS"). */
+export type ObsSetup = {
+  /** The "ViewSwitcher" scene exists. */
+  scene: boolean;
+  /** Its program browser source exists and shows this server's /program. */
+  program: boolean;
+  /** Its ground color source exists. */
+  ground: boolean;
+  /** Device sources (Camera, Screen, iPad) not in the scene yet; the user adds them in OBS. */
+  missingDevices: string[];
+};
+
+/** The USB-C link to the iPad app (see the server's usb-bridge.ts). */
+export type UsbStatus = {
+  /** The bridge is running (macOS, usbmuxd present, VIEWSWITCHER_USB isn't 0). */
+  enabled: boolean;
+  /** An iPad is plugged in over USB. */
+  attached: boolean;
+  /** The ViewSwitcher app on it is open and its tunnels are ready. */
+  connected: boolean;
+};
+
 export type LiveState = {
   onAir: OnAir | null;
   obs: ObsStatus;
+  /** null until OBS is connected and checked. */
+  obsSetup: ObsSetup | null;
+  usb: UsbStatus;
   warnings: string[];
 };
 
