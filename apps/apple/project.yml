@@ -77,19 +77,19 @@ targets:
     postBuildScripts:
       # The server and what it serves (scripts/build.sh puts them in build/payload; see README.md):
       # Contents/Helpers/viewswitcher-server (signed by build.sh with its own entitlements) and
-      # Contents/Resources/{web,starter,library-kit}. A Debug build without a payload runs the
-      # server from the checkout instead (VIEWSWITCHER_REPO, set by scripts/dev.sh).
+      # Contents/Resources/{web,starter,library-kit}. Release only: a Debug build runs the server
+      # from the checkout instead (VIEWSWITCHER_REPO, set by scripts/dev.sh).
       - name: Embed server payload
         basedOnDependencyAnalysis: false
         script: |
           set -euo pipefail
           payload="$SRCROOT/build/payload"
           contents="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH"
+          if [ "$CONFIGURATION" != "Release" ]; then
+            echo "note: Debug builds run the server from the checkout (VIEWSWITCHER_REPO, set by scripts/dev.sh)"; exit 0
+          fi
           if [ ! -x "$payload/viewswitcher-server" ]; then
-            if [ "$CONFIGURATION" = "Release" ]; then
-              echo "error: no server payload in $payload; build with scripts/build.sh (bun run mac:build)"; exit 1
-            fi
-            echo "note: no server payload; this Debug build runs the server from the checkout"; exit 0
+            echo "error: no server payload in $payload; build with scripts/build.sh (bun run mac:build)"; exit 1
           fi
           mkdir -p "$contents/Helpers" "$contents/Resources"
           ditto "$payload/viewswitcher-server" "$contents/Helpers/viewswitcher-server"
