@@ -51,21 +51,42 @@ If a scene asks for a slot whose OBS source doesn't exist, the switcher shows a 
 
 Debugging the program page: run the server with `DAISY_LOG=1`. Requests, WebSocket connections and errors from the OBS browser (which has no devtools) are printed to the server log.
 
-## iPad over Tailscale
+## iPad: ViewSwitcher app (USB-C)
+
+`apps/viewswitcher` is a Capacitor app that runs the switcher on the iPad over the **USB-C cable**: low latency, and no dependence on Wi-Fi.
+
+```sh
+bun run viewswitcher:deploy   # build, sign, install and launch on the plugged-in iPad
+```
+
+One-time requirements:
+- Your Apple ID is signed into Xcode (Settings → Accounts). The team defaults to `M96WTV3CKX`; set `TEAM=` to override.
+- Developer Mode is on, on the iPad.
+- The iPad trusts this Mac.
+
+How the link works: iOS gives apps no network over the cable. The only path is usbmuxd, and it only connects Mac → iPad.
+- The Daisy server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421.
+- The app (`ios/App/App/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each WebView connection through one of those tunnels to the server.
+- So the app simply loads `http://127.0.0.1:7420/`, the real switcher, served over the cable. A "USB" pill in the header confirms it.
+
+The server log shows `[usb] … tunnels ready` when the app is connected. Set `DAISY_USB=0` to turn the bridge off.
+
+**Without the cable:** the app's connector page falls back to a network address you save on it, such as Tailscale:
 
 ```sh
 tailscale serve --bg 7420
 ```
 
-Open the `https://<this-mac>.<tailnet>.ts.net` address on the iPad, then Share → Add to Home Screen.
+Then enter `https://<this-mac>.<tailnet>.ts.net` on the connector. The same address also works in Safari (Share → Add to Home Screen). If the link drops for 4 s, the app returns to the connector, which picks whichever link works.
 
 ## Repo layout
 
 ```
 apps/server      Bun server: API, library files + watcher, live state, OBS placement, obs:setup
-apps/web         Vite + React + TanStack Router/Query SPA: switcher + /program (Capacitor wraps this later)
+apps/web         Vite + React + TanStack Router/Query SPA: switcher + /program
+apps/viewswitcher  Capacitor iPad app: connector page + native USB-C tunnel to the server
 packages/shared  types and pure logic: resolveStream (override rule), coverTransform (slot → OBS)
-ios/inkcast      parked Swift Pencil app (InkCast); the Capacitor app replaces it later
+ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into ViewSwitcher later
 post/            YouTube post pipeline (was daisy-video); see post/README.md
 ```
 
@@ -76,6 +97,6 @@ post/            YouTube post pipeline (was daisy-video); see post/README.md
 1. ~~Switcher, library, program page, OBS placement, skill~~ (this slice)
 2. Ink layer: InkCast Pencil drawing as a layer in `/program`
 3. Post pipeline on the Daisy brand (Fraunces / Instrument Sans, forest palette)
-4. Capacitor iPad app wrapping `apps/web`, with a native Pencil canvas
+4. ~~ViewSwitcher iPad app over USB-C~~; next, a native Pencil canvas in it
 
 Scenes are edited by talking to Claude Code (or any agent) in `~/Daisy Production Library`; its `daisy-scenes` skill covers the rules. The switcher only switches and organizes.

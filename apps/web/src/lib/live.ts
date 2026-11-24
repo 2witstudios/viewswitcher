@@ -19,12 +19,27 @@ const set = (patch: Partial<Live>) => {
   listeners.forEach((l) => l());
 };
 
+/** Running inside the ViewSwitcher iPad app (its WebView appends this to the user agent). */
+export const inApp = typeof navigator !== "undefined" && navigator.userAgent.includes("ViewSwitcher");
+/** How the app reaches the Mac: its USB-C tunnel serves the switcher on 127.0.0.1. */
+export const appLink = inApp ? (location.hostname === "127.0.0.1" ? "USB" : "Network") : null;
+
+// In the app, if the server has been unreachable for a few seconds, go back to the app's
+// connector page: it picks whichever link works now (USB-C or the network) and returns here.
+const BACK_TO_CONNECTOR_MS = 4000;
+let downTimer: ReturnType<typeof setTimeout> | undefined;
+
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.onopen = () => set({ connected: true });
+  ws.onopen = () => {
+    clearTimeout(downTimer);
+    downTimer = undefined;
+    set({ connected: true });
+  };
   ws.onclose = () => {
     set({ connected: false });
+    if (inApp && !downTimer) downTimer = setTimeout(() => location.replace("capacitor://localhost/"), BACK_TO_CONNECTOR_MS);
     setTimeout(connect, 1000);
   };
   ws.onmessage = (e) => {

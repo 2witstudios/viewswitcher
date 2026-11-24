@@ -2,13 +2,18 @@
   "name": "daisy-production",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --filter '@daisy/*' dev",
     "build": "bun run --filter @daisy/web build",
     "start": "bun run build && bun apps/server/src/index.ts",
     "test": "bun test",
-    "obs:setup": "bun apps/server/src/obs-setup.ts"
+    "obs:setup": "bun apps/server/src/obs-setup.ts",
+    "viewswitcher:sync": "bun run --filter @daisy/viewswitcher sync",
+    "viewswitcher:deploy": "bash apps/viewswitcher/scripts/deploy.sh"
   },
   "devDependencies": {
     "@types/bun": "^1.4.5",

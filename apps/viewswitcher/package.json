@@ -1,0 +1,16 @@
+{
+  "name": "@daisy/viewswitcher",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "cap sync ios",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.2",
+    "@capacitor/ios": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2"
+  }
+}

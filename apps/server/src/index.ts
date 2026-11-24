@@ -8,6 +8,7 @@ import * as lib from "./library";
 import { OBSClient } from "./obs";
 import { inside, PathError } from "./paths";
 import { placeDevices } from "./placement";
+import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 await mkdir(config.library, { recursive: true });
 const stateFile = join(config.library, ".daisy", "state.json");
@@ -217,3 +218,6 @@ const server = Bun.serve({
 
 console.log(`[daisy] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[daisy] OBS program browser source → http://127.0.0.1:${server.port}/program`);
+
+// USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
+if (process.env.DAISY_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });

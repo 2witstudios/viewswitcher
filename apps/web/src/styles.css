@@ -61,6 +61,7 @@ a { color: inherit; text-decoration: none; }
 .pill { display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--stage); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--yolk); }
 .pill.off .dot { background: #4f7a5f; }
+.pill.link { font-size: 12px; letter-spacing: 0.16em; color: var(--sage); }
 .out-btn { height: 36px; padding: 0 14px; border-radius: 9px; border: 2px solid var(--line-strong); background: transparent; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; display: inline-flex; align-items: center; gap: 8px; }
 .out-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
 .out-btn.on { background: var(--live); border-color: var(--live); }

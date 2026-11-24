@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { api } from "../lib/api";
-import { useLive } from "../lib/live";
+import { appLink, useLive } from "../lib/live";
 import { attempt } from "./ui";
 
 export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) {
@@ -27,6 +27,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
             onClick={() => (obs?.streaming || confirm("Start streaming?")) && attempt(api.toggleStream)}>
             <span className="dot" />{obs?.streaming ? "LIVE" : "GO LIVE"}
           </button>
+          {appLink && <span className="pill link" title={appLink === "USB" ? "Connected to the Mac over the USB-C cable" : "Connected to the Mac over the network"}>{appLink}</span>}
           {!obs?.connected && <span className="pill off" title="Open OBS with Tools → WebSocket Server Settings enabled"><span className="dot" />OBS offline</span>}
         </div>
       </header>
