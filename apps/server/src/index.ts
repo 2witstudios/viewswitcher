@@ -2,13 +2,15 @@
 import { watch } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
-import { obsColor, orgOf } from "@viewswitcher/shared";
+import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
 import { config } from "./config";
 import * as lib from "./library";
 import { OBSClient } from "./obs";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
+import { createSlotOrder } from "./slot-order";
+import { editScene, parseEdit, readForEdit, scenePath } from "./scene-edit";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 await mkdir(config.library, { recursive: true });
@@ -20,6 +22,7 @@ const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { o
 const state: LiveState = { onAir: saved.onAir, obs: { connected: false, recording: false, streaming: false }, warnings: [] };
 if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
+const acceptSlots = createSlotOrder();
 
 function publish(msg: ServerMessage) {
   server.publish("all", JSON.stringify(msg));
@@ -156,8 +159,10 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/program/slots" && post) {
     const b = await body(req);
     // Devices follow what the program page is *showing*, never what was just requested: the page
-    // always converges on the latest on-air scene, and its reports arrive in order, so the last
-    // placement always matches the final picture. (Ignoring "stale" reports here caused drift.)
+    // always converges on the latest on-air scene, so its last report matches the final picture.
+    // (Ignoring "stale" reports by scene caused drift.) Reports are numbered per page; one that
+    // arrives after a newer one from the same page (a live drag's 33 ms reports can swap) is ignored.
+    if (!acceptSlots(b.page, b.seq)) return json({ ok: true, stale: true, warnings: state.warnings });
     if (process.env.VIEWSWITCHER_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
     const slots: Slot[] = (b.slots ?? []).map((s: Slot) => ({
       source: String(s.source), x: Number(s.x), y: Number(s.y), w: Number(s.w), h: Number(s.h),
@@ -218,6 +223,22 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     Bun.spawn(app ? ["open", "-a", app, abs] : ["open", "-t", abs], { stdout: "ignore", stderr: "ignore" });
     return json({ ok: true });
   }
+  // Scene editor: patch the file (409 when it changed since the editor loaded it), or show a change
+  // live on the program page without writing anything.
+  if (path === "/api/scene/edit" && post) {
+    const b = await body(req);
+    const r = await editScene(root, b.path, String(b.hash ?? ""), b.edits);
+    if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
+    if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
+    return json(r);
+  }
+  if (path === "/api/scene/preview" && post) {
+    const b = await body(req);
+    scenePath(root, b.path);
+    // The hash names the file version the edit's ids belong to; pages showing another version ignore it.
+    publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), session: String(b.session ?? "").slice(0, 40), seq: Number(b.seq) || 0 });
+    return json({ ok: true });
+  }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));
   if (path === "/api/obs/stream" && post) return json(await obs.request("ToggleStream"));
 
@@ -249,6 +270,21 @@ const server = Bun.serve({
         return await api(req, path, url);
       }
       if (path.startsWith("/library/")) {
+        if (url.searchParams.has("edit") && path.endsWith(".html")) {
+          // The scene with data-vs element ids, for the editor and the program page; the file is only read.
+          // If it can't be tagged for any reason, serve the plain file: the program shows the scene and
+          // live previews simply don't apply to it.
+          const rel = path.slice("/library/".length);
+          const scene = await readForEdit(config.library, rel).catch((e) => {
+            if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
+            return null;
+          });
+          if (scene) {
+            return new Response(scene.html, {
+              headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" },
+            });
+          }
+        }
         return (await fileResponse(inside(config.library, path.slice("/library/".length)))) ?? new Response("Not found", { status: 404 });
       }
       // The built SPA: real files, else index.html for client-side routes.
@@ -258,7 +294,7 @@ const server = Bun.serve({
       const index = await fileResponse(join(config.webDist, "index.html"));
       return index ?? new Response("The switcher isn't built yet. Run `bun run build`, or use the dev server (`bun run dev`, then http://localhost:5173).", { status: 503 });
     } catch (e) {
-      if (e instanceof PathError) return json({ error: e.message }, 400);
+      if (e instanceof PathError || e instanceof EditError) return json({ error: e.message }, 400);
       console.error(e);
       return json({ error: (e as Error).message }, 500);
     }

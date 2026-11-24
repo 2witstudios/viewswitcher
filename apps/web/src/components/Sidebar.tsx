@@ -127,7 +127,7 @@ function OrgSwitcher({ current }: { current?: string }) {
   return (
     <div className="org">
       <button type="button" className="org-switch" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span className="org-dot" style={{ background: org?.accent ?? "var(--quiet)" }} />
+        <span className="org-dot" aria-hidden="true">{org?.name[0]?.toUpperCase() ?? "?"}</span>
         <span className="name">{org?.name ?? "Choose an org"}</span>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ICON} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10l5 5 5-5" /></svg>
       </button>
@@ -137,7 +137,7 @@ function OrgSwitcher({ current }: { current?: string }) {
           <div className="org-menu" role="menu" aria-label="Orgs">
             {orgs?.map((o) => (
               <button key={o.id} type="button" role="menuitem" aria-current={o.id === current} onClick={() => go(o)}>
-                <span className="org-dot" style={{ background: o.accent }} />
+                <span className="org-dot" aria-hidden="true">{o.name[0]?.toUpperCase()}</span>
                 {o.name}
                 {state?.onAir?.org === o.id && <span className="onair">ON AIR</span>}
               </button>
@@ -164,7 +164,7 @@ function OrgSwitcher({ current }: { current?: string }) {
 
 function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => Promise<void> }) {
   const [name, setName] = useState("");
-  const [accent, setAccent] = useState("#8b7bff");
+  const [accent, setAccent] = useState("#d4a548");
   return (
     <Modal title="New org" submitLabel="Create org" onClose={onClose}
       onSubmit={async () => onCreated((await api.createOrg(name, accent)).orgId)}>

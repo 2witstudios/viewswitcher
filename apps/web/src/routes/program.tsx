@@ -3,10 +3,14 @@
 // Switching is a single serialized loop, so it's deterministic however fast scenes are tapped:
 // only one transition runs at a time, and when it finishes it checks for a newer request and runs again.
 // Requests that are superseded while loading are dropped; the screen always ends on the latest one.
+// A new version of the scene already on air (a saved edit) swaps in without the transition, and the
+// scene editor's live previews apply to the on-air frame in place.
 import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { sceneUrl, useLive } from "../lib/live";
+import { applyPreview, type PreviewDoc, shownVersion } from "../lib/apply-preview";
+import { freshUrl, shouldBackstop } from "../lib/backstop";
+import { onScenePreview, sceneUrl, useLive } from "../lib/live";
 
 // Report errors to the server log: the OBS browser has no devtools by default.
 const report = (data: object) => fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ where: "program", ...data }) }).catch(() => {});
@@ -18,6 +22,14 @@ if (typeof window !== "undefined") {
 const WIPE_IN = 170;
 const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
+/** A live preview that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
+const PREVIEW_BACKSTOP_MS = 5000;
+
+// Slot reports are numbered per page, so the server applies them in the order they were made (live
+// drag reports go out every 33 ms and can swap on the way).
+const slotPage = Math.random().toString(36).slice(2);
+let slotSeq = 0;
+const slotOrder = () => ({ page: slotPage, seq: ++slotSeq });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Job = { url: string; path: string };
@@ -35,7 +47,8 @@ export const Route = createFileRoute("/program")({
   component: function Program() {
     const { state, versions } = useLive();
     const onAir = state?.onAir ?? null;
-    const target = onAir ? sceneUrl(onAir.path, versions) : null;
+    // Scenes load with data-vs element ids (?edit) so the editor's live previews can find their element.
+    const target = onAir ? sceneUrl(onAir.path, versions, false, true) : null;
 
     const [frames, setFrames] = useState<[string | null, string | null]>([null, null]);
     const [front, setFront] = useState(0);
@@ -55,6 +68,7 @@ export const Route = createFileRoute("/program")({
     const running = useRef(false);
     const seq = useRef(0);
     const waiters = useRef<Map<string, () => void>>(new Map()); // frame src → resolve on load
+    const backstop = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
       const fit = () => setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
@@ -108,17 +122,19 @@ export const Route = createFileRoute("/program")({
           if (desired.current !== job) continue; // superseded while loading: go straight to the newer one
           const slots = refs[back].current ? readSlots(refs[back].current!) : [];
           const firstShow = shown.current === null;
-          if (!firstShow) {
+          // Same scene, new version (an edit was saved): swap frames with no transition.
+          const wipeIt = !firstShow && shown.current?.path !== job.path;
+          if (wipeIt) {
             // Tell the transition page to play (it can animate on the "play" class; see scene.js).
             transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
             setWipe(true);
             await sleep(WIPE_IN);
           }
-          await api.reportSlots({ path: job.path, slots }).catch(() => {});
+          await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
           frontRef.current = back;
           setFront(back);
           shown.current = job;
-          if (!firstShow) {
+          if (wipeIt) {
             await sleep(holdFor());
             setWipe(false);
           }
@@ -132,6 +148,56 @@ export const Route = createFileRoute("/program")({
         if (desired.current && desired.current.url !== shown.current?.url) run();
       }
     };
+
+    // Live edits from the scene editor: change the on-air frame's DOM (never the file), only when the
+    // edit was made against the version this frame shows. When a moved element is or holds a device
+    // slot, report the slots again (at most ~30 times a second) so OBS follows it. If previews stop
+    // without a save (the editor went away mid-drag), reload the frame so the stream matches the file.
+    useEffect(() => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      // Newest preview seq applied, per editor and element, for the version on screen (reset with it).
+      const latest = new Map<string, number>();
+      let latestFor = "";
+      const off = onScenePreview((path, hash, edit, order) => {
+        const job = shown.current;
+        if (!job || path !== job.path) return;
+        const frame = refs[frontRef.current].current;
+        const doc = frame?.contentDocument;
+        if (!frame || !doc) return;
+        const version = shownVersion(doc as unknown as PreviewDoc);
+        if (version !== latestFor) {
+          latest.clear();
+          latestFor = version ?? "";
+        }
+        // Previews are separate requests and can arrive out of order: never step back to an older one.
+        const key = `${order.session}:${edit.id}:${"text" in edit ? "t" : "p"}`;
+        if (hash === version) {
+          if (order.seq <= (latest.get(key) ?? -1)) return;
+          latest.set(key, order.seq);
+        }
+        const applied = applyPreview(doc as unknown as Parameters<typeof applyPreview>[0], hash, edit);
+        if (!applied) return;
+        clearTimeout(backstop.current);
+        backstop.current = setTimeout(() => {
+          // Not if a saved version replaced it, or the operator asked for another scene meanwhile.
+          if (!shouldBackstop(shown.current, desired.current, job)) return;
+          desired.current = { url: freshUrl(job.url, ++seq.current), path: job.path };
+          run();
+        }, PREVIEW_BACKSTOP_MS);
+        if (!applied.slotMoved) return;
+        if (timer) return;
+        timer = setTimeout(() => {
+          timer = undefined;
+          // The frame on screen now: a saved version may have swapped in during these 33 ms.
+          const now = refs[frontRef.current].current;
+          if (now && shown.current?.path === path) api.reportSlots({ path, slots: readSlots(now), ...slotOrder() }).catch(() => {});
+        }, 33);
+      });
+      return () => {
+        off();
+        clearTimeout(backstop.current);
+      };
+    }, []);
 
     useEffect(() => {
       if (!target || !onAir) return;

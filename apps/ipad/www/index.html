@@ -6,7 +6,7 @@
 <title>ViewSwitcher</title>
 <!-- Connector: finds the ViewSwitcher server (USB-C first, then the network) and opens the switcher it serves. -->
 <style>
-  :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --quiet: #7d8290; --text: #f4f5f7; --accent: #8b7bff; }
+  :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --quiet: #7d8290; --text: #f4f5f7; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 32px; text-align: center; }
@@ -16,8 +16,8 @@
   .row { display: flex; gap: 10px; width: min(560px, 100%); }
   label { font-size: 13px; color: var(--quiet); width: min(560px, 100%); text-align: left; }
   input { flex: 1; min-width: 0; height: 48px; padding: 0 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font-size: 16px; }
-  button { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--accent); color: var(--bg); font-size: 16px; font-weight: 700; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-right: 10px; animation: pulse 1.2s infinite ease-in-out; }
+  button { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 16px; font-weight: 700; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--text); margin-right: 10px; animation: pulse 1.2s infinite ease-in-out; }
   @keyframes pulse { 50% { opacity: 0.25; } }
 </style>
 </head>
