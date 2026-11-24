@@ -1,5 +1,7 @@
 # ViewSwitcher
 
+Planning (PageSpace drive, board, task codes): AGENTS.md.
+
 Bun workspaces monorepo: a live-stream scene switcher that drives OBS (`apps/`, `packages/`), plus a post pipeline (`post/`, has its own CLAUDE.md). Start with README.md.
 
 - Scene **content** lives in a separate repo, `~/ViewSwitcher Library` (env `VIEWSWITCHER_LIBRARY`), one folder per org. To create or edit scenes, work there with its `viewswitcher-scenes` skill. Don't add an org's scenes to this repo; the only scene HTML here is the neutral starter kit in `apps/server/starter/` (placeholders like `{{ORG_NAME}}` are filled in when an org is created).
