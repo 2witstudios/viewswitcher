@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { clientKind } from "./client-kind";
+import { clientKind, connectorUrl } from "./client-kind";
 
 const SAFARI_IPAD = "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
 const CHROME = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
 
 describe("clientKind (MAC-5)", () => {
   test("the iPad app, new and old builds", () => {
-    expect(clientKind(`${SAFARI_IPAD} ViewSwitcher-iPad`)).toBe("ipad");
+    expect(clientKind(`${SAFARI_IPAD} ViewSwitcher-iPad/0.1.0`)).toBe("ipad"); // native (apps/apple)
+    expect(clientKind(`${SAFARI_IPAD} ViewSwitcher-iPad`)).toBe("ipad"); // Capacitor
     expect(clientKind(`${SAFARI_IPAD} ViewSwitcher`)).toBe("ipad"); // installed before the rename
   });
   test("the Mac app's window is not the iPad app", () => {
@@ -17,5 +18,15 @@ describe("clientKind (MAC-5)", () => {
   test("browsers", () => {
     expect(clientKind(CHROME)).toBe("browser");
     expect(clientKind(SAFARI_IPAD)).toBe("browser");
+  });
+});
+
+describe("connectorUrl (MAC-14)", () => {
+  test("the native iPad app serves its connector at viewswitcher://connector/", () => {
+    expect(connectorUrl(`${SAFARI_IPAD} ViewSwitcher-iPad/0.1.0`)).toBe("viewswitcher://connector/");
+  });
+  test("older Capacitor builds keep capacitor://localhost/", () => {
+    expect(connectorUrl(`${SAFARI_IPAD} ViewSwitcher-iPad`)).toBe("capacitor://localhost/");
+    expect(connectorUrl(`${SAFARI_IPAD} ViewSwitcher`)).toBe("capacitor://localhost/");
   });
 });

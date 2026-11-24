@@ -37,7 +37,7 @@ export function Sidebar() {
 
   return (
     <nav className="side" aria-label="Library">
-      <div className="brand"><Mark /><span>ViewSwitcher</span></div>
+      <div className="brand" data-drag-region><Mark /><span>ViewSwitcher</span></div>
       <OrgSwitcher current={org} />
 
       {org && (
