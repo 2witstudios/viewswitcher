@@ -232,7 +232,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     const b = await body(req);
     scenePath(root, b.path);
     // The hash names the file version the edit's ids belong to; pages showing another version ignore it.
-    publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit) });
+    publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), seq: Number(b.seq) || 0 });
     return json({ ok: true });
   }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));

@@ -348,8 +348,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!el || !b) return;
     el.removeAttribute("contenteditable");
     el.blur();
-    const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
-    const before = { id: editing.id, text: editing.original.replace(/\s+/g, " ").trim() };
+    // Collapse only HTML whitespace, as the server does: a non-breaking space is part of the text.
+    const collapse = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").trim();
+    const text = collapse(el.textContent ?? "");
+    const before = { id: editing.id, text: collapse(editing.original) };
     if (!commit || !text) {
       if (commit && !text) toast("Text can't be empty: put back what was there");
       el.textContent = editing.original;
@@ -389,7 +391,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     };
     const onPaste = (e: ClipboardEvent) => {
       e.preventDefault();
-      const text = (e.clipboardData?.getData("text/plain") ?? "").replace(/\s+/g, " ");
+      const text = (e.clipboardData?.getData("text/plain") ?? "").replace(/[ \t\n\r\f]+/g, " ");
       d.execCommand("insertText", false, text);
     };
     const onOutside = (e: PointerEvent) => {

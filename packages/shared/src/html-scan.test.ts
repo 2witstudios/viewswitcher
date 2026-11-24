@@ -303,3 +303,13 @@ describe("CodeRabbit findings on PR #1", () => {
     expect(retarget(prev, `<p>Intro</p><p>Title</p><p>Agenda</p>`, { id: 1, text: "Mine" })).toBeNull();
   });
 });
+
+describe("/code-review findings on PR #1", () => {
+  test("named entities decode (case-sensitive), so an unchanged text is left alone", () => {
+    expect(decodeEntities("caf&eacute; &Eacute;t&eacute; 10&nbsp;AM &euro;5 &yuml;")).toBe("café Été 10 AM €5 ÿ");
+    const html = `<p>Caf&eacute; at 10&nbsp;AM</p>`;
+    expect(setText(html, 0, "Café at 10 AM")).toBe(html);
+    // A real change keeps the non-breaking space as &nbsp;.
+    expect(setText(html, 0, "Tea at 10 AM")).toBe(`<p>Tea at 10&nbsp;AM</p>`);
+  });
+});

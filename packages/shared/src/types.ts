@@ -100,6 +100,6 @@ export type ServerMessage =
   | { t: "state"; state: LiveState }
   | { t: "library:changed"; paths: string[] }
   /** The scene editor showing a change live (never written): the program page applies it to the on-air scene if `path` matches. */
-  | { t: "scene:preview"; path: string; hash: string; edit: SceneEdit }
+  | { t: "scene:preview"; path: string; hash: string; edit: SceneEdit; /** Increases per editor; an older one arriving late is ignored. */ seq: number }
   /** The entry script of the switcher build being served; a page running a different one reloads. "" when nothing is built. */
   | { t: "build"; build: string };

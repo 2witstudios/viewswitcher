@@ -187,10 +187,21 @@ export function scanElements(html: string): ScannedElement[] {
 
 // ---------------------------------------------------------------- text
 
+// Named character references scenes are likely to use: Latin-1 (U+00A0–U+00FF, in order) and common punctuation.
+const LATIN1 =
+  "nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro para middot " +
+  "cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil Egrave Eacute Ecirc Euml " +
+  "Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave Uacute Ucirc Uuml Yacute THORN szlig " +
+  "agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml igrave iacute icirc iuml eth ntilde ograve oacute " +
+  "ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute thorn yuml";
 const NAMED: Record<string, string> = {
-  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", rsquo: "’", lsquo: "‘",
-  rdquo: "”", ldquo: "“", mdash: "—", ndash: "–", hellip: "…", middot: "·",
-  copy: "©", reg: "®", trade: "™", times: "×", bull: "•", deg: "°",
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+  rsquo: "\u2019", lsquo: "\u2018", rdquo: "\u201d", ldquo: "\u201c", sbquo: "\u201a", bdquo: "\u201e", lsaquo: "\u2039", rsaquo: "\u203a",
+  mdash: "\u2014", ndash: "\u2013", hellip: "\u2026", bull: "\u2022", prime: "\u2032", Prime: "\u2033", dagger: "\u2020", Dagger: "\u2021",
+  permil: "\u2030", trade: "\u2122", euro: "\u20ac", minus: "\u2212", larr: "\u2190", rarr: "\u2192", uarr: "\u2191", darr: "\u2193",
+  hearts: "\u2665", ensp: "\u2002", emsp: "\u2003", thinsp: "\u2009", zwnj: "\u200c", zwj: "\u200d", lrm: "\u200e", rlm: "\u200f",
+  OElig: "\u0152", oelig: "\u0153", Scaron: "\u0160", scaron: "\u0161", Yuml: "\u0178", fnof: "\u0192", circ: "\u02c6", tilde: "\u02dc",
+  ...Object.fromEntries(LATIN1.split(" ").map((name, i) => [name, String.fromCharCode(0xa0 + i)])),
 };
 
 /** Decode character references the way a browser would for the text we can edit. */
@@ -200,7 +211,7 @@ export function decodeEntities(text: string): string {
       const code = ref[1] === "x" || ref[1] === "X" ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
       return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
     }
-    return NAMED[ref.toLowerCase()] ?? m;
+    return NAMED[ref] ?? m; // names are case-sensitive: &Eacute; isn't &eacute;
   });
 }
 

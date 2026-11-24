@@ -187,8 +187,8 @@ describe("over HTTP", () => {
       };
     });
     await new Promise((r) => (ws.onopen = r));
-    expect((await post("/api/scene/preview", { path: SCENE, hash: "h1", edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
-    expect(await got).toEqual({ t: "scene:preview", path: SCENE, hash: "h1", edit: { id: 3, left: 10, top: 20 } });
+    expect((await post("/api/scene/preview", { path: SCENE, hash: "h1", seq: 7, edit: { id: 3, left: 10, top: 20 } })).status).toBe(200);
+    expect(await got).toEqual({ t: "scene:preview", path: SCENE, hash: "h1", seq: 7, edit: { id: 3, left: 10, top: 20 } });
     ws.close();
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
     expect((await post("/api/scene/preview", { path: SCENE, edit: { id: 3 } })).status).toBe(400);
