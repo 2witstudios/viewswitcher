@@ -19,10 +19,16 @@ export const config = {
   port: Number(env.PORT ?? 7420),
   /** The content library agents edit: one folder per org, each with templates, assets, projects. */
   library: resolve(env.VIEWSWITCHER_LIBRARY ?? join(homedir(), "ViewSwitcher Library")),
+  // The next three default to the repo; the Mac app's compiled server (where import.meta.dir is
+  // inside the binary) passes the copies in its Resources folder.
   /** Copied into each new org: neutral templates and theme. */
-  starter: resolve(import.meta.dir, "../starter"),
+  starter: resolve(env.VIEWSWITCHER_STARTER ?? join(import.meta.dir, "../starter")),
   /** Built switcher/program SPA. */
-  webDist: resolve(import.meta.dir, "../../web/dist"),
+  webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
+  /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
+  libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
+  /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
+  allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
     password: env.OBS_PASSWORD ?? localObsPassword(),

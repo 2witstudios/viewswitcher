@@ -1,0 +1,352 @@
+// ViewSwitcher.app: runs the ViewSwitcher server (the compiled sidecar in Resources), shows the
+// switcher in a window, and keeps a menu-bar item with what's on air and whether OBS and the iPad
+// are connected. Closing the window keeps the server running for OBS and the iPad; Quit stops it,
+// unless the app attached to a server it didn't start (then that server is left alone).
+import { app, autoUpdater as squirrel, BrowserWindow, dialog, Menu, type MenuItemConstructorOptions, nativeImage, Notification, session, shell, Tray } from "electron";
+import { autoUpdater } from "electron-updater";
+import { appendFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import type { LiveState, ServerMessage } from "@viewswitcher/shared";
+import { connectOrStart, type Launch, PortTakenError, probe, type Server } from "./server";
+import { trayStatus } from "./status";
+import { forwardScript } from "./undo";
+
+const PORT = process.env.PORT ?? "7420";
+/** Schemes a frame inside the window may navigate to. */
+const frameSchemeAllowed = (url: string) => /^(https?|about|blob|data):/i.test(url);
+const BASE = `http://127.0.0.1:${PORT}`;
+const logFile = join(app.getPath("logs"), "server.log");
+
+let server: Server | null = null;
+let win: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let live: LiveState | null = null;
+let quitting = false;
+
+/** The bundled sidecar in a packaged app; `bun apps/server/src/index.ts` from a checkout. */
+function launch(): Launch {
+  const env = { ...process.env, PORT, VIEWSWITCHER_PARENT_PID: String(process.pid) };
+  if (app.isPackaged) {
+    const res = process.resourcesPath;
+    return {
+      command: join(res, "viewswitcher-server"),
+      args: [],
+      env: { ...env, VIEWSWITCHER_WEB_DIST: join(res, "web"), VIEWSWITCHER_STARTER: join(res, "starter"), VIEWSWITCHER_LIBRARY_KIT: join(res, "library-kit") },
+      logFile,
+    };
+  }
+  const repo = resolve(__dirname, "../../..");
+  return { command: process.env.BUN ?? "bun", args: [join(repo, "apps/server/src/index.ts")], env, logFile };
+}
+
+/** At launch a server that can't start ends the app; from Restart Server it only says why. */
+async function startServer({ atLaunch }: { atLaunch: boolean }) {
+  try {
+    server = await connectOrStart(BASE, launch());
+  } catch (e) {
+    const port = e instanceof PortTakenError;
+    dialog.showErrorBox(port ? "Port in use" : "ViewSwitcher couldn't start", (e as Error).message + (port ? "" : `\n\nServer log: ${logFile}`));
+    if (atLaunch) {
+      quitting = true;
+      app.quit();
+    }
+    return false;
+  }
+  server.onExit = (code) => {
+    server = null;
+    live = null;
+    renderTray();
+    if (!quitting) new Notification({ title: "ViewSwitcher server stopped", body: `It exited (${code}). Use Restart Server in the menu bar.` }).show();
+  };
+  return true;
+}
+
+// ---------------------------------------------------------------- window
+
+function openWindow() {
+  if (win) {
+    win.show();
+    win.focus();
+    return;
+  }
+  win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 760,
+    minHeight: 520,
+    title: "ViewSwitcher",
+    backgroundColor: "#0b0c0f",
+    show: false,
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  win.once("ready-to-show", () => win?.show());
+  // window.open → the browser; navigating off the server's origin → the browser. Only http(s):
+  // a scene is a page anyone can write, and openExternal on file: or a custom scheme would launch things.
+  const toBrowser = (url: string) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url);
+  };
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    toBrowser(url);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (e, url) => {
+    if (new URL(url).origin === new URL(BASE).origin) return;
+    e.preventDefault();
+    toBrowser(url);
+  });
+  // Frames (scene previews, the editor) may load web pages, but never file: or app URL schemes.
+  win.webContents.on("will-frame-navigate", (e) => {
+    if (!e.isMainFrame && !frameSchemeAllowed(e.url)) e.preventDefault();
+  });
+  // The server can be starting (Dock click during launch) or restarting: keep retrying instead of
+  // leaving a connection-refused page up. -3 is an aborted load (a navigation replaced it): not a failure.
+  win.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
+    if (!isMainFrame || code === -3 || !url.startsWith(BASE)) return;
+    setTimeout(() => win?.webContents.loadURL(`${BASE}/`), 1000);
+  });
+  win.loadURL(`${BASE}/`);
+  // Closing hides the window; the server keeps serving OBS and the iPad.
+  win.on("close", (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    win?.hide();
+  });
+  win.on("closed", () => (win = null));
+}
+
+// ---------------------------------------------------------------- permissions
+
+/** A scene (or anything it embeds) gets no browser permissions, except the switcher copying text (the editor's Copy text). */
+function lockPermissions() {
+  const own = (url: string) => {
+    try {
+      return new URL(url).origin === new URL(BASE).origin;
+    } catch {
+      return false;
+    }
+  };
+  const allowed = (permission: string, url: string) => permission === "clipboard-sanitized-write" && own(url);
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => callback(allowed(permission, details.requestingUrl)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, requestingOrigin) => allowed(permission, requestingOrigin));
+}
+
+// ---------------------------------------------------------------- menu bar
+
+const icon = (live: boolean) => {
+  const img = nativeImage.createFromPath(join(__dirname, "../assets", live ? "trayLive.png" : "trayTemplate.png"));
+  img.setTemplateImage(!live);
+  return img;
+};
+
+async function post(path: string) {
+  const res = await fetch(`${BASE}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  return data;
+}
+
+async function setUpObs() {
+  // Setup never switches OBS's scene while it's live (the server checks too), but say so before doing anything.
+  const obs = live?.obs;
+  if (obs?.streaming || obs?.recording) {
+    const { response } = await dialog.showMessageBox({
+      type: "warning",
+      message: `OBS is ${obs.streaming ? "streaming" : "recording"}`,
+      detail: "Set up the ViewSwitcher scene anyway? OBS will stay on the scene it's showing now; switch to ViewSwitcher in OBS when you're ready.",
+      buttons: ["Set Up", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response !== 0) return;
+  }
+  try {
+    const r = await post("/api/obs/setup");
+    const missing: string[] = r.missing ?? [];
+    const next = missing.length ? ` Add ${missing.join(", ")} to the ViewSwitcher scene in OBS, then set up again.` : "";
+    new Notification({
+      title: "OBS is set up",
+      body: (r.switched ? "The ViewSwitcher scene is ready." : "The ViewSwitcher scene is ready; OBS stayed on its current scene.") + next,
+    }).show();
+  } catch (e) {
+    dialog.showErrorBox("Couldn't set up OBS", (e as Error).message);
+  }
+}
+
+async function openLibrary() {
+  try {
+    const info = (await (await fetch(`${BASE}/api/info`)).json()) as { library: string };
+    const err = await shell.openPath(info.library);
+    if (err) throw new Error(err);
+  } catch (e) {
+    dialog.showErrorBox("Couldn't open the library folder", (e as Error).message);
+  }
+}
+
+function renderTray() {
+  if (!tray) return;
+  const s = trayStatus(server ? live : null);
+  tray.setImage(icon(s.live));
+  tray.setTitle(s.title ? ` ${s.title}` : "");
+  tray.setToolTip(s.onAir);
+  const items: MenuItemConstructorOptions[] = [
+    { label: s.onAir, enabled: false },
+    { label: s.obs, enabled: false },
+    { label: s.ipad, enabled: false },
+    { type: "separator" },
+    { label: "Open ViewSwitcher", click: openWindow },
+    { label: "Open in Browser", click: () => shell.openExternal(`${BASE}/`), enabled: !!server },
+    { label: "Open Library Folder", click: openLibrary, enabled: !!server },
+    { label: s.obsReady ? "Set Up OBS Again" : "Set Up OBS…", click: setUpObs, enabled: !!live?.obs.connected },
+    { type: "separator" },
+    ...(server ? [] : [{ label: restarting ? "Starting Server…" : "Restart Server", click: restartServer, enabled: !restarting } satisfies MenuItemConstructorOptions]),
+    {
+      label: "Open at Login",
+      type: "checkbox",
+      checked: app.getLoginItemSettings().openAtLogin,
+      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+    },
+    { label: "Show Server Log", click: () => shell.openPath(logFile) },
+    { type: "separator" },
+    { label: server && !server.owned ? "Quit ViewSwitcher (server keeps running)" : "Quit ViewSwitcher", click: () => app.quit() },
+  ];
+  trayMenu = Menu.buildFromTemplate(items);
+  tray.setContextMenu(trayMenu);
+}
+let trayMenu: Menu | null = null;
+
+// For the end-to-end check (scripts/e2e.ts), which drives the built app: read the menu-bar item.
+if (process.env.VIEWSWITCHER_E2E === "1") {
+  Object.assign(globalThis, { viewswitcherE2E: { trayMenu: () => trayMenu, trayTitle: () => tray?.getTitle(), server: () => server && { owned: server.owned } } });
+}
+
+let restarting = false;
+async function restartServer() {
+  if (restarting || server) return; // a second click while one is starting would race it for the port
+  restarting = true;
+  renderTray();
+  try {
+    if (await startServer({ atLaunch: false })) {
+      watchState();
+      win?.reload();
+    }
+  } finally {
+    restarting = false;
+    renderTray();
+  }
+}
+
+// The menu bar follows the live state over the server's WebSocket, like any switcher page.
+let ws: WebSocket | null = null;
+function watchState() {
+  ws?.close();
+  const sock = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+  ws = sock;
+  sock.onmessage = (e) => {
+    const msg = JSON.parse(String(e.data)) as ServerMessage;
+    if (msg.t === "state") {
+      live = msg.state;
+      renderTray();
+    }
+  };
+  sock.onclose = async () => {
+    if (ws !== sock) return;
+    live = null;
+    // Attached to a server someone else started (bun run dev) and it went away: forget it, so the
+    // menu offers Restart Server (which attaches again, or starts the bundled one).
+    if (server && !server.owned && !quitting && (await probe(BASE)) === "none") server = null;
+    renderTray();
+    if (!quitting) setTimeout(() => ws === sock && watchState(), 2000);
+  };
+}
+
+// ---------------------------------------------------------------- app menu
+
+function appMenu() {
+  // Undo/Redo forward to the page (see undo.ts): a plain role: "undo" would swallow the editor's ⌘Z.
+  const forward = (redo: boolean) => async () => {
+    const contents = BrowserWindow.getFocusedWindow()?.webContents;
+    if (!contents) return;
+    const where = await contents.executeJavaScript(forwardScript(redo)).catch(() => "native");
+    if (where === "native") redo ? contents.redo() : contents.undo();
+  };
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      { role: "appMenu" },
+      { role: "fileMenu" },
+      {
+        label: "Edit",
+        submenu: [
+          { label: "Undo", accelerator: "CmdOrCtrl+Z", click: forward(false) },
+          { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", click: forward(true) },
+          { type: "separator" },
+          { role: "cut" },
+          { role: "copy" },
+          { role: "paste" },
+          { role: "pasteAndMatchStyle" },
+          { role: "delete" },
+          { role: "selectAll" },
+        ],
+      },
+      { role: "viewMenu" },
+      { role: "windowMenu" },
+    ]),
+  );
+}
+
+// ---------------------------------------------------------------- updates
+
+/** electron-updater against GitHub Releases; what it does and any failure go to the server log (Show Server Log). */
+function startUpdates() {
+  const write = (level: string) => (...args: unknown[]) => {
+    try {
+      appendFileSync(logFile, `[updater] ${level} ${args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ")}\n`);
+    } catch {}
+  };
+  autoUpdater.logger = { info: write("info"), warn: write("warn"), error: write("error"), debug: () => {} };
+  // Installing an update closes the windows before before-quit, so hiding on close would block it:
+  // Squirrel.Mac (which electron-updater drives on macOS) says first.
+  squirrel.on("before-quit-for-update", () => (quitting = true));
+  const check = () => autoUpdater.checkForUpdatesAndNotify().catch((e) => write("error")("update check failed:", e));
+  check();
+  setInterval(check, 6 * 60 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------- lifecycle
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", openWindow);
+  // The switcher tells the Mac window from the iPad app by its user agent (apps/web/src/lib/client-kind.ts).
+  app.userAgentFallback = `${app.userAgentFallback.replace(/\s*ViewSwitcher\/\S+/, "")} ViewSwitcher-Mac/${app.getVersion()}`;
+
+  app.whenReady().then(async () => {
+    lockPermissions();
+    appMenu();
+    tray = new Tray(icon(false));
+    renderTray();
+    if (!(await startServer({ atLaunch: true }))) return;
+    watchState();
+    renderTray();
+    openWindow();
+    if (app.isPackaged && process.env.VIEWSWITCHER_UPDATES !== "0") startUpdates();
+  });
+
+  // The Dock icon (or opening the app again) brings the window back.
+  app.on("activate", openWindow);
+  // No window doesn't mean quit: the server keeps running.
+  app.on("window-all-closed", () => {});
+
+  let stopped = false;
+  app.on("before-quit", (e) => {
+    quitting = true;
+    if (stopped || !server?.owned) return;
+    e.preventDefault();
+    const s = server;
+    server = null;
+    s.stop().finally(() => {
+      stopped = true;
+      app.quit();
+    });
+  });
+}

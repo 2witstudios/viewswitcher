@@ -1,0 +1,56 @@
+# ViewSwitcher.app. Built by scripts/build.sh, which first compiles the server sidecar per arch
+# (build/sidecar/<arch>/viewswitcher-server), builds the switcher (apps/web/dist) and bundles main.
+appId: com.twowitstudios.viewswitcher.mac
+productName: ViewSwitcher
+copyright: Copyright © 2026 2wit Studios
+directories:
+  output: release
+  buildResources: build
+# main.cjs bundles everything it imports (electron-updater included), so the app ships no node_modules.
+files:
+  - dist/**
+  - assets/**
+  - package.json
+asar: true
+extraResources:
+  - from: build/sidecar/${arch}/viewswitcher-server
+    to: viewswitcher-server
+  - from: ../web/dist
+    to: web
+  - from: ../server/starter
+    to: starter
+  - from: ../server/library-kit
+    to: library-kit
+    filter: ["**/*", "!README.md"]
+mac:
+  category: public.app-category.video
+  # The zips (dmg overrides this below). x64's name must not contain "arm64": electron-updater picks by it.
+  artifactName: ViewSwitcher-${version}-${arch}-mac.${ext}
+  icon: build/icon.png
+  target:
+    # One dmg for both kinds of Mac, at the name the site links to (releases/latest/download/ViewSwitcher.dmg).
+    - target: dmg
+      arch: universal
+    # Per-arch zips are what electron-updater downloads.
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # scripts/build.sh signs the sidecar with its own entitlements first (see build/README.md); don't re-sign it.
+  signIgnore:
+    - viewswitcher-server$
+  # Notarization runs in scripts/build.sh --release (notarytool, keychain profile), not here.
+  notarize: false
+  extendInfo:
+    LSUIElement: false
+    NSHumanReadableCopyright: Copyright © 2026 2wit Studios
+dmg:
+  artifactName: ViewSwitcher.dmg
+  title: ViewSwitcher
+publish:
+  provider: github
+  owner: 2witstudios
+  repo: viewswitcher
+  releaseType: draft

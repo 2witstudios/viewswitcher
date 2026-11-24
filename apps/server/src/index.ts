@@ -6,20 +6,39 @@ import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
 import { config } from "./config";
 import * as lib from "./library";
+import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
+import { checkObsSetup, setupObs } from "./obs-setup";
+import { hostTrusted, originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
 import { editScene, parseEdit, readForEdit, scenePath } from "./scene-edit";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
-await mkdir(config.library, { recursive: true });
+// A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
+const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
+if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
+  const did = [
+    firstRun.copied.length && `added ${firstRun.copied.join(", ")}`,
+    firstRun.updated.length && `updated ${firstRun.updated.join(", ")}`,
+    firstRun.git && "git init",
+    firstRun.org && `created org "${firstRun.org}"`,
+  ].filter(Boolean);
+  console.log(`[library] ${did.join("; ")}`);
+}
 const stateFile = join(config.library, ".viewswitcher", "state.json");
 
 // ---------------------------------------------------------------- live state
 
 const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { onAir: OnAir | null }, () => ({ onAir: null }));
-const state: LiveState = { onAir: saved.onAir, obs: { connected: false, recording: false, streaming: false }, warnings: [] };
+const state: LiveState = {
+  onAir: saved.onAir,
+  obs: { connected: false, recording: false, streaming: false },
+  obsSetup: null,
+  usb: { enabled: false, attached: false, connected: false },
+  warnings: [],
+};
 if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
 const acceptSlots = createSlotOrder();
@@ -53,13 +72,32 @@ const obs = new OBSClient({
   log: true,
   onStatus: (s) => {
     state.obs = s;
+    if (!s.connected) state.obsSetup = null;
     publishState();
   },
   onIdentified: () => {
     groundShown = null;
+    recheckSetup();
     if (lastSlots) applyLatest();
   },
+  onEvent: (type, data) => {
+    if (SETUP_EVENTS.has(type) || (type === "InputSettingsChanged" && data.inputName === config.obs.programSource)) recheckSetup();
+  },
 }).start();
+
+// Whether OBS has the scene and sources the switcher needs; the switcher shows a setup card until it does.
+// Rechecked when OBS connects, after "Set up OBS", and when scenes or sources come and go in OBS.
+const SETUP_EVENTS = new Set(["SceneCreated", "SceneRemoved", "SceneNameChanged", "SceneItemCreated", "SceneItemRemoved", "InputNameChanged", "InputRemoved"]);
+let setupTimer: ReturnType<typeof setTimeout> | undefined;
+function recheckSetup() {
+  clearTimeout(setupTimer);
+  setupTimer = setTimeout(async () => {
+    const next = await checkObsSetup(obs, config.obs, config.port).catch(() => null);
+    if (JSON.stringify(next) === JSON.stringify(state.obsSetup)) return;
+    state.obsSetup = next;
+    publishState();
+  }, 300);
+}
 
 // OBS placements run one at a time, and only the latest request is applied: overlapping
 // placements would interleave OBS requests and could leave sources from an older scene.
@@ -142,6 +180,18 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
+  // For the Mac app's menu (Open Library Folder): the one response with an absolute path in it.
+  // Only for this Mac: the connection must come from loopback, be addressed to a loopback host, and
+  // carry no proxy headers (tailscale serve also connects from 127.0.0.1, but adds X-Forwarded-For).
+  if (path === "/api/info" && req.method === "GET") {
+    const peer = server.requestIP(req)?.address ?? "";
+    const local =
+      ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) &&
+      /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(req.headers.get("host") ?? "") &&
+      !req.headers.has("x-forwarded-for") && !req.headers.has("x-forwarded-host") && !req.headers.has("forwarded");
+    if (!local) return json({ error: "Not found" }, 404);
+    return json({ library: root, port: server.port });
+  }
 
   if (path === "/api/onair" && post) {
     const b = await body(req);
@@ -239,6 +289,17 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), session: String(b.session ?? "").slice(0, 40), seq: Number(b.seq) || 0 });
     return json({ ok: true });
   }
+  if (path === "/api/obs/setup" && post) {
+    // JSON only: a cross-site page can't send that without a CORS preflight, which this server never grants,
+    // so no website can rearrange OBS mid-stream (the general fix for other endpoints is ISSUE-10).
+    if (!req.headers.get("content-type")?.startsWith("application/json")) return json({ error: "Expected application/json" }, 415);
+    if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
+    // While streaming or recording, setup never switches OBS's program scene (it would cut the stream).
+    const report = await setupObs(obs, config.obs, config.port, { switchProgram: !obs.status.streaming && !obs.status.recording });
+    state.obsSetup = await checkObsSetup(obs, config.obs, config.port);
+    publishState();
+    return json(report);
+  }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));
   if (path === "/api/obs/stream" && post) return json(await obs.request("ToggleStream"));
 
@@ -258,11 +319,25 @@ const server = Bun.serve({
     const url = new URL(req.url);
     const path = decodeURIComponent(url.pathname);
     try {
+      // DNS rebinding: a page at evil.example that now resolves to 127.0.0.1 sends Host: evil.example.
+      // The API, the library and the live socket answer only to hosts this server is known by (origin.ts).
+      if ((path === "/ws" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(req.headers.get("host"), config.allowedOrigins)) {
+        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${req.headers.get("host")}`);
+        return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
+      }
       if (path === "/ws") {
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
+        // Another website in a browser on this Mac must not be able to change anything (see origin.ts).
+        if (req.method !== "GET" && req.method !== "HEAD") {
+          const ok = originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins });
+          if (!ok) {
+            if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
+            return json({ error: "Not allowed from this page" }, 403);
+          }
+        }
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });
@@ -313,5 +388,28 @@ const server = Bun.serve({
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
+// Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
+// so the port is never left held by an orphan.
+const parent = Number(process.env.VIEWSWITCHER_PARENT_PID);
+if (parent > 1) {
+  setInterval(() => {
+    try {
+      process.kill(parent, 0);
+    } catch {
+      console.log("[viewswitcher] the Mac app is gone; stopping");
+      process.exit(0);
+    }
+  }, 2000).unref();
+}
+
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
-if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) startUsbBridge({ serverPort: config.port });
+if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) {
+  state.usb.enabled = true;
+  startUsbBridge({
+    serverPort: config.port,
+    onStatus: (s) => {
+      state.usb = { enabled: true, ...s };
+      publishState();
+    },
+  });
+}

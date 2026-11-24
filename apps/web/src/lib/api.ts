@@ -67,6 +67,8 @@ export const api = {
     navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, session: previewSession, seq: nextPreviewSeq() })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
+  /** Create the ViewSwitcher scene and sources in OBS (MAC-3). */
+  setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean }>("/api/obs/setup"),
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
 
