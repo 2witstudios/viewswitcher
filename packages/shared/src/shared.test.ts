@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { coverTransform, obsColor, orgOf, resolveStream, shortDate, slugify, transitionCandidates } from "./index";
+import { coverTransform, obsColor, obsReady, orgOf, resolveStream, shortDate, slugify, transitionCandidates } from "./index";
 import type { Project, Scene, Stream } from "./types";
 
 const scene = (name: string, origin: Scene["origin"], dir: string): Scene => ({
@@ -82,5 +82,14 @@ describe("orgs", () => {
       "daisy/templates/_shared/transition.html",
     ]);
     expect(transitionCandidates("daisy/templates/brb.html")).toEqual(["daisy/templates/_shared/transition.html"]);
+  });
+});
+
+describe("obsReady", () => {
+  const full = { scene: true, program: true, ground: true, missingDevices: [] as string[] };
+  test("needs the scene, program and ground; missing devices don't count", () => {
+    expect(obsReady(full)).toBe(true);
+    expect(obsReady({ ...full, missingDevices: ["iPad"] })).toBe(true);
+    for (const k of ["scene", "program", "ground"] as const) expect(obsReady({ ...full, [k]: false })).toBe(false);
   });
 });

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { fakeObs } from "./fake-obs";
 import { OBSRequestError } from "./obs";
-import { checkObsSetup, obsReady, type ObsRequester, programUrl, setupObs } from "./obs-setup";
+import { obsReady } from "@viewswitcher/shared";
+import { checkObsSetup, type ObsRequester, programUrl, setupObs } from "./obs-setup";
 
 const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"] };
 const PORT = 7433;

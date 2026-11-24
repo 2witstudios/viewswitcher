@@ -102,9 +102,6 @@ export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: 
   return { scene: true, program, ground: present.has(names.groundSource), missingDevices: names.devices.filter((d) => !present.has(d)) };
 }
 
-/** Setup is done when nothing but devices could be missing (those the user adds by hand). */
-export const obsReady = (s: ObsSetup) => s.scene && s.program && s.ground;
-
 if (import.meta.main) {
   const { config } = await import("./config");
   const { OBSClient } = await import("./obs");

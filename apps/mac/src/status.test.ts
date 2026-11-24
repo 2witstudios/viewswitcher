@@ -23,7 +23,7 @@ describe("trayStatus (MAC-6 menu bar)", () => {
   test("OBS states", () => {
     expect(trayStatus({ ...base, obs: { ...base.obs, connected: false }, obsSetup: null }).obs).toBe("OBS: not connected");
     const unset = trayStatus({ ...base, obsSetup: { scene: false, program: false, ground: false, missingDevices: ["Camera"] } });
-    expect(unset).toMatchObject({ obs: "OBS: needs setup", needsSetup: true, obsReady: false });
+    expect(unset).toMatchObject({ obs: "OBS: needs setup", obsReady: false });
     expect(trayStatus({ ...base, obsSetup: { ...base.obsSetup!, missingDevices: ["iPad"] } }).obs).toBe("OBS: connected · add iPad");
     expect(trayStatus({ ...base, obs: { connected: true, recording: true, streaming: true } }).obs).toBe("OBS: connected · live, recording");
   });

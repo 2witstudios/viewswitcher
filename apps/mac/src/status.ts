@@ -1,5 +1,5 @@
 // What the menu-bar item shows, from the server's live state. Pure, so `bun test` covers it.
-import type { LiveState } from "@viewswitcher/shared";
+import { obsReady, type LiveState } from "@viewswitcher/shared";
 
 export type TrayStatus = {
   /** Text beside the icon: the on-air scene, or nothing. */
@@ -9,8 +9,6 @@ export type TrayStatus = {
   onAir: string;
   obs: string;
   ipad: string;
-  /** OBS is reachable but lacks the scene or sources. */
-  needsSetup: boolean;
   /** OBS is connected and has the scene and sources (devices aside). */
   obsReady: boolean;
 };
@@ -20,10 +18,10 @@ const short = (s: string) => (s.length > TITLE_MAX ? `${s.slice(0, TITLE_MAX - 1
 
 /** `state` is null while the server doesn't answer. */
 export function trayStatus(state: LiveState | null): TrayStatus {
-  if (!state) return { title: "", live: false, onAir: "Server not responding", obs: "OBS: unknown", ipad: "iPad: unknown", needsSetup: false, obsReady: false };
+  if (!state) return { title: "", live: false, onAir: "Server not responding", obs: "OBS: unknown", ipad: "iPad: unknown", obsReady: false };
   const label = state.onAir?.label ?? "";
   const setup = state.obsSetup;
-  const needsSetup = state.obs.connected && !!setup && !(setup.scene && setup.program && setup.ground);
+  const needsSetup = state.obs.connected && !!setup && !obsReady(setup);
 
   let obs = "OBS: not connected";
   if (state.obs.connected) {
@@ -43,5 +41,5 @@ export function trayStatus(state: LiveState | null): TrayStatus {
         ? "iPad: plugged in · open ViewSwitcher on it"
         : "iPad: not plugged in";
 
-  return { title: label ? short(label) : "", live: !!state.onAir, onAir: label ? `On air: ${label}` : "Nothing on air", obs, ipad, needsSetup, obsReady: state.obs.connected && !!setup && !needsSetup };
+  return { title: label ? short(label) : "", live: !!state.onAir, onAir: label ? `On air: ${label}` : "Nothing on air", obs, ipad, obsReady: state.obs.connected && !!setup && !needsSetup };
 }

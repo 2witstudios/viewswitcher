@@ -1,6 +1,6 @@
 // What the OBS setup card says, from the live state (MAC-3). The card shows while OBS or the
 // switcher's scene and sources are missing, and stays out of the way once everything is there.
-import type { LiveState } from "@viewswitcher/shared";
+import { obsReady, type LiveState } from "@viewswitcher/shared";
 
 export type SetupCard =
   /** OBS isn't reachable: it's closed, or its WebSocket server is off. */
@@ -14,7 +14,7 @@ export function setupCard(state: Pick<LiveState, "obs" | "obsSetup">): SetupCard
   if (!state.obs.connected) return { kind: "connect" };
   const s = state.obsSetup;
   if (!s) return null; // connected, not checked yet: don't flash a card
-  if (!s.scene || !s.program || !s.ground) return { kind: "setup" };
+  if (!obsReady(s)) return { kind: "setup" };
   if (s.missingDevices.length) return { kind: "devices", missing: s.missingDevices };
   return null;
 }

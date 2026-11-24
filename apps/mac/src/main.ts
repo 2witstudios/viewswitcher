@@ -74,16 +74,19 @@ function openWindow() {
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   win.once("ready-to-show", () => win?.show());
-  // Same-origin pages stay in the window; anything else opens in the browser.
+  // window.open → the browser; navigating off the server's origin → the browser. Only http(s):
+  // a scene is a page anyone can write, and openExternal on file: or a custom scheme would launch things.
+  const toBrowser = (url: string) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url);
+  };
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/.test(url)) shell.openExternal(url);
+    toBrowser(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, url) => {
-    if (new URL(url).origin !== new URL(BASE).origin) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
+    if (new URL(url).origin === new URL(BASE).origin) return;
+    e.preventDefault();
+    toBrowser(url);
   });
   win.loadURL(`${BASE}/`);
   // Closing hides the window; the server keeps serving OBS and the iPad.

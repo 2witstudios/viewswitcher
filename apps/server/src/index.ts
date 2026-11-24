@@ -283,6 +283,9 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     return json({ ok: true });
   }
   if (path === "/api/obs/setup" && post) {
+    // JSON only: a cross-site page can't send that without a CORS preflight, which this server never grants,
+    // so no website can rearrange OBS mid-stream (the general fix for other endpoints is ISSUE-10).
+    if (!req.headers.get("content-type")?.startsWith("application/json")) return json({ error: "Expected application/json" }, 415);
     if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
     const report = await setupObs(obs, config.obs, config.port);
     state.obsSetup = await checkObsSetup(obs, config.obs, config.port);
