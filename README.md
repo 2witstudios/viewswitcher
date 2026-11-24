@@ -69,6 +69,7 @@ Environment (all optional; the Mac app passes them through to its server):
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
+| `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net` and `*.local`, and refuses changes sent by other websites |
 
 ## OBS setup (once)
 

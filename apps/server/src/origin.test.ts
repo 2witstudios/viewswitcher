@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { originAllowed } from "./origin";
+import { hostTrusted, originAllowed } from "./origin";
 
 const at = (host: string, extra?: string[], forwardedHost?: string) => ({ host, extra, forwardedHost });
 
@@ -28,5 +28,26 @@ describe("originAllowed (state-changing POSTs)", () => {
   });
   test("allows origins listed in VIEWSWITCHER_ORIGINS", () => {
     expect(originAllowed("https://switcher.example.com", at("127.0.0.1:7420", ["https://switcher.example.com/"]))).toBe(true);
+  });
+});
+
+describe("DNS rebinding (evil.example → 127.0.0.1)", () => {
+  test("a rebound page's same-host Origin is refused", () => {
+    expect(originAllowed("http://evil.example:7420", at("evil.example:7420"))).toBe(false);
+    expect(originAllowed("http://evil.example:7420", at("127.0.0.1:7420", undefined, "evil.example:7420"))).toBe(false);
+  });
+  test("hostTrusted refuses evil.example:7420 and allows the names this server is known by", () => {
+    expect(hostTrusted("evil.example:7420")).toBe(false);
+    expect(hostTrusted("evil.example")).toBe(false);
+    expect(hostTrusted("127.0.0.1.evil.example:7420")).toBe(false);
+    expect(hostTrusted("localhost.evil.example")).toBe(false);
+    expect(hostTrusted(null)).toBe(false);
+    expect(hostTrusted("")).toBe(false);
+    for (const h of ["127.0.0.1:7420", "localhost:5173", "[::1]:7420", "LOCALHOST", "mac.tail1234.ts.net", "studio-mac.local:7420"]) expect(hostTrusted(h)).toBe(true);
+  });
+  test("VIEWSWITCHER_ORIGINS hosts are trusted", () => {
+    expect(hostTrusted("switcher.example.com", ["https://switcher.example.com"])).toBe(true);
+    expect(hostTrusted("192.168.1.20:7420", ["http://192.168.1.20:7420"])).toBe(true);
+    expect(hostTrusted("192.168.1.20:7420")).toBe(false);
   });
 });

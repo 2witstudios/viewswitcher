@@ -9,7 +9,7 @@ import * as lib from "./library";
 import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
-import { originAllowed } from "./origin";
+import { hostTrusted, originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
@@ -319,6 +319,12 @@ const server = Bun.serve({
     const url = new URL(req.url);
     const path = decodeURIComponent(url.pathname);
     try {
+      // DNS rebinding: a page at evil.example that now resolves to 127.0.0.1 sends Host: evil.example.
+      // The API, the library and the live socket answer only to hosts this server is known by (origin.ts).
+      if ((path === "/ws" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(req.headers.get("host"), config.allowedOrigins)) {
+        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${req.headers.get("host")}`);
+        return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
+      }
       if (path === "/ws") {
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
