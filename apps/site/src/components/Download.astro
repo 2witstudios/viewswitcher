@@ -50,6 +50,8 @@ bun run start</code></pre>
   .dev { border-top: 1px solid #ffffff1f; padding-top: 1.25rem; color: var(--on-monitor-2); font-size: 0.9375rem; }
   .dev summary { cursor: pointer; color: var(--on-monitor); font-weight: 600; }
   .dev-body { display: grid; gap: 1rem; padding-top: 1rem; max-width: 44rem; }
-  pre { margin: 0; background: var(--monitor-2); border-radius: 12px; padding: 1.1rem 1.3rem; overflow-x: auto; line-height: 1.7; color: var(--on-monitor); }
+  pre { margin: 0; background: var(--monitor-2); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dev, .dev-body { min-width: 0; }
+  .dev code { overflow-wrap: anywhere; }
   .dev code { color: var(--on-monitor); }
 </style>
