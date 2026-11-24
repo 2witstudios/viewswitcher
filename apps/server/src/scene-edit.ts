@@ -17,7 +17,6 @@ export function scenePath(root: string, path: unknown): string {
   return inside(root, p);
 }
 
-/** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
 /** The scene's real file, which must be inside the library even when the path goes through a link. */
 async function realScene(root: string, path: unknown) {
   const real = await realpath(scenePath(root, path));
@@ -26,6 +25,7 @@ async function realScene(root: string, path: unknown) {
   return real;
 }
 
+/** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
 export async function readForEdit(root: string, path: string) {
   const text = await readFile(await realScene(root, path), "utf8");
   const hash = sceneHash(text);
@@ -80,11 +80,15 @@ export function editScene(
     await writeFile(tmp, next);
     await chmod(tmp, read.mode & 0o7777);
     await hooks.beforeReplace?.();
-    // Someone else saved while this one was being written: theirs wins, this one is a conflict.
+    // Someone else saved while this one was being written: theirs wins, this one is a conflict. Checked
+    // by stat and by content, right before the rename. (Plain files have no compare-and-swap, so a
+    // write landing between this check and the rename itself can't be caught without a lock the agent
+    // would also have to honour; this leaves only that instant.)
     const now = await stat(real).catch(() => null);
-    if (!now || now.mtimeMs !== read.mtimeMs || now.size !== read.size) {
+    const there = now && now.mtimeMs === read.mtimeMs && now.size === read.size ? await readFile(real, "utf8").catch(() => null) : null;
+    if (there === null || sceneHash(there) !== current) {
       await rm(tmp, { force: true });
-      const latest = await readFile(real, "utf8").catch(() => "");
+      const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
       return { ok: false, conflict: true, hash: sceneHash(latest) };
     }
     await rename(tmp, real);

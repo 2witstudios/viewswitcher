@@ -218,8 +218,11 @@ export function decodeEntities(text: string): string {
 const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;");
 
 /** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
+/** Collapse and trim HTML whitespace only. (JS trim() would also eat U+00A0, a non-breaking space, which is text.) */
+export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
+
 export function textOf(html: string, el: ScannedElement): string {
-  return decodeEntities(html.slice(el.innerStart, el.innerEnd)).replace(/[ \t\n\r\f]+/g, " ").trim();
+  return collapseHtmlSpace(decodeEntities(html.slice(el.innerStart, el.innerEnd)));
 }
 
 // ---------------------------------------------------------------- position
@@ -303,12 +306,12 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
     if (typeof edit.text !== "string") throw new EditError("Text must be a string");
     const text = edit.text.replace(/[\r\n]+/g, " ");
     // Empty text would leave nothing to click (or edit) next time.
-    if (!text.trim()) throw new EditError("Text can't be empty");
-    if (textOf(html, el) === text.replace(/[ \t\n\r\f]+/g, " ").trim()) return [];
+    if (!collapseHtmlSpace(text)) throw new EditError("Text can't be empty");
+    if (textOf(html, el) === collapseHtmlSpace(text)) return [];
     // Keep the source's own leading and trailing whitespace (indentation).
     const inner = html.slice(el.innerStart, el.innerEnd);
-    const lead = inner.length - inner.trimStart().length;
-    const trail = inner.length - inner.trimEnd().length;
+    const lead = inner.length - inner.replace(/^[ \t\n\r\f]+/, "").length;
+    const trail = inner.length - inner.replace(/[ \t\n\r\f]+$/, "").length;
     return [{ from: el.innerStart + lead, to: el.innerEnd - trail, text: escapeText(text) }];
   }
   if (!Number.isFinite(edit.left) || !Number.isFinite(edit.top)) throw new EditError("Position must be numbers");
@@ -338,7 +341,6 @@ export function applyEdits(html: string, edits: SceneEdit[]): string {
 export const setText = (html: string, id: number, text: string) => applyEdits(html, [{ id, text }]);
 export const setPosition = (html: string, id: number, left: number, top: number) => applyEdits(html, [{ id, left, top }]);
 
-/** The scene with data-vs="<id>" on every start tag, for the editor and the program page. Never written to disk. */
 /** Where the version stamp goes: the root <html>, else (a bare fragment) the first top-level element. */
 function stampedElement(els: ScannedElement[]): number | null {
   const html = els.find((e) => e.tag === "html" && e.parent === null);
@@ -346,6 +348,7 @@ function stampedElement(els: ScannedElement[]): number | null {
 }
 
 /**
+ * The scene with data-vs="<id>" on every start tag, for the editor and the program page. Never written to disk.
  * With `hash`, the <html> element (or a fragment's first element) also carries data-vs-hash="<hash>":
  * the version those ids belong to, so a page showing it can tell whether an edit's ids are for it.
  */
@@ -382,7 +385,6 @@ export function untagForEdit(tagged: string): string {
 
 // ---------------------------------------------------------------- conflicts
 
-/** What makes an element itself (not its children): its start tag, plus its text when it's a leaf. */
 /** What makes an element itself: its start tag, its text when it's a leaf, and the start tag it sits in. */
 function signature(html: string, el: ScannedElement, els: ScannedElement[]) {
   // Every enclosing start tag, minus its style (a moved panel shouldn't mark everything inside it).

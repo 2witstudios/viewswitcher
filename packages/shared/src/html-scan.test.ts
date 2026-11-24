@@ -357,3 +357,14 @@ describe("/code-review round 2 on PR #1", () => {
     expect(setText(`<p>&frac12; cup</p>`, 0, "½ cup")).toBe(`<p>&frac12; cup</p>`);
   });
 });
+
+describe("/code-review round 4 on PR #1", () => {
+  test("leading and trailing non-breaking spaces are text, not whitespace", () => {
+    const html = `<p>&nbsp;&nbsp;Indented</p>`;
+    expect(textOf(html, scanElements(html)[0]!)).toBe("  Indented");
+    expect(setText(html, 0, "  Indented more")).toBe(`<p>&nbsp;&nbsp;Indented more</p>`);
+    expect(setText(html, 0, "Indented")).toBe(`<p>Indented</p>`); // removing them is a change
+    const literal = `<p> x</p>`;
+    expect(setText(literal, 0, " y")).toBe(`<p>&nbsp;y</p>`); // not doubled
+  });
+});

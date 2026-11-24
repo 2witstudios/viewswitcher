@@ -1,7 +1,7 @@
 // The scene editor: retype text in place and drag panels and camera boxes, live on stream when the
 // scene is on air. Every finished change (Return, letting go) is saved as a source-range patch on the
 // server; the browser DOM is never written back. See packages/shared/src/html-scan.ts.
-import { applyEdits, changedElements, positionOf, retarget, scanElements, shortDate, snapMove, textOf, untagForEdit } from "@viewswitcher/shared";
+import { applyEdits, changedElements, collapseHtmlSpace, positionOf, retarget, scanElements, shortDate, snapMove, textOf, untagForEdit } from "@viewswitcher/shared";
 import type { Box, Library, ScannedElement, SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -148,6 +148,8 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   /** Bumped on every (re)load: element ids from before a reload may name different elements now. */
   const generation = useRef(0);
   const conflictOpen = useRef(false);
+  /** A 409 whose latest version hasn't loaded yet. */
+  const pendingConflict = useRef<{ edits: SceneEdit[]; prev: Base } | null>(null);
   const frameMismatches = useRef(0);
 
   // ------------------------------------------------------------ loading
@@ -175,7 +177,14 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       if (nudge.current) clearTimeout(nudge.current.timer);
       nudge.current = null;
       // An open conflict follows the newest version: its marks and Apply my change again use it.
-      if (conflictOpen.current) setConflict((c) => (c ? { ...c, latest: b, changed: changedElements(c.prev.source, b.source) } : c));
+      // Undo entries name elements of the old version: they can't be replayed on this one.
+      setUndo([]);
+      const pending = pendingConflict.current;
+      pendingConflict.current = null;
+      if (pending) {
+        conflictOpen.current = true;
+        setConflict({ ...pending, changed: changedElements(pending.prev.source, b.source), latest: b });
+      } else if (conflictOpen.current) setConflict((c) => (c ? { ...c, latest: b, changed: changedElements(c.prev.source, b.source) } : c));
       setReady(false);
       setFrameKey((k) => k + 1);
       return b;
@@ -292,18 +301,17 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         setBase({ source, hash, els: scanElements(source) });
         if (undoEntries.length) setUndo((u) => [...u, ...undoEntries]);
       },
+      // The conflict opens when the latest version has loaded (now, or after Reload if this read fails),
+      // so the lost changes are never dropped silently.
       onConflict: async (edits, b) => {
-        const latest = await load();
-        if (!latest) return;
-        setUndo([]);
-        setSelected(null);
-        conflictOpen.current = true;
-        setConflict({ edits, changed: changedElements(b.source, latest.source), prev: b, latest });
+        pendingConflict.current = { edits, prev: b };
+        await load();
       },
       // Queued behind the change that hit the conflict: their ids are from the same old version,
       // so they join it on the conflict screen and go through Apply my change again with it.
       onStale: (edits) => {
         if (conflictOpen.current) setConflict((c) => (c ? { ...c, edits: [...c.edits, ...edits] } : c));
+        else if (pendingConflict.current) pendingConflict.current.edits.push(...edits);
         else toast("The scene reloaded, so your last change didn't save");
       },
       onError: async (e) => {
@@ -339,7 +347,15 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
 
   const doUndo = () => {
-    flushNudge();
+    // A nudge still waiting to save is the latest change: Undo cancels it (nothing was saved yet).
+    const n = nudge.current;
+    if (n) {
+      clearTimeout(n.timer);
+      nudge.current = null;
+      applyDom(n.before);
+      preview(n.before, n.gen);
+      return;
+    }
     const last = undo[undo.length - 1];
     if (!last) return;
     setUndo((u) => u.slice(0, -1));
@@ -380,7 +396,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     el.removeAttribute("contenteditable");
     el.blur();
     // Collapse only HTML whitespace, as the server does: a non-breaking space is part of the text.
-    const collapse = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").trim();
+    const collapse = collapseHtmlSpace;
     const text = collapse(el.textContent ?? "");
     const before = { id: editing.id, text: collapse(editing.original) };
     if (!commit || !text) {
@@ -550,7 +566,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!d) return;
     const p = toScene(e);
     const s = snapMove({ ...d.rect, x: d.rect.x + p.x - d.x0, y: d.rect.y + p.y - d.y0 }, d.others, { threshold: SNAP_PX / scaleRef.current });
-    const next = { left: Math.round(d.start.left + s.x - d.rect.x), top: Math.round(d.start.top + s.y - d.rect.y) };
+    // Snapped to an edge: exact. Otherwise the saved left/top go on the 8 px grid themselves (the box's
+    // screen position can be offset by its parent or margins).
+    const grid = (v: number, snapped: boolean) => (snapped ? Math.round(v) : Math.round(v / 8) * 8);
+    const next = {
+      left: grid(d.start.left + s.x - d.rect.x, s.guides.x.length > 0),
+      top: grid(d.start.top + s.y - d.rect.y, s.guides.y.length > 0),
+    };
     if (next.left === d.last.left && next.top === d.last.top) return;
     d.last = next;
     applyDom({ id: d.id, ...next });
@@ -710,6 +732,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
   const editCopy = () =>
     attempt(async () => {
+      // Nothing unfinished may land on the on-air scene on the way out: drop a pending nudge (and put
+      // the stream back), and cancel typing.
+      const n = nudge.current;
+      if (n) {
+        clearTimeout(n.timer);
+        nudge.current = null;
+        applyDom(n.before);
+        preview(n.before, n.gen);
+      }
+      if (editing) finishEdit(false);
       const { name } = await api.duplicate(path);
       const copyPath = `${path.slice(0, path.lastIndexOf("/"))}/${name}.html`;
       toast("Editing a copy: it isn't on air");
@@ -796,7 +828,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                 }
                 // The frame loads the scene on its own: if the file changed since the base was read, its ids
                 // aren't the base's. Read both again.
-                // (A scene without an <html> tag has no stamp to compare; then there's nothing to check.)
+                // (The stamp is on <html>, or on a bare fragment's first element; with no stamp at all there's nothing to check.)
                 const b = baseRef.current;
                 const stamp = d ? shownVersion(d as unknown as PreviewDoc) : undefined;
                 if (b && stamp !== undefined && stamp !== b.hash) {
