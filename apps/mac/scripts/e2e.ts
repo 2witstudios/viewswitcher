@@ -175,7 +175,8 @@ try {
   check(await until(async () => (await trayLabels(app)).includes("Restart Server"), 8000), "the attached server stops: the menu offers Restart Server");
   await app.evaluate(() => (globalThis as any).viewswitcherE2E.trayMenu().items.find((i: { label: string }) => i.label === "Restart Server").click());
   check(await until(answers), "Restart Server brings a server back");
-  check(await app.evaluate(() => (globalThis as any).viewswitcherE2E.server()?.owned), "…the app's own, which Quit stops");
+  // The server answers a moment before the app has finished waiting for it, so wait for ownership too.
+  check(await until(() => app.evaluate(() => !!(globalThis as any).viewswitcherE2E.server()?.owned), 5000), "…the app's own, which Quit stops");
   const closed3 = app.waitForEvent("close");
   await app.evaluate(({ app }) => app.quit());
   await closed3;
