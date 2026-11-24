@@ -51,7 +51,7 @@ bun install
 bun run start            # builds the switcher, serves everything on http://localhost:7420
 # or, while working on the app itself:
 bun run dev              # server on :7420 (watch) + Vite on http://localhost:5173
-bun run mac:dev          # the Mac app's window and menu bar, attached to the server above (or starting one from source)
+bun run mac:dev          # builds the Mac app (Debug) and runs it, attached to the server above (or starting one from source)
 ```
 
 Environment (all optional; the Mac app passes them through to its server):
@@ -69,6 +69,7 @@ Environment (all optional; the Mac app passes them through to its server):
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
+| `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |
 | `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net` and `*.local`, and refuses changes sent by other websites |
 
 ## OBS setup (once)
@@ -84,19 +85,19 @@ If a scene asks for a slot whose OBS source doesn't exist, the switcher shows a 
 
 ## iPad app (USB-C)
 
-`apps/ipad` is the ViewSwitcher iPad app (Capacitor).
+The ViewSwitcher iPad app is the `ViewSwitcher iPad` target in `apps/apple` (native Swift, WKWebView).
 
 ```sh
-bun run ipad:deploy   # build, sign, install and launch on the plugged-in iPad
+bun run ipad:deploy   # build, sign, install and launch on the plugged-in iPad (replaces the app on it)
 ```
 
-The app's WebView adds `ViewSwitcher-iPad` to its user agent; that's how the switcher knows it's in the app (and the Mac app's window, which says `ViewSwitcher-Mac`, knows it isn't). Builds from before the Mac app added plain `ViewSwitcher`, which still works until the next deploy.
+The app's web view adds `ViewSwitcher-iPad/<version>` to its user agent; that's how the switcher knows it's in the app (and the Mac app's window, which says `ViewSwitcher-Mac/<version>`, knows it isn't). Older builds added `ViewSwitcher-iPad` or plain `ViewSwitcher`, which still work until the next deploy. Its bundled connector page lives at `viewswitcher://connector/`. The web view runs edge to edge and the switcher keeps clear of the safe area itself (`env(safe-area-inset-*)`) in every orientation, Split View and Stage Manager.
 
 One-time requirements: your Apple ID is signed into Xcode (Settings → Accounts; the team defaults to `M96WTV3CKX`, set `TEAM=` to override), Developer Mode is on, on the iPad, and the iPad trusts this Mac.
 
 How the link works: iOS gives apps no network over the cable. The only path is usbmuxd, and it only connects Mac → iPad.
 - The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421.
-- The app (`apps/ipad/ios/App/App/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each WebView connection through one of those tunnels to the server.
+- The app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each WebView connection through one of those tunnels to the server.
 - So the app simply loads `http://127.0.0.1:7420/`, the real switcher, served over the cable. A "USB" pill in the header confirms it, the Mac's switcher and menu bar show "iPad · USB", and the server log shows `[usb] … tunnels ready`.
 
 **Without the cable:** the app's connector page falls back to a network address you save on it, such as Tailscale (`tailscale serve --bg 7420`, then `https://<this-mac>.<tailnet>.ts.net`). The same address also works in Safari. If the link drops for 4 s, the app returns to the connector, which picks whichever link works.
@@ -108,29 +109,28 @@ apps/server      Bun server: API, library + watcher, orgs, live state, OBS place
 apps/server/starter   the starter kit copied into each new org
 apps/server/library-kit   what a new library starts with: the agent skill, CLAUDE.md, .gitignore
 apps/web         Vite + React + TanStack Router/Query SPA: switcher + /program
-apps/mac         ViewSwitcher.app: Electron window + menu bar around the compiled server
-apps/ipad        ViewSwitcher iPad app: connector page + native USB-C tunnel
+apps/apple       one Xcode project (XcodeGen): ViewSwitcher.app for macOS, ViewSwitcher for iPad, the shared ViewSwitcherKit
 apps/site        viewswitcher.com (Astro)
 packages/shared  types and pure logic: resolveStream (override rule), coverTransform (slot → OBS), obsColor
 ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into the iPad app later
 post/            YouTube post pipeline (from Daisy Debate's daisy-video); see post/README.md
 ```
 
-`bun test` runs the shared logic, usbmux protocol, path-safety, library kit, OBS setup and Mac app tests.
+`bun test` runs the shared logic, usbmux protocol, path-safety, library kit and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
 
 ## Mac app
 
-`apps/mac` is ViewSwitcher.app: Electron, with the server compiled by `bun build --compile` into `Contents/Resources/viewswitcher-server` (a sidecar) next to the built switcher, the starter kit and the library kit. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
+ViewSwitcher.app is the `ViewSwitcher` target in `apps/apple`: a native window (WKWebView) and menu-bar item around the server, compiled by `bun build --compile` into `Contents/Helpers/viewswitcher-server` next to the built switcher, the starter kit and the library kit in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
 
 ```sh
-bun run mac:build              # release/ViewSwitcher.dmg (universal) + arm64/x64 zips, signed with the Developer ID in your keychain
-bun run mac:build --dir        # just release/mac-arm64/ViewSwitcher.app, then:
-bun apps/mac/scripts/e2e.ts    # drives the built app on port 7433 with OBS offline and USB off
+bun run mac:build              # apps/apple/build/ViewSwitcher.dmg (universal) + appcast.xml, signed with the Developer ID in your keychain
+bun run mac:build --app        # just apps/apple/build/export/ViewSwitcher.app, then:
+bun run mac:e2e                # drives the built app on port 7435 with OBS offline and USB off
 bun run mac:release            # signed, notarized and stapled (needs the notarytool profile below)
 bun run mac:release --publish  # ...and uploads it to a draft GitHub release for a person to publish
 ```
 
-Signing uses the "Developer ID Application" certificate for team M96WTV3CKX (`TEAM=` to override); what each binary is entitled to is in `apps/mac/build/README.md`. Notarizing needs a notarytool keychain profile, made once with `xcrun notarytool store-credentials viewswitcher-notary --apple-id <email> --team-id M96WTV3CKX` (`APPLE_KEYCHAIN_PROFILE=` to use another). Updates: electron-updater reads `latest-mac.yml` and the zips from the latest GitHub release; the dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
+Signing uses the "Developer ID Application" certificate for team M96WTV3CKX (`TEAM=` to override); what each binary is entitled to is in `apps/apple/README.md`. Notarizing needs a notarytool keychain profile, made once with `xcrun notarytool store-credentials viewswitcher-notary --apple-id <email> --team-id M96WTV3CKX` (`APPLE_KEYCHAIN_PROFILE=` to use another). Updates: Sparkle reads `appcast.xml` from the latest GitHub release, signed with an EdDSA key in the login keychain; the dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
 
 ## Roadmap
 

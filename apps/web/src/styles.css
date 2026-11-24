@@ -18,6 +18,18 @@
   --display: "Space Grotesk", "Helvetica Neue", sans-serif;
   --text: "Instrument Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Safe zones (MAC-13a). The iPad app's web view runs edge to edge (viewport-fit=cover), so the
+     notch-free but rounded corners, the home indicator and Stage Manager's window controls come in
+     as env(safe-area-inset-*); a browser reports 0. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* Set by the Mac app on <html> (apps/apple ShellBridge, with data-shell="mac"): its window has no
+     title bar, the traffic lights sit in the header row. 0 in a browser, on the iPad and in full screen. */
+  --shell-lights: 0px;  /* from the left edge to just past the lights */
+  --shell-header: 0px;  /* the row the lights are centered in */
+  --shell-drag: 0px;    /* the top band that drags the window */
 }
 
 * { box-sizing: border-box; }
@@ -32,11 +44,20 @@ a { color: inherit; text-decoration: none; }
 /* Dark scheme for the switcher only. /program must keep the default scheme: Chromium paints an opaque
    backdrop behind an iframe whose color-scheme differs from its embedder, which would hide OBS devices. */
 .app { min-height: 100vh; background: var(--bg); display: flex; flex-wrap: wrap; color-scheme: dark; }
-.main { flex: 999 1 560px; min-width: 0; padding: 28px 32px 64px; display: flex; flex-direction: column; gap: 28px; position: relative; }
+.main { flex: 999 1 560px; min-width: 0; padding: calc(28px + var(--safe-top)) calc(32px + var(--safe-right)) calc(64px + var(--safe-bottom)) 32px; display: flex; flex-direction: column; gap: 28px; position: relative; }
 
 /* ---------------------------------------------------------------- sidebar (flat, compact) */
-.side { flex: 1 1 220px; max-width: 248px; padding: 16px 10px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
-.brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; }
+.side { flex: 1 1 220px; max-width: 248px; padding: calc(16px + var(--safe-top)) 10px calc(16px + var(--safe-bottom)) calc(10px + var(--safe-left)); background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; -webkit-user-select: none; user-select: none; }
+/* The Mac window: the brand shares the header row with the traffic lights, to their right. */
+html[data-shell="mac"]:not(.shell-fullscreen) .side { padding-top: 0; }
+html[data-shell="mac"]:not(.shell-fullscreen) .brand { min-height: var(--shell-header); padding-left: max(8px, calc(var(--shell-lights) - 10px)); }
+.shell-drag { display: none; }
+/* Absolute, not fixed: it covers only the page's empty top padding and scrolls away with it, so
+   content scrolled up to the top stays clickable. */
+html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; position: absolute; z-index: 15; top: 0; left: 0; right: 0; height: var(--shell-drag); }
+/* Narrow: the main column wraps under the sidebar and reaches the left edge itself. */
+@media (max-width: 780px) { .main { padding-left: calc(32px + var(--safe-left)); } }
 .brand span { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
 .side-group { display: flex; flex-direction: column; gap: 1px; }
 .side-label { display: flex; align-items: center; padding: 0 2px 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.24em; color: var(--quiet); }
@@ -123,7 +144,7 @@ a { color: inherit; text-decoration: none; }
 .menu button small { font-size: 12px; font-weight: 400; color: var(--sage); }
 .menu hr { border: 0; border-top: 1px solid var(--line-strong); margin: 4px 6px; }
 
-.modal-wrap { position: fixed; inset: 0; z-index: 30; background: rgba(4, 5, 8, 0.6); display: grid; place-items: center; padding: 16px; }
+.modal-wrap { position: fixed; inset: 0; z-index: 30; background: rgba(4, 5, 8, 0.6); display: grid; place-items: center; padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
 .modal { width: min(480px, 100%); padding: 22px 24px; border-radius: 16px; background: var(--stage); display: flex; flex-direction: column; gap: 14px; }
 .modal h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: -0.01em; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--sage); }
@@ -139,7 +160,7 @@ a { color: inherit; text-decoration: none; }
 .btn.small { height: 36px; padding: 0 12px; font-size: 13px; }
 .error { color: #ffb3a8; font-size: 14px; }
 
-.toast { position: fixed; z-index: 40; left: 50%; bottom: 24px; transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: var(--cream); color: var(--stage); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+.toast { position: fixed; z-index: 40; left: 50%; bottom: calc(24px + var(--safe-bottom)); transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: var(--cream); color: var(--stage); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
 
 /* ---------------------------------------------------------------- assets */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -160,8 +181,8 @@ a { color: inherit; text-decoration: none; }
 /* ---------------------------------------------------------------- scene editor (graphite and white; red only for on air) */
 .app.full { display: block; }
 .main-full { min-height: 100vh; }
-.editor { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
-.editor-top { flex: none; height: 64px; padding: 0 20px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--side); }
+.editor { height: 100vh; height: 100dvh; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
+.editor-top { flex: none; height: max(64px, var(--shell-header)); padding: 0 20px 0 max(20px, var(--shell-lights)); -webkit-user-select: none; user-select: none; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--side); }
 .editor-top .icon-btn { width: 44px; height: 44px; border-radius: 10px; color: var(--sage); }
 .editor-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .editor-titles .crumb { font-size: 12px; }
@@ -229,7 +250,7 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 900px) {
   .editor-area { margin: 12px 12px 0; }
   .editor-bottom { padding: 12px; }
-  .editor-top { padding: 0 10px; gap: 8px; }
+  .editor-top { padding: 0 10px 0 max(10px, var(--shell-lights)); gap: 8px; }
 }
 /* The Reload bar sits low, clear of a conflict dialog that may be open at the same time. */
 .conflict.stuck { top: auto; bottom: 6%; }

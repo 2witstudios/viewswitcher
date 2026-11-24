@@ -12,11 +12,11 @@
     "start": "bun run build && bun apps/server/src/index.ts",
     "test": "bun test",
     "obs:setup": "bun apps/server/src/obs-setup.ts",
-    "ipad:sync": "bun run --filter @viewswitcher/ipad sync",
-    "ipad:deploy": "bash apps/ipad/scripts/deploy.sh",
-    "mac:dev": "bun run --filter @viewswitcher/mac start",
-    "mac:build": "bash apps/mac/scripts/build.sh",
-    "mac:release": "bash apps/mac/scripts/build.sh --release"
+    "ipad:deploy": "bash apps/apple/scripts/deploy-ipad.sh",
+    "mac:dev": "bash apps/apple/scripts/dev.sh",
+    "mac:build": "bash apps/apple/scripts/build.sh",
+    "mac:release": "bash apps/apple/scripts/build.sh --release",
+    "mac:e2e": "bun apps/apple/scripts/e2e.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.5",

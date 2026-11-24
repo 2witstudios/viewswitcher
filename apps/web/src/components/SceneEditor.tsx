@@ -779,7 +779,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   if (loadError) {
     return (
       <div className="editor">
-        <header className="editor-top">
+        <header className="editor-top" data-drag-region>
           <button type="button" className="icon-btn" aria-label="Back" onClick={leave}>{Icon.back}</button>
           <div className="editor-titles"><span className="crumb">{place.crumb}</span><span className="title">{place.title}</span></div>
         </header>
@@ -813,7 +813,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   return (
     <div className="editor">
-      <header className="editor-top">
+      <header className="editor-top" data-drag-region>
         <button type="button" className="icon-btn" aria-label="Back" onClick={leave}>{Icon.back}</button>
         <div className="editor-titles">
           <span className="crumb">{place.crumb}</span>

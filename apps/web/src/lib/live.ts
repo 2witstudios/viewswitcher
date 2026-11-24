@@ -2,7 +2,7 @@
 import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
-import { clientKind } from "./client-kind";
+import { clientKind, connectorUrl } from "./client-kind";
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } });
 
@@ -50,7 +50,7 @@ function connect() {
   };
   ws.onclose = () => {
     set({ connected: false });
-    if (inApp && !downTimer) downTimer = setTimeout(() => location.replace("capacitor://localhost/"), BACK_TO_CONNECTOR_MS);
+    if (inApp && !downTimer) downTimer = setTimeout(() => location.replace(connectorUrl(navigator.userAgent)), BACK_TO_CONNECTOR_MS);
     setTimeout(connect, 1000);
   };
   ws.onmessage = (e) => {

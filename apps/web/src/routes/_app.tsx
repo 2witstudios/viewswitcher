@@ -9,6 +9,8 @@ export const Route = createFileRoute("/_app")({
     const editing = useRouterState({ select: (s) => s.matches.some((m) => m.routeId === "/_app/$org/edit") });
     return (
       <div className={`app${editing ? " full" : ""}`}>
+        {/* The Mac app's window has no title bar: this band (and the sidebar's brand row) drags it. Hidden elsewhere. */}
+        {!editing && <div className="shell-drag" data-drag-region aria-hidden="true" />}
         {!editing && <Sidebar />}
         <main className={editing ? "main-full" : "main"}>
           <Outlet />
