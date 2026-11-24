@@ -29,8 +29,9 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
     const sock = net.createConnection(USBMUXD_SOCKET);
     listener = sock;
     sock.on("connect", () => sock.write(u8(listenMessage())));
-    sock.on("data", (chunk) => {
-      buf = concat(buf, chunk);
+    // @types/node types a socket's chunk as string | Buffer (a string only after setEncoding, which we never call).
+    sock.on("data", (chunk: string | Buffer) => {
+      buf = concat(buf, typeof chunk === "string" ? Buffer.from(chunk) : chunk);
       const { messages, rest } = decodeMessages(buf);
       buf = rest;
       for (const { body } of messages) {
