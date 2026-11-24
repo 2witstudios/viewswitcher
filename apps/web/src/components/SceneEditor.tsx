@@ -530,6 +530,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return; // already handled (e.g. Return/Esc in the text being typed)
     if (editing) {
       if (e.key === "Escape") finishEdit(false);
       return;
