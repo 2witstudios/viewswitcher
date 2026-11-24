@@ -26,11 +26,11 @@ The hero, the download section and the small print all follow it. A build can ov
 ## Scene images (generated, never hand-made)
 
 ```sh
-cp -R "$HOME/ViewSwitcher Library" ../../.scratch/library   # once; a COPY, never the real library
+cp -R "$HOME/ViewSwitcher Library" "${TMPDIR:-/tmp}/viewswitcher-shots-library"   # once; a COPY, never the real library
 bun run shots
 ```
 
-`scripts/shots.ts` starts the switcher server on port 7432 (OBS offline, USB bridge off, `VIEWSWITCHER_LIBRARY` = the copy; override with `SHOTS_LIBRARY`), opens each scene in `src/data/scene-list.ts` at 1920×1080 in preview mode with the slot labels hidden, and writes `src/assets/scenes/<id>.webp` plus each scene's slot boxes to `src/data/scenes.json`. The site draws its own labelled Camera/Screen/iPad stand-ins over those boxes, and the hero moves them when you switch scenes. Astro turns each image into responsive WebP with a JPEG fallback at build time. Only rendered images enter this repo, never scene HTML.
+`scripts/shots.ts` starts the switcher server on port 7432 (OBS offline, USB bridge off, `VIEWSWITCHER_LIBRARY` = the copy, which lives outside the repo so scene content can never be committed; override with `SHOTS_LIBRARY`), opens each scene in `src/data/scene-list.ts` at 1920×1080 in preview mode with the slot labels hidden, and writes `src/assets/scenes/<id>.webp` plus each scene's slot boxes to `src/data/scenes.json`. The site draws its own labelled Camera/Screen/iPad stand-ins over those boxes, and the hero moves them when you switch scenes. Astro turns each image into responsive WebP with a JPEG fallback at build time. Only rendered images enter this repo, never scene HTML.
 
 `bun run og` regenerates `public/og.png` (1200×630) and the icons (`favicon.svg`, `favicon.ico`, `apple-touch-icon.png`) from the mark in `apps/web/public/icon.svg`, drawn in graphite and white.
 

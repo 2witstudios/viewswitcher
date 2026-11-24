@@ -3,8 +3,8 @@
 //   bun run shots                         (from apps/site)
 //
 // It starts the switcher server on PORT 7432 with OBS offline, no USB bridge and
-// VIEWSWITCHER_LIBRARY pointing at a COPY of the library (default: <repo>/.scratch/library;
-// override with SHOTS_LIBRARY). If something already answers on 7432 it uses that.
+// VIEWSWITCHER_LIBRARY pointing at a COPY of the library, kept outside the repo so org scene
+// content can never be committed (default: $TMPDIR/viewswitcher-shots-library; override with SHOTS_LIBRARY). If something already answers on 7432 it uses that.
 // Each scene is opened at 1920×1080 in preview mode (ground painted), with the dashed slot
 // labels hidden; the site draws its own Camera/Screen/iPad stand-ins over the slot boxes,
 // whose rectangles are written to src/data/scenes.json. Only rendered images enter the repo.
@@ -12,13 +12,14 @@ import { chromium } from "playwright-core";
 import sharp from "sharp";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { SCENES } from "../src/data/scene-list";
 
 const site = resolve(import.meta.dir, "..");
 const repo = resolve(site, "../..");
 const port = Number(process.env.SHOTS_PORT ?? 7432);
 const base = `http://127.0.0.1:${port}`;
-const library = resolve(process.env.SHOTS_LIBRARY ?? join(repo, ".scratch/library"));
+const library = resolve(process.env.SHOTS_LIBRARY ?? join(tmpdir(), "viewswitcher-shots-library"));
 
 if (port === 7420) throw new Error("7420 is the live switcher; use another port");
 
