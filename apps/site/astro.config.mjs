@@ -10,4 +10,6 @@ export default defineConfig({
   build: { inlineStylesheets: "always" },
   server: { port: 4321, host: "127.0.0.1" },
   devToolbar: { enabled: false },
+  // Emit the hero script as a file, never inline, so the CSP in vercel.json can say script-src 'self'.
+  vite: { build: { assetsInlineLimit: 0 } },
 });

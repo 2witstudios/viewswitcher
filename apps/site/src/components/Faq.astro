@@ -19,7 +19,7 @@ const faqs = [
     <div class="list">
       {faqs.map((f) => (
         <details>
-          <summary><h3>{f.q}</h3></summary>
+          <summary>{f.q}</summary>
           <p>{f.a}</p>
         </details>
       ))}
@@ -31,7 +31,7 @@ const faqs = [
   @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5rem; } }
   details { border-top: 1px solid var(--rule); }
   details:last-child { border-bottom: 1px solid var(--rule); }
-  summary { list-style: none; cursor: pointer; padding-block: 1.25rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+  summary { list-style: none; cursor: pointer; padding-block: 1.25rem; font: 600 1.25rem/1.25 var(--display); letter-spacing: -0.015em; color: var(--ink); display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
   summary::-webkit-details-marker { display: none; }
   summary::after { content: ""; flex: none; width: 0.6rem; height: 0.6rem; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg) translateY(-25%); transition: transform 160ms ease; }
   details[open] summary::after { transform: rotate(-135deg) translateY(-25%); }

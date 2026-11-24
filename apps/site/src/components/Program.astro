@@ -25,11 +25,11 @@ const poster = hasVideo ? (await getImage({ src: scenes[start]!.image, width: 16
 const sizes = "(min-width: 76rem) 75rem, calc(100vw - 2.5rem)";
 const slotData = JSON.stringify(scenes.map((s) => s.slots));
 ---
-<figure class="program on-dark" data-program data-slots={slotData} data-start={start}>
+<figure class="program on-dark" data-program data-slots={slotData}>
   <div class="monitor">
     <div class="bar">
       <span class="tally"><span class="dot"></span>On air</span>
-      <span class="now" aria-live="polite" data-now>{scenes[start]!.name}</span>
+      {!hasVideo && <span class="now" aria-live="polite" data-now>{scenes[start]!.name}</span>}
     </div>
     {hasVideo ? (
       <div class="frame">
@@ -45,8 +45,8 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
         ))}
         {devices.map((name) => {
           const at = placeOf(start, name);
-          return <div class:list={["mover", { gone: !at }]} data-device={name} style={box(at ?? hidden)}>
-            <Device place={{ ...(at ?? hidden), name, x: 0, y: 0, w: 1920, h: 1080 }} />
+          return <div class:list={["mover", { gone: !at, round: !!at?.round }]} data-device={name} style={box(at ?? hidden)}>
+            <Device place={{ name, x: 0, y: 0, w: 1920, h: 1080, round: false }} />
           </div>;
         })}
       </div>

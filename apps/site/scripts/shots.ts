@@ -24,7 +24,7 @@ const library = resolve(process.env.SHOTS_LIBRARY ?? join(tmpdir(), "viewswitche
 if (port === 7420) throw new Error("7420 is the live switcher; use another port");
 
 async function up(): Promise<boolean> {
-  try { await fetch(base); return true; } catch { return false; }
+  try { await fetch(base, { signal: AbortSignal.timeout(1000) }); return true; } catch { return false; }
 }
 
 let server: ReturnType<typeof Bun.spawn> | undefined;
@@ -35,8 +35,12 @@ if (!(await up())) {
     env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
     stdout: "ignore", stderr: "inherit",
   });
-  for (let i = 0; i < 50 && !(await up()); i++) await Bun.sleep(200);
-  if (!(await up())) throw new Error(`server did not start on ${port}`);
+  // Up to ~10 s; stop early if the server exited (e.g. the port is taken).
+  for (let i = 0; i < 50 && server.exitCode === null && !(await up()); i++) await Bun.sleep(200);
+  if (server.exitCode !== null || !(await up())) {
+    server.kill(); // never leave a half-started server holding the port
+    throw new Error(`server did not start on ${port}`);
+  }
 }
 
 const HIDE_LABELS = `.preview .slot { background: transparent !important; } .preview .slot::before { display: none !important; }`;
