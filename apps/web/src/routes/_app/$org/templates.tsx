@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
                 { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
               ]} />
             ) : (
-              <p className="empty">No transition yet: scenes switch through the plain ground color. Ask your agent to make {org}/templates/_shared/transition.html.</p>
+              <p className="empty">Blank: scenes fade through the ground color. For a designed one, ask your agent for {org}/templates/_shared/transition.html.</p>
             )}
           </div>
         </section>

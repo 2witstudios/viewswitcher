@@ -113,7 +113,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
         <section className="section">
           <div className="section-head">
             <h2>TRANSITION</h2>
-            <span>{project.transition ? `${project.name}'s own` : transition ? "the org's, shared by projects without their own" : "none: scenes switch through the ground color"}</span>
+            <span>{project.transition ? `${project.name}'s own` : transition ? "the org's, shared by projects without their own" : "blank: scenes fade through the ground color"}</span>
           </div>
           <div className="grid">
             {transition ? (
@@ -141,7 +141,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 ]}
               />
             ) : (
-              <p className="empty">No transition yet. Ask your agent to make {org}/templates/_shared/transition.html (every project) or {org}/projects/{projectId}/transition.html (this one).</p>
+              <p className="empty">For a designed one, ask your agent for {org}/projects/{projectId}/transition.html (this project) or {org}/templates/_shared/transition.html (every project).</p>
             )}
           </div>
         </section>

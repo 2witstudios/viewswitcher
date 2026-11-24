@@ -29,7 +29,7 @@ OBS scene "ViewSwitcher"
 └─ ViewSwitcher Ground    color source, set to the on-air org's ground     (bottom)
 ```
 
-**Transitions** are pages too. Switching scenes briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else just the ground color. The switcher shows the transition on the Templates page and on each stream page, where "Customize for this project" gives a project its own.
+**Transitions** are pages too. Switching scenes briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else (the default) a blank fade through the ground color. The switcher shows the transition on the Templates page and on each stream page, where "Customize for this project" gives a project its own.
 
 New orgs are created from the org menu in the sidebar. They start from `apps/server/starter/`: neutral templates using the org's name and accent color, ready to be branded.
 
