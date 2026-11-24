@@ -4,55 +4,52 @@ import { site, github } from "../site.config";
 ---
 <section class="section dark on-dark" id="download" aria-labelledby="download-title">
   <div class="wrap grid">
-    {site.macAppReleased ? (
-      <div class="copy">
-        <h2 id="download-title">Download ViewSwitcher for Mac</h2>
-        <p class="lede">Open the dmg and drag ViewSwitcher to Applications. On first run it creates your library and sets up OBS from a button; it updates itself from then on.</p>
-        <Cta />
-      </div>
-      <div class="needs">
-        <h3>What you need</h3>
-        <ul>
-          <li>A Mac</li>
-          <li>OBS 28 or later, with its WebSocket server turned on</li>
-          <li>A camera, and optionally an iPad and a USB-C cable</li>
-          <li>A coding agent, such as Claude Code, to write scenes</li>
-        </ul>
-      </div>
-    ) : (
-      <>
-        <div class="copy">
-          <h2 id="download-title">Get ViewSwitcher</h2>
-          <p class="lede">Today it runs from source on a Mac with <a href="https://bun.sh">Bun</a> and <a href="https://obsproject.com">OBS</a>. A Mac app you download and open is next.</p>
-          <Cta />
-          <p class="small">To hear when the Mac app ships: on GitHub, choose Watch, then Custom, then Releases.</p>
-        </div>
-        <div class="code">
-          <pre><code>git clone {github}.git
+    <div class="copy">
+      <h2 id="download-title">Download for Mac</h2>
+      {site.macAppReleased
+        ? <p class="lede">Open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It keeps itself up to date.</p>
+        : <p class="lede">The Mac app is in testing now. Follow it on GitHub and you'll get an email when it's ready to download.</p>}
+      <Cta />
+      <p class="small">Free and open source. Mac only for now.</p>
+    </div>
+    <div class="needs">
+      <h3>What you need</h3>
+      <ul>
+        <li><b>A Mac</b></li>
+        <li><b>OBS</b>, the free streaming app. ViewSwitcher sets it up for you.</li>
+        <li><b>A camera</b>: a webcam, the Mac's own, or any camera OBS can see</li>
+        <li>Optional: a phone, tablet or iPad to switch from</li>
+      </ul>
+    </div>
+    <details class="dev">
+      <summary>Developers: run it from source</summary>
+      <div class="dev-body">
+        <p>ViewSwitcher is open source. Views are plain HTML files in a folder you own, so a coding agent (or you) can write new ones; the library includes a skill that teaches agents the format. To run it today with <a href="https://bun.sh">Bun</a>:</p>
+        <pre><code>git clone {github}.git
 cd viewswitcher
 bun install
 bun run start</code></pre>
-          <p class="small">Then open <code>http://localhost:7420</code>, create your first org, and follow the <a href={`${github}#obs-setup-once`}>OBS setup</a> in the README.</p>
-        </div>
-      </>
-    )}
+        <p>Then open <code>http://localhost:7420</code> and follow the <a href={`${github}#obs-setup-once`}>OBS setup</a> in the README.</p>
+      </div>
+    </details>
   </div>
 </section>
 <style>
   .dark { background: var(--monitor); color: var(--on-monitor); }
-  .dark h2 { color: var(--on-monitor); }
+  .dark h2, .dark h3 { color: var(--on-monitor); }
   .dark .lede { color: var(--on-monitor-2); }
   .dark :global(.btn-primary) { background: var(--on-monitor); color: var(--ink); }
   .dark :global(.btn-primary:hover) { background: #ffffff; }
-  .dark :global(.btn-secondary) { color: var(--on-monitor); }
   .grid { display: grid; gap: 2.5rem; align-items: center; }
-  @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4rem; } }
+  @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem 4rem; } .dev { grid-column: 1 / -1; } }
   .copy { display: grid; gap: 1.5rem; }
   .small { font-size: 0.9375rem; color: var(--on-monitor-2); }
-  .code { display: grid; gap: 1rem; }
-  pre { margin: 0; background: var(--monitor-2); border-radius: 12px; padding: 1.25rem 1.4rem; overflow-x: auto; line-height: 1.7; color: var(--on-monitor); }
-  .small code { color: var(--on-monitor); }
   .needs { display: grid; gap: 1rem; background: var(--monitor-2); border-radius: 12px; padding: 1.5rem 1.75rem; }
-  .needs h3 { color: var(--on-monitor); }
-  .needs ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.45rem; color: var(--on-monitor-2); }
+  .needs ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; color: var(--on-monitor-2); }
+  .needs b { color: var(--on-monitor); font-weight: 600; }
+  .dev { border-top: 1px solid #ffffff1f; padding-top: 1.25rem; color: var(--on-monitor-2); font-size: 0.9375rem; }
+  .dev summary { cursor: pointer; color: var(--on-monitor); font-weight: 600; }
+  .dev-body { display: grid; gap: 1rem; padding-top: 1rem; max-width: 44rem; }
+  pre { margin: 0; background: var(--monitor-2); border-radius: 12px; padding: 1.1rem 1.3rem; overflow-x: auto; line-height: 1.7; color: var(--on-monitor); }
+  .dev code { color: var(--on-monitor); }
 </style>

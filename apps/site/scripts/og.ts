@@ -49,8 +49,8 @@ p { font-size: 22px; color: #4b505c; }
 </style></head><body>
 <div class="copy">
   <div class="brand"><svg width="40" height="40" viewBox="0 0 24 24">${mark("#16181e", "#8b909c", "#ffffff")}</svg>ViewSwitcher</div>
-  <h1>Tap a scene on your iPad. OBS puts your camera in it.</h1>
-  <p>Free, open-source scene switcher for OBS on the Mac.</p>
+  <h1>Look professional when you go live.</h1>
+  <p>Professional overlays and layouts for OBS. Free for Mac.</p>
 </div>
 <div class="mon"><div class="bar"><span class="dot"></span>On air <span style="color:#a3a8b5;font-weight:500">Teaching</span></div><div class="frame">${devices}</div></div>
 </body></html>`;

@@ -1,12 +1,16 @@
 // The site's call to action. Pure: the page passes in the config.
 export type Link = { label: string; href: string };
-export type Ctas = { state: "github" | "download"; primary: Link; secondary: Link };
+export type Ctas = { state: "soon" | "download"; primary: Link; note: string };
 
+/**
+ * Before the Mac app ships there is nothing to download, so the honest, least technical step is
+ * to follow its releases (GitHub emails a watcher when one is published). After MAC-8 it's the dmg.
+ */
 export function ctas(opts: { macAppReleased: boolean; repo: string; dmgUrl: string }): Ctas {
-  const github = `https://github.com/${opts.repo}`;
+  const releases = `https://github.com/${opts.repo}/releases`;
   return opts.macAppReleased
-    ? { state: "download", primary: { label: "Download for Mac", href: opts.dmgUrl }, secondary: { label: "View on GitHub", href: github } }
-    : { state: "github", primary: { label: "Get it on GitHub", href: github }, secondary: { label: "Watch releases", href: `${github}/releases` } };
+    ? { state: "download", primary: { label: "Download for Mac", href: opts.dmgUrl }, note: "Free and open source. For macOS, with OBS." }
+    : { state: "soon", primary: { label: "Follow the Mac app", href: releases }, note: "Free and open source. The Mac app is in testing; follow it to hear when it's out." };
 }
 
 /** The config value, unless an override (e.g. SITE_MAC_APP on a preview build) says otherwise. */

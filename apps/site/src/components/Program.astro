@@ -32,12 +32,12 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
     {hasVideo ? (
       <div class="frame">
         <video src={site.demoVideo} poster={poster} autoplay muted loop playsinline preload="metadata" width="1920" height="1080"
-          aria-label="A tap on the iPad switches the scene in OBS and the camera moves into its box."></video>
+          aria-label="A view is clicked, the stream changes, and the camera moves into its new place."></video>
       </div>
     ) : (
       <div class="frame" data-frame>
         {scenes.map((s, i) => (
-          <Picture src={s.image} alt={`${s.org} ${s.name} scene, rendered from its library`} widths={[640, 960, 1280, 1600]} sizes={sizes}
+          <Picture src={s.image} alt={`The ${s.name} view on air`} widths={[640, 960, 1280, 1600]} sizes={sizes}
             formats={["webp"]} fallbackFormat="jpg" loading={i === start ? "eager" : "lazy"} fetchpriority={i === start ? "high" : "auto"}
             decoding={i === start ? "sync" : "async"} class:list={["shot", { on: i === start }]} data-shot={i} aria-hidden={i === start ? undefined : "true"} />
         ))}
@@ -52,7 +52,7 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
   </div>
   {!hasVideo && (
     <div class="deck">
-      <p class="deck-label" id="deck-label">Tap a scene</p>
+      <p class="deck-label" id="deck-label">Click a view</p>
       <div class="covers" role="group" aria-labelledby="deck-label">
         {scenes.map((s, i) => (
           <button type="button" class="cover" aria-pressed={i === start ? "true" : "false"} data-cover={i}>
@@ -65,8 +65,8 @@ const slotData = JSON.stringify(scenes.map((s) => s.slots));
   )}
   <figcaption>
     {hasVideo
-      ? "A tap on the iPad, the scene changes in OBS, and the camera moves into its box."
-      : "Real Daisy Debate scenes, rendered from its library. The gray boxes are where your camera and screen go; switch scenes and they move."}
+      ? "Click a view: the stream changes and your camera moves into its new place."
+      : "Click a view. The stream changes, and your camera and screen move to where the view puts them."}
   </figcaption>
 </figure>
 

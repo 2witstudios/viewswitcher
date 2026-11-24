@@ -3,21 +3,23 @@ import { Picture } from "astro:assets";
 import SceneFrame from "./SceneFrame.astro";
 import { scene } from "../lib/scenes";
 const covers = ["daisy-starting", "daisy-teaching", "daisy-whiteboard", "daisy-brb"].map(scene);
+const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
 ---
 <section class="section mist" id="how" aria-labelledby="how-title">
   <div class="wrap">
     <div class="section-head">
       <h2 id="how-title">How it works</h2>
-      <p class="lede">OBS keeps doing the compositing and the streaming. ViewSwitcher decides what's on screen and where your devices go.</p>
+      <p class="lede">Set up your views once. Then every show is a click away, and OBS keeps streaming the way it always does.</p>
     </div>
     <ol class="steps">
       <li>
-        <div class="vis prompt" aria-hidden="true">
-          <p class="you">Make a teaching scene for Daisy Debate: the screen share on the left, the camera top right, today's path under it.</p>
-          <p class="agent">Wrote <code>scenes/teaching.html</code> with a Screen box and a Camera box.</p>
+        <div class="vis setup" aria-hidden="true">
+          <div class="field"><span>Show name</span><b>Intro to Watercolor</b></div>
+          <div class="field"><span>This week</span><b>Wet-on-wet skies</b></div>
+          <div class="field"><span>Colors</span><i class="sw">{swatches.map((c) => <i style={`background:${c}`}></i>)}</i></div>
         </div>
-        <h3><span class="n">1</span>Ask your agent for a scene</h3>
-        <p>Describe the screen you want to Claude Code or any coding agent. It writes an HTML file in your library and marks where each device goes.</p>
+        <h3><span class="n">1</span>Pick your views</h3>
+        <p>Start from a designed set of views, then put in your show's name, your colors and this week's title.</p>
       </li>
       <li>
         <div class="vis tiles on-dark" aria-hidden="true">
@@ -28,13 +30,13 @@ const covers = ["daisy-starting", "daisy-teaching", "daisy-whiteboard", "daisy-b
             </div>
           ))}
         </div>
-        <h3><span class="n">2</span>Tap it on the iPad</h3>
-        <p>Every scene shows up as a cover. Tap one on the iPad, plugged into the Mac with USB-C, or click it in any browser.</p>
+        <h3><span class="n">2</span>Click to switch</h3>
+        <p>Click a view in the Mac app, in any browser, or on a phone or tablet beside you.</p>
       </li>
       <li>
-        <div class="vis"><SceneFrame id="daisy-teaching" alt="The Daisy Debate teaching scene on air, with the camera and screen in their boxes" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
-        <h3><span class="n">3</span>Your camera lands in place</h3>
-        <p>The scene goes on air in OBS, and ViewSwitcher moves and crops your camera, screen and iPad sources into its boxes. Nothing to rebuild in OBS for each layout.</p>
+        <div class="vis"><SceneFrame id="daisy-teaching" alt="A teaching view on air, with the camera and the screen share in their places" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
+        <h3><span class="n">3</span>Everything moves into place</h3>
+        <p>Your camera, screen share and titles land where the view puts them, and OBS keeps streaming as usual. Nothing to rebuild for each layout.</p>
       </li>
     </ol>
   </div>
@@ -48,10 +50,12 @@ const covers = ["daisy-starting", "daisy-teaching", "daisy-whiteboard", "daisy-b
   .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
   .vis :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
-  .prompt { background: var(--paper); border: 1px solid var(--rule); padding: 1.1rem; display: grid; align-content: center; gap: 0.75rem; font-size: 0.9375rem; line-height: 1.45; }
-  .prompt .you { background: var(--mist); border-radius: 10px; padding: 0.7rem 0.85rem; color: var(--ink); }
-  .prompt .agent { color: var(--ink-2); padding-inline: 0.85rem; }
-  .prompt code { font-size: 0.8125rem; word-break: break-all; color: var(--ink); }
+  .setup { background: var(--paper); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; gap: 0.55rem; }
+  .field { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.75rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
+  .field span { color: var(--ink-3); }
+  .field b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sw { display: flex; gap: 0.4rem; }
+  .sw i { width: 1.1rem; height: 1.1rem; border-radius: 50%; box-shadow: inset 0 0 0 1px #0000001f; }
   .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
   .tile { position: relative; }
   .tile :global(img) { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }

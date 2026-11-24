@@ -1,13 +1,13 @@
 ---
 import { github } from "../site.config";
 const faqs = [
-  { q: "Do I need OBS?", a: "Yes. OBS does the compositing and the streaming; ViewSwitcher tells it what to show and where your devices go, through the WebSocket server built into OBS 28 and later. You set OBS up once." },
-  { q: "Is it Mac only?", a: "The server runs on a Mac, and the USB-C link to the iPad needs macOS. The switcher itself is a web page, so any browser on your network can switch scenes too." },
-  { q: "Does it work on Windows?", a: "Not today. The OBS setup and the iPad link are built for macOS. If you'd use it on Windows, say so in a GitHub issue." },
-  { q: "Which agents can write scenes?", a: "Any coding agent that can edit files in a folder: Claude Code, Codex, Cursor and others. The library includes a skill that explains the scene format and your brand; Claude Code picks it up on its own, and you can point other agents at it. You can also write the HTML yourself." },
-  { q: "Can a church use it?", a: "Yes. Bible Study, above, is one of the libraries it runs today. A series maps onto a project, each service onto a stream, and there's no yearly seat fee. It doesn't include a song lyrics or scripture database." },
-  { q: "Does the iPad need Wi-Fi?", a: "Not while it's plugged into the Mac: the app switches over the USB-C cable. Unplugged, it connects over your network to an address you save." },
-  { q: "What does it cost?", a: "ViewSwitcher is free and open source. The iPad app is coming to the App Store." },
+  { q: "Do I need OBS?", a: "Yes. OBS is the free app that does the streaming, and ViewSwitcher sets it up for you the first time. After that, ViewSwitcher tells OBS what to show and where your camera goes; you keep streaming to YouTube, Facebook or wherever you go live today." },
+  { q: "Do I need to know how to code?", a: "No. You pick views, type in your show's name and titles, and drag boxes where you want them." },
+  { q: "Do I need AI?", a: "No. The views in the set are ready to use as they are. If you ever want a kind of view that isn't in the set, you can describe it and an AI assistant can make it for you, but that's optional." },
+  { q: "Does it work on Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
+  { q: "Can my church use it?", a: "Yes. Set up views once for your service (a welcome, worship, the sermon with slides beside the pastor, giving, the ending) and each Sunday is just new titles. There's no yearly seat fee." },
+  { q: "Does it work with my camera?", a: "If OBS can see it, ViewSwitcher can place it: the Mac's built-in camera, a USB webcam, or a camera through a capture card. Your screen share and an iPad's screen work the same way." },
+  { q: "What does it cost?", a: "Nothing. ViewSwitcher is free and open source. The iPad app is coming to the App Store." },
 ];
 ---
 <section class="section mist" id="faq" aria-labelledby="faq-title">

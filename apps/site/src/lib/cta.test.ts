@@ -5,17 +5,15 @@ const repo = "2witstudios/viewswitcher";
 const dmg = "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg";
 
 describe("ctas", () => {
-  test("before the Mac app ships, the primary action is GitHub and the secondary is watching releases", () => {
+  test("before the Mac app ships, the primary action follows its releases on GitHub", () => {
     const c = ctas({ macAppReleased: false, repo, dmgUrl: dmg });
-    expect(c.primary).toEqual({ label: "Get it on GitHub", href: "https://github.com/2witstudios/viewswitcher" });
-    expect(c.secondary).toEqual({ label: "Watch releases", href: "https://github.com/2witstudios/viewswitcher/releases" });
-    expect(c.state).toBe("github");
+    expect(c.primary).toEqual({ label: "Follow the Mac app", href: "https://github.com/2witstudios/viewswitcher/releases" });
+    expect(c.state).toBe("soon");
   });
 
-  test("after the Mac app ships, the primary action downloads the latest dmg and GitHub is secondary", () => {
+  test("after the Mac app ships, the primary action downloads the latest dmg", () => {
     const c = ctas({ macAppReleased: true, repo, dmgUrl: dmg });
     expect(c.primary).toEqual({ label: "Download for Mac", href: dmg });
-    expect(c.secondary).toEqual({ label: "View on GitHub", href: "https://github.com/2witstudios/viewswitcher" });
     expect(c.state).toBe("download");
   });
 });
