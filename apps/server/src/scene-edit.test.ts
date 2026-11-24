@@ -1,6 +1,6 @@
 // EDIT-3 / EDIT-4: the editor's file endpoints, as functions and over HTTP against a real server.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanElements, textOf } from "@viewswitcher/shared";
@@ -59,6 +59,35 @@ describe("editScene (EDIT-4)", () => {
     await expect(editScene(root, SCENE, hash, [{ id: 0, text: "x" }])).rejects.toThrow(); // <html> isn't text
     await expect(editScene(root, SCENE, hash, [{ id: 1, left: "a", top: 1 }])).rejects.toThrow();
     expect(await readFile(join(root, SCENE), "utf8")).toBe(before);
+  });
+});
+
+describe("saving keeps the file what it was (PR #1 review)", () => {
+  test("permissions survive a save", async () => {
+    const abs = join(root, "acme/templates/brb.html");
+    await chmod(abs, 0o664);
+    const text = await readFile(abs, "utf8");
+    const id = scanElements(text).find((e) => e.leaf && e.tag !== "title")!.id;
+    expect((await editScene(root, "acme/templates/brb.html", sceneHash(text), [{ id, text: "Back soon" }])).ok).toBe(true);
+    expect((await stat(abs)).mode & 0o777).toBe(0o664);
+  });
+  test("a linked scene stays a link and its target changes", async () => {
+    const target = join(root, "acme/templates/ending.html");
+    const link = join(root, "acme/templates/ending-link.html");
+    await symlink(target, link);
+    const text = await readFile(target, "utf8");
+    const id = scanElements(text).find((e) => e.leaf && e.tag !== "title")!.id;
+    expect((await editScene(root, "acme/templates/ending-link.html", sceneHash(text), [{ id, text: "Thanks!" }])).ok).toBe(true);
+    expect((await lstat(link)).isSymbolicLink()).toBe(true);
+    expect(await readFile(target, "utf8")).toContain(">Thanks!<");
+  });
+  test("a link to a file outside the library is refused", async () => {
+    const outside = join(root, "..", `vs-outside-${process.pid}.html`);
+    await writeFile(outside, "<p>outside</p>");
+    await symlink(outside, join(root, "acme/templates/out.html"));
+    await expect(editScene(root, "acme/templates/out.html", sceneHash("<p>outside</p>"), [{ id: 0, text: "x" }])).rejects.toThrow();
+    expect(await readFile(outside, "utf8")).toBe("<p>outside</p>");
+    await rm(outside);
   });
 });
 

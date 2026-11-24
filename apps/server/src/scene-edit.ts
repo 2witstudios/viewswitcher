@@ -1,6 +1,7 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { relative, isAbsolute } from "node:path";
 import { applyEdits, EditError, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
@@ -56,11 +57,17 @@ export function editScene(root: string, path: string, hash: string, edits: unkno
     if (current !== hash) return { ok: false, conflict: true, hash: current };
     const next = applyEdits(text, parsed);
     if (next === text) return { ok: true, hash: current, changed: false };
-    // Write beside it and rename, so nothing ever reads a half-written scene. The watcher ignores dot-files.
-    const dir = abs.slice(0, abs.lastIndexOf("/"));
-    const tmp = `${dir}/.${abs.slice(dir.length + 1)}.vs-${process.pid}-${Date.now()}`;
+    // A linked scene is written where it really lives (so the link stays a link), never outside the library.
+    const real = await realpath(abs);
+    const back = relative(await realpath(root), real);
+    if (back.startsWith("..") || isAbsolute(back)) throw new PathError("This scene is a link to a file outside the library");
+    // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
+    // The watcher ignores dot-files.
+    const dir = real.slice(0, real.lastIndexOf("/"));
+    const tmp = `${dir}/.${real.slice(dir.length + 1)}.vs-${process.pid}-${Date.now()}`;
     await writeFile(tmp, next);
-    await rename(tmp, abs);
+    await chmod(tmp, (await stat(real)).mode & 0o7777);
+    await rename(tmp, real);
     return { ok: true, hash: sceneHash(next), changed: true };
   };
   const result = queue.then(run, run);

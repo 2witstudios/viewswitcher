@@ -8,6 +8,7 @@ import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPoi
 import { api, SceneConflict } from "../lib/api";
 import { useLibrary } from "../lib/library";
 import { useLive } from "../lib/live";
+import { createSceneSaver } from "../lib/scene-saver";
 import { attempt, toast } from "./ui";
 
 const W = 1920;
@@ -131,7 +132,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; hit: Hit; at: number } | null>(null);
-  const [editing, setEditing] = useState<{ id: number; original: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: number; original: string; gen: number } | null>(null);
   const [drag, setDrag] = useState<{ id: number; left: number; top: number; guides: { x: number[]; y: number[] } } | null>(null);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
   const [conflict, setConflict] = useState<{ edits: SceneEdit[]; changed: number[]; prev: Base; latest: Base } | null>(null);
@@ -139,12 +140,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const redraw = () => setTick((t) => t + 1);
   /** Where each movable element was when the editor opened, for Put it back. */
   const origins = useRef(new Map<number, Pos>());
+  /** Bumped on every (re)load: element ids from before a reload may name different elements now. */
+  const generation = useRef(0);
+  const conflictOpen = useRef(false);
 
   // ------------------------------------------------------------ loading
 
   const load = useCallback(async () => {
     try {
       const b = toBase(await api.sceneForEdit(path));
+      generation.current++;
       origins.current = new Map();
       b.els.forEach((e) => {
         const p = posIn(b, e.id);
@@ -240,33 +245,41 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
   useEffect(() => () => clearTimeout(previewTimer.current), []);
 
-  const saving = useRef<Promise<void>>(Promise.resolve());
-  /** Save edits (ids from the current base) one call at a time; a stale base opens the conflict screen. */
-  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = []) => {
-    saving.current = saving.current.then(async () => {
-      const b = baseRef.current;
-      if (!b) return;
-      try {
-        const r = await api.editScene(path, b.hash, edits);
+  // Save edits one at a time against the version their ids came from (see lib/scene-saver.ts).
+  const saverRef = useRef<((edits: SceneEdit[], undo: UndoEntry[], madeIn?: number) => Promise<void>) | null>(null);
+  if (!saverRef.current) {
+    saverRef.current = createSceneSaver<Base, UndoEntry[]>({
+      base: () => baseRef.current,
+      generation: () => generation.current,
+      send: (hash, edits) => api.editScene(path, hash, edits),
+      isConflict: (e) => e instanceof SceneConflict,
+      onSaved: (b, edits, hash, undoEntries) => {
         const source = applyEdits(b.source, edits);
-        setBase({ source, hash: r.hash, els: scanElements(source) });
+        setBase({ source, hash, els: scanElements(source) });
         if (undoEntries.length) setUndo((u) => [...u, ...undoEntries]);
-      } catch (e) {
-        if (e instanceof SceneConflict) {
-          const latest = await load();
-          if (latest) {
-            setUndo([]);
-            setSelected(null);
-            setConflict({ edits, changed: changedElements(b.source, latest.source), prev: b, latest });
-          }
-        } else {
-          toast(`Couldn't save: ${(e as Error).message}`);
-          await load();
-        }
-      }
+      },
+      onConflict: async (edits, b) => {
+        const latest = await load();
+        if (!latest) return;
+        setUndo([]);
+        setSelected(null);
+        conflictOpen.current = true;
+        setConflict({ edits, changed: changedElements(b.source, latest.source), prev: b, latest });
+      },
+      // Queued behind the change that hit the conflict: their ids are from the same old version,
+      // so they join it on the conflict screen and go through Apply my change again with it.
+      onStale: (edits) => {
+        if (conflictOpen.current) setConflict((c) => (c ? { ...c, edits: [...c.edits, ...edits] } : c));
+        else toast("The scene reloaded, so your last change didn't save");
+      },
+      onError: async (e) => {
+        toast(`Couldn't save: ${(e as Error).message}`);
+        setUndo([]);
+        await load();
+      },
     });
-    return saving.current;
-  };
+  }
+  const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn?: number) => saverRef.current!(edits, undoEntries, madeIn);
 
   /** Change an element now: on screen, live on stream, and saved. */
   const change = (edit: SceneEdit, before: SceneEdit | null) => {
@@ -313,7 +326,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const sel = d.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
-    setEditing({ id, original });
+    setEditing({ id, original, gen: generation.current });
   };
 
   const finishEdit = (commit: boolean) => {
@@ -339,7 +352,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       return;
     }
     el.textContent = text;
-    save([{ id: editing.id, text }], [{ before, after: { id: editing.id, text } }]);
+    save([{ id: editing.id, text }], [{ before, after: { id: editing.id, text } }], editing.gen);
     redraw();
   };
   const finishRef = useRef(finishEdit);
@@ -395,7 +408,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   type Gesture = {
     pointerId: number; cx: number; cy: number; hit: Hit; moved: boolean; long: boolean; timer?: ReturnType<typeof setTimeout>;
-    drag?: { id: number; start: Pos; rect: Box; others: Box[]; x0: number; y0: number; last: Pos };
+    drag?: { id: number; start: Pos; rect: Box; others: Box[]; x0: number; y0: number; last: Pos; gen: number };
   };
   const gesture = useRef<Gesture | null>(null);
   const lastTap = useRef<{ t: number; cx: number; cy: number; leaf: number | null } | null>(null);
@@ -456,7 +469,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         return r ? [r] : [];
       });
       const p = toScene({ clientX: g.cx, clientY: g.cy });
-      g.drag = { id, start, rect, others, x0: p.x, y0: p.y, last: start };
+      g.drag = { id, start, rect, others, x0: p.x, y0: p.y, last: start, gen: generation.current };
       setSelected(id);
       setHover(null);
     }
@@ -478,12 +491,12 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     gesture.current = null;
     clearTimeout(g.timer);
     if (g.drag) {
-      const { id, start, last } = g.drag;
+      const { id, start, last, gen } = g.drag;
       setDrag(null);
       if (last.left !== start.left || last.top !== start.top) {
         const b = baseRef.current;
         const before = b ? valueIn(b, { id, left: 0, top: 0 }) : null;
-        save([{ id, ...last }], before ? [{ before, after: { id, ...last } }] : []);
+        save([{ id, ...last }], before ? [{ before, after: { id, ...last } }] : [], gen);
       }
       return;
     }
@@ -514,15 +527,15 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   // ------------------------------------------------------------ keyboard: nudges, undo, escape
 
-  const nudge = useRef<{ id: number; before: SceneEdit; timer?: ReturnType<typeof setTimeout> } | null>(null);
+  const nudge = useRef<{ id: number; before: SceneEdit; last: Pos; gen: number; timer?: ReturnType<typeof setTimeout> } | null>(null);
   const flushNudge = () => {
     const n = nudge.current;
     if (!n) return;
     clearTimeout(n.timer);
     nudge.current = null;
-    const now = posNow(n.id);
-    if (!now || !("left" in n.before) || (now.left === n.before.left && now.top === n.before.top)) return;
-    save([{ id: n.id, ...now }], [{ before: n.before, after: { id: n.id, ...now } }]);
+    const now = n.last;
+    if (!("left" in n.before) || (now.left === n.before.left && now.top === n.before.top)) return;
+    save([{ id: n.id, ...now }], [{ before: n.before, after: { id: n.id, ...now } }], n.gen);
   };
   const flushNudgeRef = useRef(flushNudge);
   flushNudgeRef.current = flushNudge;
@@ -558,12 +571,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       const b = baseRef.current;
       const before = b ? valueIn(b, { id: selected, left: 0, top: 0 }) : null;
       if (!before) return;
-      nudge.current = { id: selected, before };
+      nudge.current = { id: selected, before, last: now, gen: generation.current };
     }
     const step = e.shiftKey ? 10 : 1;
     const next = { id: selected, left: now.left + dir[0] * step, top: now.top + dir[1] * step };
     applyDom(next);
     preview(next);
+    nudge.current.last = { left: next.left, top: next.top };
     clearTimeout(nudge.current.timer);
     nudge.current.timer = setTimeout(flushNudge, NUDGE_SAVE_MS);
   };
@@ -584,6 +598,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!conflict) return;
     const { edits, prev, latest } = conflict;
     const moved = edits.map((e) => retarget(prev.source, latest.source, e));
+    conflictOpen.current = false;
     setConflict(null);
     if (moved.some((m) => m === null)) {
       toast("That part of the scene isn't in the new version, so your change can't go there");
@@ -608,6 +623,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       const v = m && valueIn(conflict.latest, m);
       if (v) preview(v);
     }
+    conflictOpen.current = false;
     setConflict(null);
   };
 
