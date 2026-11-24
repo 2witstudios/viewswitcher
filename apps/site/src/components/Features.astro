@@ -1,17 +1,17 @@
 ---
-import SceneFrame from "./SceneFrame.astro";
+import ViewFrame from "./ViewFrame.astro";
 const groups = [
-  { title: "Make it yours", items: [
-    { h: "A designed set of views", p: "Starting soon, teaching, whiteboard, be right back and the ending, ready the first time you open it." },
-    { h: "Edit right on the view", p: "Retype a title or drag a box where you want it, even while you're live. Viewers see the change as you make it." },
-    { h: "Your colors and logo", p: "Set them once and every view uses them." },
-    { h: "Clean transitions", p: "A calm fade between views, so switching never looks like a glitch." },
-  ] },
   { title: "Run the show", items: [
     { h: "One click changes everything", p: "The layout, the titles and where your camera and screen sit all change together." },
     { h: "Switch from anywhere nearby", p: "The Mac app, any browser, a phone, or an iPad on a cable beside you." },
     { h: "A new episode in a minute", p: "Each episode gets its own titles while the views stay the same, so next week is just a new title." },
   ] },
+  { title: "Make it yours", items: [
+    { h: "A designed set of views", p: "Starting soon, talking head, screen and camera, interview, be right back and thanks for watching, ready the first time you open it." },
+    { h: "Edit right on the view", p: "Retype a title or drag a box where you want it, even while you're live. Viewers see the change as you make it." },
+    { h: "Your colors and logo", p: "Set them once and every view uses them." },
+    { h: "Clean transitions", p: "A calm fade between views, so switching never looks like a glitch." },
+  ] }
 ];
 ---
 <section class="section mist" id="features" aria-labelledby="features-title">
@@ -22,7 +22,8 @@ const groups = [
         <p class="lede">Set up your look once. Run every show with one hand.</p>
       </div>
       <figure>
-        <SceneFrame id="bible-study-teaching" alt="A teaching view: the screen share, the camera beside it, a notes panel and a title bar" sizes="(min-width: 60rem) 30rem, calc(100vw - 2.5rem)" class="rounded" />
+        <ViewFrame show="grace" file="teaching" alt="Grace Community's sermon view: the slide on the screen share, the pastor beside it, a prayer note and the sermon title" sizes="(min-width: 60rem) 30rem, calc(100vw - 2.5rem)" class="rounded" />
+        <figcaption class="quiet">The sermon title, the note and the boxes are all things you can retype or drag, right on the view.</figcaption>
       </figure>
     </div>
     <div class="groups">
@@ -41,7 +42,7 @@ const groups = [
 <style>
   .grid { display: grid; gap: 3rem; }
   @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5rem; } .side { position: sticky; top: 2rem; align-self: start; } }
-  figure { margin: 0; }
+  figure { margin: 0; display: grid; gap: 0.75rem; }
   .side :global(.rounded) { border-radius: 12px; }
   .groups { display: grid; gap: 2.5rem; }
   .group { font: 600 0.8125rem/1 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.5rem; }

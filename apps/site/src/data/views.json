@@ -1,0 +1,195 @@
+{
+  "framewell-starting-soon": {
+    "ground": "#0e1116",
+    "slots": []
+  },
+  "framewell-talking-head": {
+    "ground": "#0e1116",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "radius": "0"
+      }
+    ]
+  },
+  "framewell-teaching": {
+    "ground": "#0e1116",
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "radius": "18px"
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "radius": "18px"
+      }
+    ]
+  },
+  "framewell-interview": {
+    "ground": "#0e1116",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 40,
+        "y": 40,
+        "w": 908,
+        "h": 796,
+        "radius": "18px"
+      },
+      {
+        "name": "Guest",
+        "x": 972,
+        "y": 40,
+        "w": 908,
+        "h": 796,
+        "radius": "18px"
+      }
+    ]
+  },
+  "framewell-brb": {
+    "ground": "#0e1116",
+    "slots": []
+  },
+  "framewell-ending": {
+    "ground": "#0e1116",
+    "slots": []
+  },
+  "watercolor-starting-soon": {
+    "ground": "#efe6d8",
+    "slots": []
+  },
+  "watercolor-teaching": {
+    "ground": "#efe6d8",
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "radius": "18px"
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "radius": "18px"
+      }
+    ]
+  },
+  "watercolor-talking-head": {
+    "ground": "#efe6d8",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "radius": "0"
+      }
+    ]
+  },
+  "watercolor-brb": {
+    "ground": "#efe6d8",
+    "slots": []
+  },
+  "grace-starting-soon": {
+    "ground": "#141a2e",
+    "slots": []
+  },
+  "grace-teaching": {
+    "ground": "#141a2e",
+    "slots": [
+      {
+        "name": "Screen",
+        "x": 32,
+        "y": 32,
+        "w": 1472,
+        "h": 828,
+        "radius": "18px"
+      },
+      {
+        "name": "Camera",
+        "x": 1528,
+        "y": 32,
+        "w": 360,
+        "h": 450,
+        "radius": "18px"
+      }
+    ]
+  },
+  "grace-talking-head": {
+    "ground": "#141a2e",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "radius": "0"
+      }
+    ]
+  },
+  "grace-ending": {
+    "ground": "#141a2e",
+    "slots": []
+  },
+  "longtable-starting-soon": {
+    "ground": "#1b1411",
+    "slots": []
+  },
+  "longtable-interview": {
+    "ground": "#1b1411",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 40,
+        "y": 40,
+        "w": 908,
+        "h": 796,
+        "radius": "18px"
+      },
+      {
+        "name": "Guest",
+        "x": 972,
+        "y": 40,
+        "w": 908,
+        "h": 796,
+        "radius": "18px"
+      }
+    ]
+  },
+  "longtable-talking-head": {
+    "ground": "#1b1411",
+    "slots": [
+      {
+        "name": "Camera",
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080,
+        "radius": "0"
+      }
+    ]
+  },
+  "longtable-ending": {
+    "ground": "#1b1411",
+    "slots": []
+  }
+}

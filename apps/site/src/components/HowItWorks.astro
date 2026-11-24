@@ -1,9 +1,7 @@
 ---
-import { Picture } from "astro:assets";
-import SceneFrame from "./SceneFrame.astro";
-import { scene } from "../lib/scenes";
-const covers = ["daisy-starting", "daisy-teaching", "daisy-whiteboard", "daisy-brb"].map(scene);
-const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
+import ViewFrame from "./ViewFrame.astro";
+const covers = ["starting-soon", "teaching", "talking-head", "brb"];
+const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
 ---
 <section class="section mist" id="how" aria-labelledby="how-title">
   <div class="wrap">
@@ -23,9 +21,9 @@ const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
       </li>
       <li>
         <div class="vis tiles on-dark" aria-hidden="true">
-          {covers.map((c, i) => (
+          {covers.map((file, i) => (
             <div class:list={["tile", { live: i === 1 }]}>
-              <Picture src={c.image} alt="" widths={[240, 360]} sizes="10rem" formats={["webp"]} fallbackFormat="jpg" loading="lazy" decoding="async" />
+              <ViewFrame show="watercolor" file={file} alt="" sizes="10rem" widths={[240, 360]} />
               {i === 1 && <span class="badge"><i class="dot"></i>On air</span>}
             </div>
           ))}
@@ -34,7 +32,7 @@ const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
         <p>Click a view in the Mac app, in any browser, or on a phone or tablet beside you.</p>
       </li>
       <li>
-        <div class="vis"><SceneFrame id="daisy-teaching" alt="A teaching view on air, with the camera and the screen share in their places" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
+        <div class="vis"><ViewFrame show="watercolor" file="teaching" alt="Intro to Watercolor on air: the painting on the screen share, the teacher beside it, this week's lesson in the title" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
         <h3><span class="n">3</span>Everything moves into place</h3>
         <p>Your camera, screen share and titles land where the view puts them, and OBS keeps streaming as usual. Nothing to rebuild for each layout.</p>
       </li>
@@ -49,7 +47,7 @@ const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
   h3 { display: flex; align-items: baseline; gap: 0.6rem; margin-top: 0.75rem; }
   .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
-  .vis :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
+  .vis > :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
   .setup { background: var(--paper); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; gap: 0.55rem; }
   .field { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.75rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
   .field span { color: var(--ink-3); }
@@ -58,8 +56,8 @@ const swatches = ["#16181e", "#e8a33d", "#f4f5f7"];
   .sw i { width: 1.1rem; height: 1.1rem; border-radius: 50%; box-shadow: inset 0 0 0 1px #0000001f; }
   .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
   .tile { position: relative; }
-  .tile :global(img) { width: 100%; height: auto; aspect-ratio: 16 / 9; border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }
-  .tile.live :global(img) { outline-color: var(--live); }
+  .tile :global(.frame) { border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }
+  .tile.live :global(.frame) { outline-color: var(--live); }
   .badge { position: absolute; left: 0.4rem; bottom: 0.4rem; display: inline-flex; align-items: center; gap: 0.35rem; background: var(--monitor); color: var(--on-monitor); font: 600 0.75rem/1 var(--text); padding: 0.3rem 0.5rem; border-radius: 999px; }
   .dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--live); display: inline-block; }
 </style>

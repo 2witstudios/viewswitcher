@@ -4,7 +4,8 @@ import { chromium } from "playwright-core";
 import sharp from "sharp";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import data from "../src/data/scenes.json";
+import data from "../src/data/views.json";
+import { SHOWS } from "../src/data/shows";
 
 const site = resolve(import.meta.dir, "..");
 const pub = join(site, "public");
@@ -27,10 +28,15 @@ ico.writeUInt32LE(png32.length, 14); ico.writeUInt32LE(22, 18);
 await writeFile(join(pub, "favicon.ico"), new Uint8Array(Buffer.concat([ico, png32])));
 
 // ---- social card
-const shot = await b64(join(site, "src/assets/scenes/daisy-teaching.webp"));
-const slots = data["daisy-teaching"].slots;
+const id = "framewell-teaching";
+const spec = SHOWS.find((x) => x.id === "framewell")!.views.find((v) => v.file === "teaching")!;
+const view = (data as Record<string, { ground: string; slots: { name: string; x: number; y: number; w: number; h: number; radius: string }[] }>)[id]!;
+const shot = await b64(join(site, `src/assets/views/${id}.webp`));
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
-const devices = slots.map((s) => `<div class="dev ${s.name}" style="left:${pct(s.x, 1920)};top:${pct(s.y, 1080)};width:${pct(s.w, 1920)};height:${pct(s.h, 1080)}"><span>${s.name}</span></div>`).join("");
+const mediaFile = async (n: string) => (await Bun.file(join(site, `src/assets/media/${n}.jpg`)).exists())
+  ? `data:image/jpeg;base64,${await b64(join(site, `src/assets/media/${n}.jpg`))}` : `data:image/webp;base64,${await b64(join(site, `src/assets/media/${n}.webp`))}`;
+let devices = "";
+for (const s of view.slots) devices += `<div class="dev" style="left:${pct(s.x, 1920)};top:${pct(s.y, 1080)};width:${pct(s.w, 1920)};height:${pct(s.h, 1080)};background-image:url(${await mediaFile(spec.media![s.name]!)})"></div>`;
 const html = `<!doctype html><html><head><style>
 @font-face { font-family: SG; src: url(data:font/woff2;base64,${await font("space-grotesk", "space-grotesk-latin-wght-normal.woff2")}) format("woff2"); font-weight: 300 700; }
 @font-face { font-family: IS; src: url(data:font/woff2;base64,${await font("instrument-sans", "instrument-sans-latin-wght-normal.woff2")}) format("woff2"); font-weight: 400 700; }
@@ -43,16 +49,16 @@ p { font-size: 22px; color: #4b505c; }
 .mon { align-self: center; background: #0b0c0f; border-radius: 20px; padding: 10px; }
 .bar { color: #f4f5f7; font: 600 17px IS; display: flex; gap: 10px; align-items: center; padding: 4px 8px 12px; }
 .dot { width: 11px; height: 11px; border-radius: 50%; background: #ff4d4f; }
-.frame { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: url(data:image/webp;base64,${shot}) center/cover; }
-.dev { position: absolute; border-radius: 5px; display: grid; place-items: center; color: #a3a8b5; font: 600 12px IS; letter-spacing: .08em; background: linear-gradient(160deg,#2b2f39,#23262e); }
-.dev.Camera { background: radial-gradient(120% 90% at 50% 30%, #3a3f4b, #1f2229 70%); color: #c4c8d2; }
+.frame { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: ${view.ground}; }
+.frame::after { content: ""; position: absolute; inset: 0; background: url(data:image/webp;base64,${shot}) center/cover; }
+.dev { position: absolute; background: center/cover; }
 </style></head><body>
 <div class="copy">
   <div class="brand"><svg width="40" height="40" viewBox="0 0 24 24">${mark("#16181e", "#8b909c", "#ffffff")}</svg>ViewSwitcher</div>
   <h1>Look professional when you go live.</h1>
-  <p>Professional overlays and layouts for OBS. Free for Mac.</p>
+  <p>A one-click scene switcher for OBS. Free for Mac.</p>
 </div>
-<div class="mon"><div class="bar"><span class="dot"></span>On air <span style="color:#a3a8b5;font-weight:500">Teaching</span></div><div class="frame">${devices}</div></div>
+<div class="mon"><div class="bar"><span class="dot"></span>On air <span style="color:#a3a8b5;font-weight:500">Demo</span></div><div class="frame">${devices}</div></div>
 </body></html>`;
 const browser = await chromium.launch({ channel: "chrome" });
 try {

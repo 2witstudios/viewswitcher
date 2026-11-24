@@ -1,0 +1,18 @@
+---
+// A view as it looks on stream: the show's ground, the camera/screen in their boxes, the view on top.
+import { Picture } from "astro:assets";
+import { view, box, radius } from "../lib/views";
+interface Props { show: string; file: string; alt?: string; sizes: string; widths?: number[]; class?: string; eager?: boolean }
+const { show, file, alt, sizes, widths = [480, 720, 960, 1280], class: cls, eager = false } = Astro.props;
+const v = view(show, file);
+const label = alt ?? `${v.show.name}: the ${v.name.toLowerCase()} view`;
+const loading = eager ? "eager" : "lazy";
+---
+<div class:list={["frame", cls]} style={`background:${v.ground}`} role="img" aria-label={label}>
+  {v.slots.map((s) => (
+    <div class="box" style={{ ...box(s), borderRadius: radius(s.radius) }}>
+      <Picture src={s.media.image} alt="" widths={[320, 640, 960]} sizes={sizes} formats={["webp"]} fallbackFormat="jpg" loading={loading} decoding="async" style={`object-position:${s.media.focus}`} />
+    </div>
+  ))}
+  <Picture src={v.image} alt="" widths={widths} sizes={sizes} formats={["webp"]} fallbackFormat="png" loading={loading} decoding="async" class="overlay" />
+</div>

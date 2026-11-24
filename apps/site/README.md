@@ -23,16 +23,15 @@ The package is named `viewswitcher-site`, outside the `@viewswitcher/*` filter, 
 
 The hero, the download section and the small print all follow it. A build can override it without a commit, e.g. to show the other state on a Vercel preview: `SITE_MAC_APP=1 bun run build` (or `0`). The dmg link only resolves if the release has an asset named exactly `ViewSwitcher.dmg`.
 
-## Scene images (generated, never hand-made)
+## View images (generated, never hand-made)
 
 ```sh
-cp -R "$HOME/ViewSwitcher Library" "${TMPDIR:-/tmp}/viewswitcher-shots-library"   # once; a COPY, never the real library
-bun run shots
+bun run shots     # then: bun run og
 ```
 
-`scripts/shots.ts` starts the switcher server on port 7432 (OBS offline, USB bridge off, `VIEWSWITCHER_LIBRARY` = the copy, which lives outside the repo so scene content can never be committed; override with `SHOTS_LIBRARY`), opens each scene in `src/data/scene-list.ts` at 1920×1080 in preview mode with the slot labels hidden, and writes `src/assets/scenes/<id>.webp` plus each scene's slot boxes to `src/data/scenes.json`. The site draws its own labelled Camera/Screen/iPad stand-ins over those boxes, and the hero moves them when you switch scenes. Astro turns each image into responsive WebP with a JPEG fallback at build time. Only rendered images enter this repo, never scene HTML.
+The site shows four made-up shows (`src/data/shows.ts`): Intro to Watercolor, Grace Community, The Long Table and Framewell Live. `scripts/library.ts` builds them as a scratch library **outside the repo** (`$TMPDIR/viewswitcher-site-library`, or `SHOTS_LIBRARY`): the starter kit (`apps/server/starter`) restyled per show (colors, fonts, titles), plus a talking-head and an interview layout. `scripts/shots.ts` starts the switcher server on port 7434 (OBS offline, USB bridge off), renders every view the way OBS shows it (transparent, with holes for the devices) to `src/assets/views/<show>-<view>.webp`, records each view's device boxes and ground color in `src/data/views.json`, and renders the made-up screen shares in `scripts/screens/` to `src/assets/media/screen-*.webp`.
 
-`bun run og` regenerates `public/og.png` (1200×630) and the icons (`favicon.svg`, `favicon.ico`, `apple-touch-icon.png`) from the mark in `apps/web/public/icon.svg`, drawn in graphite and white.
+The site stacks them the way OBS does: the show's ground color, then the photo or screen in each box (`media` in `shows.ts`, focal points in `src/lib/views.ts`), then the view on top. The hero moves the camera, guest and screen between boxes when you click a view. Photos are Unsplash-licensed and credited in `CREDITS.md`; no real org's scenes appear on the site.
 
 ## Demo video (SITE-11)
 

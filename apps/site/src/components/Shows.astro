@@ -1,46 +1,43 @@
 ---
-// Four made-up shows, each a full set of views in its own colors (SITE-14 renders them).
-const shows = [
-  { kind: "Weekly class", name: "Intro to Watercolor", ground: "#1d2733", accent: "#e8a33d", views: ["Starting soon", "Demo", "Q&A", "Break"],
-    body: "The painting under an overhead camera, the teacher in a corner, and this week's lesson in the title." },
-  { kind: "Church service", name: "Grace Community, Sunday Live", ground: "#1f1a2b", accent: "#d9b779", views: ["Welcome", "Worship", "Sermon", "Giving"],
-    body: "A welcome before the service, the sermon slides beside the pastor, and a giving view at the end." },
-  { kind: "Podcast and interviews", name: "The Long Table", ground: "#2a1714", accent: "#ff8a5b", views: ["Intro", "Two cameras", "Guest", "Outro"],
-    body: "Host and guest side by side, the guest's name on screen, and a clean intro and outro." },
-  { kind: "Product demo and webinar", name: "Tallyhop Live", ground: "#0f1f1c", accent: "#45d0a8", views: ["Starting soon", "Demo", "Slides", "Q&A"],
-    body: "The product on the screen share, you beside it, and the agenda in the title as you move through it." },
-];
+// SITE-14: four made-up shows, each a full set of views in its own colors, rendered from the
+// restyled starter kit (scripts/library.ts, scripts/shots.ts).
+import ViewFrame from "./ViewFrame.astro";
+import { SHOWS } from "../data/shows";
+const order = ["watercolor", "grace", "longtable", "framewell"];
+const lead: Record<string, string> = { watercolor: "teaching", grace: "teaching", longtable: "interview", framewell: "teaching" };
+const shows = order.map((id) => SHOWS.find((s) => s.id === id)!);
 ---
 <section class="section" id="shows" aria-labelledby="shows-title">
   <div class="wrap">
     <div class="section-head">
       <h2 id="shows-title">Don't be the only one live without a professional look.</h2>
-      <p class="lede">Every show gets a full set of views in its own colors. Here are four made-up shows to show the range.</p>
+      <p class="lede">Every show gets a full set of views in its own colors and type. Here are four made-up shows to show the range.</p>
     </div>
     <ul class="shows">
       {shows.map((s) => (
         <li>
-          <div class="card" style={`--g:${s.ground};--a:${s.accent}`} aria-hidden="true">
-            <span class="k">{s.kind}</span>
-            <b>{s.name}</b>
-            <span class="views">{s.views.map((v) => <i>{v}</i>)}</span>
+          <ViewFrame show={s.id} file={lead[s.id]!} sizes="(min-width: 48rem) 36rem, calc(100vw - 2.5rem)" class="main" />
+          <div class="strip">
+            {s.views.filter((v) => v.file !== lead[s.id]).slice(0, 3).map((v) => (
+              <figure><ViewFrame show={s.id} file={v.file} sizes="(min-width: 48rem) 11rem, 30vw" widths={[240, 360, 480]} class="mini" /><figcaption>{v.name}</figcaption></figure>
+            ))}
           </div>
           <h3>{s.name} <span class="kind">{s.kind}</span></h3>
-          <p>{s.body}</p>
+          <p>{s.blurb}</p>
         </li>
       ))}
     </ul>
   </div>
 </section>
 <style>
-  .shows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3rem 2rem; }
+  .shows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4rem 2.5rem; }
   @media (min-width: 48rem) { .shows { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .shows li { display: grid; gap: 0.6rem; align-content: start; }
-  .card { aspect-ratio: 16 / 9; border-radius: 12px; margin-bottom: 0.6rem; background: var(--g); color: #f4f5f7; padding: clamp(1rem, 3vw, 2rem); display: grid; align-content: end; gap: 0.6rem; }
-  .card .k { font: 600 0.75rem/1 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--a); }
-  .card b { font: 700 clamp(1.4rem, 3vw, 2.2rem)/1.05 var(--display); letter-spacing: -0.03em; }
-  .views { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .views i { font: 500 0.75rem/1 var(--text); font-style: normal; padding: 0.35rem 0.6rem; border-radius: 999px; background: #ffffff14; }
+  .shows :global(.main) { border-radius: 12px; box-shadow: 0 24px 48px -28px #16181e80; }
+  .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin: 0.4rem 0 0.8rem; }
+  .strip figure { margin: 0; display: grid; gap: 0.35rem; }
+  .strip :global(.mini) { border-radius: 6px; }
+  .strip figcaption { font-size: 0.8125rem; color: var(--ink-3); }
   .kind { font: 500 0.9375rem var(--text); color: var(--ink-3); letter-spacing: 0; margin-left: 0.35rem; }
   .shows p { color: var(--ink-2); max-width: 34rem; }
 </style>
