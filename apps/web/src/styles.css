@@ -61,6 +61,8 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 /* Narrow: the main column wraps under the sidebar and reaches the left edge itself. */
 @media (max-width: 780px) { .main { padding-left: calc(32px + var(--safe-left)); } }
 .brand span { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.side-toggle { display: none; }
+.side-body { display: contents; }
 .side-group { display: flex; flex-direction: column; gap: 1px; }
 .side-label { display: flex; align-items: center; padding: 0 2px 2px 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.24em; color: var(--quiet); }
 .side-label span { flex: 1; }
@@ -127,7 +129,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .tile { position: relative; display: flex; flex-direction: column; gap: 10px; width: 280px; }
 .cover { position: relative; width: 280px; height: 158px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--raised); outline: 4px solid transparent; outline-offset: 3px; }
 .cover.live { outline-color: var(--live); }
-.cover iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform: scale(0.1458333); transform-origin: 0 0; pointer-events: none; }
+.cover iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform: scale(var(--cover-scale, 0.1458333)); transform-origin: 0 0; pointer-events: none; }
 .badge { position: absolute; left: 10px; top: 10px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--live); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; display: inline-flex; align-items: center; }
 .badge.quiet { background: #0b0c0fcc; color: var(--sage); }
 .tile-meta { display: flex; align-items: center; gap: 8px; }
@@ -322,3 +324,71 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .ed-drop-point span { left: 14px; top: -26px; }
 .ed-uploading { position: absolute; z-index: 22; left: 50%; top: 16px; transform: translateX(-50%); height: 36px; padding: 0 16px; border-radius: 10px; background: var(--cream); color: var(--on-cream); font-size: 14px; font-weight: 600; display: flex; align-items: center; }
 .menu { max-height: min(72dvh, 640px); overflow-y: auto; }
+
+/* ---------------------------------------------------------------- phone: the switcher as a remote (MAC-27)
+   Up to 600 px wide: the library folds into a top bar, the scenes come first in two columns of
+   covers you can hit with a thumb, and what's on air (with REC and GO LIVE) stays at the bottom
+   of the screen, above the home indicator. Wider layouts are untouched. */
+@media (max-width: 600px) {
+  .side { flex: 1 1 100%; max-width: none; position: sticky; top: 0; z-index: 12; gap: 12px;
+    padding: calc(8px + var(--safe-top)) calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left));
+    border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand { min-height: 44px; padding: 0 0 0 4px; }
+  .side-toggle { display: inline-flex; align-items: center; margin-left: auto; min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); font-size: 15px; font-weight: 600; }
+  .side-body { display: none; }
+  .side.open { max-height: 100dvh; overflow-y: auto; padding-bottom: calc(16px + var(--safe-bottom)); }
+  .side.open .side-body { display: flex; flex-direction: column; gap: 16px; }
+  .side-item { min-height: 44px; font-size: 16px; }
+  .side-stream, .side-project { min-height: 44px; font-size: 15px; }
+  .side-add { min-height: 44px; font-size: 14px; }
+  .icon-btn { width: 44px; height: 44px; }
+
+  .main { padding: 18px calc(16px + var(--safe-right)) calc(150px + var(--safe-bottom)) calc(16px + var(--safe-left)); gap: 22px; }
+  .title { font-size: 26px; }
+  .crumb { font-size: 13px; }
+
+  /* What's on air, always in reach. */
+  .livebar { position: fixed; z-index: 11; left: 0; right: 0; bottom: 0; gap: 8px;
+    padding: 10px calc(12px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(12px + var(--safe-left));
+    background: color-mix(in srgb, var(--side) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line-strong); }
+  .livebar > .pill:first-child { flex: 1 1 100%; justify-content: flex-start; height: 44px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
+  .livebar .out-btn { flex: 1 1 0; justify-content: center; height: 48px; font-size: 14px; }
+  .livebar .pill.link, .livebar .pill.off:not(:first-child) { height: 32px; font-size: 11px; }
+
+  .section { gap: 12px; }
+  .section-head h2 { font-size: 12px; letter-spacing: 0.24em; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .tile, .cover, .add-tile, .asset-cover { width: 100%; }
+  .cover, .add-tile, .asset-cover { height: auto; aspect-ratio: 16 / 9; }
+  .cover { border-radius: 10px; outline-width: 3px; outline-offset: 2px; }
+  .badge { left: 6px; top: 6px; height: 20px; font-size: 10px; letter-spacing: 0.14em; }
+  .tile { gap: 4px; }
+  .tile-meta { gap: 0; }
+  .tile-meta .label { font-size: 15px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile-meta .file { display: none; }
+  .more { width: 44px; height: 44px; }
+  .add-tile { font-size: 14px; }
+
+  /* Menus open as a sheet along the bottom, where the thumb is. */
+  .menu { position: fixed; left: calc(8px + var(--safe-left)); right: calc(8px + var(--safe-right)); top: auto; bottom: calc(8px + var(--safe-bottom)); min-width: 0; max-width: none; padding: 8px; }
+  .menu button { min-height: 52px; font-size: 16px; }
+  .setup-card { padding: 16px; }
+  .btn { height: 44px; }
+  .livebar .out-btn { white-space: nowrap; letter-spacing: 0.08em; padding: 0 10px; }
+
+  /* The scene editor on a phone: back, the scene's name and ON AIR on one row; Add, Undo and Done on
+     the next. "Open the file" opens it on the Mac, so a phone doesn't offer it. */
+  .editor-top { height: auto; flex-wrap: wrap; gap: 8px; padding: 6px 10px 8px; }
+  .editor-titles { flex: 1 1 0; }
+  .editor-titles .crumb { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .editor-top .onair-pill { margin-left: 0; }
+  .editor-spacer { flex: 1 1 100% !important; height: 0; }
+  .editor-top .open-file { display: none; }
+  .editor-top .add-wrap { flex: 1 1 0; }
+  .editor-top .add-wrap .btn { width: 100%; }
+  .editor-top .btn.ghost, .editor-top .btn.primary { flex: 1 1 0; }
+  .editor-top .btn.primary { padding: 0 14px; }
+  .add-menu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(8px + var(--safe-bottom)); width: auto; }
+  .editor-bottom .hint { height: auto; min-height: 44px; padding: 8px 12px; }
+}

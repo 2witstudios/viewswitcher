@@ -29,9 +29,9 @@
   <img src="icon.svg" alt="">
   <h1>ViewSwitcher</h1>
   <p id="status"><span class="dot"></span>Looking for the ViewSwitcher server…</p>
-  <label for="net">Network address (used when the cable isn't plugged in), e.g. https://your-mac.tailnet.ts.net</label>
+  <label for="net">Without the cable: on the Mac, turn on Phones and Tablets in ViewSwitcher's menu, then enter the address it shows, e.g. http://your-mac.local:7420</label>
   <form class="row" id="form">
-    <input id="net" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://your-mac.tailnet.ts.net">
+    <input id="net" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://your-mac.local:7420">
     <button type="submit">Save</button>
   </form>
   <button type="button" class="demo" id="demo" hidden>Try the demo</button>
@@ -52,7 +52,7 @@
     e.preventDefault();
     const v = net.value.trim().replace(/\/+$/, "");
     if (v && !VS.usable(v)) {
-      status.textContent = "Use your Mac's Tailscale (…ts.net) or .local address.";
+      status.textContent = "Use the .local address ViewSwitcher shows on the Mac, under Phones and Tablets.";
       return;
     }
     VS.saveNetwork(v);

@@ -1,6 +1,6 @@
 import { shortDate } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
@@ -25,6 +25,11 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
+  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first.
+  // Wider screens never see the button and always show the library.
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => setLibraryOpen(false), [pathname]);
 
   const toggle = (id: string) => {
     const key = `${org}/${id}`;
@@ -36,8 +41,14 @@ export function Sidebar() {
   };
 
   return (
-    <nav className="side" aria-label="Library">
-      <div className="brand" data-drag-region><Mark /><span>ViewSwitcher</span></div>
+    <nav className={`side${libraryOpen ? " open" : ""}`} aria-label="Library">
+      <div className="brand" data-drag-region>
+        <Mark /><span>ViewSwitcher</span>
+        <button type="button" className="side-toggle" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
+          {libraryOpen ? "Close" : "Library"}
+        </button>
+      </div>
+      <div className="side-body" id="side-body">
       <OrgSwitcher current={org} />
 
       {org && (
@@ -86,6 +97,7 @@ export function Sidebar() {
           </div>
         </>
       )}
+      </div>
 
       {org && dialog?.kind === "project" && (
         <NewProject org={org} groups={data ? templateGroups(data).filter((g) => g.templates.length) : []} onClose={() => setDialog(null)} />
