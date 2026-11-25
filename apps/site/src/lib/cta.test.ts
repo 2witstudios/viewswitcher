@@ -49,3 +49,13 @@ describe("ipadApp", () => {
     expect(() => ipadApp("http://apps.apple.com/app/id1")).toThrow();
   });
 });
+
+import { flag } from "./cta";
+describe("flag", () => {
+  test("the config value, unless the env override says 1/0/true/false", () => {
+    expect(flag("X", false, undefined)).toBe(false);
+    expect(flag("X", false, "1")).toBe(true);
+    expect(flag("X", true, "false")).toBe(false);
+    expect(() => flag("SITE_AI_CONNECT_RELEASED", false, "yes")).toThrow(/SITE_AI_CONNECT_RELEASED/);
+  });
+});

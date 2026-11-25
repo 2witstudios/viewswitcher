@@ -1,6 +1,9 @@
 ---
 import ViewFrame from "./ViewFrame.astro";
-import { github } from "../site.config";
+import { Picture } from "astro:assets";
+import { github, site } from "../site.config";
+import aiSheet from "../assets/app/edit-with-ai.webp";
+const ai = site.aiConnect;
 const covers = ["starting-soon", "main", "live", "brb"];
 const skill = `${github}/blob/main/apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md`;
 ---
@@ -12,14 +15,26 @@ const skill = `${github}/blob/main/apps/server/library-kit/skills/viewswitcher-s
     </div>
     <ol class="steps">
       <li>
+        {ai ? (
+          <div class="vis ask on-dark">
+            <Picture src={aiSheet} alt="ViewSwitcher's Edit with AI sheet, with Add to Claude Desktop and Add to Cursor buttons." widths={[320, 480, 640]} sizes="(min-width: 60rem) 11rem, 45vw" formats={["webp"]} loading="lazy" decoding="async" class="sheet" />
+            <div class="made" aria-hidden="true">
+              <p class="bubble">Make me a halftime screen</p>
+              <ViewFrame show="fullcount" file="brb" alt="" sizes="(min-width: 60rem) 11rem, 45vw" widths={[240, 360, 480]} />
+            </div>
+          </div>
+        ) : (
         <div class="vis code" aria-hidden="true"><pre><code><span class="t">&lt;div</span> <span class="a">class</span>=<span class="s">"card"</span><span class="t">&gt;</span>
   <span class="t">&lt;small&gt;</span>Saltwater Kitchen · Ep. 31<span class="t">&lt;/small&gt;</span>
   <span class="t">&lt;strong&gt;</span>Sunday bread, start to finish<span class="t">&lt;/strong&gt;</span>
 <span class="t">&lt;/div&gt;</span>
 <span class="t">&lt;div</span> <span class="a">data-slot</span>=<span class="s">"Camera"</span><span class="t">&gt;&lt;/div&gt;</span>
 <span class="t">&lt;p</span> <span class="a">class</span>=<span class="s">"caption"</span><span class="t">&gt;</span>Ana, at the stove<span class="t">&lt;/p&gt;</span></code></pre></div>
+        )}
         <h3><span class="n">1</span>Pick or make your views</h3>
-        <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>, code your own, or have an AI assistant code one: the <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>
+        {ai
+          ? <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>. Or connect your favorite AI (Claude, Cursor or any app that supports MCP) in one click, and ask it for custom overlays and slides: "make me a halftime screen", "turn this sermon outline into slides". The <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>
+          : <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>, code your own, or have an AI assistant code one: the <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>}
       </li>
       <li>
         <div class="vis tiles on-dark" aria-hidden="true">
@@ -52,6 +67,12 @@ const skill = `${github}/blob/main/apps/server/library-kit/skills/viewswitcher-s
   .vis > :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
   .code { background: var(--raised); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; }
   .code pre { margin: 0; font-size: clamp(0.6875rem, 1.1vw, 0.75rem); line-height: 1.65; color: var(--ink); white-space: pre; overflow: hidden; }
+  .ask { background: var(--monitor); padding: 0.75rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: center; }
+  .ask :global(.sheet) { width: 100%; height: 100%; max-height: 100%; object-fit: cover; object-position: 0 0; border-radius: 8px; display: block; }
+  .ask :global(picture) { display: block; height: 100%; min-height: 0; }
+  .made { display: grid; gap: 0.5rem; align-content: center; }
+  .made :global(.frame) { border-radius: 6px; }
+  .made .bubble { margin: 0; background: var(--monitor-2); color: var(--on-monitor); font-size: 0.75rem; line-height: 1.3; padding: 0.45rem 0.6rem; border-radius: 10px 10px 10px 3px; width: fit-content; }
   .code .t { color: #8a3b2a; }
   .code .a { color: #2b5c8a; }
   .code .s { color: #3d6b35; }
