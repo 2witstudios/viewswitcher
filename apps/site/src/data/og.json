@@ -1,0 +1,58 @@
+{
+  "/church-livestream": {
+    "image": "/og/church-livestream.jpg",
+    "alt": "ViewSwitcher: A church livestream that looks cared for, run by one volunteer. Grace Community's sermon view: Romans 12:2 in large serif type beside the pastor preaching, letterboxed, with the sermon title underneath"
+  },
+  "/download": {
+    "image": "/og/download.jpg",
+    "alt": "ViewSwitcher: Download ViewSwitcher for Mac."
+  },
+  "/": {
+    "image": "/og/home.jpg",
+    "alt": "ViewSwitcher: Look professional when you go live. Click a view. The stream changes, and your camera, guest and screen move to where the view puts them."
+  },
+  "/ipad": {
+    "image": "/og/ipad.jpg",
+    "alt": "ViewSwitcher: Run the show from the iPad beside you. ViewSwitcher for iPad in landscape, running its demo: Saltwater Kitchen's Guest cook view on air with two cooks side by side, and six views to tap on the right, the one on air outlined in red."
+  },
+  "/privacy": {
+    "image": "/og/privacy.jpg",
+    "alt": "ViewSwitcher: Privacy."
+  },
+  "/setup": {
+    "image": "/og/setup.jpg",
+    "alt": "ViewSwitcher: How to set up OBS with ViewSwitcher."
+  },
+  "/support": {
+    "image": "/og/support.jpg",
+    "alt": "ViewSwitcher: Support."
+  },
+  "/templates": {
+    "image": "/og/templates.jpg",
+    "alt": "ViewSwitcher: Free templates for every kind of show."
+  },
+  "/templates/full-count": {
+    "image": "/og/templates-full-count.jpg",
+    "alt": "ViewSwitcher: Full Count sports podcast templates. Full Count's both hosts view, as it looks on stream"
+  },
+  "/templates/grace-community": {
+    "image": "/og/templates-grace-community.jpg",
+    "alt": "ViewSwitcher: Grace Community church service templates. Grace Community's sermon view, as it looks on stream"
+  },
+  "/templates/nova-plays": {
+    "image": "/og/templates-nova-plays.jpg",
+    "alt": "ViewSwitcher: NOVA_PLAYS gaming stream templates. NOVA_PLAYS's gameplay view, as it looks on stream"
+  },
+  "/templates/riverside-live": {
+    "image": "/og/templates-riverside-live.jpg",
+    "alt": "ViewSwitcher: Riverside Live live event coverage templates. Riverside Live's main stage view, as it looks on stream"
+  },
+  "/templates/roam-with-remi": {
+    "image": "/og/templates-roam-with-remi.jpg",
+    "alt": "ViewSwitcher: Roam with Remi travel vlog templates. Roam with Remi's the view view, as it looks on stream"
+  },
+  "/templates/saltwater-kitchen": {
+    "image": "/og/templates-saltwater-kitchen.jpg",
+    "alt": "ViewSwitcher: Saltwater Kitchen cooking show templates. Saltwater Kitchen's cook along view, as it looks on stream"
+  }
+}

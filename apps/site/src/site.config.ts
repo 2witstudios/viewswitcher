@@ -45,5 +45,5 @@ export const descriptor = "The free, custom scene manager and one-click switcher
 export const macAppSchema = (path: string) => softwareApp({
   url: new URL(path, site.url).href, name: site.name, version: site.mac.version, minOS: site.mac.minOS,
   description: "A one-click scene switcher for OBS. Pick a view and your camera, screen and titles move into place.",
-  downloadUrl: site.dmgUrl, image: new URL("/og.png", site.url).href, releaseNotes: `${releases}/latest`,
+  downloadUrl: site.dmgUrl, image: new URL("/og/home.jpg", site.url).href, releaseNotes: `${releases}/latest`,
 });
