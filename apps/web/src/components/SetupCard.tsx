@@ -75,7 +75,10 @@ export function SetupCard() {
       {card.kind === "order" && (
         <div className="setup-text">
           <h2>Set up OBS again</h2>
-          <p>A source in the ViewSwitcher scene sits above the program page, so it covers your views. Set up OBS puts the program back on top.</p>
+          <p>
+            Something in the ViewSwitcher scene is out of order: a source above the program page covers your views, and one below the
+            ground is hidden by it. Set up OBS puts the program back on top and the ground at the bottom.
+          </p>
         </div>
       )}
       {card.kind === "setup" && (

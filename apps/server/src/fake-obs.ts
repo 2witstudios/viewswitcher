@@ -2,8 +2,7 @@
 // requests that setup, placement and previews use, with OBS's error codes. It records every request.
 // serveFakeObs puts one on a real WebSocket, speaking the protocol (hello, auth, requests, batches,
 // events), so OBSClient itself can be tested against it.
-import { createHash } from "node:crypto";
-import { type BatchRequest, type BatchResult, CLOSE_AUTH_FAILED, OBSRequestError } from "./obs";
+import { type BatchRequest, type BatchResult, CLOSE_AUTH_FAILED, OBSRequestError, sha256b64 } from "./obs";
 import type { ObsRequester } from "./obs-setup";
 import { solidPng } from "./png";
 
@@ -21,7 +20,20 @@ export type FakeObsInit = {
    * Called once per screenshot, so it can change from frame to frame. Defaults to an empty frame.
    */
   screenshot?: (sourceName: string, size: { width: number; height: number }) => Uint8Array | Promise<Uint8Array>;
+  /** Streaming or recording from the start (GetStreamStatus, GetRecordStatus; the toggles flip them). */
+  streaming?: boolean;
+  recording?: boolean;
 };
+
+/** One request's answer, as obs-websocket reports it (in op 7, and per request in op 9). */
+export async function result(answer: () => Promise<unknown>): Promise<Omit<BatchResult, "requestType">> {
+  try {
+    return { requestStatus: { result: true, code: 100 }, responseData: await answer() };
+  } catch (e) {
+    const code = e instanceof OBSRequestError ? e.code : 205;
+    return { requestStatus: { result: false, code, comment: (e as Error).message } };
+  }
+}
 
 /** An in-memory OBS that answers the obs-websocket v5 requests setup and placement use, with OBS's error codes. */
 export function fakeObs(init: FakeObsInit = {}) {
@@ -32,6 +44,9 @@ export function fakeObs(init: FakeObsInit = {}) {
   const requests: { type: string; data: any }[] = [];
   const video = { baseWidth: 1920, baseHeight: 1080, ...init.video };
   let program = "";
+  const outputs = { streaming: !!init.streaming, recording: !!init.recording };
+  /** Where OBS's events go (serveFakeObs sends them to its clients). */
+  let emit: (eventType: string, eventData: Record<string, unknown>) => void = () => {};
   const fail = (type: string, code: number): never => {
     throw new OBSRequestError(type, code, `fake ${code}`);
   };
@@ -122,6 +137,20 @@ export function fakeObs(init: FakeObsInit = {}) {
       case "SetSceneItemEnabled":
         itemById(type, d).sceneItemEnabled = !!d.sceneItemEnabled;
         return {};
+      case "GetVersion":
+        return { obsVersion: "31.0.0", obsWebSocketVersion: "5.5.0", rpcVersion: 1, availableRequests: [], supportedImageFormats: ["png"], platform: "macos", platformDescription: "macOS" };
+      case "GetStreamStatus":
+        return { outputActive: outputs.streaming, outputReconnecting: false, outputTimecode: "00:42:17.000", outputDuration: 2_537_000, outputBytes: 0, outputSkippedFrames: 0, outputTotalFrames: 0 };
+      case "GetRecordStatus":
+        return { outputActive: outputs.recording, outputPaused: false, outputTimecode: "00:00:00.000", outputDuration: 0, outputBytes: 0 };
+      case "ToggleStream":
+      case "ToggleRecord": {
+        const key = type === "ToggleStream" ? "streaming" : "recording";
+        outputs[key] = !outputs[key];
+        const outputActive = outputs[key];
+        emit(type === "ToggleStream" ? "StreamStateChanged" : "RecordStateChanged", { outputActive, outputState: outputActive ? "OBS_WEBSOCKET_OUTPUT_STARTED" : "OBS_WEBSOCKET_OUTPUT_STOPPED" });
+        return { outputActive };
+      }
       case "GetCurrentProgramScene":
         return { currentProgramSceneName: program, sceneName: program } as never;
       case "SetCurrentProgramScene":
@@ -136,13 +165,9 @@ export function fakeObs(init: FakeObsInit = {}) {
     requests.push({ type: "RequestBatch", data: list.map((r) => r.requestType) });
     const results: BatchResult[] = [];
     for (const r of list) {
-      try {
-        results.push({ requestType: r.requestType, requestStatus: { result: true, code: 100 }, responseData: await answer(r.requestType, r.requestData) });
-      } catch (e) {
-        const code = e instanceof OBSRequestError ? e.code : 205;
-        results.push({ requestType: r.requestType, requestStatus: { result: false, code, comment: (e as Error).message } });
-        if (haltOnFailure) break;
-      }
+      const one = { requestType: r.requestType, ...(await result(() => answer(r.requestType, r.requestData))) };
+      results.push(one);
+      if (haltOnFailure && !one.requestStatus.result) break;
     }
     return results;
   };
@@ -153,8 +178,11 @@ export function fakeObs(init: FakeObsInit = {}) {
     shown: (scene: string) => Record<string, boolean>;
     /** An item's transform as last set. */
     transformOf: (scene: string, sourceName: string) => Record<string, unknown> | undefined;
+    /** Where to send OBS's events (stream and record state changes). */
+    onEvent: (send: typeof emit) => void;
   } = {
     scenes, inputs, requests, program: () => program,
+    onEvent: (send) => void (emit = send),
     request: (type: string, d?: any) => answer(type, d),
     requestBatch: batch,
     shown: (scene) => Object.fromEntries(items(scene).map((i) => [i.sourceName, i.sceneItemEnabled])),
@@ -165,21 +193,19 @@ export function fakeObs(init: FakeObsInit = {}) {
 
 export type FakeObs = ReturnType<typeof fakeObs>;
 
-const sha256b64 = (s: string) => createHash("sha256").update(s).digest("base64");
-
 /**
- * `obs` on a real obs-websocket v5 server on 127.0.0.1. `password()` is asked at each hello, so a test
- * can turn authentication on or change the password while clients are connected or retrying.
- * `stall` makes it stop answering requests while keeping the socket open (a hung OBS).
+ * `obs` on a real obs-websocket v5 server on 127.0.0.1 (`port`: 0 picks a free one). `password()` is
+ * asked at each hello, so a test can turn authentication on or change the password while clients are
+ * connected or retrying. `stall` makes it stop answering requests while keeping the socket open (a hung OBS).
  */
-export function serveFakeObs(obs: FakeObs, opts: { password?: () => string | undefined } = {}) {
+export function serveFakeObs(obs: FakeObs, opts: { password?: () => string | undefined; port?: number } = {}) {
   type Data = { salt: string; challenge: string; password?: string; identified: boolean };
   const control = { stall: false, connections: 0 };
   const sockets = new Set<import("bun").ServerWebSocket<Data>>();
   const server = Bun.serve<Data>({
     hostname: "127.0.0.1",
-    port: 0,
-    fetch: (req, srv) => (srv.upgrade(req, { data: { salt: "salt", challenge: crypto.randomUUID(), identified: false } }) ? undefined : new Response("no", { status: 400 })),
+    port: opts.port ?? 0,
+    fetch: (req, srv) => (srv.upgrade(req, { data: { salt: "salt", challenge: crypto.randomUUID(), identified: false } }) ? undefined : new Response("obs-websocket (fake)", { status: 426 })),
     websocket: {
       open(ws) {
         control.connections++;
@@ -202,17 +228,7 @@ export function serveFakeObs(obs: FakeObs, opts: { password?: () => string | und
         if (!ws.data.identified || control.stall) return;
         if (m.op === 6) {
           const { requestType, requestId, requestData } = m.d;
-          // The client's own status refresh: answered, but not recorded, so tests see only their own requests.
-          if (requestType === "GetRecordStatus" || requestType === "GetStreamStatus") {
-            return void ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData: { outputActive: false } } }));
-          }
-          try {
-            const responseData = await obs.request(requestType, requestData);
-            ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData } }));
-          } catch (e) {
-            const code = e instanceof OBSRequestError ? e.code : 205;
-            ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, requestStatus: { result: false, code, comment: (e as Error).message } } }));
-          }
+          ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, ...(await result(() => obs.request(requestType, requestData))) } }));
         }
         if (m.op === 8) {
           const results = await obs.requestBatch(m.d.requests, { haltOnFailure: m.d.haltOnFailure });
@@ -221,13 +237,10 @@ export function serveFakeObs(obs: FakeObs, opts: { password?: () => string | und
       },
     },
   });
-  return {
-    url: `ws://127.0.0.1:${server.port}`,
-    control,
-    /** Sends an OBS event (op 5) to every identified client. */
-    event(eventType: string, eventData: Record<string, unknown> = {}) {
-      for (const ws of sockets) if (ws.data.identified) ws.send(JSON.stringify({ op: 5, d: { eventType, eventIntent: 0, eventData } }));
-    },
-    stop: () => server.stop(true),
+  /** Sends an OBS event (op 5) to every identified client. */
+  const event = (eventType: string, eventData: Record<string, unknown> = {}) => {
+    for (const ws of sockets) if (ws.data.identified) ws.send(JSON.stringify({ op: 5, d: { eventType, eventIntent: 0, eventData } }));
   };
+  obs.onEvent(event);
+  return { url: `ws://127.0.0.1:${server.port}`, port: server.port, control, event, stop: () => server.stop(true) };
 }

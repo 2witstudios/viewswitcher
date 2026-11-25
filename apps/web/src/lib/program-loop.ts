@@ -22,6 +22,8 @@ export type ProgramEffects = {
   loadTransition(): Promise<void>;
   /** Ask scene frame `i` (its bridge) for its slots and version; null when it doesn't answer. */
   ask(i: FrameIndex): Promise<FrameState | null>;
+  /** The file version `url` would load (the server's scene hash), without loading it; null if unknown. */
+  version(url: string): Promise<string | null>;
   /** Tell the server where the shown scene's slots are, so OBS places the sources there. */
   reportSlots(path: string, slots: Slot[]): Promise<unknown>;
   /** Show scene frame `i`, hiding the other. */
@@ -39,13 +41,14 @@ export type ProgramEffects = {
   log(data: object): void;
 };
 
-export const WIPE_IN = 170;
+const WIPE_IN = 170;
 /** The longest a switch waits for the server to place the sources: OBS may be slow or stuck. */
-export const REPORT_MS = 1500;
+const REPORT_MS = 1500;
 /** When a scene didn't answer, ask again this much later (a scene that was only slow still gets its sources). */
-export const LATE_ASKS = [2000, 6000];
+const LATE_ASKS = [2000, 6000];
 
 const versionOf = (url: string) => new URL(url, "http://x").searchParams.get("v");
+const other = (i: FrameIndex): FrameIndex => (i === 0 ? 1 : 0);
 
 export function createProgramLoop(fx: ProgramEffects) {
   let desired: Job | null = null;
@@ -61,6 +64,11 @@ export function createProgramLoop(fx: ProgramEffects) {
 
   /** `p`, or null as soon as a newer request arrives (whichever is first). */
   const unlessNewer = <T>(p: Promise<T>, newer: Promise<void>) => Promise.race([p, newer.then(() => null)]);
+  /** Empty scene frame `i`: what it showed stops. */
+  const clear = (i: FrameIndex) => {
+    fx.unload(i);
+    frameVersion[i] = null;
+  };
 
   async function run() {
     if (running) return;
@@ -70,7 +78,18 @@ export function createProgramLoop(fx: ProgramEffects) {
         const job = desired;
         const newer = nudge.promise;
         const superseded = () => desired !== job;
-        const back: FrameIndex = front === 0 ? 1 : 0;
+        const back = other(front);
+        // The scene on screen under a new URL (every URL changes when the live socket comes back; a
+        // save changes the file). When the file is the version already playing, keep that frame
+        // rather than load a second copy behind it, whose music would play twice.
+        if (!job.force && shown?.path === job.path && frameVersion[front]) {
+          const v = await unlessNewer(fx.version(job.url), newer);
+          if (superseded()) continue;
+          if (v === frameVersion[front]) {
+            shown = job;
+            continue;
+          }
+        }
         await unlessNewer(Promise.all([fx.load(back, job.url), fx.loadTransition()]), newer);
         if (superseded()) continue; // go straight to the newer one
         const v = versionOf(job.url);
@@ -91,14 +110,6 @@ export function createProgramLoop(fx: ProgramEffects) {
           fx.log({ warning: `scene didn't answer the bridge: ${seen?.slots ? "keeping its last known slots" : "showing no sources until it does"}`, path: job.path });
           askLater(job, back, v);
         }
-        // The version already on screen (every URL changed when the live socket came back): keep the
-        // frame that's playing rather than restart its media.
-        if (!job.force && shown?.path === job.path && st?.version && st.version === frameVersion[front]) {
-          shown = job;
-          fx.unload(back);
-          frameVersion[back] = null;
-          continue;
-        }
         const wipeIt = shown !== null && shown.path !== job.path && !(job.from && job.from === shown.path);
         if (wipeIt) {
           fx.wipe(true);
@@ -114,14 +125,11 @@ export function createProgramLoop(fx: ProgramEffects) {
           fx.wipe(false);
         }
         // Off air: emptied once it's hidden, so nothing in it keeps playing.
-        fx.unload(old);
-        frameVersion[old] = null;
+        clear(old);
       }
       // Idle: the hidden frame is empty. A load abandoned for the scene already on screen (a tap on
       // another scene, then back) must not keep playing behind it.
-      const back: FrameIndex = front === 0 ? 1 : 0;
-      fx.unload(back);
-      frameVersion[back] = null;
+      clear(other(front));
     } catch (e) {
       fx.log({ error: String(e) });
     } finally {

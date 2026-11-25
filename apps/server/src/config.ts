@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const env = process.env;
 
 /** On this Mac, read the obs-websocket password from OBS's own settings when OBS_PASSWORD isn't set. */
-export function localObsPassword(): string | undefined {
+function localObsPassword(): string | undefined {
   try {
     const file = join(homedir(), "Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json");
     const c = JSON.parse(readFileSync(file, "utf8"));

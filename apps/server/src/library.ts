@@ -201,6 +201,11 @@ export async function exists(path: string) {
   return stat(path).then(() => true, () => false);
 }
 
+/** A file (not a folder) is there. */
+export async function isFile(path: string) {
+  return stat(path).then((s) => s.isFile(), () => false);
+}
+
 /**
  * Refuses (PathError) when `abs`, or any folder between the org folder `root` and it, is really
  * somewhere outside the library through a link (the library is the org folder's parent). Only what

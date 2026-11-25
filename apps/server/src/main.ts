@@ -27,7 +27,7 @@ import { inside, PathError, plainName } from "./paths";
 import { createSlotOrder } from "./slot-order";
 import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { withBridge } from "./scene-bridge";
-import { editScene, parseEdit, readForEdit, renameScene, type RenameResult, scenePath } from "./scene-edit";
+import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
 import { defuseMeta, libraryHeaders } from "./scene-sandbox";
 import { readSettings, SettingsError, writeSettings } from "./settings";
 import { asDropped, type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
@@ -421,7 +421,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     const b = await body(req);
     const r = await editScene(root, b.path, String(b.hash ?? ""), b.edits);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
-    if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
+    log?.(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
     return json(r);
   }
   // Rename a scene: its title, and a stream scene's file. The scene stays on air if it is.
@@ -497,7 +497,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       // The API, the library and the live socket answer only to hosts this server is known by (origin.ts);
       // and anything not from this Mac, page loads included, only to those.
       if ((!local || path === "/ws" || path === "/mcp" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(host, config.allowedOrigins, lanNames())) {
-        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${host}`);
+        log?.(`[http] refused ${path} for Host ${host}`);
         return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
       }
       // Anything not from this Mac needs a paired device (gate.ts); unpaired, it can only pair.
@@ -514,7 +514,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       if (path.startsWith("/api/") && req.method !== "GET" && req.method !== "HEAD") {
         const ok = originAllowed(req.headers.get("origin"), { host, forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins, lan: lanNames() });
         if (!ok) {
-          if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
+          log?.(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
           return json({ error: "Not allowed from this page" }, 403);
         }
       }
@@ -564,7 +564,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
 
     async function route(): Promise<Response> {
       if (path.startsWith("/api/")) {
-        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
+        log?.(`[http] ${req.method} ${path}`);
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });
@@ -585,7 +585,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
           // live previews simply don't apply to it. ?bridge: with the bridge the program page talks to it through.
           const scene = url.searchParams.has("edit")
             ? await readForEdit(config.library, rel).catch((e) => {
-                if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
+                log?.(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
                 return null;
               })
             : null;
@@ -620,7 +620,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
 
 const websocket = {
   open(ws: Socket) {
-    if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
+    log?.("[ws] client connected");
     sockets.add(ws);
     ws.subscribe("all");
     ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));

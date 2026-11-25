@@ -67,18 +67,15 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
    * scene) added to it. `update` is what setup sets on an input that was already there.
    */
   const ensure = async (input: { inputName: string; inputKind: string; inputSettings: object }, update: object, what: string) => {
-    const id = await itemIn(obs, scene, input.inputName);
-    if (id !== null) {
-      await obs.request("SetInputSettings", { inputName: input.inputName, inputSettings: update });
-      return id;
+    let id = await itemIn(obs, scene, input.inputName);
+    if (id === null) {
+      const added = await addToScene(obs, scene, input);
+      log.push(added.created ? `Created ${what}.` : `Added ${what} to "${scene}".`);
+      if (added.created) return added.sceneItemId; // made with the settings it needs
+      id = added.sceneItemId;
     }
-    const added = await addToScene(obs, scene, input);
-    if (added.created) log.push(`Created ${what}.`);
-    else {
-      await obs.request("SetInputSettings", { inputName: input.inputName, inputSettings: update });
-      log.push(`Added ${what} to "${scene}".`);
-    }
-    return added.sceneItemId;
+    await obs.request("SetInputSettings", { inputName: input.inputName, inputSettings: update });
+    return id;
   };
 
   const settings = { url, width: 1920, height: 1080, fps_custom: false, reroute_audio: false, shutdown: false };

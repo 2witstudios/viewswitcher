@@ -1,6 +1,6 @@
 // Library changes that both the switcher's /api routes and the MCP tools make, so the two follow one
 // set of rules and return the same shapes (paths start with the org id).
-import { realpath, stat } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { orgOf } from "@viewswitcher/shared";
 import type { OnAir } from "@viewswitcher/shared";
@@ -14,7 +14,7 @@ export const orgDir = (root: string, id: unknown) => inside(root, plainName(Stri
 /** An org that exists (a top-level folder with org.json), for callers that must never make a new one by accident. */
 export async function existingOrg(root: string, id: unknown): Promise<string> {
   const dir = orgDir(root, id);
-  if (!(await stat(join(dir, "org.json")).then((s) => s.isFile(), () => false))) throw new PathError(`There's no org "${String(id)}". list_orgs shows the orgs.`);
+  if (!(await lib.isFile(join(dir, "org.json")))) throw new PathError(`There's no org "${String(id)}". list_orgs shows the orgs.`);
   return dir;
 }
 
@@ -62,7 +62,7 @@ export type OnAirRequest = { path: string; label?: string; projectId?: string; s
  */
 export async function onAirFor(root: string, b: OnAirRequest): Promise<OnAir> {
   const file = inside(root, b.path);
-  if (!String(b.path).endsWith(".html") || !(await stat(file).then((s) => s.isFile(), () => false))) {
+  if (!String(b.path).endsWith(".html") || !(await lib.isFile(file))) {
     throw new PathError(`There's no scene at ${b.path}. It may have been renamed or deleted.`);
   }
   const o = await lib.readOrg(root, orgOf(b.path));

@@ -5,11 +5,11 @@
 // Changes to what's on air (a person's tap, an agent's go_on_air, a rename, the on-air file going
 // away) run one at a time, in the order they were asked: two requests close together always end on
 // the one asked last, and state.json is only ever written by one of them at a time (and atomically).
-import { stat } from "node:fs/promises";
 import { orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage } from "@viewswitcher/shared";
 import { writeAtomic } from "../atomic";
 import * as lib from "../library";
+import { isFile } from "../library";
 import { onAirFor, type OnAirRequest, renamedOnAir } from "../library-actions";
 import { inside } from "../paths";
 import type { RenameResult } from "../scene-edit";
@@ -26,8 +26,6 @@ export type LiveStoreOptions = {
   log?: (line: string) => void;
 };
 
-const isFile = (abs: string) => stat(abs).then((s) => s.isFile(), () => false);
-
 /** A stream's own copy of a project scene: the project scene it overrides. */
 const STREAM_SCENE = /^([^/]+)\/projects\/([^/]+)\/streams\/([^/]+)\/([^/]+\.html)$/;
 export function overriddenScene(path: string): string | null {
@@ -36,7 +34,7 @@ export function overriddenScene(path: string): string | null {
 }
 
 export const missingWarning = (on: OnAir) =>
-  `"${on.label}" was deleted while on air. The program keeps showing it until you put another view on air.`;
+  `"${on.label}" was deleted while on air. Put another view on air: until then the program keeps showing it (only the ground if the program page reloads).`;
 
 export class LiveStore {
   readonly state: LiveState;
@@ -63,7 +61,8 @@ export class LiveStore {
     if (on) {
       on.transition = await lib.resolveTransition(opts.root, on.path).catch(() => null);
       delete on.missing;
-      if (!(await isFile(store.abs(on.path)))) store.markMissing(on);
+      // Gone while the server was off: the same as while it runs (the project's scene, or a warning).
+      if (!(await isFile(store.abs(on.path)))) await store.serial(() => store.removed(on));
     }
     return store;
   }
@@ -81,6 +80,8 @@ export class LiveStore {
 
   /** What the last placement in OBS reported (replacing the previous placement's warnings). */
   setPlacementWarnings(warnings: string[]) {
+    // Placement reports come every 33 ms while a box is dragged: only a change is worth telling everyone.
+    if (warnings.length === this.placementWarnings.length && warnings.every((w, i) => w === this.placementWarnings[i])) return;
     this.placementWarnings = warnings;
     this.composeWarnings();
     this.publish();
@@ -103,7 +104,7 @@ export class LiveStore {
       this.state.onAir = renamedOnAir(on, from, name, r);
       // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
       this.publish();
-      await this.persist(this.state.onAir).catch((e) => console.error("[state] couldn't save:", (e as Error).message));
+      await this.persistOrLog(this.state.onAir);
     });
   }
 
@@ -143,7 +144,7 @@ export class LiveStore {
       const added = sources.filter((s) => !this.placed.has(s));
       if (!added.length) return;
       for (const s of added) this.placed.add(s); // seen by the very next placement, before it's saved
-      void this.serial(() => this.persist(this.state.onAir)).catch((e) => console.error("[state] couldn't save:", (e as Error).message));
+      void this.serial(() => this.persistOrLog(this.state.onAir));
     },
   };
 
@@ -170,7 +171,7 @@ export class LiveStore {
     try {
       check?.();
     } catch (e) {
-      await this.persist(this.state.onAir).catch((err) => console.error("[state] couldn't save:", (err as Error).message));
+      await this.persistOrLog(this.state.onAir);
       throw e;
     }
     this.state.onAir = next;
@@ -211,6 +212,11 @@ export class LiveStore {
   private persist(onAir: OnAir | null) {
     const { missing: _, ...saved } = onAir ?? ({} as OnAir);
     return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null, placed: [...this.placed].sort() }, null, 2));
+  }
+
+  /** For a save nothing waits on: a failure is logged, and the next change saves again. */
+  private persistOrLog(onAir: OnAir | null) {
+    return this.persist(onAir).catch((e) => console.error("[state] couldn't save:", (e as Error).message));
   }
 
   private abs(path: string) {

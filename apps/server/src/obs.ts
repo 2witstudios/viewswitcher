@@ -2,7 +2,8 @@
 import { createHash } from "node:crypto";
 import type { ObsStatus } from "@viewswitcher/shared";
 
-const sha256b64 = (s: string) => createHash("sha256").update(s).digest("base64");
+/** obs-websocket's authentication hash step (base64 SHA-256). */
+export const sha256b64 = (s: string) => createHash("sha256").update(s).digest("base64");
 
 // EventSubscription bitflags: General | Config | Scenes | Inputs | Outputs | SceneItems.
 // Config brings scene-collection and profile changes, after which every cached scene item id is stale.
@@ -16,7 +17,7 @@ const RETRY_MS = 3000;
  * The longest any request may wait for OBS. An OBS that keeps its socket open but never answers would
  * otherwise hold its caller for the rest of the show.
  */
-export const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 export class OBSRequestError extends Error {
   constructor(readonly requestType: string, readonly code: number, comment?: string) {
@@ -30,8 +31,8 @@ export type BatchResult = { requestType: string; requestStatus: { result: boolea
 
 type Options = {
   url: string;
-  /** Read again on every connect, so a password set or changed in OBS after start is picked up. */
-  password?: string | (() => string | undefined);
+  /** Asked on every connect, so a password set or changed in OBS after start is picked up. */
+  password?: () => string | undefined;
   onStatus?: (s: ObsStatus) => void;
   onIdentified?: () => void;
   /** Every OBS event (op 5), e.g. to notice sources being added or removed. */
@@ -129,8 +130,7 @@ export class OBSClient {
   }
 
   private connect() {
-    const p = this.opts.password;
-    this.password = typeof p === "function" ? p() : p;
+    this.password = this.opts.password?.();
     const ws = new WebSocket(this.opts.url);
     this.ws = ws;
     ws.onmessage = (e) => this.handle(ws, JSON.parse(String(e.data)));

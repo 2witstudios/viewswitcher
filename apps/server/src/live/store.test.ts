@@ -178,6 +178,16 @@ describe("the on-air file going away", () => {
     expect(store.state.onAir?.label).toBe("C");
   });
 
+  test("on start, a stream copy deleted while the server was off is replaced by its project scene", async () => {
+    const own = `${ORG}/projects/p/streams/s/brb.html`;
+    await (await open()).goOnAir({ path: own, label: "BRB · S", projectId: "p", streamId: "s" });
+    await rm(join(root, own));
+    const store = await open();
+    expect(store.state.onAir).toMatchObject({ path: `${ORG}/projects/p/scenes/brb.html`, label: "BRB · S", renamedFrom: own });
+    expect(store.state.onAir?.missing).toBeUndefined();
+    expect(store.state.warnings).toEqual([]);
+  });
+
   test("on start, a saved scene whose file is gone comes back marked missing", async () => {
     await (await open()).goOnAir({ path: `${ORG}/templates/a.html`, label: "A" });
     await rm(join(root, `${ORG}/templates/a.html`));

@@ -30,13 +30,13 @@ export type Canvas = { width: number; height: number };
  * After these OBS events the kept item ids or canvas may be wrong: items were added, removed or
  * renamed, or another scene collection or profile was loaded.
  */
-export const PLACEMENT_EVENTS = new Set([
+const PLACEMENT_EVENTS = new Set([
   "SceneItemCreated", "SceneItemRemoved", "InputNameChanged", "InputRemoved", "InputCreated",
   "SceneNameChanged", "SceneRemoved", "SceneCreated", "CurrentSceneCollectionChanged", "CurrentProfileChanged",
 ]);
 
 /** How long one batch may wait for OBS. */
-export const PLACEMENT_TIMEOUT_MS = 2000;
+const PLACEMENT_TIMEOUT_MS = 2000;
 
 /**
  * The OBS changes for one placement, given the scene's items and the slotted sources' sizes (by item
@@ -130,8 +130,11 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
   }
 
   async function placeOnce(path: string, slots: Slot[]): Promise<string[]> {
+    // The org's ground color is looked up while OBS is asked for the scene and the sizes.
+    const color = Promise.resolve(ground(path)).catch(() => null);
     const { canvas, items } = await sceneItems();
-    const ids = [...slotted(items, slots).keys()];
+    const inSlots = slotted(items, slots);
+    const ids = [...inSlots.keys()];
     const read = ids.length
       ? await obs.requestBatch(ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })), { timeoutMs })
       : [];
@@ -141,11 +144,10 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
       if (r.requestStatus.result && t) sizes.set(ids[i]!, { width: Number(t.sourceWidth) || 0, height: Number(t.sourceHeight) || 0 });
       else if (r.requestStatus.code === 600) scene = null; // an item went away under us: list again next time
     });
-    const slotSources = items.filter((i) => slots.some((s) => s.source === i.sourceName)).map((i) => i.sourceName);
-    placed.remember(slotSources);
+    placed.remember([...inSlots.values()].map((s) => s.source));
     const plan = planPlacement({ items, slots, sizes, canvas, names, placed });
-    const color = await Promise.resolve(ground(path)).catch(() => null);
-    const recolor = color && color !== groundShown ? color : null;
+    const wanted = await color;
+    const recolor = wanted && wanted !== groundShown ? wanted : null;
     const requests = recolor
       ? [{ requestType: "SetInputSettings", requestData: { inputName: names.groundSource, inputSettings: { color: obsColor(recolor) } } }, ...plan.requests]
       : plan.requests;
@@ -158,7 +160,7 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
       }
       if (r.requestStatus.code === 600) scene = null;
       // A missing ground source isn't worth a warning (scenes still show).
-      if (!(recolor && i === 0)) warnings.push(`Couldn't place sources in OBS: ${r.requestType}: ${r.requestStatus.comment ?? `error ${r.requestStatus.code}`}`);
+      if (!(recolor && i === 0)) warnings.push(`Couldn't place sources in OBS: ${fail(r, r.requestType).message}`);
     });
     return [...new Set(warnings)];
   }

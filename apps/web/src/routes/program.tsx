@@ -137,6 +137,9 @@ export const Route = createFileRoute("/program")({
       load: (i, url) => load(url, (src) => setFrame(i, src)),
       loadTransition,
       ask: (i) => ask(refs[i]!.current),
+      // The ?edit response names the file version it serves; HEAD asks for it without loading the scene.
+      version: (url) =>
+        fetch(url, { method: "HEAD", cache: "no-store" }).then((r) => (r.ok ? r.headers.get("x-scene-hash") : null), () => null),
       reportSlots: (path, slots) => api.reportSlots({ path, slots, ...slotOrder() }),
       show: (i) => setFront(i),
       unload: (i) => setFrame(i, null),
