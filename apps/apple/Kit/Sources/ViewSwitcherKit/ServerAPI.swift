@@ -67,11 +67,14 @@ public struct ServerAPI: Sendable {
     public let base: URL
     /// Sent as x-viewswitcher-admin for the pairing endpoints only this app may call.
     public let adminToken: String?
+    /// How long a call may take before it fails.
+    public let timeout: TimeInterval
     private let session: URLSession
 
-    public init(base: URL, adminToken: String? = nil, session: URLSession = .shared) {
+    public init(base: URL, adminToken: String? = nil, timeout: TimeInterval = 30, session: URLSession = .shared) {
         self.base = base
         self.adminToken = adminToken
+        self.timeout = timeout
         self.session = session
     }
 
@@ -117,6 +120,7 @@ public struct ServerAPI: Sendable {
     private func call(_ path: String, body: (any Encodable & Sendable)? = nil, admin: Bool = false) async throws -> Data {
         var req = URLRequest(url: base.appendingPathComponent(path))
         req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.timeoutInterval = timeout
         if admin, let adminToken { req.setValue(adminToken, forHTTPHeaderField: "x-viewswitcher-admin") }
         if let body {
             req.httpMethod = "POST"

@@ -194,10 +194,60 @@ final class ServerControllerTests: XCTestCase {
         _ = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid(), reportPid: bystander.processIdentifier))
         let launch = try stubLaunch(port: port, script: Self.serving)
         let s = try await connectOrStart(base, launch: launch)
-        XCTAssertFalse(s.owned, "not provably a leftover of ours: attach, as before")
+        XCTAssertFalse(s.owned, "not provably a leftover of ours, and it stays: attach, as before")
         XCTAssertNil(s.replacedOrphan)
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertTrue(bystander.isRunning, "the bystander survives")
+    }
+
+    func testALeftoverThatCantBeConfirmedIsLeftToGoByItself() async throws {
+        // Says it's an orphan but names a pid the system can't confirm; it then exits on its own, as
+        // a real orphan's parent watch makes it. The app starts its own instead of attaching to it.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let bystander = Process()
+        bystander.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        bystander.arguments = ["30"]
+        try bystander.run()
+        defer { bystander.terminate() }
+        let leaving = "setTimeout(() => process.exit(0), 800);\n" + sidecarScript(parent: try deadPid(), reportPid: bystander.processIdentifier)
+        _ = try await runLeftover(port: port, script: leaving)
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertTrue(s.owned)
+        XCTAssertNil(s.replacedOrphan, "it went by itself; nothing was signalled")
+        XCTAssertTrue(bystander.isRunning)
+        await s.stop()
+    }
+
+    func testAServerThatStopsAnsweringIsAskedAgainNotAttached() async throws {
+        // Answers /api/state but never /api/info (a server on its way out): the info call gives up
+        // after its short timeout and the port is probed again, rather than launch waiting a minute.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let hanging = "Bun.serve({ hostname: \"127.0.0.1\", port: Number(process.env.PORT), fetch: (req) => new URL(req.url).pathname === \"/api/info\" ? new Promise(() => {}) : Response.json(\(Self.state)) });"
+        _ = try await runLeftover(port: port, script: hanging)
+        let launch = Launch(executable: URL(fileURLWithPath: "/nonexistent"), environment: [:], logFile: tmp.appendingPathComponent("log"))
+        let t0 = Date()
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertFalse(s.owned, "it still answers like a server: attach")
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 6, "the info call has a short timeout")
+    }
+
+    func testACancelledStartStopsItsServerAndReturns() async throws {
+        let port = try freePort()
+        let launch = try stubLaunch(port: port, script: "setInterval(() => {}, 1000); console.log(\"never answers\");")
+        let task = Task { try await connectOrStart(URL(string: "http://127.0.0.1:\(port)")!, launch: launch, readyTimeout: 15) }
+        try await Task.sleep(for: .milliseconds(800))
+        let t0 = Date()
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("should throw")
+        } catch is CancellationError {}
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 4, "returns at once (SIGTERM), not after the 15 s wait")
+        let log = try String(contentsOf: launch.logFile, encoding: .utf8)
+        XCTAssertTrue(log.contains("server exited"), "the half-started server was stopped")
     }
 
     func testOnlyALeftoverOfThisAppsOwnServerQualifies() throws {

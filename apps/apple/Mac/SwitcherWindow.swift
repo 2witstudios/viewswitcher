@@ -303,13 +303,25 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         scheduleRetry()
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { scheduleRetry() }
+    /// The web content crashed. A page that crashes it again soon after (a scene is anyone's code) is
+    /// left for the switcher's root, so it can't reload itself in a loop.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        let now = Date()
+        let again = lastContentCrash.map { now.timeIntervalSince($0) < 30 } ?? false
+        lastContentCrash = now
+        scheduleRetry(toRoot: again)
+    }
 
-    /// Retries the page that was open, or the one that failed to open: never back to the root, which
-    /// would drop someone out of the editor or a stream because the server restarted.
-    func scheduleRetry(failed: URL? = nil) {
+    private var lastContentCrash: Date?
+
+    /// Retries the page that was open, or the one that failed to open: not the root, which would drop
+    /// someone out of the editor or a stream because the server restarted. A connection that fails
+    /// keeps being retried this way for as long as the server is coming back.
+    func scheduleRetry(failed: URL? = nil, toRoot: Bool = false) {
         retry?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.reloadCurrent(preferring: failed) }
+        let item = DispatchWorkItem { [weak self] in
+            if toRoot { self?.load() } else { self?.reloadCurrent(preferring: failed) }
+        }
         retry = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: item)
     }

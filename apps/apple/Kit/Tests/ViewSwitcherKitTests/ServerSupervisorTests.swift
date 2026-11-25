@@ -157,6 +157,26 @@ final class ServerSupervisorTests: XCTestCase {
         XCTAssertEqual(p, .none, "no server came back after Quit")
     }
 
+    func testQuitWhileARestartIsStartingLeavesNothingRunning() async throws {
+        let marker = tmp.appendingPathComponent("slow")
+        // Answers at once the first time; once the marker exists, takes 3 s to answer.
+        let script = "import { existsSync } from \"node:fs\"; setTimeout(() => { " + TestServers.serving + " }, existsSync(\(String(reflecting: marker.path))) ? 3000 : 0);"
+        let (s, base) = try make(script: script)
+        await s.start()
+        XCTAssertEqual(s.state, .owned)
+        try Data().write(to: marker)
+        kill(s.server!.pid!, SIGKILL)
+        let restarting = await until { if case .restarting = s.state { true } else { false } }
+        XCTAssertTrue(restarting)
+        try await Task.sleep(for: .milliseconds(500)) // the new server is starting, not answering yet
+        XCTAssertNil(s.quit())
+        try await Task.sleep(for: .seconds(4))
+        let p = await probe(base)
+        XCTAssertEqual(p, .none, "the half-started server was stopped, not left to answer after Quit")
+        let log = try String(contentsOf: tmp.appendingPathComponent("logs/server.log"), encoding: .utf8)
+        XCTAssertEqual(log.components(separatedBy: "server exited").count - 1, 2, "both servers exited: \(log)")
+    }
+
     func testAnAttachedServerGoingAwayIsLost() async throws {
         var running: TestServers.Stub? = try TestServers.Stub(body: TestServers.state)
         let s = ServerSupervisor(base: running!.base, policy: quick) { throw ServerError.startFailed("no server here") }

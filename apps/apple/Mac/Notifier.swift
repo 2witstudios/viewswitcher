@@ -18,12 +18,19 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// A banner with `id` replaces the last one with that id (the server stopped, then restarted).
     func post(_ title: String, _ body: String, id: String) {
         let center = center
-        center.getNotificationSettings { settings in
-            guard [.authorized, .provisional].contains(settings.authorizationStatus) else { return }
+        let add = {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
+        }
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .authorized, .provisional: add()
+            // Not answered yet (the question asked at launch may still be up): ask, and post if allowed.
+            case .notDetermined: center.requestAuthorization(options: [.alert]) { granted, _ in if granted { add() } }
+            default: break
+            }
         }
     }
 
