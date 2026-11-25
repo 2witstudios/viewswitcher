@@ -20,7 +20,7 @@ const CODEX_TOML = `[mcp_servers.viewswitcher]\nurl = "${MCP_URL}"`;
 const SKILL_ZIP = "/skills/viewswitcher-scenes.zip";
 const states = Object.entries(BETA_MESSAGES) as [keyof typeof BETA_MESSAGES, string][];
 ---
-<Base title="Connect your AI agent · ViewSwitcher" description="Connect Claude Code, Claude Desktop, Cursor or Codex to ViewSwitcher on your Mac, and it makes and fixes your OBS scenes. Download the scenes skill, connect over MCP, or sign up for the iPad beta." path="/ai">
+<Base title="Connect your AI agent · ViewSwitcher" description="Connect Claude Code, Claude Desktop, Cursor or Codex to ViewSwitcher on your Mac, and it makes and fixes your OBS scenes. Download the scenes skill, connect over MCP, or sign up for the iPhone and iPad beta." path="/ai">
   <Header />
   <main id="main" class="wrap prose guide">
     <p class="eyebrow">Agents</p>
@@ -28,7 +28,7 @@ const states = Object.entries(BETA_MESSAGES) as [keyof typeof BETA_MESSAGES, str
     <p class="lede">Connect Claude, Cursor or Codex to ViewSwitcher, and it makes and fixes your scenes. It reads your library, edits scenes, sees each one rendered in OBS, and fixes what it sees. It puts things on air only when you let it.</p>
     <div class="actions ctas">
       <Cta />
-      <a class="btn btn-secondary" href="#beta">Sign up for the iPad beta</a>
+      <a class="btn btn-secondary" href="#beta">Sign up for the iPhone and iPad beta</a>
     </div>
 
     <h2 id="skill">Download the skill</h2>
@@ -58,8 +58,8 @@ const states = Object.entries(BETA_MESSAGES) as [keyof typeof BETA_MESSAGES, str
         <Cta />
       </div>
       <form class="card beta" id="beta" method="post" action="/api/ipad-beta">
-        <h3>Sign up for the iPad beta</h3>
-        <p>Switch scenes from an iPad beside you. Leave your email for an invite to the TestFlight beta. We use it only to send the invite.</p>
+        <h3>Sign up for the iPhone and iPad beta</h3>
+        <p>Switch scenes from your iPhone or the iPad beside you. Leave your email for an invite to the TestFlight beta. We use it only to send the invite.</p>
         <label for="beta-email">Email</label>
         <div class="row">
           <input id="beta-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">

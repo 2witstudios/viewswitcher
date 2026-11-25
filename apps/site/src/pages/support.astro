@@ -1,15 +1,16 @@
 ---
-// Help for ViewSwitcher for Mac and iPad, also the App Store's support URL (SITE-17).
+// Help for ViewSwitcher for Mac, iPhone and iPad, also the App Store's support URL (SITE-17).
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
-import { github } from "../site.config";
+import { github, site } from "../site.config";
+const store = site.ipadApp.state === "store";
 ---
-<Base title="Support for ViewSwitcher for Mac and iPad" description="Help with ViewSwitcher for Mac and iPad: getting set up with OBS, fixing common problems, and how to reach us." path="/support">
+<Base title="Support for ViewSwitcher for Mac, iPhone and iPad" description="Help with ViewSwitcher for Mac, iPhone and iPad: getting set up with OBS, fixing common problems, and how to reach us." path="/support">
   <Header />
   <main id="main" class="wrap prose">
     <h1>Support</h1>
-    <p class="lede">Help with ViewSwitcher for Mac and iPad. If your question isn't answered here, <a href={`${github}/issues/new`}>ask us on GitHub</a>. We read every one.</p>
+    <p class="lede">Help with ViewSwitcher for Mac, iPhone and iPad. If your question isn't answered here, <a href={`${github}/issues/new`}>ask us on GitHub</a>. We read every one.</p>
 
     <h2>Getting set up</h2>
     <p>The short version is below. The full guide, with screenshots and a first stream: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
@@ -28,17 +29,18 @@ import { github } from "../site.config";
     <p>In OBS, open Settings → Advanced and turn off <strong>Enable Browser Source Hardware Acceleration</strong>, then restart OBS.</p>
     <h3>My camera or screen doesn't show up in the view</h3>
     <p>Check that the source in the "ViewSwitcher" scene is named exactly <strong>Camera</strong> or <strong>Screen</strong>, then press Set up OBS again.</p>
-    <h3>The iPad app won't connect</h3>
-    <p>Keep ViewSwitcher open on the Mac and plug the iPad in with a USB-C cable. The first time, tap <strong>Trust</strong> on the iPad when it asks about this computer. Without the cable, pair it over Wi-Fi (below). More in <a href="/ipad">ViewSwitcher for iPad</a>.</p>
-    <h3>Pairing a phone or tablet over Wi-Fi</h3>
-    <p>In ViewSwitcher's menu bar, turn on <strong>Let Phones and Tablets on This Wi-Fi Connect</strong> and scan the QR code with the phone's camera (or open the address under it and enter the code). Only devices you pair can switch scenes, and you can remove one any time. The phone and the Mac need to be on the same Wi-Fi; use it on networks you trust, like home or church Wi-Fi. If a phone can't connect, check that the Mac isn't on a guest network that keeps devices apart.</p>
+    <h3>The iPhone or iPad app won't connect</h3>
+    <p>Keep ViewSwitcher open on the Mac and plug the iPhone or iPad in with its cable. The first time, tap <strong>Trust</strong> when it asks about this computer. Without the cable, pair it over Wi-Fi (below). More in <a href="/ipad">ViewSwitcher for iPhone and iPad</a>.</p>
+    <h3>Pairing over Wi-Fi</h3>
+    <p>In ViewSwitcher's menu bar, turn on <strong>Let Phones and Tablets on This Wi-Fi Connect</strong>. In the iPhone or iPad app, tap <strong>Scan the code</strong> and point it at the QR code, or tap <strong>Enter code</strong> and type the code the Mac shows. Scan from the app, not the Camera app, which would pair Safari instead. In a phone's browser without the app, scan the QR code with the camera (or open the address under it and enter the code). Only devices you pair can switch scenes, and you can remove one any time. The phone and the Mac need to be on the same Wi-Fi; use it on networks you trust, like home or church Wi-Fi.</p>
+    <p>If it can't find your Mac: check that the Mac isn't on a guest network that keeps devices apart, and that ViewSwitcher is allowed in <strong>Settings → Privacy &amp; Security → Local Network</strong> on the iPhone or iPad. If Scan the code shows no camera, allow it in <strong>Settings → Privacy &amp; Security → Camera</strong>.</p>
 
-    <h2>Buying the iPad app</h2>
-    <p>ViewSwitcher for iPad is a one-time purchase on the App Store, with nothing to subscribe to. To install it on another iPad, sign in with the same Apple Account and download it again from the App Store at no charge. For a refund, ask Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</p>
+    <h2>Buying the iPhone and iPad app</h2>
+    <p>ViewSwitcher for iPhone and iPad {store ? "is" : "will be"} a one-time purchase on the App Store, with nothing to subscribe to, and one purchase covers both. To install it on another iPhone or iPad, sign in with the same Apple Account and download it again from the App Store at no charge. For a refund, ask Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</p>
     <p>ViewSwitcher for Mac is free.</p>
 
     <h2>Contact</h2>
-    <p>Questions, bugs and ideas: <a href={`${github}/issues`}>GitHub issues</a>. Please say which app you're using (Mac or iPad) and what you expected to happen.</p>
+    <p>Questions, bugs and ideas: <a href={`${github}/issues`}>GitHub issues</a>. Please say which app you're using (Mac, iPhone or iPad) and what you expected to happen.</p>
     <p>How we handle your data: <a href="/privacy">Privacy</a>.</p>
   </main>
   <Footer />

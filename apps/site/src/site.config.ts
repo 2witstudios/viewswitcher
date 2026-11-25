@@ -6,7 +6,7 @@ import { softwareApp } from "./lib/seo";
 // A build can override it with SITE_MAC_APP=1 or 0 (e.g. on a Vercel preview) to show the other state.
 const MAC_APP_RELEASED = true;
 
-// THE iPAD SWITCH: paste the App Store link (https://apps.apple.com/...) once the iPad app is live.
+// THE iPHONE AND iPAD SWITCH: paste the App Store link (https://apps.apple.com/...) once the app is live.
 // Before: "Coming to the App Store". After: the "Download on the App Store" badge links there.
 // A build can override it with SITE_IPAD_APP_URL.
 const IPAD_APP_URL: string | null = null;

@@ -37,7 +37,7 @@ The site stacks them the way OBS does: the show's ground color, then the photo o
 
 The homepage, `/download`, `/setup` (OBS setup guide), `/ipad`, `/church-livestream`, `/support` and `/privacy`. "The free, one-click OBS scene switcher for Mac" is the descriptor (`descriptor` in `src/site.config.ts`): the homepage title and hero line, and the footer. The Mac app's version and minimum macOS are `site.mac` in `site.config.ts`: update them with each release. Structured data (schema.org JSON-LD) comes from `src/lib/seo.ts` through `Base.astro`'s `schema` prop, and states only what the page shows: SoftwareApplication (free, macOS 14+) on the homepage and `/download`, FAQPage where there are questions on the page (`src/data/faq.ts` for the homepage), HowTo on `/setup`.
 
-App screenshots are real: `bun scripts/app-shots.ts` runs the switcher on port 7434 (OBS offline, USB off) against the scratch library, makes Grace Community a Sunday stream, and saves the switcher, the editor and the Connect OBS card to `src/assets/app/`. The iPad ones are the iPad app's App Store screenshots.
+App screenshots are real: `bun scripts/app-shots.ts` runs the switcher on port 7434 (OBS offline, USB off) against the scratch library, makes Grace Community a Sunday stream, and saves the switcher, the editor and the Connect OBS card to `src/assets/app/`. The iPad ones are the iPhone and iPad app's App Store screenshots (`apps/apple/scripts/ipad-shots.sh`).
 
 ## Templates and template packs (SITE-26 · SITE-29)
 

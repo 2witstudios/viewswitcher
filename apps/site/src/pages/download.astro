@@ -1,5 +1,5 @@
 ---
-// SITE-20: one clear release path. What's out, what it needs, what happens after you open it, and the iPad app's status.
+// SITE-20: one clear release path. What's out, what it needs, what happens after you open it, and the iPhone and iPad app's status.
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
@@ -38,7 +38,7 @@ const v = site.mac.version;
     <ul>
       <li><strong>OBS</strong>, the free streaming app, from <a href="https://obsproject.com">obsproject.com</a>. OBS does the streaming; ViewSwitcher tells it what to show.</li>
       <li><strong>A camera</strong> OBS can see: the Mac's own camera, a USB webcam, or a camera through a capture card.</li>
-      <li>Optional: a second camera, a screen to share, and a phone or iPad to switch from.</li>
+      <li>Optional: a second camera, a screen to share, and an iPhone or iPad to switch from.</li>
     </ul>
 
     <h2 id="after-you-open-it">After you open it</h2>
@@ -52,7 +52,7 @@ const v = site.mac.version;
     </ol>
     {site.aiConnect && <p><strong>Edit with AI:</strong> connect Claude, Cursor or any app that supports MCP from ViewSwitcher in one click, and ask it for custom overlays and slides. <a href="/ai">How to connect your AI</a></p>}
     <p>Each step, with screenshots and what to do if something doesn't show up: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
-    <p>Closing the window keeps ViewSwitcher running in the menu bar, so OBS and the iPad stay connected. Quit it from the menu bar icon or with ⌘Q.</p>
+    <p>Closing the window keeps ViewSwitcher running in the menu bar, so OBS and your iPhone or iPad stay connected. Quit it from the menu bar icon or with ⌘Q.</p>
 
     <h2 id="whats-new">What's new in {v}</h2>
     <ul>
@@ -76,10 +76,10 @@ const v = site.mac.version;
     <h2 id="release-notes">Release notes and updates</h2>
     <p>Every version is published on GitHub with its notes: <a href={releases}>all releases</a>. ViewSwitcher installs updates from there, so there's nothing to download again by hand.</p>
 
-    <h2 id="ipad">ViewSwitcher for iPad</h2>
-    <p>The iPad app is the remote for ViewSwitcher on your Mac: tap a view on the iPad beside you and the stream changes. It's optional, {IPAD_PRICE} once, with no subscription.</p>
+    <h2 id="ipad">ViewSwitcher for iPhone and iPad</h2>
+    <p>The iPhone and iPad app is the remote for ViewSwitcher on your Mac: tap a view on your phone or the iPad beside you and the stream changes. Held sideways, an iPhone shows your views like a deck. It's optional, {IPAD_PRICE} once for both, with no subscription.</p>
     <IpadStore />
-    <p><a href="/ipad">How the iPad app works</a></p>
+    <p><a href="/ipad">How the iPhone and iPad app works</a></p>
 
     <h2 id="source">Running it from source</h2>
     <p>ViewSwitcher is open source. To run it from source with <a href="https://bun.sh">Bun</a>, follow the <a href={`${github}#development`}>development notes</a> in the README.</p>

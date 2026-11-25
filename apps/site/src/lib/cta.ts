@@ -26,7 +26,7 @@ export function flag(name: string, configured: boolean, override: string | undef
   throw new Error(`${name} must be 1, 0, true or false, not "${override}"`);
 }
 
-/** The iPad app: optional, a one-time price on the App Store. Before its listing is live it's "coming". */
+/** The iPhone and iPad app (one universal app): optional, a one-time price on the App Store. Before its listing is live it's "coming". */
 export const IPAD_PRICE = "$9.99";
 export type IpadApp = { state: "soon" } | { state: "store"; href: string };
 
