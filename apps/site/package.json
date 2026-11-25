@@ -4,12 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev --port 4321",
-    "build": "bun scripts/packs.ts && astro build",
+    "build": "bun scripts/packs.ts && bun scripts/skill.ts && astro build",
     "preview": "astro preview --port 4321",
     "check": "astro check",
     "shots": "bun scripts/shots.ts",
     "og": "bun scripts/og.ts",
-    "packs": "bun scripts/packs.ts"
+    "packs": "bun scripts/packs.ts",
+    "skill": "bun scripts/skill.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.6",
