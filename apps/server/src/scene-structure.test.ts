@@ -97,6 +97,11 @@ describe("renameScene (EDIT-19)", () => {
     const r = await renameScene(root, P, sceneHash(text), "Teaching");
     expect(r).toMatchObject({ ok: true, path: `${STREAM}/teaching-2.html` });
   });
+  test("a name that comes back to its own file name keeps the file (review nit)", async () => {
+    const P = `${STREAM}/teaching-2.html`;
+    const text = await read(P);
+    expect(await renameScene(root, P, sceneHash(text), "Teaching")).toMatchObject({ ok: true, path: P });
+  });
   test("a stale hash renames nothing", async () => {
     const P = `${STREAM}/teaching-2.html`;
     expect(await renameScene(root, P, "stale", "Other")).toMatchObject({ ok: false, conflict: true });

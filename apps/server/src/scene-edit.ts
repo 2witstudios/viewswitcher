@@ -2,7 +2,7 @@
 // back into the file, refusing when the file changed since the editor loaded it.
 import { chmod, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
-import { applyEdits, EditError, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, EditError, isLibraryUrl, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
@@ -55,7 +55,7 @@ export function parseEdit(e: any): SceneEdit {
   if (typeof e.src === "string") {
     // Only the library's own files (an org's assets or brand): never another site's.
     const src = e.src;
-    if (!src.startsWith("/library/") || src.length > 600) throw new EditError("Images come from the library");
+    if (!isLibraryUrl(src)) throw new EditError("Images come from the library");
     let rel = "";
     try {
       rel = decodeURIComponent(src.slice("/library/".length));
@@ -187,6 +187,7 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
     const dir = dirname(own);
     let free = base;
     for (let n = 2; ; n++) {
+      if (free === file) return { ok: true, hash: sceneHash(next), path }; // its own name already
       const taken = await stat(join(dir, `${free}.html`)).then(() => true, () => false);
       const shadows = await stat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${free}.html`)).then(() => true, () => false);
       if (!taken && !shadows) break;

@@ -3,7 +3,7 @@
 // letting go, choosing from Add) is saved as a source-range patch on the server; the browser DOM is
 // never written back. See packages/shared/src/html-scan.ts.
 import {
-  applyEdits, canRemove, changedElements, collapseHtmlSpace, DEVICE_SLOTS, editKind, idsAfter, isStructural, markupFor, positionOf, restoreFor, retarget,
+  applyEdits, canRemove, changedElements, collapseHtmlSpace, decodeEntities, DEVICE_SLOTS, freeSlotName, isLibraryUrl, editKind, idsAfter, isStructural, markupFor, positionOf, restoreFor, retarget,
   scanElements, sceneRoot, setTitle, shortDate, sizeOf, snapMove, textOf, untagForEdit,
 } from "@viewswitcher/shared";
 import type { AddKind, Box, InsertEdit, Library, RemoveEdit, ScannedElement, SceneEdit } from "@viewswitcher/shared";
@@ -47,6 +47,11 @@ const attrIn = (b: Base, id: number, name: string) => {
 };
 /** Camera, screen and guest boxes: the OBS sources go in them. */
 const isSlot = (b: Base, id: number) => attrIn(b, id, "data-slot") !== null;
+/** The scene's own <title>, as the browser shows it. */
+const titleIn = (b: Base) => {
+  const t = b.els.find((e) => e.tag === "title" && e.closed);
+  return t ? collapseHtmlSpace(decodeEntities(b.source.slice(t.innerStart, t.innerEnd))) || null : null;
+};
 const slotsIn = (b: Base) => b.els.flatMap((e) => attrIn(b, e.id, "data-slot") ?? []);
 /** The value an edit would put back: the element's text or position in `b`. */
 function valueIn(b: Base, edit: SceneEdit): SceneEdit | null {
@@ -438,8 +443,9 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
    * saved file, which swaps in without a transition. Undo entries below it were made in the ids from
    * before it, and are only reached once Undo has taken it back out, so they stay right.
    */
-  const structural = async (edit: InsertEdit | RemoveEdit, record = true): Promise<number | null> => {
-    if (busyRef.current) return null;
+  /** Resolves to the inserted element's id (null for a delete) once saved and shown; to false if it didn't happen. */
+  const structural = async (edit: InsertEdit | RemoveEdit, record = true): Promise<{ added: number | null } | false> => {
+    if (busyRef.current) return false;
     busyRef.current = true;
     setBusy(true);
     try {
@@ -448,19 +454,19 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       await saverRef.current!.idle();
       const b = baseRef.current;
       const d = doc();
-      if (!b || !d || conflictOpen.current || pendingConflict.current) return null;
+      if (!b || !d || conflictOpen.current || pendingConflict.current) return false;
       let ids: ReturnType<typeof idsAfter>, undoIt: SceneEdit;
       try {
         ids = idsAfter(b.source, edit);
         undoIt = "insert" in edit ? { id: ids.added!, remove: true } : restoreFor(b.source, edit.id);
       } catch (e) {
         toast((e as Error).message);
-        return null;
+        return false;
       }
       const gen = generation.current;
       await save([edit], [], gen);
       // Not saved (a conflict or an error reloaded the scene): nothing to show.
-      if (generation.current !== gen || baseRef.current === b) return null;
+      if (generation.current !== gen || baseRef.current === b) return false;
       // The frame follows the saved file.
       const gone = "remove" in edit ? node(edit.id) : null;
       gone?.remove();
@@ -496,7 +502,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
         setSelected(movableIn(baseRef.current!, ids.added) ? ids.added : null);
       } else setSelected((sel) => (sel === null ? null : ids.map(sel)));
       redraw();
-      return ids.added;
+      return { added: ids.added };
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -509,8 +515,11 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (!b) return;
     const root = sceneRoot(b.source);
     if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.");
-    void structural({ id: root, insert: markupFor(kind, { slots: slotsIn(b), image }) }).then((id) => {
-      if (id !== null && onAirRef.current && DEVICE_SLOTS[kind]) toast(`On air: OBS puts ${DEVICE_SLOTS[kind]} in the new box`);
+    const slots = slotsIn(b);
+    const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
+    void structural({ id: root, insert: markupFor(kind, { slots, image }) }).then((done) => {
+      if (done && slot && onAirRef.current) toast(`On air: OBS puts its "${slot}" source in the new box`);
+      else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`This box asks OBS for a source named "${slot}"`);
     });
   };
 
@@ -519,7 +528,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (!b) return;
     if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.");
     setMenu(null);
-    void structural({ id, remove: true }).then(() => toast("Deleted. Undo puts it back."));
+    void structural({ id, remove: true }).then((done) => done && toast("Deleted. Undo puts it back."));
   };
 
   const doUndo = () => {
@@ -887,6 +896,16 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.defaultPrevented) return; // already handled (e.g. Return/Esc in the text being typed)
+    // An add or delete is saving: element ids are about to change, so nothing may start on the old ones.
+    if (busyRef.current) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Backspace"].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) e.preventDefault();
+      return;
+    }
+    // The picture picker is open: it names an image by id, so the scene stays as it is until it closes.
+    if (picker) {
+      if (e.key === "Escape") setPicker(null);
+      return;
+    }
     if (editing) {
       if (e.key === "Escape") finishEdit(false);
       return;
@@ -940,31 +959,35 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
 
   // ------------------------------------------------------------ conflict
 
-  const applyAgain = () => {
+  const applyAgain = async () => {
     if (!conflict) return;
     const { edits, prev } = conflict;
     const latest = baseRef.current ?? conflict.latest; // the newest version, if it moved on again
-    const moved = edits.map((e) => retarget(prev.source, latest.source, e));
+    const pairs = edits.map((e) => ({ e, m: retarget(prev.source, latest.source, e) }));
     conflictOpen.current = false;
     setConflict(null);
     // The ones that can be placed go through; the others are said so. (Their earlier live previews
     // were on the old version, which the stream already replaced.)
-    const lost = moved.filter((m) => m === null).length;
-    if (lost) toast(lost === moved.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
-    // Several lost changes to one element (a drag, then a nudge) become its last one.
+    const lost = pairs.filter((p) => p.m === null).length;
+    if (lost) toast(lost === pairs.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
+    // Several lost changes of one kind to one element (a drag, then a nudge) become its last one.
+    // Each goes as its own save: a move and a resize of one box both change its left.
     const last = new Map<string, SceneEdit>();
-    for (const e of moved) if (e) last.set(`${e.id}:${"text" in e ? "t" : "p"}`, e);
-    if (!last.size) return;
-    const again = [...last.values()];
-    const entries = again.flatMap((e) => {
+    for (const { m } of pairs) if (m && !isStructural(m)) last.set(`${m.id}:${editKind(m)}`, m);
+    for (const e of last.values()) {
       const before = valueIn(latest, e);
-      return before ? [{ before, after: e }] : [];
-    });
-    again.forEach((e) => {
       applyDom(e);
       preview(e);
-    });
-    save(again, entries);
+      save([e], before ? [{ before, after: e }] : []);
+    }
+    // Adding and deleting go through the same path as the first time (saved, then the frame follows),
+    // one at a time, each placed in the version as it is by then.
+    for (const { e, m } of pairs) {
+      if (!m || !isStructural(m)) continue;
+      const now = baseRef.current;
+      const again = now ? retarget(prev.source, now.source, e) : null;
+      if (again && isStructural(again)) await structural(again);
+    }
   };
   const keepNew = () => {
     if (!conflict) return;
@@ -1005,7 +1028,8 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const [naming, setNaming] = useState(rename);
   /** The new name until the library catches up. */
   const [named, setNamed] = useState<string | null>(null);
-  const shownTitle = named ?? place.title;
+  // The file's own <title> first: right after a duplicate, the library hasn't caught up with the copy yet.
+  const shownTitle = named ?? (base && titleIn(base)) ?? place.title;
   const doRename = (name: string) =>
     attempt(async () => {
       setNaming(false);
@@ -1105,7 +1129,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
         <button type="button" className="icon-btn" aria-label="Back" onClick={leave}>{Icon.back}</button>
         <div className="editor-titles">
           <span className="crumb">{place.crumb}</span>
-          {naming ? (
+          {naming && base ? (
             <TitleField value={shownTitle} onDone={(v) => (v === null ? setNaming(false) : void doRename(v))} />
           ) : (
             <button type="button" className="title title-btn" title="Rename" aria-label={`Rename ${shownTitle}`} disabled={busy} onClick={() => setNaming(true)}>
@@ -1255,7 +1279,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                       </button>
                     </>
                   )}
-                  {menu.hit.image !== null && (
+                  {menu.hit.image !== null && isLibraryUrl(attrIn(base, menu.hit.image, "src") ?? "") && (
                     <button type="button" role="menuitem" className={menu.hit.leaf === null ? "first" : ""} onClick={() => {
                       setPicker({ replace: menu.hit.image });
                       setMenu(null);
@@ -1313,7 +1337,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                   return <div key={i} className="lost"><span>{d.what} → </span>{d.value}</div>;
                 })}
                 <div className="actions">
-                  <button type="button" className="btn primary" onClick={applyAgain}>Apply my change again</button>
+                  <button type="button" className="btn primary" onClick={() => void applyAgain()}>Apply my change again</button>
                   <button type="button" className="btn" onClick={keepNew}>Keep the new version</button>
                 </div>
               </div>
@@ -1363,9 +1387,9 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
             setPicker(null);
             const src = libraryUrl(asset.path).replace(/'/g, "%27");
             if (replace !== null) {
-              const before = base ? valueIn(base, { id: replace, src }) : null;
-              const old = node(replace)?.getAttribute("src");
-              change({ id: replace, src }, old ? { id: replace, src: old } : before);
+              // Undo puts back what the file has (the menu offers Replace only when that's a library path).
+              const b = baseRef.current;
+              change({ id: replace, src }, b ? valueIn(b, { id: replace, src }) : null);
               return;
             }
             // Its natural size keeps its shape.
@@ -1401,7 +1425,8 @@ function TitleField({ value, onDone }: { value: string; onDone: (v: string | nul
   const finish = (out: string | null) => {
     if (done.current) return;
     done.current = true;
-    onDone(out);
+    // Unchanged (or emptied) is a cancel: nothing to save.
+    onDone(out === null || !out.trim() || out.trim() === value.trim() ? null : out);
   };
   return (
     <input ref={ref} className="title-input" aria-label="Scene name" value={v} maxLength={120} enterKeyHint="done"

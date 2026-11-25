@@ -339,6 +339,20 @@ const formatPx = (n: number) => String(Math.round(n * 100) / 100);
 /** Tags and attributes the editor never adds: nothing it inserts can run code or load another page. */
 const UNSAFE_TAGS = new Set(["script", "style", "iframe", "frame", "frameset", "object", "embed", "applet", "link", "meta", "base", "form", "input", "button", "textarea", "select", "title", "noscript", "template", "svg", "math", "xmp", "noembed", "noframes"]);
 
+const URL_ATTRS = new Set(["src", "href", "poster", "data", "action", "xlink:href", "background", "cite", "longdesc", "manifest", "ping"]);
+
+/** A path to a file in the library (`/library/<org>/…`), with nothing a scene attribute or the server would trip over. */
+export function isLibraryUrl(src: string): boolean {
+  if (typeof src !== "string" || !src.startsWith("/library/") || src.length > 600 || !/^[^\s"'<>`\\]+$/.test(src)) return false;
+  let path = "";
+  try {
+    path = decodeURIComponent(src.slice("/library/".length).split(/[?#]/)[0]!);
+  } catch {
+    return false;
+  }
+  return path.split("/").every((part) => part !== "" && part !== ".." && !part.startsWith("."));
+}
+
 /** Why `markup` can't be inserted as one element, or null when it can. */
 export function checkInsert(markup: string): string | null {
   if (typeof markup !== "string" || !markup) return "Nothing to add";
@@ -351,9 +365,15 @@ export function checkInsert(markup: string): string | null {
     if (!e.closed) return "Not one element";
     if (UNSAFE_TAGS.has(e.tag)) return `The editor doesn't add <${e.tag}>`;
     for (const a of e.attrs) {
-      if (a.name.startsWith("on") || a.name === "srcdoc" || a.name === "formaction" || !/^[a-z][\w:.-]*$/.test(a.name)) return `The editor doesn't add ${a.name}`;
-      const v = a.valueStart >= 0 ? decodeEntities(markup.slice(a.valueStart, a.valueEnd)).replace(/[\s\u0000-\u001f]+/g, "").toLowerCase() : "";
-      if (v.includes("javascript:") || v.includes("vbscript:") || (v.startsWith("data:") && !v.startsWith("data:image/"))) return "The editor doesn't add links that run code";
+      if (a.name.startsWith("on") || a.name === "srcdoc" || a.name === "formaction" || a.name === "srcset" || !/^[a-z][\w:.-]*$/.test(a.name)) return `The editor doesn't add ${a.name}`;
+      const decoded = a.valueStart >= 0 ? decodeEntities(markup.slice(a.valueStart, a.valueEnd)) : "";
+      // A character reference this decoder doesn't know (&colon;, &Tab;…) could hide anything from the checks below.
+      if (/&(#|[a-z])/i.test(decoded)) return "The editor doesn't add that";
+      const v = decoded.replace(/[\s\u0000-\u001f]+/g, "").toLowerCase();
+      if (v.includes("javascript:") || v.includes("vbscript:")) return "The editor doesn't add links that run code";
+      // Pictures and links come from the library only, never another site.
+      if (URL_ATTRS.has(a.name) && !isLibraryUrl(decoded)) return "Images come from the library";
+      if (a.name === "style" && [...v.matchAll(/url\(\s*['"]?([^'")]*)/g)].some((m) => !isLibraryUrl(m[1]!))) return "Images come from the library";
     }
   }
   return null;
@@ -469,7 +489,7 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
     case "src": {
       const { src } = edit as SrcEdit;
       if (el.tag !== "img") throw new EditError(`<${el.tag}> isn't an image`);
-      if (typeof src !== "string" || !/^[^\s"'<>`]+$/.test(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
+      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
       const a = el.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
       if (!a) throw new EditError("This image has no src to replace");
       return html.slice(a.valueStart, a.valueEnd) === src ? [] : [{ from: a.valueStart, to: a.valueEnd, text: src }];

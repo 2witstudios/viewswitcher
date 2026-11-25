@@ -58,7 +58,9 @@ describe("insertElement (EDIT-16)", () => {
 
   test("refuses anything but one plain element", () => {
     for (const bad of ["", " <p>x</p>", "<p>x</p><p>y</p>", "text", "<script>alert(1)</script>", `<div onclick="x()"></div>`,
-      `<a href="javascript:alert(1)">x</a>`, `<a href="java&#115;cript:x">x</a>`, `<div><iframe src="x"></iframe></div>`, "<p>x", `<img src="data:text/html,x">`, "<!-- x --><p></p>", "<svg><script/></svg>"]) {
+      `<a href="javascript:alert(1)">x</a>`, `<a href="java&#115;cript:x">x</a>`, `<a href="javascript&colon;alert(1)">x</a>`, `<a href="java&Tab;script:alert(1)">x</a>`,
+      `<a href="java&NewLine;script:x">x</a>`, `<img src="https://evil.example/x.png">`, `<img src="/library/o/a.png" srcset="https://evil.example/x.png 2x">`,
+      `<div style="background: url(https://evil.example/x.png)"></div>`, `<video poster="//evil.example/x.png"></video>`, `<img src="/library/../x.png">`, `<div><iframe src="x"></iframe></div>`, "<p>x", `<img src="data:text/html,x">`, "<!-- x --><p></p>", "<svg><script/></svg>"]) {
       expect(checkInsert(bad)).not.toBeNull();
       expect(() => insertElement(`<main class="scene"></main>`, 0, bad)).toThrow();
     }
@@ -170,7 +172,8 @@ describe("image src (EDIT-18)", () => {
   test("replaces only the src value", () => {
     const html = `<img class="abs" src="/library/o/assets/a.png" alt="" style="left: 1px">`;
     expect(applyEdits(html, [{ id: 0, src: "/library/o/assets/b%20c.png" }])).toBe(`<img class="abs" src="/library/o/assets/b%20c.png" alt="" style="left: 1px">`);
-    for (const bad of [`x" onerror="y`, "javascript:alert(1)", "a b.png", "data:text/html,x"]) expect(() => applyEdits(html, [{ id: 0, src: bad }])).toThrow();
+    for (const bad of [`x" onerror="y`, "javascript:alert(1)", "a b.png", "data:text/html,x", "https://evil.example/x.png", "/library/../x.png"]) expect(() => applyEdits(html, [{ id: 0, src: bad }])).toThrow();
+    expect(checkInsert(`<div style="background: url('/library/o/assets/a.png')"></div>`)).toBeNull();
     expect(() => applyEdits(`<p>x</p>`, [{ id: 0, src: "a.png" }])).toThrow();
   });
 });
