@@ -10,7 +10,7 @@ import { customizeScene, duplicateScene, onAirFor, type OnAirRequest, orgDir, re
 import { ensureLibrary } from "./library-kit";
 import { isLocalRequest } from "./local";
 import { handleMcp, noteSeen } from "./mcp/http";
-import { noPreview } from "./mcp/no-preview";
+import { createPreviewer } from "./preview";
 import type { McpDeps } from "./mcp/server";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
@@ -351,7 +351,7 @@ const mcp: McpDeps = {
   state: () => state,
   goOnAir,
   renamed,
-  previewer: noPreview(config.port),
+  previewer: createPreviewer(obs, { obs: config.obs, port: config.port, library: config.library }),
 };
 function agentSeen(client: string | null) {
   const seen = noteSeen(state.agent, client, Date.now());
