@@ -1,35 +1,33 @@
 ---
+// The footer (Jono's design): the wordmark and what ViewSwitcher is, then one row of links.
 import Logo from "./Logo.astro";
-import { github, releases } from "../site.config";
+import { descriptor } from "../site.config";
+const links = [
+  { href: "/download", label: "Download" },
+  { href: "/templates", label: "Templates" },
+  { href: "/setup", label: "Set up OBS" },
+  { href: "/ipad", label: "iPad" },
+  { href: "/church-livestream", label: "Church livestreaming" },
+  { href: "/support", label: "Support" },
+  { href: "/privacy", label: "Privacy" },
+];
 ---
-<footer class="wrap">
-  <div class="about">
-    <a class="brand" href="/"><Logo height={19} label /></a>
-    <p>The free, one-click OBS scene switcher for Mac.</p>
-    <p class="quiet">No cookies, no tracking, no data collected.</p>
+<footer>
+  <div class="wrap row">
+    <div class="about">
+      <a class="brand" href="/"><Logo height={19} label /></a>
+      <p>{descriptor}</p>
+    </div>
+    <nav aria-label="Footer">
+      {links.map((l) => <a href={l.href}>{l.label}</a>)}
+    </nav>
   </div>
-  <nav aria-label="Guides">
-    <p class="head">Guides</p>
-    <a href="/download">Download for Mac</a>
-    <a href="/templates">Templates</a>
-    <a href="/setup">Set up OBS</a>
-    <a href="/ipad">ViewSwitcher for iPad</a>
-    <a href="/church-livestream">Church livestreaming</a>
-  </nav>
-  <nav aria-label="Help">
-    <p class="head">Help</p>
-    <a href="/support">Support</a>
-    <a href="/privacy">Privacy</a>
-    <a href={releases}>Release notes</a>
-    <a href={github}>GitHub</a>
-  </nav>
 </footer>
 <style>
-  footer { display: grid; gap: 2rem 3rem; padding-block: 3rem calc(3rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--rule); }
-  @media (min-width: 48rem) { footer { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); } }
-  .about { display: grid; gap: 0.6rem; align-content: start; color: var(--ink-2); }
-  .brand { display: inline-flex; width: fit-content; color: var(--ink); margin-bottom: 0.25rem; }
-  nav { display: grid; gap: 0.6rem; align-content: start; }
-  nav a { color: var(--ink-2); width: fit-content; padding-block: 0.15rem; }
-  .head { font: 600 0.8125rem/1 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.25rem; }
+  footer { border-top: 1px solid var(--rule); }
+  .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem 3rem; padding-block: 3rem calc(4rem + env(safe-area-inset-bottom, 0px)); font-size: 0.9375rem; color: var(--ink-2); }
+  .about { display: grid; gap: 0.6rem; align-content: start; }
+  .brand { display: inline-flex; color: var(--ink); width: fit-content; }
+  nav { display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem; align-content: start; }
+  nav a { color: var(--ink-2); padding-block: 0.2rem; }
 </style>

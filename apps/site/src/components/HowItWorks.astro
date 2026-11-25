@@ -1,85 +1,161 @@
 ---
-import ViewFrame from "./ViewFrame.astro";
+// How it works (SITE-27, Jono's approved homepage): four steps, text beside a big picture, alternating sides;
+// on a phone the picture stacks above the text. AI_CONNECT_RELEASED (site.config.ts) adds the AI wording and
+// the prompt bubble to step 2.
 import { Picture } from "astro:assets";
+import ViewFrame from "./ViewFrame.astro";
+import Step4 from "./Step4.astro";
 import { github, site } from "../site.config";
-import aiSheet from "../assets/app/edit-with-ai.webp";
+import { media } from "../lib/views";
 const ai = site.aiConnect;
-const covers = ["starting-soon", "main", "live", "brb"];
 const skill = `${github}/blob/main/apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md`;
+const webcam = media("fc-host");
+const added = [
+  { file: "starting-soon", name: "Pregame", added: false },
+  { file: "main", name: "Both hosts", added: false },
+  { file: "brb", name: "Break", added: true },
+];
 ---
-<section class="section" id="how" aria-labelledby="how-title">
+<section class="section how" id="how" aria-labelledby="how-title">
   <div class="wrap">
     <div class="section-head">
       <h2 id="how-title">How it works</h2>
       <p class="lede">Set up your views once. Then every show is a click away, and OBS keeps streaming the way it always does.</p>
     </div>
-    <ol class="steps">
-      <li>
-        {ai ? (
-          <div class="vis ask on-dark">
-            <Picture src={aiSheet} alt="ViewSwitcher's Edit with AI sheet, with Add to Claude Desktop and Add to Cursor buttons." widths={[320, 480, 640]} sizes="(min-width: 60rem) 11rem, 45vw" formats={["webp"]} loading="lazy" decoding="async" class="sheet" />
-            <div class="made" aria-hidden="true">
-              <p class="bubble">Make me a halftime screen</p>
-              <ViewFrame show="fullcount" file="brb" alt="" sizes="(min-width: 60rem) 11rem, 45vw" widths={[240, 360, 480]} />
-            </div>
+
+    <div class="step">
+      <div class="text">
+        <span class="n">Step 1</span>
+        <h3>Set up once</h3>
+        <p>Download ViewSwitcher, open OBS beside it and click <b>Set Up OBS</b>. It adds what OBS needs; then you pick your camera and screen once.</p>
+        <p class="links"><a href="/setup">Setup guide</a></p>
+      </div>
+      <div class="pic obs-setup" role="img" aria-label="OBS with the ViewSwitcher scene and its Camera and Screen sources, beside ViewSwitcher's Set up OBS card">
+        <div class="obs">
+          <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>OBS</span></div>
+          <div class="docks" aria-hidden="true">
+            <div class="col scenes"><span class="h">Scenes</span><span class="sel">ViewSwitcher</span><span>Scene</span></div>
+            <div class="col"><span class="h">Sources</span><span>Camera</span><span>Screen</span></div>
           </div>
-        ) : (
-        <div class="vis code" aria-hidden="true"><pre><code><span class="t">&lt;div</span> <span class="a">class</span>=<span class="s">"card"</span><span class="t">&gt;</span>
-  <span class="t">&lt;small&gt;</span>Saltwater Kitchen · Ep. 31<span class="t">&lt;/small&gt;</span>
-  <span class="t">&lt;strong&gt;</span>Sunday bread, start to finish<span class="t">&lt;/strong&gt;</span>
-<span class="t">&lt;/div&gt;</span>
-<span class="t">&lt;div</span> <span class="a">data-slot</span>=<span class="s">"Camera"</span><span class="t">&gt;&lt;/div&gt;</span>
-<span class="t">&lt;p</span> <span class="a">class</span>=<span class="s">"caption"</span><span class="t">&gt;</span>Ana, at the stove<span class="t">&lt;/p&gt;</span></code></pre></div>
-        )}
-        <h3><span class="n">1</span>Pick or make your views</h3>
-        {ai
-          ? <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>. Or connect your favorite AI (Claude, Cursor or any app that supports MCP) in one click, and ask it for custom overlays and slides: "make me a halftime screen", "turn this sermon outline into slides". The <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>
-          : <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>, code your own, or have an AI assistant code one: the <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>}
-      </li>
-      <li>
-        <div class="vis tiles on-dark" aria-hidden="true">
-          {covers.map((file, i) => (
-            <div class:list={["tile", { live: i === 1 }]}>
-              <ViewFrame show="kitchen" file={file} alt="" sizes="10rem" widths={[240, 360]} />
-              {i === 1 && <span class="badge"><i class="dot"></i>On air</span>}
-            </div>
-          ))}
         </div>
-        <h3><span class="n">2</span>Click to switch</h3>
-        <p>Click a view in the Mac app, or tap it on a phone or iPad beside you: pair one over Wi-Fi with a QR code, or plug an iPad in.</p>
-      </li>
-      <li>
-        <div class="vis"><ViewFrame show="kitchen" file="main" alt="Saltwater Kitchen on air: the dough up close, the cook in a polaroid beside it, and today's recipe card" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
-        <h3><span class="n">3</span>Everything moves into place</h3>
-        <p>Your camera, screen share and titles land where the view puts them, and OBS keeps streaming as usual. Nothing to rebuild for each layout. <a href="/setup">How to set up OBS with ViewSwitcher</a></p>
-      </li>
-    </ol>
+        <div class="card" aria-hidden="true">
+          <b>Set up OBS</b>
+          <span>Adds the ViewSwitcher scene. Then pick your camera and screen.</span>
+          <span class="btn-ish">Set Up OBS</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step flip">
+      <div class="text">
+        <span class="n">Step 2</span>
+        <h3>Create a custom template</h3>
+        {ai
+          ? <p>Connect your favorite AI (Claude, Cursor, any app with MCP) in one click and describe the look you want. Or start from a free template. Templates are small web pages, so you can also code your own.</p>
+          : <p>Start from a free template: your show's name and colors fill in, and you retype the titles right on the view. Templates are small web pages, so you can also code your own, or have an AI assistant code one.</p>}
+        <p class="links"><a href="/templates">Browse templates</a><a href={skill}>The ViewSwitcher skill</a></p>
+      </div>
+      <div class="pic panel before-after">
+        <div class="pair">
+          <figure>
+            <div class="raw"><Picture src={webcam.image} alt="A plain webcam shot of a podcast host at a microphone" widths={[360, 540, 720]} sizes="(min-width: 64rem) 20rem, 42vw" formats={["webp"]} loading="lazy" decoding="async" style={`object-position:${webcam.focus}`} /></div>
+            <figcaption>Just a webcam</figcaption>
+          </figure>
+          <figure>
+            <ViewFrame show="fullcount" file="live" alt="The same shot with the Full Count template: the host's name and the scoreboard title bar" sizes="(min-width: 64rem) 20rem, 42vw" widths={[360, 540, 720]} class="made" />
+            <figcaption><b>With your template</b></figcaption>
+          </figure>
+        </div>
+        {ai && <p class="prompt">“Make it look like a sports show. Two hosts, a scoreboard bar.”</p>}
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="text">
+        <span class="n">Step 3</span>
+        <h3>Add it to your stream</h3>
+        <p>Make a stream for this week's show and add the views you need. Retype this episode's titles right on the view; the template stays the same for next week.</p>
+      </div>
+      <div class="pic panel stream">
+        <b class="ep">Full Count · Ep. 112</b>
+        <ul>
+          {added.map((v) => (
+            <li class:list={{ added: v.added }}>
+              <ViewFrame show="fullcount" file={v.file} alt="" sizes="8rem" widths={[240, 360]} />
+              <span>{v.name}</span>
+              {v.added && <span class="plus">+ Added</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+
+    <div class="step flip">
+      <div class="text">
+        <span class="n">Step 4</span>
+        <h3>Click to switch and control your live</h3>
+        <p>Click a view on your Mac, or tap it on an iPad or a paired phone. OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.</p>
+      </div>
+      <div class="pic"><Step4 /></div>
+    </div>
   </div>
 </section>
 <style>
-  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 3rem 2rem; }
-  @media (min-width: 60rem) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  .steps li { display: grid; gap: 0.85rem; align-content: start; }
-  .steps p { color: var(--ink-2); max-width: 30rem; }
-  h3 { display: flex; align-items: baseline; gap: 0.6rem; margin-top: 0.75rem; }
-  .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
-  .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
-  .vis > :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
-  .code { background: var(--raised); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; }
-  .code pre { margin: 0; font-size: clamp(0.6875rem, 1.1vw, 0.75rem); line-height: 1.65; color: var(--ink); white-space: pre; overflow: hidden; }
-  .ask { background: var(--monitor); padding: 0.75rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: center; }
-  .ask :global(.sheet) { width: 100%; height: 100%; max-height: 100%; object-fit: cover; object-position: 0 0; border-radius: 8px; display: block; }
-  .ask :global(picture) { display: block; height: 100%; min-height: 0; }
-  .made { display: grid; gap: 0.5rem; align-content: center; }
-  .made :global(.frame) { border-radius: 6px; }
-  .made .bubble { margin: 0; background: var(--monitor-2); color: var(--on-monitor); font-size: 0.75rem; line-height: 1.3; padding: 0.45rem 0.6rem; border-radius: 10px 10px 10px 3px; width: fit-content; }
-  .code .t { color: #8a3b2a; }
-  .code .a { color: #2b5c8a; }
-  .code .s { color: #3d6b35; }
-  .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
-  .tile { position: relative; }
-  .tile :global(.frame) { border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }
-  .tile.live :global(.frame) { outline-color: var(--live); }
-  .badge { position: absolute; left: 0.4rem; bottom: 0.4rem; display: inline-flex; align-items: center; gap: 0.35rem; background: var(--monitor); color: var(--on-monitor); font: 600 0.75rem/1 var(--text); padding: 0.3rem 0.5rem; border-radius: 999px; }
-  .dot { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--live); display: inline-block; }
+  .how { padding-bottom: clamp(3rem, 7vw, 6.5rem); }
+  .step { display: grid; gap: 2rem; align-items: center; padding-block: clamp(2rem, 4vw, 3rem); }
+  .step .pic { order: -1; }
+  @media (min-width: 60rem) {
+    .step { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 4rem; }
+    .step .pic { order: 0; }
+    .step.flip { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+    .step.flip .pic { order: -1; }
+  }
+  .text { display: grid; gap: 0.9rem; align-content: start; }
+  .text .n { font-size: 0.9375rem; font-weight: 600; color: var(--ink-3); }
+  .text h3 { font-size: clamp(1.6rem, 3vw, 2.125rem); line-height: 1.1; }
+  .text p { color: var(--ink-2); font-size: 1.125rem; max-width: 34rem; }
+  .text b { color: var(--ink); font-weight: 600; }
+  .links { display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; }
+  .text .links a { color: var(--ink); font-weight: 500; text-underline-offset: 5px; }
+
+  .pic { min-width: 0; border-radius: 18px; overflow: hidden; }
+  .panel { background: #f6f7f9; padding: clamp(1rem, 2.5vw, 1.75rem); display: grid; gap: 1.1rem; }
+
+  /* Step 1: OBS beside the Set up OBS card (an illustration, not a capture). */
+  .obs-setup { aspect-ratio: 16 / 10; background: #eef0f3; position: relative; container-type: inline-size; }
+  .obs { position: absolute; left: 6%; top: 9%; width: 70%; height: 74%; border-radius: 10px; background: #2b2e36; border: 1px solid #3a3f4b; overflow: hidden; box-shadow: 0 24px 48px -24px #00000073; }
+  .obs .bar { height: 3.6cqw; background: #23262d; display: flex; align-items: center; gap: 0.8cqw; padding: 0 1.4cqw; }
+  .obs .bar i { width: 1.25cqw; height: 1.25cqw; border-radius: 50%; background: #ff5f57; }
+  .obs .bar i:nth-child(2) { background: #febc2e; }
+  .obs .bar i:nth-child(3) { background: #28c840; }
+  .obs .bar span { margin-left: 1cqw; font-size: 1.65cqw; color: #9ca3af; }
+  .docks { padding: 1.9cqw; display: flex; gap: 1.9cqw; font-size: max(1.8cqw, 7px); }
+  .docks .col { display: flex; flex-direction: column; gap: 0.8cqw; flex: 1; }
+  .docks .scenes { flex: 0 0 30%; }
+  .docks span { padding: 0.8cqw 1.1cqw; color: #c9ccd3; }
+  .docks .h { padding: 0; color: #9ca3af; }
+  .docks .sel { border-radius: 4px; background: #3d5afe; color: #fff; font-weight: 600; }
+  .card { position: absolute; right: 5%; bottom: 8%; width: 44%; border-radius: 14px; background: #171a20; color: #f3f4f6; padding: 2.8cqw 3cqw; box-shadow: 0 24px 48px -16px #00000080; display: flex; flex-direction: column; gap: 1.4cqw; }
+  .card b { font: 700 max(2.75cqw, 10px)/1.1 var(--display); }
+  .card span { font-size: max(1.95cqw, 7px); line-height: 1.45; color: #c9ccd3; }
+  .card .btn-ish { align-self: flex-start; padding: 1.25cqw 2.2cqw; border-radius: 8px; background: #f3f4f6; color: var(--ink); font-weight: 600; }
+
+  /* Step 2: before and after. */
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  figure { margin: 0; display: grid; gap: 0.5rem; }
+  figcaption { font-size: 0.8125rem; color: var(--ink-3); }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .raw { aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; }
+  .raw :global(img) { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.85); }
+  .raw :global(picture) { display: block; height: 100%; }
+  .before-after :global(.made) { border-radius: 10px; box-shadow: 0 18px 36px -20px #00000080; }
+  .prompt { justify-self: center; margin: 0; padding: 0.75rem 1.1rem; border-radius: 14px; background: #fff; border: 1px solid #e0e2e6; font-size: 1rem; line-height: 1.4; text-align: center; }
+
+  /* Step 3: this week's stream. */
+  .ep { font: 700 1.25rem/1.2 var(--display); }
+  .stream ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+  .stream li { display: flex; align-items: center; gap: 1rem; padding: 0.6rem; border-radius: 12px; background: #fff; border: 1px solid #e0e2e6; font-size: 1.0625rem; }
+  .stream li :global(.frame) { width: clamp(5.5rem, 22%, 7.5rem); flex: none; border-radius: 6px; }
+  .stream li.added { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; box-shadow: 0 14px 28px -16px #00000080; }
+  .stream .plus { margin-left: auto; padding-right: 0.5rem; font-size: 0.9375rem; }
 </style>

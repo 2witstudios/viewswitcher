@@ -1,13 +1,9 @@
 ---
-import { github } from "../site.config";
 import { FAQS as faqs } from "../data/faq";
 ---
 <section class="section" id="faq" aria-labelledby="faq-title">
-  <div class="wrap grid">
-    <div class="section-head">
-      <h2 id="faq-title">Questions</h2>
-      <p class="lede">Something else? <a href={`${github}/issues`}>Ask on GitHub</a>.</p>
-    </div>
+  <div class="wrap">
+    <h2 id="faq-title">Questions</h2>
     <div class="list">
       {faqs.map((f) => (
         <details>
@@ -19,14 +15,14 @@ import { FAQS as faqs } from "../data/faq";
   </div>
 </section>
 <style>
-  .grid { display: grid; gap: 1rem; align-items: start; }
-  @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5rem; } }
-  details { border-top: 1px solid var(--rule); }
-  details:last-child { border-bottom: 1px solid var(--rule); }
-  summary { list-style: none; cursor: pointer; padding-block: 1.25rem; font: 600 1.25rem/1.25 var(--display); letter-spacing: -0.015em; color: var(--ink); display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+  h2 { margin-bottom: 1.4rem; }
+  .list { border-top: 1px solid var(--rule); }
+  details { border-bottom: 1px solid var(--rule); }
+  summary { list-style: none; cursor: pointer; padding-block: 1.15rem; font-size: 1.125rem; color: var(--ink); display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: ""; flex: none; width: 0.6rem; height: 0.6rem; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg) translateY(-25%); transition: transform 160ms ease; }
-  details[open] summary::after { transform: rotate(-135deg) translateY(-25%); }
-  details p { color: var(--ink-2); padding-bottom: 1.4rem; max-width: 38rem; }
+  summary::after { content: "+"; flex: none; color: var(--ink-3); font-size: 1.25rem; line-height: 1; transition: transform 160ms ease; }
+  details[open] summary::after { transform: rotate(45deg); }
+  details p { color: var(--ink-2); padding-bottom: 1.3rem; max-width: 44rem; }
+  details a { color: var(--ink); }
   @media (prefers-reduced-motion: reduce) { summary::after { transition: none; } }
 </style>
