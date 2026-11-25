@@ -20,7 +20,8 @@ require_pinned_bun() {
 # require_clean_tree <repo> [ship]: with "ship", the build leaves this Mac, so ALLOW_DIRTY doesn't apply.
 require_clean_tree() {
   local dirty
-  dirty="$(git -C "$1" status --porcelain)"
+  # --untracked-files=all whatever status.showUntrackedFiles says, so an untracked file can't hide.
+  dirty="$(git -C "$1" status --porcelain --untracked-files=all)"
   [ -z "$dirty" ] && return 0
   if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "${2:-}" != ship ]; then
     echo "⚠ ALLOW_DIRTY=1: building from a working tree with changes. Don't ship this build." >&2

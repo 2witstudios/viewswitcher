@@ -48,10 +48,10 @@ if [ "$RELEASE" = 1 ]; then
   # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
   BUILT="$(git -C "$REPO" rev-parse HEAD)"
   # node_modules is gitignored, so the clean tree says nothing about it: install bun.lock into empty
-  # node_modules folders, so no stale or extra package, and no file patched in node_modules, reaches the
-  # build. A local test build from a dirty tree (ALLOW_DIRTY) installs what package.json says now
+  # node_modules folders, so no stale or extra package reaches the build (a file patched by hand can come
+  # back only through a hardlinked cache; see below). A local test build from a dirty tree (ALLOW_DIRTY) installs what package.json says now
   # instead, since its bun.lock may have changed.
-  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then
+  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain --untracked-files=all)" ]; then
     (cd "$REPO" && bun install)
   else
     # The root's and each workspace's folder, found as Bun finds workspaces (scripts/node-modules-dirs.ts),
@@ -113,6 +113,11 @@ if [ "$PUBLISH" = 1 ]; then
   gh auth status >/dev/null 2>&1 || { echo "✗ --publish needs the GitHub CLI signed in (gh auth login)." >&2; exit 1; }
   ! gh release view "v$VERSION" --repo 2witstudios/viewswitcher >/dev/null 2>&1 || {
     echo "✗ A release v$VERSION already exists: bump MARKETING_VERSION in project.yml first." >&2; exit 1; }
+  # A tag left without a release: gh would reuse it (--target doesn't move a tag), so the draft would
+  # name that commit while carrying this build. ^{} dereferences an annotated tag.
+  TAGGED="$(git -C "$REPO" ls-remote origin "refs/tags/v$VERSION^{}" "refs/tags/v$VERSION" | awk 'NR==1 || /\^\{\}$/ {c=$1} END {print c}')"
+  [ -z "$TAGGED" ] || [ "$TAGGED" = "$BUILT" ] || {
+    echo "✗ Tag v$VERSION already exists on origin at ${TAGGED:0:7}, not ${BUILT:0:7}: bump MARKETING_VERSION or delete that tag." >&2; exit 1; }
 fi
 sign() { # sign <path> [entitlements]: Developer ID + hardened runtime + timestamp, or ad hoc
   local ent=()

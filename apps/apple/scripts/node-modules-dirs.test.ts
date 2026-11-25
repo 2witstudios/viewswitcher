@@ -16,13 +16,14 @@ function tree(workspaces: unknown, files: string[]) {
 afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
 describe("nodeModulesDirs", () => {
-  test("the root's and each workspace's, not another checkout's under a dot folder", () => {
+  test("the root's and each workspace's", () => {
     tree(["apps/*", "packages/*"], ["apps/web/package.json", "apps/server/package.json", "packages/shared/package.json", ".pu/worktrees/x/apps/web/package.json", "apps/notes.txt"]);
     expect(nodeModulesDirs(repo)).toEqual(["apps/server/node_modules", "apps/web/node_modules", "node_modules", "packages/shared/node_modules"]);
   });
 
   test("Bun's object form and ** patterns, skipping packages inside node_modules", () => {
-    tree({ packages: ["packages/**"], catalog: {} }, ["packages/ui/package.json", "packages/ui/icons/package.json", "packages/ui/node_modules/dep/package.json"]);
+    // packages/.wt is a dot folder (another checkout, say): ** must not reach into it, as Bun doesn't.
+    tree({ packages: ["packages/**"], catalog: {} }, ["packages/ui/package.json", "packages/ui/icons/package.json", "packages/ui/node_modules/dep/package.json", "packages/.wt/x/package.json"]);
     expect(nodeModulesDirs(repo)).toEqual(["node_modules", "packages/ui/icons/node_modules", "packages/ui/node_modules"]);
   });
 

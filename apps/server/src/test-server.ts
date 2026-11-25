@@ -43,9 +43,15 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
     for await (const chunk of proc.stderr) stderr = (stderr + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL);
   })().catch(() => {});
   const fail = async (why: string) => {
+    // Let it exit (and flush its stderr) before the caller's afterAll removes its library. The caller
+    // never gets proc on a failure, so a server that ignores SIGTERM is killed outright, never orphaned.
     proc.kill();
-    // Let it exit (and flush its stderr) before the caller's afterAll removes its library.
-    await Promise.race([Promise.all([proc.exited, drained]), Bun.sleep(2_000)]);
+    const gone = await Promise.race([proc.exited.then(() => true), Bun.sleep(2_000).then(() => false)]);
+    if (!gone) {
+      proc.kill("SIGKILL");
+      await proc.exited;
+    }
+    await Promise.race([drained, Bun.sleep(500)]);
     const tail = stderr.trim();
     return new Error(tail ? `${why}; its stderr ended:\n${tail}` : why);
   };
