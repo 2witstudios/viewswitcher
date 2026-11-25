@@ -56,6 +56,8 @@ html[data-shell="mac"]:not(.shell-fullscreen) .brand { min-height: var(--shell-h
 /* Absolute, not fixed: it covers only the page's empty top padding and scrolls away with it, so
    content scrolled up to the top stays clickable. */
 html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; position: absolute; z-index: 15; top: 0; left: 0; right: 0; height: var(--shell-drag); }
+/* Wide (Mac, browser, iPad): the sidebar stays put while the page scrolls, and scrolls itself if it's taller than the window. */
+@media (min-width: 781px) { .side { position: sticky; top: 0; align-self: flex-start; height: 100vh; height: 100dvh; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; } }
 /* Narrow: the main column wraps under the sidebar and reaches the left edge itself. */
 @media (max-width: 780px) { .main { padding-left: calc(32px + var(--safe-left)); } }
 .brand span { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
