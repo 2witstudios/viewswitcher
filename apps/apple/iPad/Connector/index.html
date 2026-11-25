@@ -89,11 +89,14 @@
   }
   net.value = VS.network();
 
-  let busy = false, leaving = false, browsing = false;
+  // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
+  // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
+  let busy = false, leaving = false, browsing = false, touched = false;
   const go = (url) => { leaving = true; location.replace(url); };
 
   // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app.
   $("scan").addEventListener("click", async () => {
+    touched = true;
     const link = await ask("scan");
     if (!link || !VS.usable(link)) return;
     VS.saveNetwork(new URL(link).origin);
@@ -103,14 +106,18 @@
   // Enter code (PHONE-5): the Mac's own pair page takes the code; this finds the Mac for it.
   $("enter").addEventListener("click", async () => {
     if (browsing) return;
-    browsing = true;
+    browsing = touched = true;
     status.innerHTML = `<span class="dot"></span>Looking on this Wi-Fi…`;
     macs.hidden = true;
-    const found = ((await ask("browse")) || []).filter((m) => VS.usable(m.url));
+    const reply = (await ask("browse")) || {};
+    // Only a .local name, as the app's MacFinder already insists (PairingLink.bonjourMac).
+    const found = (reply.macs || []).filter((m) => VS.usable(m.url) && new URL(m.url).hostname.endsWith(".local"));
     browsing = false;
     if (found.length === 1) return pairWith(found[0].url);
     if (!found.length) {
-      status.textContent = "No Mac found. Turn on Wi-Fi connections in ViewSwitcher on the Mac.";
+      status.textContent = reply.denied
+        ? "Allow Local Network for ViewSwitcher in Settings, then try again."
+        : "No Mac found. Turn on Wi-Fi connections in ViewSwitcher on the Mac.";
       return;
     }
     status.textContent = "Which Mac?";
@@ -128,7 +135,7 @@
     go(`${base}/pair`);
   }
 
-  $("manual").addEventListener("click", () => { form.hidden = false; $("manual").hidden = true; net.focus(); });
+  $("manual").addEventListener("click", () => { touched = true; form.hidden = false; $("manual").hidden = true; net.focus(); });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = net.value.trim().replace(/\/+$/, "");
@@ -159,7 +166,7 @@
       // try it there); after leaving it, or once a Mac has been used, the connector stays and offers it.
       // A saved network address means it was used before (an earlier build). It waits ~4.5 s first: at
       // launch the Mac's usb-bridge dials the tunnel on a 1 s retry and UsbTunnel holds a request up to 4 s.
-      if (!VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
+      if (!touched && !VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
         if (Date.now() - started < 4500) return;
         leaving = true;
         location.replace("demo/");

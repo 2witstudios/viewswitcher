@@ -23,6 +23,19 @@ public enum PairingLink {
         return "\(url.scheme?.lowercased() ?? "http")://\(host)\(url.port.map { ":\($0)" } ?? "")"
     }
 
+    /// A Mac found by Bonjour (PHONE-5): its address, only for a `.local` name and a real port. Whoever
+    /// answers on the Wi-Fi picks the name, so anything else (a *.ts.net or loopback name, an IP) is refused,
+    /// as PairingLink refuses it from a QR code.
+    public static func bonjourMac(host: String, port: Int) -> String? {
+        var h = host.lowercased()
+        if h.hasSuffix(".") { h.removeLast() }
+        let labels = h.split(separator: ".", omittingEmptySubsequences: false)
+        guard h.hasSuffix(".local"), labels.count >= 2, (1...65535).contains(port),
+              labels.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") } })
+        else { return nil }
+        return "http://\(h):\(port)"
+    }
+
     /// 10/8, 172.16/12 or 192.168/16: an address on a home or office network, never the internet.
     public static func isPrivateIPv4(_ host: String) -> Bool {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)

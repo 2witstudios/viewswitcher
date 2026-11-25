@@ -68,6 +68,12 @@ public enum NavigationPolicy {
     /// The scheme of the iPad app's bundled connector page (viewswitcher://connector/).
     public static let connectorScheme = "viewswitcher"
 
+    /// Who may ask the app for the camera scanner and Bonjour (ConnectorBridge, PHONE-4, PHONE-5): only the
+    /// bundled connector or demo in the main frame, never a page the Mac serves, a scene, or a subframe.
+    public static func connectorBridgeAllowed(isMainFrame: Bool, scheme: String) -> Bool {
+        isMainFrame && scheme.lowercased() == connectorScheme
+    }
+
     /// Hosts the iPhone and iPad app may show in its main frame (the Capacitor app's allowNavigation): the
     /// USB-C tunnel on 127.0.0.1, tailscale serve (*.ts.net), Bonjour names (*.local), and a private LAN
     /// address, which the Mac's pairing QR code carries (PHONE-4). A LAN device could answer as either a

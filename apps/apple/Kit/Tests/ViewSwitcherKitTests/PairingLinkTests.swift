@@ -35,4 +35,13 @@ final class PairingLinkTests: XCTestCase {
             XCTAssertFalse(PairingLink.isPrivateIPv4(h), h)
         }
     }
+
+    func testBonjourAcceptsOnlyLocalNames() {
+        XCTAssertEqual(PairingLink.bonjourMac(host: "Studio-Mac.local.", port: 7420), "http://studio-mac.local:7420")
+        XCTAssertEqual(PairingLink.bonjourMac(host: "studio-mac.local", port: 7420), "http://studio-mac.local:7420")
+        for (h, p) in [("evil.ts.net", 443), ("localhost", 7420), ("127.0.0.1", 7420), ("192.168.1.20", 7420), ("local", 7420),
+                       (".local", 7420), ("mac.local", 0), ("mac.local", 70000), ("ma c.local", 7420), ("mac.local/x", 7420), ("evil.com", 80)] {
+            XCTAssertNil(PairingLink.bonjourMac(host: h, port: p), "\(h):\(p)")
+        }
+    }
 }

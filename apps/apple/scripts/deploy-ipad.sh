@@ -10,7 +10,8 @@ TEAM="${TEAM:-M96WTV3CKX}"
 BUNDLE_ID="com.twowitstudios.viewswitcher"
 
 if [ -z "${DEVICE:-}" ]; then
-  first() { xcrun devicectl list devices 2>/dev/null | awk -v kind="$1" '$0 ~ kind && /available/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/) { print $i; exit } }'; }
+  # Usable states: "available (paired)", or "connected" while a tunnel is open; never "unavailable".
+  first() { xcrun devicectl list devices 2>/dev/null | awk -v kind="$1" '$0 ~ kind && ($0 ~ /(^|[[:space:]])available/ || $0 ~ /(^|[[:space:]])connected/) && $0 !~ /unavailable/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/) { print $i; exit } }'; }
   DEVICE=$(first iPad)
   [ -n "$DEVICE" ] || DEVICE=$(first iPhone)
 fi

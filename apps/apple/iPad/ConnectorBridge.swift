@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import VisionKit
 import WebKit
@@ -6,18 +7,19 @@ import ViewSwitcherKit
 /// What the bundled connector page (viewswitcher://connector/) can ask the app for, as
 /// `window.webkit.messageHandlers.vs.postMessage(...)` with a reply (PHONE-4, PHONE-5):
 ///  - `"scan"`: the camera reads the Mac's pairing QR code; replies with the pairing link, or null.
-///  - `"browse"`: finds Macs running ViewSwitcher on this Wi-Fi by Bonjour; replies with [{ name, url }].
+///  - `"browse"`: finds Macs running ViewSwitcher on this Wi-Fi by Bonjour; replies with
+///    { macs: [{ name, url }], denied } (denied: Local Network access is off for the app).
 /// Only the connector may ask: never the switcher the Mac serves, a scene, or any other page.
 final class ConnectorBridge: NSObject, WKScriptMessageHandlerWithReply {
     weak var host: UIViewController?
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping @MainActor (Any?, String?) -> Void) {
-        guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == NavigationPolicy.connectorScheme else {
+        guard NavigationPolicy.connectorBridgeAllowed(isMainFrame: message.frameInfo.isMainFrame, scheme: message.frameInfo.securityOrigin.protocol) else {
             return replyHandler(nil, "Not available here")
         }
         switch message.body as? String {
         case "scan": scan { replyHandler($0?.absoluteString, nil) }
-        case "browse": MacFinder.find { macs in replyHandler(macs.map { ["name": $0.name, "url": $0.url] }, nil) }
+        case "browse": MacFinder.find { macs, denied in replyHandler(["macs": macs.map { ["name": $0.name, "url": $0.url] }, "denied": denied], nil) }
         default: replyHandler(nil, "Unknown request")
         }
     }
@@ -26,15 +28,41 @@ final class ConnectorBridge: NSObject, WKScriptMessageHandlerWithReply {
 
     private func scan(_ done: @escaping @MainActor (URL?) -> Void) {
         guard let host else { return done(nil) }
-        guard DataScannerViewController.isSupported else {
-            let a = UIAlertController(title: "No camera", message: "Use Enter code instead.", preferredStyle: .alert)
-            a.addAction(UIAlertAction(title: "OK", style: .default) { _ in done(nil) })
-            return host.present(a, animated: true)
+        guard DataScannerViewController.isSupported else { return tell(host, "No camera", "Use Enter code instead.", done) }
+        // Ask for the camera first: with access denied the scanner would only show black.
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: present(on: host, done)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor [weak self] in
+                    guard let self, let host = self.host else { return done(nil) }
+                    granted ? self.present(on: host, done) : self.cameraOff(host, done)
+                }
+            }
+        default: cameraOff(host, done)
         }
-        let scanner = PairingScanner(done: done)
-        let nav = UINavigationController(rootViewController: scanner)
+    }
+
+    private func present(on host: UIViewController, _ done: @escaping @MainActor (URL?) -> Void) {
+        let nav = UINavigationController(rootViewController: PairingScanner(done: done))
         nav.modalPresentationStyle = .fullScreen
         host.present(nav, animated: true)
+    }
+
+    private func cameraOff(_ host: UIViewController, _ done: @escaping @MainActor (URL?) -> Void) {
+        let a = UIAlertController(title: "Camera is off", message: "Allow the camera for ViewSwitcher in Settings, or use Enter code.", preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "Settings", style: .default) { _ in
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            done(nil)
+        })
+        a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in done(nil) })
+        host.present(a, animated: true)
+    }
+
+    private func tell(_ host: UIViewController, _ title: String, _ message: String, _ done: @escaping @MainActor (URL?) -> Void) {
+        let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default) { _ in done(nil) })
+        host.present(a, animated: true)
     }
 }
 
@@ -84,21 +112,24 @@ private final class PairingScanner: UIViewController, DataScannerViewControllerD
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        try? scanner.startScanning()
+        do { try scanner.startScanning() } catch { show("Camera unavailable: use Enter code") }
+    }
+
+    private func show(_ text: String) {
+        note.text = "  \(text)  "
+        note.isHidden = false
     }
 
     func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
         for item in addedItems {
             guard case .barcode(let code) = item, let text = code.payloadStringValue else { continue }
             if let link = PairingLink.parse(text) { return finish(link) }
-            note.text = "  Not a ViewSwitcher code  "
-            note.isHidden = false
+            show("Not a ViewSwitcher code")
         }
     }
 
     func dataScanner(_ dataScanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
-        note.text = "  Allow the camera in Settings  "
-        note.isHidden = false
+        show("Allow the camera in Settings")
     }
 
     private func finish(_ link: URL?) {
@@ -111,7 +142,9 @@ private final class PairingScanner: UIViewController, DataScannerViewControllerD
 
 /// Macs running ViewSwitcher on this Wi-Fi (PHONE-5). The Mac app announces "ViewSwitcher" as an
 /// _http._tcp service while phones may connect (RemotesWindow.swift, MAC-23); a second Mac on the same
-/// network gets a numbered name. Browses for a moment, resolves each to its .local name, and reports.
+/// network gets a numbered name. Browses until the first Mac answers (then a moment more for others), or
+/// a long limit: the first search on a fresh install waits behind iOS's Local Network prompt, and no
+/// results arrive while it's up. Only a .local name is accepted (PairingLink.bonjourMac).
 @MainActor
 final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     struct Mac: Equatable { let name: String; let url: String }
@@ -120,24 +153,29 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     private let browser = NetServiceBrowser()
     private var services: [NetService] = []
     private var found: [Mac] = []
-    private var done: ((([Mac]) -> Void))?
+    private var denied = false
+    private var settling = false
+    private var done: (([Mac], Bool) -> Void)?
 
-    static func find(seconds: TimeInterval = 2.5, _ done: @escaping ([Mac]) -> Void) {
+    /// `limit`: the longest it looks with nothing found; `settle`: how long it keeps looking after the first Mac.
+    static func find(limit: TimeInterval = 20, settle: TimeInterval = 1.2, _ done: @escaping ([Mac], Bool) -> Void) {
         let f = MacFinder()
         running.append(f)
         f.done = done
+        f.settle = settle
         f.browser.delegate = f
         f.browser.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { f.finish() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + limit) { f.finish() }
     }
+    private var settle: TimeInterval = 1.2
 
     private func finish() {
+        guard let report = done else { return }
+        done = nil
         browser.stop()
         services.forEach { $0.stop() }
-        let report = done
-        done = nil
         MacFinder.running.removeAll { $0 === self }
-        report?(found)
+        report(found, denied && found.isEmpty)
     }
 
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
@@ -145,16 +183,28 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
             guard service.name.hasPrefix("ViewSwitcher") else { return }
             services.append(service)
             service.delegate = self
-            service.resolve(withTimeout: 2)
+            service.resolve(withTimeout: 5)
+        }
+    }
+
+    /// Local Network access is off for the app (the browse is refused by policy): say so rather than "no Mac".
+    nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        MainActor.assumeIsolated {
+            denied = true
+            finish()
         }
     }
 
     nonisolated func netServiceDidResolveAddress(_ sender: NetService) {
         MainActor.assumeIsolated {
-            guard let host = sender.hostName?.lowercased(), sender.port > 0 else { return }
-            let name = host.hasSuffix(".") ? String(host.dropLast()) : host
-            let mac = Mac(name: MacFinder.displayName(name), url: "http://\(name):\(sender.port)")
+            guard let host = sender.hostName, let url = PairingLink.bonjourMac(host: host, port: sender.port) else { return }
+            let name = URL(string: url)?.host ?? url
+            let mac = Mac(name: MacFinder.displayName(name), url: url)
             if !found.contains(mac) { found.append(mac) }
+            if !settling {
+                settling = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + settle) { [weak self] in self?.finish() }
+            }
         }
     }
 

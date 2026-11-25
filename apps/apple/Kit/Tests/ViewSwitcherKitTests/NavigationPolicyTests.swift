@@ -100,4 +100,15 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(NavigationPolicy.iPad(u("capacitor://localhost/"), mainFrame: true), .deny)
         XCTAssertEqual(NavigationPolicy.mac(u("capacitor://localhost/migrate"), server: server, mainFrame: true), .deny)
     }
+
+    /// PHONE-4/5: the scanner and Bonjour answer only the bundled connector in the main frame.
+    func testConnectorBridgeOnlyForTheConnector() {
+        XCTAssertTrue(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "viewswitcher"))
+        XCTAssertTrue(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "ViewSwitcher"))
+        XCTAssertFalse(NavigationPolicy.connectorBridgeAllowed(isMainFrame: false, scheme: "viewswitcher"), "a subframe")
+        XCTAssertFalse(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "http"), "the switcher the Mac serves")
+        XCTAssertFalse(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "https"))
+        XCTAssertFalse(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "capacitor"))
+        XCTAssertFalse(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: ""))
+    }
 }

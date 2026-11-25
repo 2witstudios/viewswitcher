@@ -1,10 +1,11 @@
 import { shortDate } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
+import { DECK, useMedia } from "../lib/media";
 import { queryClient, useLive } from "../lib/live";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
@@ -33,6 +34,28 @@ export function Sidebar() {
   const libraryOpen = useLibraryOpen();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => setLibraryOpen(false), [pathname]);
+  // Sideways the library is a modal drawer over the deck: focus moves in, the page behind is inert (so
+  // focus stays in the drawer), Escape closes it, and focus goes back to what opened it. Upright it
+  // unfolds in place and stays a plain disclosure.
+  const deck = useMedia(DECK);
+  const modal = deck && libraryOpen;
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!modal) return;
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const page = document.querySelector<HTMLElement>("main.main");
+    page?.setAttribute("inert", "");
+    // After the drawer has become visible (it's visibility: hidden until the open class applies).
+    const frame = requestAnimationFrame(() => nav.current?.querySelector<HTMLElement>(".side-toggle")?.focus());
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLibraryOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      page?.removeAttribute("inert");
+      document.removeEventListener("keydown", onKey);
+      if (back?.isConnected) back.focus();
+    };
+  }, [modal]);
 
   const toggle = (id: string) => {
     const key = `${org}/${id}`;
@@ -45,7 +68,7 @@ export function Sidebar() {
 
   return (
     <>
-    <nav className={`side${libraryOpen ? " open" : ""}`} aria-label="Library">
+    <nav ref={nav} className={`side${libraryOpen ? " open" : ""}`} aria-label="Library" {...(modal ? { role: "dialog", "aria-modal": true } : {})}>
       <div className="brand" data-drag-region>
         <Mark /><span>ViewSwitcher</span>
         <button type="button" className="side-toggle" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>

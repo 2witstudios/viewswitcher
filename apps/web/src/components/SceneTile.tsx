@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
+import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
 
@@ -15,25 +16,27 @@ export const PencilIcon = () => (
   <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13 7l4 4" /></svg>
 );
 
-/** The 1920×1080 scene scaled to its box's width: 280 px on a desktop, half a phone's width (MAC-27). */
-function useCoverScale<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+/** The 1920×1080 scene scaled to its box's width: 280 px on a desktop, half a phone's width (MAC-27).
+ *  A callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */
+function useCoverScale<T extends HTMLElement>(): (el: T | null) => void {
+  const [el, setEl] = useState<T | null>(null);
   useEffect(() => {
-    const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => el.style.setProperty("--cover-scale", String(el.clientWidth / 1920)));
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  return ref;
+  }, [el]);
+  return setEl;
 }
 
-/** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Hidden on other screens by CSS. */
+/** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Mounted only there, so the
+ *  Mac, the iPad and the deck don't load and run a hidden copy of the on-air scene. */
 export function OnAirHero() {
   const { state, versions, connected } = useLive();
   const onAir = state?.onAir;
   const box = useCoverScale<HTMLDivElement>();
-  if (!onAir || !connected) return null;
+  const shown = isUprightPhone({ upright: useMedia(UPRIGHT), deck: useMedia(DECK) });
+  if (!shown || !onAir || !connected) return null;
   return (
     <section className="onair-hero" aria-label="On air">
       <div className="cover live" ref={box}>

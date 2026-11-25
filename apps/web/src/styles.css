@@ -452,6 +452,9 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
   .page-head .titles > .crumb, .page-head .titles > .title { display: none; }
   .stream-pick { display: flex; }
   .onair-hero { display: flex; }
+}
+/* A phone (touch), not a narrow Mac window or an iPad in Split View: editing happens on the Mac and iPad. */
+@media (max-width: 600px) and (pointer: coarse) {
   .livebar .ai-btn { display: none; }
 }
 
