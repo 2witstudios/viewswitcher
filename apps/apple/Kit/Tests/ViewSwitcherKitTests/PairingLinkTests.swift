@@ -46,6 +46,13 @@ final class PairingLinkTests: XCTestCase {
         }
     }
 
+    func testAPublicAddressPairsOnTheMacsLocalName() {
+        XCTAssertEqual(PairingLink.parse("http://129.132.10.20:7420/pair?code=AB&mac=studio-mac.local")?.absoluteString, "http://studio-mac.local:7420/pair?code=AB")
+        XCTAssertNil(PairingLink.parse("http://129.132.10.20:7420/pair?code=AB"), "no name: refused")
+        XCTAssertNil(PairingLink.parse("http://129.132.10.20:7420/pair?code=AB&mac=evil.com"), "only a .local name")
+        XCTAssertNil(PairingLink.parse("https://example.com/pair?code=AB&mac=1.2.3.4"))
+    }
+
     func testTheLinksLocalNameIsTheSamePairing() {
         let link = PairingLink.parse("http://192.168.1.20:7420/pair?code=ABCD-EFGH&mac=Studio-Mac.local")!
         XCTAssertEqual(PairingLink.localAlternative(link)?.absoluteString, "http://studio-mac.local:7420/pair?code=ABCD-EFGH")

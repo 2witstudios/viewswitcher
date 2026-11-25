@@ -17,7 +17,7 @@ import type { McpDeps } from "./mcp/server";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
 import { fromThisMac, fromThisMacOnly, gate, loopbackAddress, rateKey } from "./gate";
-import { thisMac } from "./lan";
+import { pairingOrder, thisMac } from "./lan";
 import { hostTrusted, originAllowed } from "./origin";
 import { PAIR_PAGE_CSP, pairPage } from "./pair-page";
 import { deviceName, guessName, Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
@@ -259,14 +259,9 @@ const body = async (req: Request) => (await req.json().catch(() => ({}))) as Rec
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
 const lanNames = () => (lanServer ? thisMac() : null);
 
-// Local ranges first (private, and 100.64/10 carrier-grade NAT, which a hotspot or campus Wi-Fi uses), so
-// the QR code points at an address a phone can reach. lanAddresses() already puts VPN interfaces
-// (Tailscale's 100.x) last, and the sort is stable, so a Wi-Fi address wins a tie (PHONE-4).
-const rank = (ip: string) =>
-  /^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip) ? 0 : 1;
 function remoteStatus() {
   const mac = thisMac();
-  const addresses = [...mac.addresses].sort((a, b) => rank(a) - rank(b));
+  const addresses = pairingOrder(mac.addresses, mac.vpn);
   const connected = new Map<string, number>();
   for (const ws of sockets) if (ws.data.device) connected.set(ws.data.device, (connected.get(ws.data.device) ?? 0) + 1);
   return {

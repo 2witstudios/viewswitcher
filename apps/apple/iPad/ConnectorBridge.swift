@@ -159,6 +159,9 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     private var services: [NetService] = []
     private var found: [Mac] = []
     private var denied = false
+    /// When the first policy refusal came: the retries stop after `promptTime` (long enough to answer the prompt).
+    private var refusedAt: Date?
+    private let promptTime: TimeInterval = 8
     private var settling = false
     private var done: (([Mac], Bool) -> Void)?
 
@@ -173,6 +176,7 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     private func search() {
+        denied = false // only the latest attempt counts; didNotSearch sets it again
         browser.stop()
         browser = NetServiceBrowser()
         browser.delegate = self
@@ -199,12 +203,15 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     /// Refused by policy (kDNSServiceErr_PolicyDenied): Local Network access is off, or its first-run prompt is
-    /// still up. Search again until the limit, and report `denied` only if it's still refused then. Any other
-    /// failure (Wi-Fi off, the daemon) ends the search as "no Mac", not a trip to Settings.
+    /// still up. Search again for a few seconds (time to answer the prompt), then report `denied` if it's still
+    /// refused. Any other failure (Wi-Fi off, the daemon) ends the search as "no Mac", not a trip to Settings.
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         MainActor.assumeIsolated {
             guard errorDict[NetService.errorCode]?.intValue == -65570 else { return finish() }
             denied = true
+            let since = refusedAt ?? Date()
+            refusedAt = since
+            if Date().timeIntervalSince(since) >= promptTime { return finish() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, self.done != nil else { return }
                 self.search()

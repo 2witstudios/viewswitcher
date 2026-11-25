@@ -20,6 +20,23 @@ export function lanAddresses(ifaces = networkInterfaces()): string[] {
   return [...out];
 }
 
+/** The IPv4 addresses of VPN interfaces (Tailscale's utun, IPsec, PPP): never the one to put in a QR code. */
+export function vpnAddresses(ifaces = networkInterfaces()): string[] {
+  return Object.entries(ifaces).filter(([name]) => vpn(name)).flatMap(([, list]) => (list ?? []).filter((i) => i.family === "IPv4").map((i) => i.address));
+}
+
+/** 10/8, 172.16/12, 192.168/16 and 100.64/10 (carrier-grade NAT: a hotspot or campus Wi-Fi). */
+const local = (ip: string) =>
+  /^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
+
+/** The order the pairing QR code picks from (PHONE-4): Wi-Fi and Ethernet in local ranges, then other
+ *  Wi-Fi and Ethernet addresses, then VPN addresses, whatever their range, since a phone on the Wi-Fi
+ *  can't reach a VPN's (a Tailscale 100.x or a corporate IPsec 10.x). Stable within each group. */
+export function pairingOrder(addresses: string[], vpns: string[]): string[] {
+  const rank = (ip: string) => (vpns.includes(ip) ? 2 : local(ip) ? 0 : 1);
+  return [...addresses].sort((a, b) => rank(a) - rank(b));
+}
+
 /** "Jonos-Mac.local", from macOS's LocalHostName (VIEWSWITCHER_LOCAL_NAME overrides it, for tests). */
 function readLocalName(): string | null {
   const forced = process.env.VIEWSWITCHER_LOCAL_NAME;
@@ -34,11 +51,14 @@ function readLocalName(): string | null {
   }
 }
 
-let cache: { at: number; addresses: string[]; localName: string | null } | null = null;
+let cache: { at: number; addresses: string[]; vpn: string[]; localName: string | null } | null = null;
 
-/** This Mac's LAN addresses and .local name, read at most every 5 seconds. */
-export function thisMac(): { addresses: string[]; localName: string | null } {
+/** This Mac's LAN addresses (and which are a VPN's) and .local name, read at most every 5 seconds. */
+export function thisMac(): { addresses: string[]; vpn: string[]; localName: string | null } {
   const now = Date.now();
-  if (!cache || now - cache.at > 5000) cache = { at: now, addresses: lanAddresses(), localName: readLocalName() };
+  if (!cache || now - cache.at > 5000) {
+    const ifaces = networkInterfaces();
+    cache = { at: now, addresses: lanAddresses(ifaces), vpn: vpnAddresses(ifaces), localName: readLocalName() };
+  }
   return cache;
 }

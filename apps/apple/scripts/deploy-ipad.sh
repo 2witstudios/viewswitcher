@@ -11,7 +11,8 @@ BUNDLE_ID="com.twowitstudios.viewswitcher"
 
 if [ -z "${DEVICE:-}" ]; then
   # Usable states: "available (paired)", or "connected" while a tunnel is open; never "unavailable".
-  first() { xcrun devicectl list devices 2>/dev/null | awk -v kind="$1" '$0 ~ kind && ($0 ~ /(^|[[:space:]])available/ || $0 ~ /(^|[[:space:]])connected/) && $0 !~ /unavailable/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/) { print $i; exit } }'; }
+  # The id: a CoreDevice UUID, or a UDID (00008110-001A2B3C4D5E801E, or 40 hex on older devices) as newer Xcodes print.
+  first() { xcrun devicectl list devices 2>/dev/null | awk -v kind="$1" '$0 ~ kind && ($0 ~ /(^|[[:space:]])available/ || $0 ~ /(^|[[:space:]])connected/) && $0 !~ /unavailable/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/ || $i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/ || $i ~ /^[0-9a-f]{40}$/) { print $i; exit } }'; }
   DEVICE=$(first iPad)
   [ -n "$DEVICE" ] || DEVICE=$(first iPhone)
 fi

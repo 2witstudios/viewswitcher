@@ -47,7 +47,8 @@ export function Sidebar() {
     page?.setAttribute("inert", "");
     // After the drawer has become visible (it's visibility: hidden until the open class applies).
     const frame = requestAnimationFrame(() => nav.current?.querySelector<HTMLElement>(".side-toggle")?.focus());
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLibraryOpen(false); };
+    // Escape closes the drawer, unless a dialog opened from it (New org, New project) is up: that's its Escape.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("form.modal")) setLibraryOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => {
       cancelAnimationFrame(frame);
@@ -139,7 +140,7 @@ export function Sidebar() {
         />
       )}
     </nav>
-    {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" onClick={() => setLibraryOpen(false)} />}
+    {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" tabIndex={-1} onClick={() => setLibraryOpen(false)} />}
     {/* Sideways, on a screen with no page header to open it from (styles.css shows it only there, and
         hides it while the library is open). Always mounted, so closing the drawer can focus it again. */}
     <button type="button" className="deck-library" aria-controls="side-body" aria-expanded={libraryOpen} onClick={() => setLibraryOpen(true)}>Library</button>

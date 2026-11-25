@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { DECK, isUprightPhone, SIDEWAYS, UPRIGHT } from "./media";
+import { DECK, isUprightPhone, UPRIGHT } from "./media";
+
+/** Sideways viewports: [width, height, gets the deck?]. */
+const SIDEWAYS: [number, number, boolean][] = [
+  [956, 440, true], // iPhone 16 and 17 Pro Max
+  [932, 430, true], // 14 and 15 Pro Max
+  [844, 390, true],
+  [568, 320, true], // SE (1st): the upright query matches too; the deck wins
+  [1133, 480, false], // iPad mini sideways, keyboard up
+  [1180, 480, false], // iPad Air sideways, keyboard up
+  [790, 480, true], // the known trade-off: an iPad in 2/3 Split View with the keyboard up
+];
 
 describe("phone layouts (PHONE-3, PHONE-12)", () => {
   test("the queries match styles.css", () => {

@@ -8,9 +8,11 @@ import http from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lanAddresses } from "./lan";
+import { lanAddresses, pairingOrder, vpnAddresses } from "./lan";
 
-const ip = process.env.VIEWSWITCHER_TEST_LAN_IP ?? lanAddresses().find((a) => /^(192\.168|10|172\.(1[6-9]|2\d|3[01]))\./.test(a)) ?? lanAddresses()[0];
+// The address the server puts in the QR code (its own pairingOrder), and the one this test connects to.
+const advertised = pairingOrder(lanAddresses(), vpnAddresses())[0];
+const ip = process.env.VIEWSWITCHER_TEST_LAN_IP ?? advertised;
 const ADMIN = "test-admin-secret-" + "x".repeat(32);
 const TTL = 1500;
 let port = 0;
@@ -116,7 +118,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
   let deviceId = "";
   test("a code pairs once; the cookie is HttpOnly and SameSite=Strict", async () => {
     const { code, pairUrl } = (await admin("/api/remote/code", {})) as { code: { code: string }; pairUrl: string };
-    expect(pairUrl).toBe(`http://${ip}:${port}/pair?code=${code.code}&mac=test-mac.local`);
+    expect(pairUrl).toBe(`http://${advertised}:${port}/pair?code=${code.code}&mac=test-mac.local`);
     expect((await pairWith("WRONGCOD")).status).toBe(403);
     // The one POST an unpaired device may make is small.
     expect((await lan("/api/pair", { method: "POST", headers: { "content-type": "application/json", origin: `http://${ip}:${port}` }, body: JSON.stringify({ code: code.code, name: "x".repeat(4000) }) })).status).toBe(413);

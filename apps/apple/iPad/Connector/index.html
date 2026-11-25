@@ -94,16 +94,17 @@
   let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
   const go = (url) => { leaving = true; location.replace(url); };
 
-  // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app.
+  // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app. `scanning` holds
+  // from the tap until the page leaves (or the scan comes back empty), so no other flow starts or navigates meanwhile.
   $("scan").addEventListener("click", async () => {
-    if (scanning) return;
+    if (scanning || leaving) return;
     scanning = touched = true;
     // Look on the Wi-Fi meanwhile: on a fresh install that brings up the Local Network prompt while the
     // camera is up, so it's answered before the .local name is tried below.
     if (!browsing) ask("browse").catch(() => {});
     const scanned = await ask("scan").catch(() => null);
-    scanning = false;
-    if (!scanned || !VS.usable(scanned.link)) return;
+    if (!scanned || !VS.usable(scanned.link)) { scanning = false; return; }
+    status.innerHTML = `<span class="dot"></span>Connecting…`;
     // Pair on the Mac's .local name when it answers (a cold mDNS lookup can be slow, so up to 5 s, twice):
     // it outlasts the Mac's LAN address changing. Else the address in the code.
     const answers = async (u) => (await VS.reachable(u, 5000)) || (await VS.reachable(u, 5000));
@@ -115,7 +116,7 @@
 
   // Enter code (PHONE-5): the Mac's own pair page takes the code; this finds the Mac for it.
   $("enter").addEventListener("click", async () => {
-    if (browsing) return;
+    if (browsing || scanning || leaving) return;
     browsing = touched = true;
     status.innerHTML = `<span class="dot"></span>Looking on this Wi-Fi…`;
     macs.hidden = true;
@@ -123,6 +124,7 @@
     // Only a .local name, as the app's MacFinder already insists (PairingLink.bonjourMac).
     const found = (reply.macs || []).filter((m) => VS.usable(m.url) && new URL(m.url).hostname.endsWith(".local"));
     browsing = false;
+    if (scanning || leaving) return; // a scan started meanwhile: it decides where the page goes
     if (found.length === 1) return pairWith(found[0].url);
     if (!found.length) {
       status.textContent = reply.denied
@@ -141,6 +143,7 @@
     macs.hidden = false;
   });
   function pairWith(base) {
+    if (scanning || leaving) return;
     VS.saveNetwork(base);
     go(`${base}/pair`);
   }
@@ -157,11 +160,11 @@
     net.blur();
     check();
   });
-  demo.addEventListener("click", () => go("demo/"));
+  demo.addEventListener("click", () => { if (!scanning && !leaving) go("demo/"); });
 
   const started = Date.now();
   async function check() {
-    if (busy || leaving) return;
+    if (busy || leaving || scanning) return;
     busy = true;
     try {
       const found = await VS.find();
@@ -182,7 +185,7 @@
         location.replace("demo/");
         return;
       }
-      if (!browsing && status.querySelector(".dot") && Date.now() - started > 2500) status.textContent = "";
+      if (!browsing && !scanning && status.querySelector(".dot") && Date.now() - started > 2500) status.textContent = "";
       demo.hidden = false;
     } finally { busy = false; }
   }

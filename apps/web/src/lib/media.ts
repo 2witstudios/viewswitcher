@@ -7,11 +7,10 @@ import { useSyncExternalStore } from "react";
 export const UPRIGHT = "(max-width: 600px)";
 /** The deck: a phone held sideways, a short touch screen no wider than the largest phone (the iPhone 16 and
  *  17 Pro Max, 956 pt) and narrower than any iPad held sideways (the mini, 1133 pt), so an iPad with the
- *  keyboard up keeps its editing. Wins over UPRIGHT where both match. */
+ *  keyboard up keeps its editing. Known trade-off: an iPad window narrower than 1000 pt (Split View,
+ *  Stage Manager) with the keyboard up still matches; a viewport query can't tell it from a phone.
+ *  Wins over UPRIGHT where both match. */
 export const DECK = "(max-height: 500px) and (max-width: 1000px) and (pointer: coarse)";
-
-/** Sideways viewports, for the tests: [width, height, the deck?]. */
-export const SIDEWAYS: [number, number, boolean][] = [[956, 440, true], [932, 430, true], [844, 390, true], [568, 320, true], [1133, 480, false], [1180, 480, false]];
 
 export const isUprightPhone = ({ upright, deck }: { upright: boolean; deck: boolean }) => upright && !deck;
 

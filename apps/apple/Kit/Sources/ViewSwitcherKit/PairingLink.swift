@@ -5,16 +5,19 @@ import Foundation
 /// app's web view rather than in Safari, which is where the system Camera would open it. Pure, so
 /// XCTest covers what's accepted.
 public enum PairingLink {
-    /// The link, if it's a ViewSwitcher pairing link on the local network; nil for anything else.
+    /// The link, if it's a ViewSwitcher pairing link on the local network; nil for anything else. A Mac whose
+    /// only address is outside the local ranges (some campus and office networks) still advertises its
+    /// .local name (`&mac=`): such a link becomes the same pairing on that name. Any other public host is refused.
     public static func parse(_ text: String) -> URL? {
         guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
-              let host = url.host?.lowercased(), host.hasSuffix(".local") || isPrivateIPv4(host),
+              let host = url.host?.lowercased(),
               url.path == "/pair",
               let code = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value,
               !code.isEmpty
         else { return nil }
-        return url
+        if host.hasSuffix(".local") || isPrivateIPv4(host) { return url }
+        return localAlternative(url)
     }
 
     /// The same pairing on the Mac's .local name, when the link names it (`&mac=<name>.local`, PHONE-4). A
