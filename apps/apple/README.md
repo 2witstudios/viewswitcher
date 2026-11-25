@@ -21,7 +21,7 @@ bun run ipad:release [--export]  # archive, export for App Store Connect, check,
 cd apps/apple && xcodegen && xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -destination platform=macOS test
 cd apps/apple/Kit && swift test  # the same XCTest, without Xcode's project
 bash apps/apple/scripts/ipad-shots.sh [dir]   # 13-inch iPad App Store screenshots: the app on a live show (fake OBS, scratch server on 7445), framed
-IPHONE=1 bash apps/apple/scripts/ipad-shots.sh [dir]   # 6.9-inch iPhone ones: the deck, upright, pairing, the demo (into iphone/)
+IPHONE=1 bash apps/apple/scripts/ipad-shots.sh [dir]   # iPhone ones, 6.9-inch and 6.3-inch: the deck, upright, pairing (into iphone/, iphone-6.3/)
 bun apps/apple/scripts/demo-assets.ts         # refresh the iPad demo's show from apps/site
 bun apps/apple/AppStore/check.ts              # App Store listing lengths
 ```
@@ -116,13 +116,15 @@ boxes and the red On air tally moves. A white bar says "Demo · Connect your Mac
 ### Screenshots (MAC-19)
 
 `scripts/ipad-shots.sh` makes the App Store screenshots from the real app in the 13-inch iPad Pro
-simulator, or with `IPHONE=1` the 6.9-inch iPhone 17 (or 16) Pro Max (PHONE-9: the deck, upright, pairing
-and the demo, into `AppStore/screenshots/iphone/`). It starts a stand-in OBS (`scripts/fake-obs-server.ts`: an obs-websocket server around the
+simulator, or with `IPHONE=1` the 6.9-inch iPhone 17 (or 16) Pro Max (PHONE-9: the deck, upright and pairing,
+into `AppStore/screenshots/iphone/`, and again at 1206×2622 into `iphone-6.3/`). It starts a stand-in OBS (`scripts/fake-obs-server.ts`: an obs-websocket server around the
 server tests' in-memory OBS, live) and a scratch switcher on 7445 with USB off, and seeds it through the
-API (`scripts/shots-seed.ts`: Full Count and Grace Community, a project and a stream each). Then
+API (`scripts/shots-seed.ts`: Full Count and Grace Community, a project and a stream each, and the
+site's photos in their camera boxes, in the scratch library only). Then
 `iPadUITests/AppStoreScreenshots.swift` (`testShots`, `testPhoneShots`) taps through each screen in the app and waits while the script
 captures it with `simctl io screenshot`, under a 9:41 status bar. `scripts/frame-shots.ts` puts each in a
-device frame under a caption (Space Grotesk, on white) at the same size. The upload list is in
+realistic device on a portrait canvas: dark ground, the logo, a two-line Space Grotesk headline and an
+Instrument Sans subtitle. The upload list is in
 `AppStore/listing.md`.
 
 ### App Store (MAC-19, MAC-20)

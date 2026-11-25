@@ -53,29 +53,29 @@ Result: **4+**.
 ## Screenshots
 
 Made by `bash apps/apple/scripts/ipad-shots.sh` (iPad) and `IPHONE=1 bash apps/apple/scripts/ipad-shots.sh`
-(iPhone) into `AppStore/screenshots/` and `AppStore/screenshots/iphone/` (gitignored): the real app in the
-simulator, connected to a scratch switcher with a stand-in OBS that's live. Each one is there twice:
-`raw/<name>.png` is the capture, `<name>.png` the App Store version, in a device frame under a caption.
-Upload the framed ones, in these orders.
+(iPhone) into `AppStore/screenshots/`, `screenshots/iphone/` and `screenshots/iphone-6.3/` (gitignored):
+the real app in the simulator, connected to a scratch switcher with a stand-in OBS that's live, on two
+shows only, the sports podcast (Full Count) and the church (Grace Community), with photos in their camera
+boxes. `raw/<name>.png` is the capture; `<name>.png` the App Store version: a portrait canvas on
+ViewSwitcher's dark ground, the logo, a two-line headline and a subtitle over the device (sideways for a
+landscape capture). Upload the framed ones, in these orders.
 
-### 13-inch iPad
+### 13-inch iPad (2064 × 2752)
 
-2752 × 2064 landscape or 2064 × 2752 portrait (iPad Pro 13-inch).
+1. `1-stream-landscape.png`: "Look professional / when you go live." Full Count's Ep. 112, Both hosts on air, OBS live
+2. `2-editor-landscape.png`: "Change titles / while you're live." The episode title retyped on the view that's on air
+3. `3-templates-landscape.png`: "Your show's look, / ready to go." Grace Community's templates
+4. `4-sermon-portrait.png`: "Tap a view. / OBS switches." Grace Community upright, the sermon on air
+5. `5-pastor-landscape.png`: "Run the service / without a crew." Grace Community, Pastor on air
 
-1. `1-stream-landscape.png`, "Look professional when you go live.": Full Count's Ep. 112, Both hosts on air, OBS live
-2. `2-editor-landscape.png`, "Change titles live, right on the view.": the episode title retyped on the view that's on air
-3. `3-templates-landscape.png`, "Free templates for every kind of show.": the built-in template sets under Add templates
-4. `4-stream-portrait.png`, "Tap a view. OBS switches.": Grace Community's Sunday Live in portrait, the sermon on air
-5. `5-demo-landscape.png`, "Try it first: the demo needs no Mac.": the demo App Review sees without a Mac
+### iPhone: 6.9-inch (1320 × 2868, `iphone/`) and 6.3-inch "medium display" (1206 × 2622, `iphone-6.3/`)
 
-### 6.9-inch iPhone (PHONE-9)
+The same four, from the iPhone 17 Pro Max simulator. Sideways first: most people hold the phone like a deck.
 
-2868 × 1320 landscape or 1320 × 2868 portrait (iPhone 17 Pro Max). Sideways first: most people hold the phone like a deck.
-
-1. `iphone/1-deck-landscape.png`, "Tap a view. OBS switches.": the deck, Ep. 112's views four across, Both hosts on air
-2. `iphone/2-onair-portrait.png`, "Always know what's on air.": upright, what's on air on top
-3. `iphone/3-pair-portrait.png`, "Scan your Mac's code to pair.": the app's own connector, Scan the code or Enter code, or USB-C
-4. `iphone/4-demo-landscape.png`, "Try it first: the demo needs no Mac.": the demo, sideways
+1. `1-deck-landscape.png`: "Tap a view. / OBS switches." Full Count's deck, Both hosts on air
+2. `2-sermon-portrait.png`: "Always know / what's on air." Grace Community upright, the sermon on top
+3. `3-pair-portrait.png`: "Scan the code. / You're connected." The app's own connector: Scan the code, Enter code, or USB-C
+4. `4-pastor-landscape.png`: "Your whole show, / in your pocket." Grace Community's deck, Pastor on air
 
 ## First version (1.2.1): text
 

@@ -6,11 +6,13 @@
 #
 #   1. a fake OBS (scripts/fake-obs-server.ts, streaming) on FAKE_OBS_PORT (4466)
 #   2. a scratch switcher on SHOTS_PORT (7445): USB off, a scratch library, that OBS
-#   3. seeds it (scripts/shots-seed.ts): Full Count and Grace Community, a project and a stream each
+#   3. seeds it (scripts/shots-seed.ts): Full Count and Grace Community, a project and a stream each,
+#      photos in their camera boxes
 #   4. boots the simulator, overrides its status bar (9:41, full battery, Wi-Fi), and runs
 #      AppStoreScreenshots (testShots, or testPhoneShots), which builds and installs the app, taps through
 #      each screen and waits while this script captures it
-#   5. frames each one (scripts/frame-shots.ts): a device frame and a caption on white
+#   5. frames each one (scripts/frame-shots.ts): the device on a portrait canvas under a headline; the
+#      iPhone set twice, 1320×2868 (6.9-inch) and 1206×2622 (6.3-inch) in <out-dir>-6.3/
 #
 # Out (gitignored), in upload order (the names and captions are in frame-shots.ts and listing.md):
 #   raw/<n>-<screen>.png        the captures
@@ -74,7 +76,7 @@ xcrun simctl status_bar "$SIM" override --time 9:41 --batteryState charged --bat
   --wifiMode active --wifiBars 3 --dataNetwork wifi --cellularMode notSupported
 xcodegen --quiet
 # This run's shots only: no raw or framed ones left from an earlier run (or from the old script's names).
-rm -rf "$RAW" "$OUT/split" && rm -f "$OUT"/*.png && mkdir -p "$RAW"
+rm -rf "$RAW" "$OUT/split" ${IPHONE:+"$OUT-6.3"} && rm -f "$OUT"/*.png && mkdir -p "$RAW"
 test_env() {
   env TEST_RUNNER_VIEWSWITCHER_SERVER="http://127.0.0.1:$PORT" TEST_RUNNER_VIEWSWITCHER_MAC="http://127.0.0.1:$PORT" \
     TEST_RUNNER_VIEWSWITCHER_SHOTS="$RAW" TEST_RUNNER_VIEWSWITCHER_FULLCOUNT="$FULLCOUNT" TEST_RUNNER_VIEWSWITCHER_GRACE="$GRACE" "$@"
@@ -112,7 +114,7 @@ mkdir -p "$OUT/split"
 uitest SafeAreaScreenshots/testOrientations 678 half
 uitest SafeAreaScreenshots/testOrientations 444 third
 fi
-for f in "$RAW"/*.png "$OUT"/*.png "$OUT"/split/*.png; do
+for f in "$RAW"/*.png "$OUT"/*.png "$OUT"/split/*.png "$OUT"-6.3/*.png; do
   [ -f "$f" ] || continue
-  printf '%s %s\n' "$(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/ { printf "%s ", $2 }')" "${f#"$OUT"/}"
+  printf '%s %s\n' "$(sips -g pixelWidth -g pixelHeight "$f" | awk '/pixel/ { printf "%s ", $2 }')" "${f#"$(dirname "$OUT")"/}"
 done
