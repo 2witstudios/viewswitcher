@@ -12,9 +12,10 @@ import { IPAD_PRICE } from "../lib/cta";
         ? <p class="lede">Open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It keeps itself up to date.</p>
         : <p class="lede">The Mac app is in testing now. Follow it on GitHub and you'll get an email when it's ready to download.</p>}
       <Cta />
-      <p class="small">The Mac app is free and open source.</p>
+      {site.macAppReleased && <p class="small">Version {site.mac.version} · free and open source · {site.mac.minOSName} or later · Apple silicon and Intel · notarized by Apple</p>}
+      <p class="small"><a href="/download">Install steps and release notes</a> · <a href="/setup">Set up OBS</a></p>
       <div class="ipad">
-        <p>Want to switch from an iPad? <b>ViewSwitcher for iPad</b> is {IPAD_PRICE}, once.</p>
+        <p>Want to switch from an iPad? <a href="/ipad"><b>ViewSwitcher for iPad</b></a> is {IPAD_PRICE}, once.</p>
         <IpadStore />
       </div>
     </div>
@@ -24,7 +25,7 @@ import { IPAD_PRICE } from "../lib/cta";
         <li><b>A Mac</b></li>
         <li><b>OBS</b>, the free streaming app. ViewSwitcher sets it up for you.</li>
         <li><b>A camera</b>: a webcam, the Mac's own, or any camera OBS can see</li>
-        <li>Optional: a phone, tablet or iPad to switch from</li>
+        <li>Optional: an iPad on a USB-C cable to switch from. Coming soon: pair your phone over Wi-Fi.</li>
       </ul>
     </div>
     <details class="dev">

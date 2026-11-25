@@ -3,7 +3,7 @@ import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { queryClient, useLive } from "../lib/live";
 import { AskAgent } from "./AgentSheet";
 import { Mark, Modal, PlusIcon } from "./ui";
@@ -89,7 +89,7 @@ export function Sidebar() {
       )}
 
       {org && dialog?.kind === "project" && (
-        <NewProject org={org} templates={data?.templates.map((t) => t.name) ?? []} onClose={() => setDialog(null)} />
+        <NewProject org={org} groups={data ? templateGroups(data).filter((g) => g.templates.length) : []} onClose={() => setDialog(null)} />
       )}
       {org && dialog?.kind === "stream" && (
         <NewStream
@@ -176,22 +176,29 @@ function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: s
   );
 }
 
-function NewProject({ org, templates, onClose }: { org: string; templates: string[]; onClose: () => void }) {
+function NewProject({ org, groups, onClose }: { org: string; groups: ReturnType<typeof templateGroups>; onClose: () => void }) {
   const [name, setName] = useState("");
-  const [picked, setPicked] = useState<string[]>(templates.filter((t) => t !== "chapter"));
+  // The org's own templates start ticked (not "chapter", a one-off); a style pack's, unticked.
+  const [picked, setPicked] = useState<string[]>(groups[0]?.set === null ? groups[0].templates.map(templateId).filter((t) => t !== "chapter") : []);
   return (
     <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => api.createProject(org, name, picked).then(() => {})}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Spring series" /></label>
       <div className="field">
         Shared scenes to start with
-        <div className="checks">
-          {templates.map((t) => (
-            <label key={t}>
-              <input type="checkbox" checked={picked.includes(t)} onChange={(e) => setPicked(e.target.checked ? [...picked, t] : picked.filter((x) => x !== t))} />
-              {t}
-            </label>
-          ))}
-        </div>
+        {groups.map((g) => (
+          <div key={g.set?.id ?? ""} className="checks">
+            {groups.length > 1 && <span className="checks-head">{g.name}</span>}
+            {g.templates.map((t) => {
+              const id = templateId(t);
+              return (
+                <label key={id}>
+                  <input type="checkbox" checked={picked.includes(id)} onChange={(e) => setPicked(e.target.checked ? [...picked, id] : picked.filter((x) => x !== id))} />
+                  {t.set ? t.label : t.name}
+                </label>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </Modal>
   );

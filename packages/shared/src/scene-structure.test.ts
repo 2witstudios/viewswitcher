@@ -92,6 +92,18 @@ describe("insertElement (EDIT-16)", () => {
     expect(add("image")).toContain("width: 600px; height: 300px"); // keeps the picture's shape
   });
 
+  test("a dropped picture (EDIT-22) lands centred where it was dropped, inside the scene, never blown up", () => {
+    const img = (width: number, height: number, at: { x: number; y: number }) => markupFor("image", { image: { src: "/library/org/assets/p.jpg", width, height }, at });
+    expect(img(4000, 3000, { x: 500, y: 400 })).toContain("left: 200px; top: 175px; width: 600px; height: 450px");
+    expect(img(200, 100, { x: 500, y: 400 })).toContain("left: 400px; top: 350px; width: 200px; height: 100px");
+    // At the edges it stays in the scene.
+    expect(img(4000, 3000, { x: 1910, y: 1070 })).toContain("left: 1320px; top: 630px; width: 600px; height: 450px");
+    expect(img(4000, 3000, { x: -50, y: 5 })).toContain("left: 0px; top: 0px");
+    // A size it can't read (an SVG without one) still gets a sensible box.
+    expect(img(1, 1, { x: 960, y: 540 })).toContain("width: 600px; height: 600px");
+    expect(checkInsert(img(800, 600, { x: 10, y: 10 }))).toBeNull();
+  });
+
   test("a conflicting insert goes into the new version's scene root", () => {
     const prev = `<main class="scene">\n  <p>a</p>\n</main>`;
     const next = `<header></header><main class="scene">\n  <p>b</p>\n</main>`;

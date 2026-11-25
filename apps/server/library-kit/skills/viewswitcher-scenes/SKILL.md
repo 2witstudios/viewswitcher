@@ -1,6 +1,6 @@
 ---
 name: viewswitcher-scenes
-description: Make or change what's on screen in a live stream run with ViewSwitcher (the HTML scenes its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any ask about the stream's look or scenes — "make a BRB screen", "brand my channel", "change the title for tonight", "add my logo", a new scene, a starting-soon or ending screen, a lower third, a stream-only version, restyling, new text, using an uploaded image or video, a transition, branding a new org — and for anything in an org's templates/, projects/ or assets/.
+description: Make or change what's on screen in a live stream run with ViewSwitcher (the HTML scenes its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any ask about the stream's look or scenes — "make a BRB screen", "brand my channel", "change the title for tonight", "add my logo", a new scene, a starting-soon or ending screen, a lower third, a stream-only version, restyling, new text, using an uploaded image or video, a transition, branding a new org — for anything in an org's templates/, projects/ or assets/, and for making a style pack (a set of views people install with a drop).
 ---
 
 # ViewSwitcher scenes
@@ -68,6 +68,10 @@ Fix what's wrong and preview again until it's right; usually 1–3 rounds. If `p
 <org>/templates/_shared/scene.js                     ?preview mode, data-countdown, the transition "play" class
 <org>/templates/_shared/transition.html              the org's transition between scenes (optional)
 <org>/templates/_shared/brand/mark.svg               the org's mark
+<org>/templates/<set>/                               a template set installed from a style pack (see below):
+<org>/templates/<set>/pack.json                        its name, version and views
+<org>/templates/<set>/<view>.html                      its templates
+<org>/templates/<set>/_shared/, assets/                its own theme, scripts, transition and pictures
 <org>/assets/<file>                                  the org's uploads (images, video, audio)
 <org>/projects/<project>/project.json                { "name", "order": [scene names] }
 <org>/projects/<project>/transition.html             this project's own transition (optional; overrides the org's)
@@ -143,6 +147,41 @@ Deleting removes one element and the whitespace before it. Renaming sets `<title
 - Don't put text that scripts overwrite (like `data-countdown`) in the elements people edit.
 - Their edits are real changes to the file: keep them. If a file changed since you last read it, read it again and work from what's there now.
 
+## Scenes run sandboxed
+
+The switcher shows every scene in a sandboxed frame with no origin of its own, so a scene's scripts can't reach the switcher (its API, its live socket, the page around it). For scenes that means:
+
+- Scripts run (countdowns, clocks, animations, `scene.js`), but `localStorage`, `sessionStorage`, cookies and `parent`/`top` are off limits and throw.
+- `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` work only to `https:`/`wss:` addresses (a public feed, say), never `http:`, `ws:` or the switcher itself, so a scene can't `fetch` its own library JSON: put data in the HTML. Library scripts (also `type="module"`), styles, pictures, media and fonts load fine; leave `crossorigin` off library pictures and media (they aren't sent with CORS, so a canvas can't read them back).
+- No forms, pop-ups or navigating the page. Links and buttons do nothing on air anyway.
+- Fonts load from Google Fonts (or any https host with CORS) and from the library.
+- The scene editor shows the file **without running its scripts**, so text a script writes isn't editable there: keep text people should retype in the HTML itself.
+
+## Template sets and style packs
+
+A **style pack** is a whole look (a set of views with their own theme, scripts, transition and pictures) in one folder or `.zip` that people install with a drop on the switcher's Templates page. It installs into an org as a **template set**, `<org>/templates/<set>/`, beside the org's own templates; the Templates page and New scene group templates by set. Scenes made from a set's template link the set's `_shared/` files, so:
+
+- To restyle every view of a set, edit `<org>/templates/<set>/_shared/theme.css`. Edit a set's views like any template.
+- Don't rename a set's folder or move its files: scenes made from it link them by path.
+- Removing a set in the switcher keeps its `_shared/` and `assets/` if scenes still use them.
+
+To **make** a pack (for another org, another library, or to share), write a folder like this, outside the library unless the user says where:
+
+```
+my-pack/
+  pack.json            { "format": 1, "id": "neon-night", "name": "Neon Night", "version": "1.0.0",
+                         "description": "…", "views": ["starting-soon", "main", "brb"],
+                         "placeholders": ["ORG_NAME", "ACCENT", "GROUND", "PACK"] }
+  templates/<view>.html   one per name in "views", in that order
+  _shared/theme.css, scene.js, transition.html (optional), brand/…, fonts
+  assets/              pictures, video, audio, fonts
+```
+
+- Link the pack's own files as `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg` (on install `{{PACK}}` becomes `/library/<org>/templates/<set>`). Views sit at `{{PACK}}/<view>.html`.
+- `{{ORG_NAME}}`, `{{ORG_INITIAL}}`, `{{ORG_ID}}`, `{{ACCENT}}` and `{{GROUND}}` are filled from the org it's installed into. Use them so the pack takes on any org's name and colors.
+- Same scene contract as above. Scripts go in `_shared/*.js` only; file names use letters, numbers, dots, dashes and spaces; views are lower-case-with-dashes. Up to 400 files, 25 MB each, 100 MB in all.
+- The full format is docs/style-packs.md in the ViewSwitcher repo. `bun run packs:export` there exports the starter kit and the site's example styles as example packs.
+
 ## Transitions
 
 A transition is a page that covers the screen while one scene switches to the next. The switcher fades it in over about 170 ms, holds it, then fades out onto the new scene. Switching to a scene in project P plays `<org>/projects/P/transition.html` if it exists, else `<org>/templates/_shared/transition.html`, else a blank fade through the ground color. Templates use the org's.
@@ -171,7 +210,7 @@ When the ViewSwitcher tools aren't there (the app is closed, or your agent has n
 ## Don't
 
 - Rename or move folders (orgs, projects, streams). The app keys on folder names.
-- Touch `.viewswitcher/` (live app state).
+- Touch `.viewswitcher/` (live app state, and packs waiting to be installed).
 - Put a scene on air unless the user asked.
 - Add build tools, frameworks or npm packages. Scenes are plain HTML/CSS with a little inline JS when needed.
 - Delete user assets.

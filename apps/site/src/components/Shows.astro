@@ -3,6 +3,8 @@
 // rendered by scripts/library.ts and scripts/shots.ts). Each card leads with the show's main view.
 import ViewFrame from "./ViewFrame.astro";
 import { SHOWS } from "../data/shows";
+import { site } from "../site.config";
+const downloads = site.styleDownloads;
 const lead = "main";
 const shows = SHOWS;
 ---
@@ -10,7 +12,7 @@ const shows = SHOWS;
   <div class="wrap">
     <div class="section-head">
       <h2 id="shows-title">Don't be the only one live without a professional look.</h2>
-      <p class="lede">Every show gets a full set of views with its own look, from the countdown to the goodbye. Here are six made-up shows to show the range.</p>
+      <p class="lede">Every show gets a full set of views with its own look, from the countdown to the goodbye. Here are six made-up shows to show the range. Every style is free.</p>
     </div>
     <ul class="shows">
       {shows.map((s) => (
@@ -22,7 +24,8 @@ const shows = SHOWS;
             ))}
           </div>
           <h3>{s.name} <span class="kind">{s.kind}</span></h3>
-          <p>{s.blurb}</p>
+          <p class="get">{downloads ? <a href={downloads}>Built in, or download this style free</a> : <a href="/download">Download coming soon</a>}</p>
+          <p>{s.blurb}{s.id === "grace" && <> <a href="/church-livestream">Church livestreaming with ViewSwitcher</a></>}</p>
         </li>
       ))}
     </ul>
@@ -39,4 +42,6 @@ const shows = SHOWS;
   .strip figcaption { font-size: 0.8125rem; color: var(--ink-3); }
   .kind { font: 500 0.9375rem var(--text); color: var(--ink-3); letter-spacing: 0; margin-left: 0.35rem; }
   .shows p { color: var(--ink-2); max-width: 34rem; }
+  .shows .get { font-size: 0.875rem; font-weight: 600; color: var(--ink-3); }
+  .get a { color: inherit; }
 </style>

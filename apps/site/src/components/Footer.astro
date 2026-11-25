@@ -1,21 +1,34 @@
 ---
 import Mark from "./Mark.astro";
-import { github } from "../site.config";
+import { github, releases } from "../site.config";
 ---
 <footer class="wrap">
-  <a class="brand" href="/"><Mark size={24} /><span>ViewSwitcher</span></a>
-  <nav aria-label="Footer">
-    <a href={github}>GitHub</a>
-    <a href={`${github}/releases`}>Releases</a>
+  <div class="about">
+    <a class="brand" href="/"><Mark size={24} /><span>ViewSwitcher</span></a>
+    <p>The free, one-click OBS scene switcher for Mac.</p>
+    <p class="quiet">No cookies, no tracking, no data collected.</p>
+  </div>
+  <nav aria-label="Guides">
+    <p class="head">Guides</p>
+    <a href="/download">Download for Mac</a>
+    <a href="/setup">Set up OBS</a>
+    <a href="/ipad">ViewSwitcher for iPad</a>
+    <a href="/church-livestream">Church livestreaming</a>
+  </nav>
+  <nav aria-label="Help">
+    <p class="head">Help</p>
     <a href="/support">Support</a>
     <a href="/privacy">Privacy</a>
+    <a href={releases}>Release notes</a>
+    <a href={github}>GitHub</a>
   </nav>
-  <p class="quiet">A one-click scene switcher for OBS, on the Mac. No cookies, no tracking, no data collected.</p>
 </footer>
 <style>
-  footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 2rem; padding-block: 2.5rem calc(3rem + env(safe-area-inset-bottom, 0px)); }
-  .brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; font: 700 1.0625rem/1 var(--display); letter-spacing: -0.02em; }
-  nav { display: flex; flex-wrap: wrap; gap: 1.5rem; }
-  nav a { color: var(--ink-2); }
-  .quiet { flex-basis: 100%; }
+  footer { display: grid; gap: 2rem 3rem; padding-block: 3rem calc(3rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--rule); }
+  @media (min-width: 48rem) { footer { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); } }
+  .about { display: grid; gap: 0.6rem; align-content: start; color: var(--ink-2); }
+  .brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; font: 700 1.0625rem/1 var(--display); letter-spacing: -0.02em; color: var(--ink); margin-bottom: 0.25rem; }
+  nav { display: grid; gap: 0.6rem; align-content: start; }
+  nav a { color: var(--ink-2); width: fit-content; padding-block: 0.15rem; }
+  .head { font: 600 0.8125rem/1 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 0.25rem; }
 </style>

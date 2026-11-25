@@ -11,6 +11,8 @@ export type Scene = {
   /** Library-relative path, starting with the org, e.g. "daisy/projects/ld-2026/scenes/teaching.html". */
   path: string;
   origin: SceneOrigin;
+  /** Templates only: the template set it's in (templates/<set>/), absent for the org's own. */
+  set?: string;
 };
 
 export type Stream = {
@@ -52,10 +54,28 @@ export type Org = {
   ground: string;
 };
 
+/**
+ * A set of templates installed from a style pack (EDIT-25): templates/<id>/ with the pack's pack.json,
+ * its views, _shared/ and assets/. Its templates are named "<set>/<view>" where a template is asked for.
+ */
+export type TemplateSet = {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author?: string;
+  templates: Scene[];
+  /** The set's own transition (templates/<id>/_shared/transition.html), if it has one. */
+  transition: string | null;
+};
+
 /** One org's content. */
 export type Library = {
   org: Org;
+  /** The org's own templates (templates/*.html). */
   templates: Scene[];
+  /** Installed style packs, by name. */
+  sets: TemplateSet[];
   assets: Asset[];
   projects: Project[];
   /** The org's default transition (templates/_shared/transition.html), or null for a plain cut through the ground color. */
