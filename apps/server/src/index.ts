@@ -40,15 +40,15 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
-/** The built-in template packs (EDIT-29): loaded once, on first use. A failure is logged and leaves just none. */
+/** The built-in template packs (EDIT-29): loaded once, on first use, and kept (a pack that won't build is logged and left out). */
 let builtinsLoad: Promise<BuiltinPack[]> | null = null;
 const builtins = () =>
   (builtinsLoad ??= (config.packs
     ? readBuiltins(config.packs)
-    : buildBuiltins(config.starter, existsSync(join(config.site, "src/data/shows.ts")) ? config.site : null)
+    : buildBuiltins(config.starter, existsSync(join(config.site, "src/data/shows.ts")) ? config.site : null, (id, e) =>
+        console.error(`[packs] built-in template pack ${id} left out: ${e.message}`))
   ).catch((e) => {
     console.error("[packs] built-in template packs:", (e as Error).message);
-    builtinsLoad = null;
     return [];
   }));
 void builtins();

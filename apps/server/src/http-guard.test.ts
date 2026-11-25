@@ -154,6 +154,9 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     await Bun.write(join(library, "my-channel/assets/photo.jpg"), "x");
     expect((await request("/library/my-channel/assets/photo.jpg")).status).toBe(200);
     expect((await request("/library/my-channel/assets/photo.jpg")).headers["access-control-allow-origin"]).toBeUndefined();
+    // A staged pack's preview copy is a template pack's design files too (covers before installing).
+    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg"), "<svg/>");
+    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
     const sneaky = await request("/library/my-channel/templates/%2e%2e/assets/photo.jpg");
     expect(sneaky.headers["access-control-allow-origin"]).toBeUndefined();
   });

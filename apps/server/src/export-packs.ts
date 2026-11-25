@@ -86,6 +86,8 @@ export async function starterPack(starter: string, version = "1.0.0"): Promise<P
 
 type SiteShow = { id: string; name: string; initial: string; kind: string; accent: string; ground: string; blurb: string; views: { file: string }[] };
 
+const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /**
  * Show content a site view may mark for the site's renders only (apps/site/scripts/library.ts fills
  * them with the show's data); a pack gets this generic sample text instead, which people retype.
@@ -99,30 +101,45 @@ export const SITE_SAMPLES: Record<string, string> = { EPISODE: "Episode title" }
  * SITE_SAMPLES placeholder ({{EPISODE}}) becomes generic sample text.
  */
 export function genericView(html: string, show: SiteShow): string {
-  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   let out = html.replace(new RegExp(`<title>\\s*${esc(show.name)}\\s*·\\s*`), "<title>");
   for (const [k, v] of Object.entries(SITE_SAMPLES)) out = out.replaceAll(`{{${k}}}`, v);
+  // The name as its words, however they're spaced or broken: "Full<br>Count", "Roam with<br/>Remi".
+  const gap = String.raw`(?:\s|&nbsp;|&#160;|<br\s*/?>)+`;
+  const words = show.name.split(/\s+/).map((w) => esc(w).replace(/&/g, "(?:&|&amp;)")).join(gap);
   const upper = show.name.toUpperCase();
-  if (upper !== show.name) out = out.replaceAll(upper, `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`);
-  out = out.replaceAll(show.name.replace(/ /g, "<br>"), "{{ORG_NAME}}").replaceAll(show.name, "{{ORG_NAME}}");
-  if (out.includes(show.name) || out.includes(upper)) throw new Error(`${show.id}: the show's name is still in a view`);
+  if (upper !== show.name) {
+    // In capitals as typed: the element it starts keeps the look with text-transform on itself, so
+    // the element stays one piece of plain text people can retype ("ROAM WITH REMI · DAY 4").
+    const caps = show.name.toUpperCase().split(/\s+/).map((w) => esc(w).replace(/&/g, "(?:&|&amp;)")).join(gap);
+    out = out.replace(new RegExp(`<([a-z][\\w-]*)([^>]*)>([^<]*?)${caps}`, "g"), (_m, tag: string, attrs: string, before: string) => {
+      const styled = /\sstyle="/.test(attrs) ? attrs.replace(/\sstyle="([^"]*)"/, (_s, v: string) => ` style="${v.replace(/;?\s*$/, "")}; text-transform: uppercase"`) : `${attrs} style="text-transform: uppercase"`;
+      return `<${tag}${styled}>${before}{{ORG_NAME}}`;
+    });
+    // Capitals after other markup in the same element (`<div><i></i>RIVERSIDE LIVE</div>`): that element
+    // holds tags already, so it isn't plain text to retype either way; a span keeps the look.
+    out = out.replace(new RegExp(caps, "g"), `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`);
+  }
+  out = out.replace(new RegExp(words, "g"), "{{ORG_NAME}}");
+  // Fail rather than ship another show's branding: compare as people read it, in any case and spacing.
+  const read = (t: string) => t.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, "").replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").toLowerCase();
+  if (read(out).includes(read(show.name))) throw new Error(`${show.id}: the show's name is still in a view`);
   return out;
 }
 
 /**
- * A site show's theme, made generic: its accent and ground become {{ACCENT}} and {{GROUND}}. A paper
- * ground (Remi, Kitchen) keeps its own color in --paper-ground: the paper is the look, and an org's
- * dark ground under dark ink wouldn't read.
+ * A site show's theme, made generic: its ground and every variable set to its accent become
+ * {{GROUND}} and {{ACCENT}}. Other palette colors stay: they're the look (a panel that happens to
+ * share the show's ground keeps it, as a paper ground does: Remi and Kitchen keep theirs in
+ * --paper-ground, since an org's dark ground under dark ink wouldn't read).
  */
 export function genericTheme(css: string, show: SiteShow): string {
-  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const ground = new RegExp(`--ground:\\s*${esc(show.ground)};`, "i");
-  const accent = new RegExp(`(--[\\w-]+:\\s*)${esc(show.accent)};`, "i");
-  if (!ground.test(css) || !accent.test(css)) throw new Error(`${show.id}: theme.css has no --ground ${show.ground} or no variable set to the accent ${show.accent}`);
+  const ground = new RegExp(`(^|[;{\\s])--ground:\\s*${esc(show.ground)};`, "i");
+  const accent = new RegExp(`(^|[;{\\s])(--[\\w-]+:\\s*)${esc(show.accent)};`, "gi");
+  if (!ground.test(css) || !new RegExp(accent.source, "i").test(css)) throw new Error(`${show.id}: theme.css has no --ground ${show.ground} or no variable set to the accent ${show.accent}`);
   const paper = /\.ground\.paper\s*\{[^}]*var\(--ground\)/.test(css);
-  let out = css.replace(ground, paper ? `--ground: {{GROUND}};\n  --paper-ground: ${show.ground};` : "--ground: {{GROUND}};");
+  let out = css.replace(ground, paper ? `$1--ground: {{GROUND}};\n  --paper-ground: ${show.ground};` : "$1--ground: {{GROUND}};");
   if (paper) out = out.replace(/(\.ground\.paper\s*\{[^}]*)var\(--ground\)/, "$1var(--paper-ground)");
-  return out.replace(accent, "$1{{ACCENT}};");
+  return out.replace(accent, "$1$2{{ACCENT}};");
 }
 
 /**
@@ -131,16 +148,22 @@ export function genericTheme(css: string, show: SiteShow): string {
  * renders fill the same placeholders with the show's (apps/site/scripts/library.ts). Its views in the
  * site's order, its theme.css, and the shared base.css and view.js.
  */
-export async function sitePacks(site: string): Promise<{ id: string; files: PackFileOut[] }[]> {
+export async function sitePacks(site: string, onError?: (id: string, e: Error) => void): Promise<{ id: string; files: PackFileOut[] }[]> {
   const { SHOWS } = (await import(join(site, "src/data/shows.ts"))) as { SHOWS: SiteShow[] };
   const styles = join(site, "scripts/shows");
   const common = await sharedOf(join(styles, "_shared"));
   const out = [];
   for (const s of SHOWS) {
-    const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, genericView(await readFile(join(styles, s.id, `${v.file}.html`), "utf8"), s)] as [string, string]));
-    const theme = genericTheme(await readFile(join(styles, s.id, "theme.css"), "utf8"), s);
-    const id = s.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    out.push({ id, files: buildPack({ id, name: s.name, description: `${s.kind} templates, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) });
+    try {
+      const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, genericView(await readFile(join(styles, s.id, `${v.file}.html`), "utf8"), s)] as [string, string]));
+      const theme = genericTheme(await readFile(join(styles, s.id, "theme.css"), "utf8"), s);
+      const id = s.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+      out.push({ id, files: buildPack({ id, name: s.name, description: `${s.kind} templates, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) });
+    } catch (e) {
+      // packs:export and the site build fail on any bad show; the app (onError) skips just that one.
+      if (!onError) throw e;
+      onError(s.id, e as Error);
+    }
   }
   return out;
 }

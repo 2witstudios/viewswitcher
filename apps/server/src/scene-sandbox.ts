@@ -35,8 +35,8 @@ import { posix } from "node:path";
 // image or a stylesheet does nothing.
 /** Library files a scene loads in CORS mode (module scripts, @font-face): code, styles and fonts. Never documents or JSON. */
 const CORS_OK = /\.(woff2?|ttf|otf|js|mjs|css)$/i;
-/** Pictures and media of templates (`<org>/templates/…`): design files, sent with CORS. */
-const TEMPLATE_MEDIA = /^[^/]+\/templates\/.+\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
+/** Pictures and media of templates (`<org>/templates/…`, and a staged pack's preview copy): design files, sent with CORS. */
+const TEMPLATE_MEDIA = /^[^/]+\/(templates|\.viewswitcher\/staging\/[0-9a-f]+\/preview)\/.+\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
 
 export const SCENE_CSP = "sandbox allow-scripts; connect-src https: wss:; object-src 'none'; base-uri 'none'; form-action 'none'";
 export const INERT_CSP = "sandbox allow-same-origin allow-scripts; script-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'";

@@ -47,9 +47,11 @@ export async function readBuiltins(dir: string): Promise<BuiltinPack[]> {
 }
 
 /** From the repo's sources: the starter kit, and the site's shows when the site is there. */
-export async function buildBuiltins(starter: string, site: string | null): Promise<BuiltinPack[]> {
-  const packs = [{ id: "starter", files: await starterPack(starter) }];
-  if (site) packs.push(...(await sitePacks(site)));
+export async function buildBuiltins(starter: string, site: string | null, onError: (id: string, e: Error) => void = () => {}): Promise<BuiltinPack[]> {
+  // Each pack on its own: one that won't build is left out (and reported), never the rest.
+  const packs: { id: string; files: PackFileOut[] }[] = [];
+  await starterPack(starter).then((files) => packs.push({ id: "starter", files }), (e) => onError("starter", e as Error));
+  if (site) packs.push(...(await sitePacks(site, onError).catch((e) => (onError("site", e as Error), []))));
   return order(packs.map((p) => describe(p.id, p.files)).filter((b): b is BuiltinPack => !!b));
 }
 

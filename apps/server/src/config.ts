@@ -31,7 +31,7 @@ export const config = {
    */
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
   /** The site's sources the built-in packs come from in a source run (see builtin-packs.ts). */
-  site: resolve(join(import.meta.dir, "../../site")),
+  site: resolve(env.VIEWSWITCHER_SITE ?? join(import.meta.dir, "../../site")),
   /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */

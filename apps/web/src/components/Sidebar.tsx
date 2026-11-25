@@ -178,7 +178,7 @@ function OrgSwitcher({ current }: { current?: string }) {
         <TemplatePicker
           org={picking.id}
           orgName={picking.name}
-          have={[]}
+          have={["starter"]}
           title="Pick your templates"
           intro={`${picking.name} starts with the neutral Starter templates. Add any of these to start from too.`}
           skipLabel="Just the starter"
