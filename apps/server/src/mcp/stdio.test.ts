@@ -9,7 +9,7 @@ import { NOT_RUNNING, relayStdio } from "./stdio";
 
 type Stub = { port: number; posts: unknown[]; stop: () => void };
 /** A stand-in for the switcher: /api/state, and /mcp that answers requests in JSON (or `answer`). */
-function stub(port = 0, answer?: (body: unknown) => Response): Stub {
+function stub(port = 0, answer?: (body: unknown) => Response | Promise<Response>): Stub {
   const posts: unknown[] = [];
   const s = Bun.serve({
     hostname: "127.0.0.1",
@@ -152,5 +152,32 @@ describe("index.ts --mcp-stdio", () => {
     expect(s.posts).toHaveLength(3);
     // The real server would have set up the library (kit, first org) before anything else.
     expect(readdirSync(library)).toEqual([]);
+  });
+
+  test("stdin closing while answers are still on their way: every answer is written before it exits", async () => {
+    // Slow answers, one of them big, and stdin at EOF straight away (like `printf ... | viewswitcher-server --mcp-stdio`).
+    const big = "x".repeat(512 * 1024);
+    const s = stub(0, async (b) => {
+      await Bun.sleep(400);
+      const m = b as { id?: number };
+      return m.id === undefined ? new Response(null, { status: 202 }) : Response.json({ jsonrpc: "2.0", id: m.id, result: { big: m.id === 2 ? big : "" } });
+    });
+    const input = [
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    ].map((m) => JSON.stringify(m) + "\n").join("");
+    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio"], {
+      env: { ...process.env, PORT: String(s.port), VIEWSWITCHER_LIBRARY: library },
+      stdin: new Blob([input]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    s.stop();
+    expect(code).toBe(0);
+    const out = stdout.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    expect(out.map((m) => m.id).sort()).toEqual([1, 2]);
+    expect(out.find((m) => m.id === 2).result.big).toBe(big);
   });
 });

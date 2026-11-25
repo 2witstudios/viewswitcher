@@ -143,7 +143,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const picture = (r: PreviewResult, what: string): CallToolResult =>
     r.ok
       ? { content: [{ type: "image", data: Buffer.from(r.png).toString("base64"), mimeType: "image/png" }, { type: "text", text: `${what} (${r.width}×${r.height}).` }] }
-      : text(`No picture: ${r.reason}. ${what} is at ${r.url}`);
+      : text(`No picture: ${r.reason.trim().replace(/\.+$/, "")}. ${what} is at ${r.url}`);
 
   // ------------------------------------------------------------ read
 
