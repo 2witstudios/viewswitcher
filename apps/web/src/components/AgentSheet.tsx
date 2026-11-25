@@ -10,7 +10,7 @@ import {
 } from "../lib/agent";
 import { clientKind } from "../lib/client-kind";
 import { useLive } from "../lib/live";
-import { toast } from "./ui";
+import { Overlay, toast } from "./ui";
 import { trapTab } from "../lib/modal";
 
 // ---------------------------------------------------------------- open / close, from anywhere
@@ -114,7 +114,10 @@ function Sheet({ onClose }: { onClose: () => void }) {
     setTimeout(() => dispatch({ t: "expire", id }), 3000);
   };
 
+  // In <body>, as every dialog is (ui.tsx Overlay): opened from one ("Ask your agent" in New org), it
+  // comes later in <body>, so it sits on top of it.
   return (
+    <Overlay>
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <section ref={dialog} tabIndex={-1} className="modal agent-sheet" role="dialog" aria-modal="true" aria-labelledby="agent-sheet-title">
         <div className="agent-head">
@@ -148,6 +151,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
         )}
       </section>
     </div>
+    </Overlay>
   );
 }
 

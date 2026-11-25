@@ -289,6 +289,12 @@ describe("write_file", () => {
     expect(await refused(`${ORG}/page.html`)).toContain("isn't where scenes go");
     expect(await refused(`${ORG}/projects/p/page.html`)).toContain("isn't where scenes go");
     expect(await stat(join(root, ORG, "assets/page.html")).catch(() => null)).toBeNull();
+    // A folder in templates/ without a pack.json isn't a set: the switcher wouldn't list the scene.
+    expect(await refused(`${ORG}/templates/lower-thirds/intro.html`)).toContain("isn't a template set");
+    // A page that's there already is left as it is, even with an upper-case .HTML.
+    await writeFile(join(root, ORG, "templates/Intro.HTML"), "<title>Intro</title>");
+    const intro = await data("read_file", { path: `${ORG}/templates/Intro.HTML` });
+    expect((await call("write_file", { path: `${ORG}/templates/Intro.HTML`, text: "<title>Intro 2</title>", hash: intro.hash })).isError).toBe(false);
     const { projectId } = await data("create_project", { org: ORG, name: "Pages" });
     const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Ep 1", date: "2026-12-07" });
     for (const path of [
@@ -532,6 +538,18 @@ describe("built-in template sets (the switcher's Add templates)", () => {
     expect(made.path).toStartWith(`${ORG}/projects/${projectId}/streams/${streamId}/`);
     expect((await call("add_template_set", { org: ORG, set: "nope" })).text).toContain("list_template_sets shows them");
     expect((await call("add_template_set", { org: "nope", set: "grace" })).isError).toBe(true);
+  });
+  test("under the agent on-air guard like every write: refused while live when what's on air can't all be checked", async () => {
+    const scene = `${ORG}/templates/busy.html`;
+    await writeFile(join(root, scene), `<title>Busy</title>${Array.from({ length: 201 }, (_, i) => `<img src="../assets/p${i}.png">`).join("")}`);
+    await data("go_on_air", { path: scene });
+    live();
+    const r = await call("add_template_set", { org: ORG, set: "nova" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("loads more files than ViewSwitcher checks");
+    expect(await stat(join(root, ORG, "templates/nova")).catch(() => null)).toBeNull();
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await data("add_template_set", { org: ORG, set: "nova" })).set).toBe("nova");
   });
 });
 

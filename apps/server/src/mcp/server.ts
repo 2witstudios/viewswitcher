@@ -399,7 +399,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const b = await findSet(set);
     // It lands in a new folder in templates/ (claimed with a plain mkdir, so never over a file on air),
     // and templates/ itself must really be in the library.
-    await contained(`${plainName(org)}/templates/${b.id}`);
+    // The agent on-air guard too, as for every write (refused while live if it can't tell what's on air).
+    await writes(`${plainName(org)}/templates/${b.id}/pack.json`);
     const staged = await stagePack(root, plainName(org), { files: asDropped(b) }, deps.starterScript ?? null);
     let installed: { set: string };
     try {

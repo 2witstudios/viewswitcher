@@ -148,7 +148,8 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .menu button small { font-size: 12px; font-weight: 400; color: var(--sage); }
 .menu hr { border: 0; border-top: 1px solid var(--line-strong); margin: 4px 6px; }
 
-.modal-wrap { position: fixed; inset: 0; z-index: 30; background: rgba(4, 5, 8, 0.6); display: grid; place-items: center; padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
+/* Dialogs render in <body> (ui.tsx Overlay), outside .app: they set the dark scheme for their own controls. */
+.modal-wrap { color-scheme: dark; position: fixed; inset: 0; z-index: 30; background: rgba(4, 5, 8, 0.6); display: grid; place-items: center; padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
 .modal { width: min(480px, 100%); padding: 22px 24px; border-radius: 16px; background: var(--stage); display: flex; flex-direction: column; gap: 14px; }
 .modal h2 { margin: 0; font-family: var(--display); font-weight: 700; font-size: 24px; letter-spacing: -0.01em; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--sage); }

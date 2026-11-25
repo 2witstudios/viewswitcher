@@ -2,6 +2,7 @@
 // under the switcher's rules: paths start with an existing org, never a dot-folder (.git,
 // .viewswitcher), text files only, and a file that exists is only replaced with the hash of the
 // version that was read (the same hash the scene editor uses, so the two never overwrite each other).
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import { slugify } from "@viewswitcher/shared";
@@ -51,14 +52,19 @@ const TRANSITIONS = [/^templates\/_shared\/transition\.html$/, /^templates\/[^/_
  * pack rules (template-pack.ts planPack): exactly ".html", which is how the switcher lists them
  * ("brb.HTML" would sit unseen), and a new one is named like a pack's views (lower-case letters,
  * numbers and dashes) in a folder where scenes live. assets/ and _shared/ hold no pages, except a
- * transition. A page that exists may keep its name: this only decides where new ones go.
+ * transition, and a folder in templates/ holds scenes only when it's a set (its pack.json). A page
+ * that exists is left as it is, whatever its name: this only decides where new ones go.
  */
-export function pageProblem(path: string, exists: boolean): string | null {
+export function pageProblem(path: string, exists: boolean, isSet: (dir: string) => boolean = () => true): string | null {
   const ext = extname(path);
-  if (ext.toLowerCase() !== ".html") return null;
+  if (ext.toLowerCase() !== ".html" || exists) return null;
   if (ext !== ".html") return `Name it with a lower-case .html (${path.slice(0, -ext.length)}.html): the switcher only lists those.`;
-  if (exists) return null;
   const rest = path.split("/").slice(1).join("/");
+  // A folder in templates/ is a template set only with its pack.json (library.ts listSets).
+  const set = /^templates\/([^/_][^/]*)\//.exec(rest)?.[1];
+  if (set && !isSet(set)) {
+    return `templates/${set}/ isn't a template set (it has no pack.json), so the switcher doesn't list scenes in it. Put the scene in templates/, or add a set with add_template_set.`;
+  }
   if (TRANSITIONS.some((r) => r.test(rest))) return null;
   const name = rest.split("/").pop()!.slice(0, -".html".length);
   if (!SCENE_HOMES.some((r) => r.test(rest))) {
@@ -123,7 +129,8 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
     if (!isText(p)) throw new PathError(`Only text files can be written (${TEXT_TYPES.join(", ")}). Add images and other media with add_asset.`);
     if (Buffer.byteLength(text) > MAX_TEXT_BYTES) throw new PathError("That's over 2 MB, too big for a library text file");
     const real = await realpath(abs).catch(() => null);
-    const page = pageProblem(p, !!real);
+    const org = p.split("/")[0]!;
+    const page = pageProblem(p, !!real, (set) => existsSync(inside(root, `${org}/templates/${set}/pack.json`)));
     if (page) throw new PathError(page);
     if (real) {
       const read = await stat(real);
