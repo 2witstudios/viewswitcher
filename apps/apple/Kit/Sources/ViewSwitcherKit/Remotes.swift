@@ -50,8 +50,9 @@ public struct RemoteStatus: Decodable, Equatable, Sendable {
 }
 
 public enum RemoteText {
-    /// The settings's help text: plain HTTP on the Wi-Fi is the known limit (Decisions, MAC-23).
-    public static let help = "Phones and tablets you pair can switch scenes from a browser. Wi-Fi traffic isn't encrypted: use this on networks you trust, and Tailscale elsewhere."
+    /// The setting's help text: plain HTTP on the Wi-Fi is the known limit (Decisions, MAC-23). Users
+    /// never see a VPN named (Decisions): the caveat is the kind of network, not a product.
+    public static let help = "Phones and tablets you pair can switch scenes from a browser. Wi-Fi traffic isn't encrypted, so use this on networks you trust, like home or church Wi-Fi."
 
     /// "K7PQ2MXA" → "K7PQ-2MXA", easier to read out and type.
     public static func code(_ c: String) -> String {

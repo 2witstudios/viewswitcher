@@ -30,8 +30,8 @@ final class RemotesTests: XCTestCase {
         XCTAssertEqual(RemoteText.lastSeen(d, now: now), "Seen 3 min ago")
         XCTAssertEqual(RemoteText.lastSeen(.init(id: "a", name: "", pairedAt: 0, lastSeen: 1_699_827_200_000, connected: 0), now: now), "Seen 2 days ago")
         XCTAssertEqual(RemoteText.lastSeen(.init(id: "a", name: "", pairedAt: 0, lastSeen: 0, connected: 2), now: now), "Connected now")
-        XCTAssertTrue(RemoteText.help.contains("trust"))
-        XCTAssertTrue(RemoteText.help.contains("Tailscale"))
+        XCTAssertTrue(RemoteText.help.contains("networks you trust, like home or church Wi-Fi"))
+        XCTAssertFalse(RemoteText.help.contains("Tailscale"))
     }
 
     /// Made on the Mac, and a phone camera would read back the same link.

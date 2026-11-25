@@ -45,7 +45,7 @@ Result: **4+**.
 - Privacy policy URL: `https://viewswitcher.com/privacy` (SITE-17)
 - Data collection: **"No, we do not collect data from this app."**
   The app talks only to the ViewSwitcher server on the user's own Mac, over the USB-C cable or their own
-  network. Nothing is sent to the developer or anyone else: no accounts, analytics, crash reporting, ads
+  Wi-Fi once paired. Nothing is sent to the developer or anyone else: no accounts, analytics, crash reporting, ads
   or tracking. `PrivacyInfo.xcprivacy` says the same (no tracking, no collected data types).
 - Privacy label shown on the store: **Data Not Collected**.
 
@@ -81,7 +81,7 @@ ON THE IPAD
 • The view on air marked in red, so you always know what people see
 • Go live, record, and see that OBS is connected
 • Plug the iPad into the Mac with a USB-C cable: no Wi-Fi needed
-• Or use it over your own network when it's unplugged
+• Or pair it over Wi-Fi: scan the QR code the Mac shows, and only devices you pair can switch scenes
 • Portrait or landscape, full screen, Split View or Stage Manager
 • The screen stays awake while you run the show
 
@@ -123,7 +123,7 @@ stream,live,streaming,scene,scenes,switcher,church,podcast,teacher,remote,contro
 ### Notes (4000)
 
 ```
-ViewSwitcher for iPad is the remote for ViewSwitcher on the Mac, which drives OBS (the free streaming app). Full use needs a Mac running ViewSwitcher and OBS, connected by a USB-C cable or on the same network.
+ViewSwitcher for iPad is the remote for ViewSwitcher on the Mac, which drives OBS (the free streaming app). Full use needs a Mac running ViewSwitcher and OBS, connected by a USB-C cable or paired over the same Wi-Fi.
 
 TRY IT WITHOUT A MAC: THE DEMO
 1. Open the app. With no Mac connected it opens the demo by itself: a sample cooking show, "Saltwater Kitchen", with a white bar along the top that reads "Demo · Connect your Mac to go live".
@@ -134,7 +134,11 @@ Nothing in the demo is streamed or sent anywhere; it is all inside the app and w
 WITH A MAC (OPTIONAL)
 1. On a Mac, install ViewSwitcher (free: https://github.com/2witstudios/viewswitcher/releases) and OBS (https://obsproject.com). ViewSwitcher sets up OBS from its first window.
 2. Plug the iPad into the Mac with a USB-C cable and open the app. It connects by itself and shows the same views as the Mac. Tapping a view switches what OBS streams.
-3. Without the cable, enter the Mac's local (.local) or Tailscale (.ts.net) address in the connector. The app asks for Local Network access only for this.
+3. Without the cable, pair over Wi-Fi (the iPad and the Mac on the same Wi-Fi network):
+   a. On the Mac, click ViewSwitcher in the menu bar and turn on "Let Phones and Tablets on This Wi-Fi Connect", then choose "Phones and Tablets…". The window shows a QR code, a one-time code (like K7PQ-2MXA, valid for 5 minutes) and the Mac's address (like http://your-mac.local:7420).
+   b. On the iPad, open the app and tap "Connect your Mac" if the demo is showing. Enter that address in the connector and tap Save. The app asks for Local Network access only for this.
+   c. The iPad shows "Pair with ViewSwitcher": enter the code and tap Pair. The switcher opens, and the iPad appears under "Paired devices" on the Mac, where Remove disconnects it at once.
+   (Scanning the QR code with the iPad's Camera opens the same pairing page in Safari, which works too.)
 
 The app has no accounts, in-app purchases, ads or analytics, and collects no data.
 ```
@@ -146,5 +150,4 @@ None. (The demo shows the app working without a Mac.)
 ## Export compliance
 
 `ITSAppUsesNonExemptEncryption` is `NO` in the app's Info.plist, so App Store Connect doesn't ask
-per build. The app uses only the operating system's own HTTPS (to a Tailscale address); it has no
-encryption of its own. If asked: "None of the algorithms mentioned above" → no documents needed.
+per build. The app has no encryption of its own; any HTTPS it loads is the operating system's own. If asked: "None of the algorithms mentioned above" → no documents needed.

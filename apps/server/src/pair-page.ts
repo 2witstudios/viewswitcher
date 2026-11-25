@@ -46,7 +46,7 @@ export function pairPage({ name }: { name: string }): string {
     <button id="go" type="submit">Pair</button>
     <div id="error" role="alert"></div>
   </form>
-  <small>Only devices paired here can switch scenes. Wi-Fi traffic isn't encrypted, so pair only on a network you trust.</small>
+  <small>Only devices paired here can switch scenes. Wi-Fi traffic isn't encrypted, so pair only on networks you trust, like home or church Wi-Fi.</small>
 </main>
 <script>
   const q = new URLSearchParams(location.search);

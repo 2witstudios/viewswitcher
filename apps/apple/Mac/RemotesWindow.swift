@@ -164,7 +164,8 @@ struct RemotesView: View {
             devices
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 560, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder var pairing: some View {
@@ -185,15 +186,17 @@ struct RemotesView: View {
                     if model.status?.enabled == true {
                         Text("Scan with the phone's camera, or open the address below and enter the code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("Over Tailscale: open your Mac's Tailscale address on the device and enter this code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("Turn on Wi-Fi connections above for a QR code. On a device that already reaches this Mac, open ViewSwitcher and enter this code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Text(RemoteText.code(code)).font(.system(size: 34, weight: .semibold, design: .monospaced)).textSelection(.enabled)
                     Text(RemoteText.expiry(expires, now: model.now)).foregroundStyle(.secondary).monospacedDigit()
                 } else {
                     Text("The code was used or has expired.").foregroundStyle(.secondary)
                 }
-                if model.status?.enabled == true, let url = model.status?.urls.first {
-                    Text(url).font(.callout.monospaced()).textSelection(.enabled)
+                if model.status?.enabled == true {
+                    ForEach(model.status?.urls.prefix(2).map { $0 } ?? [], id: \.self) { url in
+                        Text(url).font(.callout.monospaced()).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Button("New Code") { Task { await model.newCode() } }.padding(.top, 4)
             }
@@ -236,9 +239,8 @@ final class RemotesWindow: NSObject, NSWindowDelegate {
         super.init()
         window.title = "Phones and Tablets"
         window.isReleasedWhenClosed = false
-        let hosting = NSHostingView(rootView: RemotesView(model: model))
-        hosting.sizingOptions = .preferredContentSize // the window follows the content (QR code or not, more devices)
-        window.contentView = hosting
+        // A hosting controller sizes the window to the content (QR code or not, more devices).
+        window.contentViewController = NSHostingController(rootView: RemotesView(model: model))
         window.delegate = self
         window.center()
     }
