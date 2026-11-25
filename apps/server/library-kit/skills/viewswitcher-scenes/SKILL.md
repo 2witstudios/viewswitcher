@@ -204,7 +204,7 @@ When the ViewSwitcher tools aren't there (the app is closed, or your agent has n
 
 1. Find the right file with the override rule. Read it right before editing (people may have just changed it in the switcher).
 2. Edit in place. Keep the contract: head links, `main.scene`, slot names, `scene.js`, text in its own small elements, positions as inline px. For a stream-only change, edit the stream's own copy; copy the project scene into the stream folder first only if the stream has no copy yet (never over one: it holds that stream's changes).
-3. To check it, open `http://localhost:7420/library/<path>?preview` (1920×1080; use the switcher's port if it isn't 7420). If a headless browser is available, screenshot it at 1920×1080, look, and fix it with the checklist under "Preview, look, fix".
+3. To check it, open `http://localhost:7420/library/<path>?preview` (1920×1080; use the switcher's port if it isn't 7420). ViewSwitcher must be open for that address to answer; if it isn't, ask the user to open it. If a headless browser is available, screenshot it at 1920×1080, look, and fix it with the checklist under "Preview, look, fix".
 4. Tell the user which file you changed and whether the change applies to one stream, the whole project, or a template.
 
 ## Don't

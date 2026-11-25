@@ -151,11 +151,12 @@ function Sheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Copyable({ label, text, multiline = false }: { label: string; text: string; multiline?: boolean }) {
+/** `pending`: the text isn't known yet (this Mac's details are still on their way): shown as such, not copyable. */
+function Copyable({ label, text, multiline = false, pending = false }: { label: string; text: string; multiline?: boolean; pending?: boolean }) {
   return (
     <div className="agent-copy">
-      {multiline ? <pre aria-label={label}>{text}</pre> : <code aria-label={label}>{text}</code>}
-      <button type="button" className="btn small" onClick={async () => (await copy(text)) && toast("Copied")}>Copy</button>
+      {multiline ? <pre aria-label={label}>{text}</pre> : <code aria-label={label}>{pending ? "…" : text}</code>}
+      <button type="button" className="btn small" disabled={pending} onClick={async () => (await copy(text)) && toast("Copied")}>Copy</button>
     </div>
   );
 }
@@ -175,7 +176,7 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
         return (
           <>
             <p>In Terminal, start Claude Code in your library folder. The library's <code>.mcp.json</code> connects it to ViewSwitcher; the first time, Claude Code asks you once to allow the <b>viewswitcher</b> server.</p>
-            <Copyable label="Claude Code command" text={info?.claudeCode ?? DEFAULT_CLAUDE_CODE} />
+            <Copyable label="Claude Code command" text={info?.claudeCode ?? DEFAULT_CLAUDE_CODE} pending={info === undefined} />
             {portNote && <p className="agent-note">{portNote}</p>}
           </>
         );
@@ -204,7 +205,7 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
           <>
             <p>Any MCP client on this Mac: the Streamable HTTP address, or the stdio command.</p>
             <Copyable label="MCP address" text={url} />
-            <Copyable label="stdio command" text={stdio} />
+            <Copyable label="stdio command" text={stdio} pending={info === undefined} />
             <p>Codex: add this to <code>~/.codex/config.toml</code>.</p>
             <Copyable label="Codex config" text={codexToml(url)} multiline />
           </>

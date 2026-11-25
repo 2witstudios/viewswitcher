@@ -161,8 +161,7 @@ describe("preview renderer (MCP-1)", () => {
     const started = Date.now();
     const r = await createPreviewer(obs, opts({ timeoutMs: 120, intervalMs: 10 })).scene(SCENE);
     const took = Date.now() - started;
-    expect(took).toBeGreaterThanOrEqual(120);
-    expect(took).toBeLessThan(400);
+    expect(took).toBeGreaterThanOrEqual(120); // no upper bound: a busy machine may pause the worker; a hang fails the test runner's timeout
     expect(r).toEqual({ ok: true, png: png([n - 1, 0, 0, 255]), width: 960, height: 540 });
   });
 

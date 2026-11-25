@@ -144,6 +144,22 @@ describe("relayStdio", () => {
   });
 });
 
+describe("an answer whose body never arrives", () => {
+  test("is answered as dropped (the call may have run), not as a 200", async () => {
+    // Headers, then the connection closes before the promised body.
+    const s = createServer((sock) => {
+      sock.once("data", () => {
+        sock.write("HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 500\r\n\r\n{\"jsonrpc\"");
+        sock.destroy();
+      });
+    });
+    const port = await new Promise<number>((r) => s.listen(0, "127.0.0.1", () => r((s.address() as { port: number }).port)));
+    const out = await relay(port, lines(JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "duplicate_scene" } })));
+    s.close();
+    expect(out).toEqual([{ jsonrpc: "2.0", id: 3, error: { code: -32000, message: DROPPED } }]);
+  });
+});
+
 describe("bypassProxies", () => {
   test("loopback is added to NO_PROXY and no_proxy, keeping what's there", () => {
     const env: Record<string, string | undefined> = { NO_PROXY: "example.com" };

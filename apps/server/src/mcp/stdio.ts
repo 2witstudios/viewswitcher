@@ -121,7 +121,14 @@ export async function relayStdio(opts: RelayOptions): Promise<void> {
       for (const id of ids) opts.write(errorFor(id, why));
       return;
     }
-    const text = await res.text().catch(() => "");
+    // The answer's headers came, but its body didn't: the call reached the switcher and may have run.
+    let text: string;
+    try {
+      text = await res.text();
+    } catch {
+      for (const id of ids) opts.write(errorFor(id, DROPPED));
+      return;
+    }
     const messages: unknown[] = [];
     if ((res.headers.get("content-type") ?? "").includes("text/event-stream")) {
       for (const line of text.split(/\r?\n/)) {
