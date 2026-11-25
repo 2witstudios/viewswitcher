@@ -99,6 +99,16 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .page-head .titles { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
 .crumb { font-size: 14px; color: var(--sage); }
 .title { margin: 0; font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.05; letter-spacing: -0.02em; }
+/* Phones only (PHONE-3, PHONE-12): the title opens the library, the on-air scene sits on top upright, and a
+   scrim closes the library sideways. Hidden everywhere else. */
+.stream-pick, .onair-hero, .side-scrim, .deck-library { display: none; }
+.deck-library { position: fixed; z-index: 20; top: calc(10px + var(--safe-top)); left: calc(16px + var(--safe-left)); min-height: 44px; padding: 0 16px; align-items: center; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); font-size: 14px; font-weight: 600; }
+.stream-pick { flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; min-height: 44px; padding: 0; border: 0; background: transparent; text-align: left; }
+.stream-pick .title { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.stream-pick .title svg { flex: none; color: var(--sage); }
+.onair-hero { flex-direction: column; gap: 8px; }
+.onair-hero .cover { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.onair-hero .label { font-family: var(--display); font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .livebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pill { display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--stage); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); }
@@ -438,4 +448,63 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
   .editor-top .btn.primary { padding: 0 14px; }
   .add-menu { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(8px + var(--safe-bottom)); width: auto; }
   .editor-bottom .hint { height: auto; min-height: 44px; padding: 8px 12px; }
+}
+@media (max-width: 600px) {
+  .page-head .titles > .crumb, .page-head .titles > .title { display: none; }
+  .stream-pick { display: flex; }
+  .onair-hero { display: flex; }
+}
+/* A phone (touch), not a narrow Mac window or an iPad in Split View: editing happens on the Mac and iPad. */
+@media (max-width: 600px) and (pointer: coarse) {
+  .livebar .ai-btn { display: none; }
+}
+
+/* ---------------------------------------------------------------- the deck: a phone held sideways (PHONE-12)
+   About 844×390: wider than the phone layout above, so it keys on a short, touch screen no wider than a phone
+   (a short iPad window keeps its editing). The scenes fill
+   the screen four across under one slim bar; the library slides in from the title. Switching only: adding
+   and editing scenes, the transition and OBS setup stay on the Mac and iPad (upright works too). Comes
+   after the phone rules so a small phone sideways (568×320, both at once) gets the deck. */
+@media (max-height: 500px) and (max-width: 1000px) and (pointer: coarse) {
+  .side { position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: min(340px, 85vw); max-width: none; height: auto; max-height: none; flex: none;
+    padding: calc(10px + var(--safe-top)) 12px calc(16px + var(--safe-bottom)) calc(12px + var(--safe-left));
+    border-right: 1px solid var(--line-strong); border-bottom: 0; overflow-y: auto; overscroll-behavior: contain;
+    transform: translateX(-100%); visibility: hidden; transition: transform 160ms ease-out, visibility 160ms; }
+  .side.open { transform: none; visibility: visible; max-height: none; }
+  .side .side-body { display: flex; flex-direction: column; gap: 16px; }
+  .brand { min-height: 44px; padding: 0 0 0 4px; }
+  .side-toggle { display: inline-flex; align-items: center; margin-left: auto; min-height: 44px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); font-size: 14px; font-weight: 600; }
+  .side-item, .side-stream, .side-project { min-height: 44px; }
+  .side-scrim { display: block; position: fixed; z-index: 29; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, 0.55); }
+  /* A screen with no page header (a stream that's gone, no orgs yet) still needs a way to the library. */
+  .app:not(:has(.stream-pick)) .deck-library { display: inline-flex; }
+  .app .side.open ~ .deck-library { display: none; }
+  .app:not(:has(.stream-pick)) .main { padding-top: calc(64px + var(--safe-top)); }
+
+  .main { padding: calc(4px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left)); gap: 10px; }
+  .page-head { position: sticky; top: 0; z-index: 10; flex-wrap: nowrap; align-items: center; gap: 8px; padding: 6px 0; background: var(--bg); }
+  .page-head .titles { flex: 0 1 auto; min-width: 0; }
+  .page-head .titles > .crumb, .page-head .titles > .title { display: none; }
+  .stream-pick { display: flex; justify-content: center; }
+  .stream-pick .crumb { display: none; }
+  .stream-pick .title { font-size: 17px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .livebar { position: static; flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; padding: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-top: 0; }
+  .livebar > .pill:first-child { flex: 0 1 auto; min-width: 0; height: 32px; padding: 0 12px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+  .livebar .out-btn { flex: none; height: 36px; padding: 0 10px; font-size: 12px; letter-spacing: 0.1em; white-space: nowrap; }
+  .livebar .ai-btn, .livebar .edit-onair { display: none; }
+  .livebar .pill.link, .livebar .pill.off:not(:first-child) { height: 28px; padding: 0 9px; font-size: 11px; }
+  .onair-hero, .setup-card, .new-scene, .transition-section, .own-empty, .section-head span { display: none; }
+
+  .section { gap: 8px; }
+  .section-head h2 { font-size: 11px; letter-spacing: 0.24em; }
+  .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .tile, .cover, .asset-cover { width: 100%; }
+  .cover, .asset-cover { height: auto; aspect-ratio: 16 / 9; }
+  .cover { border-radius: 9px; outline-width: 3px; outline-offset: 2px; }
+  .badge { left: 6px; top: 6px; height: 18px; padding: 0 6px; font-size: 9px; letter-spacing: 0.12em; }
+  .tile { gap: 4px; }
+  .tile-meta { min-height: 20px; }
+  .tile-meta .label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile-meta .file, .tile .more { display: none; }
+  .menu { position: fixed; left: calc(8px + var(--safe-left)); right: calc(8px + var(--safe-right)); top: auto; bottom: calc(8px + var(--safe-bottom)); min-width: 0; max-width: 480px; margin: 0 auto; max-height: calc(100dvh - 16px); overflow-y: auto; }
 }

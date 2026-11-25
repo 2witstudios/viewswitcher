@@ -17,7 +17,7 @@ import type { McpDeps } from "./mcp/server";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
 import { fromThisMac, fromThisMacOnly, gate, loopbackAddress, rateKey } from "./gate";
-import { thisMac } from "./lan";
+import { pairingOrder, thisMac } from "./lan";
 import { hostTrusted, originAllowed } from "./origin";
 import { PAIR_PAGE_CSP, pairPage } from "./pair-page";
 import { deviceName, guessName, Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
@@ -259,11 +259,9 @@ const body = async (req: Request) => (await req.json().catch(() => ({}))) as Rec
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
 const lanNames = () => (lanServer ? thisMac() : null);
 
-// Private ranges first (the Wi-Fi), so the QR code points at the address a phone can reach.
-const rank = (ip: string) => (/^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 0 : 1);
 function remoteStatus() {
   const mac = thisMac();
-  const addresses = [...mac.addresses].sort((a, b) => rank(a) - rank(b));
+  const addresses = pairingOrder(mac.addresses, mac.vpn);
   const connected = new Map<string, number>();
   for (const ws of sockets) if (ws.data.device) connected.set(ws.data.device, (connected.get(ws.data.device) ?? 0) + 1);
   return {
@@ -316,7 +314,10 @@ async function remoteApi(req: Request, path: string): Promise<Response> {
     const { code, expiresAt } = pairing.newCode();
     const s = remoteStatus();
     const [host] = s.urls.filter((u) => !u.includes(".local:")).concat(s.urls);
-    return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}` : null });
+    // The link opens on an address any phone can reach; `mac` also names this Mac's .local name, so the
+    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address (PHONE-4).
+    const mac = s.localName && host && !host.includes(".local:") ? `&mac=${encodeURIComponent(s.localName)}` : "";
+    return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}${mac}` : null });
   }
   if (path === "/api/remote/remove") {
     try {

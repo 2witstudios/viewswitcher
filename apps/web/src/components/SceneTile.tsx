@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
+import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
 
@@ -14,6 +15,38 @@ export function useOpenEditor(): (path: string, opts?: { rename?: boolean; repla
 export const PencilIcon = () => (
   <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13 7l4 4" /></svg>
 );
+
+/** The 1920×1080 scene scaled to its box's width: 280 px on a desktop, half a phone's width (MAC-27).
+ *  A callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */
+function useCoverScale<T extends HTMLElement>(): (el: T | null) => void {
+  const [el, setEl] = useState<T | null>(null);
+  useEffect(() => {
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => el.style.setProperty("--cover-scale", String(el.clientWidth / 1920)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return setEl;
+}
+
+/** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Mounted only there, so the
+ *  Mac, the iPad and the deck don't load and run a hidden copy of the on-air scene. */
+export function OnAirHero() {
+  const { state, versions, connected } = useLive();
+  const onAir = state?.onAir;
+  const box = useCoverScale<HTMLDivElement>();
+  const shown = isUprightPhone({ upright: useMedia(UPRIGHT), deck: useMedia(DECK) });
+  if (!shown || !onAir || !connected) return null;
+  return (
+    <section className="onair-hero" aria-label="On air">
+      <div className="cover live" ref={box}>
+        <iframe title={onAir.label} src={sceneUrl(onAir.path, versions, true)} sandbox={SCENE_SANDBOX} tabIndex={-1} />
+        <span className="badge">ON AIR</span>
+      </div>
+      <span className="label">{onAir.label}</span>
+    </section>
+  );
+}
 
 /** An album-style cover: a live, scaled render of the scene file. */
 export function SceneTile({ label, path, live, badge, onActivate, onEdit, editChoices, menu }: {
@@ -30,15 +63,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   menu: MenuItem[];
 }) {
   const { versions } = useLive();
-  // The 1920×1080 scene scaled to the cover's width: 280 px on a desktop, half a phone's width (MAC-27).
-  const cover = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const el = cover.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => el.style.setProperty("--cover-scale", String(el.clientWidth / 1920)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const cover = useCoverScale<HTMLButtonElement>();
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const openMenu = (e?: MouseEvent) => {

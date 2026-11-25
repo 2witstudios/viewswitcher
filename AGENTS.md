@@ -27,6 +27,7 @@ Scene editor (EDIT) first and landing page (SITE) in parallel; Mac app (MAC) aft
 - `SITE`: landing page, viewswitcher.com (plan `y1qa9qp2ltfjsepjmetpmsgw`)
 - `MAC`: Mac app (plan `gz7zkvlaofixz6ljsljdj6sh`)
 - `MCP`: agent connection, the MCP server and Edit with AI (plan `q47xu7oithlmzpkeshfn5bdh`)
+- `PHONE`: iPhone app, one universal app with the iPad's (plan `yxec9dlaej36ib1ytknvdoq7`)
 - `ISSUE`: bugs, debt and loose ends found outside a slice
 
 Tasks read `<CODE> — Given X, should Y`. Never renumber; inserted work takes a suffix (`EDIT-4a`).

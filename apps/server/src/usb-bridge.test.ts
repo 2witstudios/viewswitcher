@@ -16,7 +16,7 @@ async function fakeUsbmuxd(socketPath: string) {
   const fake = {
     appOpen: true,
     tunnels,
-    attach: () => listener?.write(u8(encodeMessage({ MessageType: "Attached", DeviceID: 7, Properties: { ConnectionType: "USB", DeviceID: 7 } }))),
+    attach: (productId?: number) => listener?.write(u8(encodeMessage({ MessageType: "Attached", DeviceID: 7, Properties: { ConnectionType: "USB", DeviceID: 7, ...(productId ? { ProductID: productId } : {}) } }))),
     detach: () => listener?.write(u8(encodeMessage({ MessageType: "Detached", DeviceID: 7 }))),
     /** The app quits: idle tunnels close and new ones are refused. */
     quitApp() {
@@ -90,6 +90,23 @@ describe("usb bridge status (MAC-4)", () => {
     fake.detach();
     await until(() => !now().attached);
     expect(now()).toEqual({ attached: false, connected: false });
+  });
+
+  test("names an iPhone plugged in (PHONE-8)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const { fake, close } = await fakeUsbmuxd(join(dir, "usbmuxd"));
+    cleanup.push(close);
+    const seen: BridgeStatus[] = [];
+    const bridge = startUsbBridge({ serverPort: 1, socketPath: join(dir, "usbmuxd"), log: () => {}, onStatus: (s) => seen.push(s) });
+    cleanup.push(() => bridge.stop());
+    await Bun.sleep(50);
+    fake.attach(0x12a8);
+    await until(() => seen.at(-1)?.connected === true);
+    expect(seen.at(-1)).toEqual({ attached: true, connected: true, device: "iPhone" });
+    fake.detach();
+    await until(() => seen.at(-1)?.attached === false);
+    expect(seen.at(-1)).toEqual({ attached: false, connected: false });
   });
 
   test("an iPad request on an idle tunnel reaches the server", async () => {

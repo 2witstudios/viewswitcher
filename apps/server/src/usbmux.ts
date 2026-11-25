@@ -156,3 +156,7 @@ export const connectMessage = (deviceId: number, port: number) =>
 
 /** Result codes: 0 ok, 2 bad device, 3 connection refused (app not listening), 6 bad version. */
 export const resultNumber = (body: PlistDict) => (body.MessageType === "Result" ? Number(body.Number) : null);
+
+/** Apple's usbmux product ids for the devices the app runs on (PHONE-8); anything else is unknown. */
+const PRODUCTS: Record<number, "iPhone" | "iPad"> = { 0x12a8: "iPhone", 0x12ab: "iPad" };
+export const deviceKind = (productId: unknown): "iPhone" | "iPad" | undefined => PRODUCTS[Number(productId)];

@@ -5,42 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ViewSwitcher</title>
 <!-- Connector: finds the ViewSwitcher server (USB-C first, then the network) and opens the switcher it serves.
-     With no Mac it offers the demo (demo/, MAC-18), and opens it by itself until a Mac has been connected once. -->
+     With no Mac it offers to pair: Scan reads the Mac's QR code with the app's own camera (PHONE-4), Enter code
+     finds the Mac on the Wi-Fi by Bonjour and opens its pair page (PHONE-5). With no Mac at all it offers the demo
+     (demo/, MAC-18), and opens it by itself until a Mac has been connected once. Same page on iPhone and iPad. -->
 <style>
-  :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --quiet: #7d8290; --text: #f4f5f7; }
+  :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --soft: #c4c8d2; --text: #f4f5f7; --live: #ff4d4f; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: calc(32px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(32px + env(safe-area-inset-left)); text-align: center; }
-  img { width: 96px; height: 96px; }
-  h1 { margin: 0; font-weight: 700; font-size: 34px; letter-spacing: -0.02em; }
-  #status { margin: 0; font-size: 18px; color: var(--muted); min-height: 1.4em; }
-  .row { display: flex; gap: 10px; width: min(560px, 100%); }
-  label { font-size: 13px; color: var(--quiet); width: min(560px, 100%); text-align: left; }
-  input { flex: 1; min-width: 0; height: 48px; padding: 0 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font-size: 16px; }
-  button { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 16px; font-weight: 700; }
-  .demo { background: transparent; color: var(--text); border: 2px solid var(--line); }
-  .demo[hidden] { display: none; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--text); margin-right: 10px; animation: pulse 1.2s infinite ease-in-out; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { min-height: 100vh; min-height: 100dvh; width: min(440px, 100%); margin: 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 18px;
+    padding: calc(24px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left)); }
+  header { display: flex; align-items: center; gap: 12px; }
+  header img { width: 44px; height: 44px; }
+  h1 { margin: 0; font-weight: 700; font-size: 28px; letter-spacing: -0.02em; line-height: 1.1; }
+  #status { margin: 0; font-size: 15px; color: var(--muted); min-height: 1.4em; }
+  button, .btn { min-height: 52px; padding: 0 18px; border: 0; border-radius: 12px; font: inherit; font-size: 17px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+  .primary { background: var(--text); color: var(--bg); }
+  .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+  .actions { display: flex; flex-direction: column; gap: 10px; }
+  .usb { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--soft); }
+  .macs { display: flex; flex-direction: column; gap: 8px; }
+  .macs button { justify-content: flex-start; background: var(--raised); color: var(--text); border: 1px solid var(--line); }
+  form { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; height: 52px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font-size: 16px; }
+  .link { min-height: 44px; padding: 0; background: none; color: var(--muted); font-size: 15px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; align-self: flex-start; }
+  [hidden] { display: none !important; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--text); margin-right: 8px; animation: pulse 1.2s infinite ease-in-out; }
   @keyframes pulse { 50% { opacity: 0.25; } }
+  /* A phone held sideways: two columns, so nothing scrolls. */
+  @media (max-height: 500px) and (min-width: 560px) {
+    main { width: min(720px, 100%); display: grid; grid-template-columns: 1fr 1fr; align-content: center; column-gap: 28px; }
+    header, #status { grid-column: 1; }
+    .actions, .usb, .macs, form, .link, #demo { grid-column: 2; }
+    .link { justify-self: start; }
+    header { grid-row: 1; } #status { grid-row: 2; }
+  }
 </style>
 </head>
 <body>
 <main>
-  <img src="icon.svg" alt="">
-  <h1>ViewSwitcher</h1>
-  <p id="status"><span class="dot"></span>Looking for the ViewSwitcher server…</p>
-  <label for="net">Without the cable: on the Mac, turn on Phones and Tablets in ViewSwitcher's menu, then enter the address it shows, e.g. http://your-mac.local:7420</label>
-  <form class="row" id="form">
+  <header>
+    <img src="icon.svg" alt="">
+    <h1 id="title">Connect to your Mac</h1>
+  </header>
+  <p id="status"><span class="dot"></span>Looking for your Mac…</p>
+
+  <div class="actions" id="pair">
+    <button type="button" class="primary" id="scan" hidden>
+      <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 12h8"/></svg>
+      Scan the code
+    </button>
+    <button type="button" class="ghost" id="enter" hidden>Enter code</button>
+  </div>
+  <div class="macs" id="macs" hidden></div>
+
+  <div class="usb">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"/></svg>
+    Or plug in with USB-C
+  </div>
+
+  <button type="button" class="link" id="manual">Enter an address</button>
+  <form id="form" hidden>
+    <label for="net" hidden>Address</label>
     <input id="net" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://your-mac.local:7420">
-    <button type="submit">Save</button>
+    <button type="submit" class="primary">Save</button>
   </form>
-  <button type="button" class="demo" id="demo" hidden>Try the demo</button>
+
+  <button type="button" class="ghost" id="demo" hidden>Try the demo</button>
 </main>
 <script src="probe.js"></script>
 <script>
-  const status = document.getElementById("status");
-  const net = document.getElementById("net");
-  const demo = document.getElementById("demo");
+  const $ = (id) => document.getElementById(id);
+  const status = $("status"), net = $("net"), demo = $("demo"), form = $("form"), macs = $("macs");
+  // The app's scanner and Bonjour (ConnectorBridge.swift). Missing in a browser, or an old build.
+  const app = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.vs;
+  const ask = (what) => app ? app.postMessage(what) : Promise.resolve(null);
+  if (app) { $("scan").hidden = false; $("enter").hidden = false; }
+
   // The address saved by the Capacitor build, handed over once by the app (#network=…).
   const handed = new URLSearchParams(location.hash.slice(1)).get("network");
   if (handed !== null) {
@@ -48,23 +88,83 @@
     history.replaceState(null, "", location.pathname);
   }
   net.value = VS.network();
-  document.getElementById("form").addEventListener("submit", (e) => {
+
+  // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
+  // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
+  let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
+  const go = (url) => { leaving = true; location.replace(url); };
+
+  // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app. `scanning` holds
+  // from the tap until the page leaves (or the scan comes back empty), so no other flow starts or navigates meanwhile.
+  $("scan").addEventListener("click", async () => {
+    if (scanning || leaving) return;
+    scanning = touched = true;
+    // Look on the Wi-Fi meanwhile: on a fresh install that brings up the Local Network prompt while the
+    // camera is up, so it's answered before the .local name is tried below.
+    if (!browsing) ask("browse").catch(() => {});
+    const scanned = await ask("scan").catch(() => null);
+    if (!scanned || !VS.usable(scanned.link)) { scanning = false; return; }
+    status.innerHTML = `<span class="dot"></span>Connecting…`;
+    // Pair on the Mac's .local name when it answers (a cold mDNS lookup can be slow, so up to 5 s, twice):
+    // it outlasts the Mac's LAN address changing. Else the address in the code.
+    const answers = async (u) => (await VS.reachable(u, 5000)) || (await VS.reachable(u, 5000));
+    const local = scanned.local && VS.usable(scanned.local) && (await answers(new URL(scanned.local).origin)) ? scanned.local : null;
+    const link = local || scanned.link;
+    VS.saveNetwork(new URL(link).origin);
+    go(link);
+  });
+
+  // Enter code (PHONE-5): the Mac's own pair page takes the code; this finds the Mac for it.
+  $("enter").addEventListener("click", async () => {
+    if (browsing || scanning || leaving) return;
+    browsing = touched = true;
+    status.innerHTML = `<span class="dot"></span>Looking on this Wi-Fi…`;
+    macs.hidden = true;
+    const reply = (await ask("browse")) || {};
+    // Only a .local name, as the app's MacFinder already insists (PairingLink.bonjourMac).
+    const found = (reply.macs || []).filter((m) => VS.usable(m.url) && new URL(m.url).hostname.endsWith(".local"));
+    browsing = false;
+    if (scanning || leaving) return; // a scan started meanwhile: it decides where the page goes
+    if (found.length === 1) return pairWith(found[0].url);
+    if (!found.length) {
+      status.textContent = reply.denied
+        ? "Allow Local Network for ViewSwitcher in Settings, then try again."
+        : "No Mac found. Turn on Wi-Fi connections in ViewSwitcher on the Mac.";
+      return;
+    }
+    status.textContent = "Which Mac?";
+    macs.replaceChildren(...found.map((m) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = m.name;
+      b.addEventListener("click", () => pairWith(m.url));
+      return b;
+    }));
+    macs.hidden = false;
+  });
+  function pairWith(base) {
+    if (scanning || leaving) return;
+    VS.saveNetwork(base);
+    go(`${base}/pair`);
+  }
+
+  $("manual").addEventListener("click", () => { touched = true; form.hidden = false; $("manual").hidden = true; net.focus(); });
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = net.value.trim().replace(/\/+$/, "");
     if (v && !VS.usable(v)) {
-      status.textContent = "Use the .local address ViewSwitcher shows on the Mac, under Phones and Tablets.";
+      status.textContent = "Use the Mac's .local address.";
       return;
     }
     VS.saveNetwork(v);
     net.blur();
     check();
   });
-  demo.addEventListener("click", () => { leaving = true; location.href = "demo/"; });
+  demo.addEventListener("click", () => { if (!scanning && !leaving) go("demo/"); });
 
-  let busy = false, leaving = false;
   const started = Date.now();
   async function check() {
-    if (busy || leaving) return;
+    if (busy || leaving || scanning) return;
     busy = true;
     try {
       const found = await VS.find();
@@ -79,13 +179,13 @@
       // try it there); after leaving it, or once a Mac has been used, the connector stays and offers it.
       // A saved network address means it was used before (an earlier build). It waits ~4.5 s first: at
       // launch the Mac's usb-bridge dials the tunnel on a 1 s retry and UsbTunnel holds a request up to 4 s.
-      if (!VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
+      if (!touched && !VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
         if (Date.now() - started < 4500) return;
         leaving = true;
         location.replace("demo/");
         return;
       }
-      status.innerHTML = `<span class="dot"></span>Plug in the USB-C cable and open ViewSwitcher on the Mac.`;
+      if (!browsing && !scanning && status.querySelector(".dot") && Date.now() - started > 2500) status.textContent = "";
       demo.hidden = false;
     } finally { busy = false; }
   }
