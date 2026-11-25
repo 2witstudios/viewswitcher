@@ -12,10 +12,13 @@ load_release_env() {
   local file="$1/.release.env" line key value
   if [ -f "$file" ]; then
     while IFS= read -r line || [ -n "$line" ]; do
-      line="${line%%#*}"
-      [[ "$line" =~ ^[[:space:]]*(ASC_KEY_ID|ASC_ISSUER_ID|ASC_KEY_PATH)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
-      key="${BASH_REMATCH[1]}"
-      value="${BASH_REMATCH[2]}"
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?(ASC_KEY_ID|ASC_ISSUER_ID|ASC_KEY_PATH)[[:space:]]*=[[:space:]]*(.*)$ ]] || continue
+      key="${BASH_REMATCH[2]}"
+      value="${BASH_REMATCH[3]}"
+      # A comment after the value needs whitespace before its # (a path may contain #).
+      [[ "$value" =~ ^(.*[^[:space:]])[[:space:]]+#.*$ ]] && value="${BASH_REMATCH[1]}"
+      [[ "$value" =~ ^[[:space:]]*#.*$ ]] && value=""
       value="${value%"${value##*[![:space:]]}"}"
       value="${value#\"}"; value="${value%\"}"; value="${value#\'}"; value="${value%\'}"
       # The environment wins over the file.

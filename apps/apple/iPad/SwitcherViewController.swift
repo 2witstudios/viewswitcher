@@ -16,6 +16,10 @@ final class ConnectorScheme: NSObject, WKURLSchemeHandler {
         var file = root.appendingPathComponent(String(url.path.drop(while: { $0 == "/" }))).standardizedFileURL
         var isFolder: ObjCBool = false
         if FileManager.default.fileExists(atPath: file.path, isDirectory: &isFolder), isFolder.boolValue {
+            // Only as demo/: without the slash its relative URLs (show.js, media/…) would resolve one level up.
+            guard url.hasDirectoryPath || url.path.isEmpty || url.path == "/" else {
+                return task.didFailWithError(URLError(.fileDoesNotExist))
+            }
             file = file.appendingPathComponent("index.html")
         }
         guard file.path.hasPrefix(root.standardizedFileURL.path + "/"), let data = try? Data(contentsOf: file) else {

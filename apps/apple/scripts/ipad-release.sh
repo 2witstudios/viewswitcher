@@ -78,6 +78,20 @@ if [ "$UPLOAD" = 1 ]; then
   step "Upload to App Store Connect"
   xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$(options upload)" -exportPath "$OUT/upload" \
     -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"}
+  # The upload is a second export of the same archive with the same options (only the destination
+  # differs). Confirm it was signed exactly like the .ipa that ipad-check.sh passed.
+  signed_with() { plutil -convert json -o - "$1/DistributionSummary.plist" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for apps in d.values():
+    for a in apps:
+        if a.get("name", "").endswith(".app"):
+            print(a.get("certificate", {}).get("SHA1", ""), a.get("profile", {}).get("UUID", ""))
+'; }
+  [ "$(signed_with "$OUT/export")" = "$(signed_with "$OUT/upload")" ] || {
+    echo "✗ The uploaded build was signed differently from the checked .ipa (certificate or profile): check App Store Connect before submitting." >&2
+    exit 1
+  }
   echo "✓ Uploaded ViewSwitcher iPad $VERSION ($BUILD_NUMBER). It appears in App Store Connect → TestFlight once processed."
 else
   echo "✓ $IPA (not uploaded)"

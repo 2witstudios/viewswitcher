@@ -15,7 +15,7 @@ Apple's; `bun apps/apple/AppStore/check.ts` checks them. The app record itself (
 | Primary language | English (U.S.) |
 | Primary category | Photo & Video |
 | Secondary category | Productivity |
-| Content rights | No: it doesn't contain, show or access third-party content. (The demo's photos are Unsplash License, credited in apps/site/CREDITS.md.) |
+| Content rights | Yes: it contains, shows or accesses third-party content, and we have the necessary rights. (The demo's photos are Unsplash License, credited in apps/site/CREDITS.md; everything else it shows is the user's own scenes from their Mac.) |
 
 ### Age rating
 

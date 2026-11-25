@@ -61,7 +61,8 @@
   });
   demo.addEventListener("click", () => { leaving = true; location.href = "demo/"; });
 
-  let busy = false, leaving = false, first = true;
+  let busy = false, leaving = false;
+  const started = Date.now();
   async function check() {
     if (busy || leaving) return;
     busy = true;
@@ -76,14 +77,17 @@
       }
       // No Mac. Until one has been connected, the app opens on the demo (App Review and new buyers
       // try it there); after leaving it, or once a Mac has been used, the connector stays and offers it.
-      if (first && !VS.connectedBefore() && !VS.leftDemo()) {
+      // A saved network address means it was used before (an earlier build). It waits ~4.5 s first: at
+      // launch the Mac's usb-bridge dials the tunnel on a 1 s retry and UsbTunnel holds a request up to 4 s.
+      if (!VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
+        if (Date.now() - started < 4500) return;
         leaving = true;
         location.replace("demo/");
         return;
       }
       status.innerHTML = `<span class="dot"></span>Plug in the USB-C cable and open ViewSwitcher on the Mac.`;
       demo.hidden = false;
-    } finally { busy = false; first = false; }
+    } finally { busy = false; }
   }
   check();
   setInterval(check, 1000);

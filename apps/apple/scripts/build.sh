@@ -51,9 +51,14 @@ fi
 # API key (scripts/release-env.sh: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH from env or .release.env).
 NOTARY=()
 if [ "$RELEASE" = 1 ]; then
-  if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+  if profile_out="$(xcrun notarytool history --keychain-profile "$PROFILE" 2>&1)"; then
     NOTARY=(--keychain-profile "$PROFILE")
     echo "Notarizing with the keychain profile $PROFILE."
+  elif [[ "$profile_out" != *"No Keychain password item found"* ]]; then
+    # The profile exists but notarytool can't use it (network, expired password, Apple's service).
+    echo "✗ notarytool couldn't use the keychain profile $PROFILE:" >&2
+    echo "$profile_out" | sed 's/^/    /' >&2
+    exit 1
   else
     source "$APPLE/scripts/release-env.sh"
     load_release_env "$APPLE"

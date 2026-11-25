@@ -65,8 +65,8 @@ usage="$(plutil -convert json -o - "$PLIST" | python3 -c 'import json,sys; d=jso
 [ "$usage" = "NSLocalNetworkUsageDescription" ] && ok "usage strings: local network only" || bad "usage strings are \"$usage\", expected NSLocalNetworkUsageDescription only"
 
 # Signing: distribution, not a debug build
-ent="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null || true)"
-[[ "$ent" == *"get-task-allow</key><true/>"* ]] && bad "signed with get-task-allow (a development build)" || ok "distribution signature (no get-task-allow)"
+gta="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -extract get-task-allow raw -o - - 2>/dev/null || true)"
+[ "$gta" = "true" ] && bad "signed with get-task-allow (a development build)" || ok "distribution signature (no get-task-allow)"
 codesign --verify --strict "$APP" 2>/dev/null && ok "signature verifies" || bad "codesign --verify failed"
 if [ -f "$APP/embedded.mobileprovision" ]; then
   prof="$(security cms -D -i "$APP/embedded.mobileprovision" 2>/dev/null || true)"
