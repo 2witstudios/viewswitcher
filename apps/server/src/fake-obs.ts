@@ -132,7 +132,7 @@ export function fakeObs(init: FakeObsInit = {}) {
     return fail(type, 204);
   };
   /** Like OBS's SerialRealtime batch: each request in turn, each with its own result. */
-  const batch = async (list: BatchRequest[], { haltOnFailure = false }: { haltOnFailure?: boolean } = {}): Promise<BatchResult[]> => {
+  const batch = async (list: BatchRequest[], { haltOnFailure = false }: { haltOnFailure?: boolean; timeoutMs?: number } = {}): Promise<BatchResult[]> => {
     requests.push({ type: "RequestBatch", data: list.map((r) => r.requestType) });
     const results: BatchResult[] = [];
     for (const r of list) {

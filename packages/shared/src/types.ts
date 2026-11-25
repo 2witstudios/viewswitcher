@@ -55,7 +55,7 @@ export type Org = {
 };
 
 /**
- * A set of templates installed from a template pack (EDIT-25): templates/<id>/ with the pack's pack.json,
+ * A set of templates installed from a template pack: templates/<id>/ with the pack's pack.json,
  * its views, _shared/ and assets/. Its templates are named "<set>/<view>" where a template is asked for.
  */
 export type TemplateSet = {
@@ -146,7 +146,7 @@ export type UsbStatus = {
   attached: boolean;
   /** The ViewSwitcher app on it is open and its tunnels are ready. */
   connected: boolean;
-  /** Which kind it is (PHONE-8), from usbmuxd's product id; absent when unknown. */
+  /** Which kind it is, from usbmuxd's product id; absent when unknown. */
   device?: UsbDevice;
 };
 export type UsbDevice = "iPhone" | "iPad";

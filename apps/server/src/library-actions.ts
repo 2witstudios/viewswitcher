@@ -70,7 +70,7 @@ export async function onAirFor(root: string, b: OnAirRequest): Promise<OnAir> {
   return { path: b.path, org: o.id, ground: o.ground, transition, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
 }
 
-/** The on-air record after the scene on air was renamed (EDIT-19): new path, and the new name in its label. */
+/** The on-air record after the scene on air was renamed: new path, and the new name in its label. */
 export function renamedOnAir(on: OnAir, from: string, name: unknown, r: Extract<RenameResult, { ok: true }>): OnAir {
   // The label is "<scene> · <stream>": swap the scene's old name for the new one, keep the rest.
   const n = String(name).replace(/\s+/g, " ").trim();

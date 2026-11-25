@@ -130,7 +130,7 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
   return { org, templates, sets, assets, projects, transition };
 }
 
-// ---------------------------------------------------------------- template sets (EDIT-25)
+// ---------------------------------------------------------------- template sets
 // An installed template pack is a folder templates/<set>/ with its pack.json, its views, _shared/ and
 // assets/ (see packs.ts and docs/template-packs.md). The org's own templates stay in templates/*.html.
 

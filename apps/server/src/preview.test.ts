@@ -53,7 +53,7 @@ function rendering(blanks = 0) {
 const opts = (more: object = {}) => ({ obs: names, port: PORT, library, intervalMs: 2, ...more });
 const shots = (obs: ReturnType<typeof fakeObs>) => obs.requests.filter((r) => r.type === "GetSourceScreenshot");
 
-describe("preview renderer (MCP-1)", () => {
+describe("preview renderer", () => {
   test("creates the preview scene and its muted browser source on first use, then renders the scene in it", async () => {
     const obs = rendering(2);
     await setupObs(obs, { ...names, previewScene: "elsewhere", previewSource: "elsewhere render" }, PORT); // an OBS set up before previews existed
@@ -215,7 +215,7 @@ describe("preview renderer (MCP-1)", () => {
   });
 });
 
-describe("program picture (MCP-1, MCP-6)", () => {
+describe("program picture", () => {
   test("is one screenshot of the ViewSwitcher scene, camera and all, at 960×540 or full size", async () => {
     let frame = 0;
     const obs = connected({ screenshot: (source, { width, height }) => (source === names.scene ? png([frame++, 99, 99, 255], width, height) : png([0, 0, 0, 0])) });

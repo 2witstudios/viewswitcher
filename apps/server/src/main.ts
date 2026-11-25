@@ -48,7 +48,7 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
-/** The built-in template packs (EDIT-29): loaded once, on first use, and kept (a pack that won't build is logged and left out). */
+/** The built-in template packs: loaded once, on first use, and kept (a pack that won't build is logged and left out). */
 let builtinsLoad: Promise<BuiltinPack[]> | null = null;
 const builtins = () =>
   (builtinsLoad ??= (config.packs
@@ -68,7 +68,7 @@ if (!loopbackAddress(config.host) && config.host !== "localhost") {
   process.exit(1);
 }
 
-// Phones and tablets (MAC-23 … MAC-26); before anything else awaits, so publish() can always reach them.
+// Phones and tablets: before anything else awaits, so publish() can always reach them.
 /** Paired devices and the open pairing code (pairing.ts); devices.json sits with state.json, outside git (.viewswitcher/ is ignored). */
 const pairing = await new Pairing({ file: join(config.library, ".viewswitcher", "devices.json"), ttlMs: Number(process.env.VIEWSWITCHER_PAIR_TTL_MS) || undefined }).load();
 type Socket = ServerWebSocket<{ device: string | null; lan: boolean }>;
@@ -145,7 +145,6 @@ const placer = createPlacer({
   onPlaced: (warnings) => store.setPlacementWarnings(warnings),
   log,
 });
-obs.start();
 
 // Whether OBS has the scene and sources the switcher needs, in order; the switcher shows a setup card
 // until it does. Rechecked when OBS connects, after "Set up OBS", and when scenes or sources come, go
@@ -160,6 +159,7 @@ function recheckSetup() {
     store.update({ obsSetup: next });
   }, 300);
 }
+obs.start();
 
 // ---------------------------------------------------------------- library watcher
 
@@ -185,7 +185,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 
-// ---------------------------------------------------------------- phones and tablets (MAC-23 … MAC-26)
+// ---------------------------------------------------------------- phones and tablets
 
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
 const lanNames = () => (lanServer ? thisMac() : null);
@@ -246,7 +246,7 @@ async function remoteApi(req: Request, path: string): Promise<Response> {
     const s = remoteStatus();
     const [host] = s.urls.filter((u) => !u.includes(".local:")).concat(s.urls);
     // The link opens on an address any phone can reach; `mac` also names this Mac's .local name, so the
-    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address (PHONE-4).
+    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address.
     const mac = s.localName && host && !host.includes(".local:") ? `&mac=${encodeURIComponent(s.localName)}` : "";
     return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}${mac}` : null });
   }
@@ -372,7 +372,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     }
     return json({ saved });
   }
-  // Template packs (EDIT-24 · EDIT-25): check a dropped .zip or folder and show it, install it as a
+  // Template packs: check a dropped .zip or folder and show it, install it as a
   // template set, or remove a set. See packs.ts.
   if (path === "/api/packs/stage" && post) {
     const form = await req.formData();
@@ -384,7 +384,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     if (!files.length || files.length !== paths.length || files.some((f) => !(f instanceof File))) return json({ error: "Drop a template pack: a .zip, or its folder" }, 400);
     return json(await stagePack(root, orgId, { files: files.map((f, i) => ({ path: paths[i]!, data: f as File })) }, starterScript));
   }
-  // The built-in template packs (EDIT-29 · EDIT-30): listed, then staged like a dropped one.
+  // The built-in template packs: listed, then staged like a dropped one.
   if (path === "/api/packs/builtin" && req.method === "GET") {
     return json((await builtins()).map(({ id, name, description, views }) => ({ id, name, description, views })));
   }
@@ -423,7 +423,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
     return json(r);
   }
-  // Rename a scene (EDIT-19): its title, and a stream scene's file. The scene stays on air if it is.
+  // Rename a scene: its title, and a stream scene's file. The scene stays on air if it is.
   if (path === "/api/scene/rename" && post) {
     const b = await body(req);
     const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
@@ -440,7 +440,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
   }
   if (path === "/api/obs/setup" && post) {
     // JSON only: a cross-site page can't send that without a CORS preflight, which this server never grants,
-    // so no website can rearrange OBS mid-stream (the general fix for other endpoints is ISSUE-10).
+    // so no website can rearrange OBS mid-stream (the other endpoints rely on the Origin check in handle()).
     if (!req.headers.get("content-type")?.startsWith("application/json")) return json({ error: "Expected application/json" }, 415);
     if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
     // While streaming or recording, setup never switches OBS's program scene (it would cut the stream).
