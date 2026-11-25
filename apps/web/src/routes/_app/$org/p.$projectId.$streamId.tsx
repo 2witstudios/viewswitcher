@@ -1,13 +1,12 @@
 import { resolveStream, shortDate } from "@viewswitcher/shared";
 import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AskAgent } from "../../../components/AgentSheet";
 import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
-import { cueAfterOnAir, cueAfterTap, usePhone } from "../../../lib/cue";
 import { templateGroups, templateId, useLibrary } from "../../../lib/library";
 import { useLive } from "../../../lib/live";
 
@@ -18,14 +17,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     const { state } = useLive();
     const [adding, setAdding] = useState(false);
     const openEditor = useOpenEditor();
-    // PHONE-2: at phone width a tap cues, Take goes on air. Kept per stream, so another stream starts clear.
-    const phone = usePhone();
-    const [cue, setCue] = useState<{ stream: string; path: string } | null>(null);
-    const onAirPath = state?.onAir?.path;
-    const cued = cue?.stream === `${projectId}/${streamId}` ? cue.path : null;
-    useEffect(() => {
-      if (cueAfterOnAir(cued, onAirPath) === null && cued !== null) setCue(null);
-    }, [cued, onAirPath]);
 
     const project = data?.projects.find((p) => p.id === projectId);
     const stream = project?.streams.find((s) => s.id === streamId);
@@ -34,15 +25,9 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
 
     const { own, shared } = resolveStream(project, stream);
     const transition = project.transition ?? data.transition;
-    const putOnAir = (s: Scene) =>
+    const onAirPath = state?.onAir?.path;
+    const goLive = (s: Scene) => () =>
       attempt(() => api.putOnAir({ path: s.path, label: `${s.label} · ${stream.name}`, projectId, streamId }));
-    const tap = (s: Scene) => () => {
-      if (!phone) return void putOnAir(s);
-      const next = cueAfterTap({ cued, onAir: onAirPath }, s.path);
-      setCue(next ? { stream: `${projectId}/${streamId}`, path: next } : null);
-    };
-    const cuedScene = cued ? [...own, ...shared].find((s) => s.path === cued) : undefined;
-    const cueOf = (s: Scene) => (phone && s.path !== onAirPath ? s.path === cued : undefined);
     const fileItems = (path: string, hint: string): MenuItem[] => [
       { label: "Open the file", hint, run: () => attempt(() => api.open(path)) },
       { label: "Copy path", hint: path, run: () => void copy(path) },
@@ -50,11 +35,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
 
     return (
       <>
-        <PageHead
-          crumb={`${project.name} · ${stream.date ? shortDate(stream.date) : ""}`}
-          title={stream.name}
-          take={phone ? <TakeBar scene={cuedScene} onTake={() => cuedScene && putOnAir(cuedScene)} onClear={() => setCue(null)} /> : undefined}
-        />
+        <PageHead crumb={`${project.name} · ${stream.date ? shortDate(stream.date) : ""}`} title={stream.name} />
 
         <section className="section">
           <div className="section-head">
@@ -68,8 +49,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 label={s.overrides ? `${s.label} (custom)` : s.label}
                 path={s.path}
                 live={s.path === onAirPath}
-                cued={cueOf(s)}
-                onActivate={tap(s)}
+                onActivate={goLive(s)}
                 onEdit={() => openEditor(s.path)}
                 menu={[
                   {
@@ -127,8 +107,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 label={s.label}
                 path={s.path}
                 live={s.path === onAirPath}
-                cued={cueOf(s)}
-                onActivate={tap(s)}
+                onActivate={goLive(s)}
                 editChoices={[
                   {
                     label: "Edit for this stream",
@@ -190,19 +169,3 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     );
   },
 });
-
-/** The phone's Take row (PHONE-2), at the bottom where the thumb is: what's cued, clear, and Take. */
-function TakeBar({ scene, onTake, onClear }: { scene: Scene | undefined; onTake: () => void; onClear: () => void }) {
-  return (
-    <div className="take-bar">
-      <div className="take-next">
-        <span>NEXT</span>
-        <b>{scene?.label ?? "—"}</b>
-      </div>
-      <button type="button" className="take-clear" aria-label="Clear the cue" disabled={!scene} onClick={onClear}>
-        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
-      </button>
-      <button type="button" className="take-btn" disabled={!scene} onClick={onTake}>Take</button>
-    </div>
-  );
-}
