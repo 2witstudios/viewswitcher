@@ -92,7 +92,7 @@ let queue: Promise<unknown> = Promise.resolve();
  * Write `next` over `real` (read as `text`, stat'd as `read`) only if it's still that version.
  * Returns false (writing nothing) when someone else saved meanwhile.
  */
-async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat>>, current: string, next: string, hooks: { beforeReplace?: () => Promise<void> }) {
+export async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat>>, current: string, next: string, hooks: { beforeReplace?: () => Promise<void> }) {
   // A linked scene is written where it really lives (so the link stays a link), never outside the library.
   // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
   // The watcher ignores dot-files.
@@ -123,7 +123,7 @@ async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat
 }
 
 /** Run one library change at a time. */
-function serial<T>(run: () => Promise<T>): Promise<T> {
+export function serial<T>(run: () => Promise<T>): Promise<T> {
   const result = queue.then(run, run);
   queue = result.catch(() => {});
   return result;

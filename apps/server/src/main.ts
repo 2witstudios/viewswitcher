@@ -1,4 +1,4 @@
-// ViewSwitcher server: the switcher API, the library files, live state, and OBS.
+// ViewSwitcher server: the switcher API, the library files, live state, OBS, and the MCP server for agents.
 import { watch } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
@@ -6,14 +6,20 @@ import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
 import { config } from "./config";
 import * as lib from "./library";
+import { customizeScene, duplicateScene, onAirFor, type OnAirRequest, orgDir, renamedOnAir, sceneFromTemplate } from "./library-actions";
 import { ensureLibrary } from "./library-kit";
+import { isLocalRequest } from "./local";
+import { handleMcp, noteSeen } from "./mcp/http";
+import { noPreview } from "./mcp/no-preview";
+import type { McpDeps } from "./mcp/server";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
 import { hostTrusted, originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
-import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
+import { editScene, parseEdit, readForEdit, renameScene, type RenameResult, scenePath } from "./scene-edit";
+import { readSettings, SettingsError, writeSettings } from "./settings";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
@@ -38,6 +44,7 @@ const state: LiveState = {
   obsSetup: null,
   usb: { enabled: false, attached: false, connected: false },
   warnings: [],
+  agent: { onAir: (await readSettings(config.library)).agentOnAir, lastSeen: null, client: null },
 };
 if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
 let lastSlots: { path: string; slots: Slot[] } | null = null;
@@ -64,6 +71,26 @@ setInterval(async () => {
 async function persist() {
   await mkdir(join(config.library, ".viewswitcher"), { recursive: true });
   await writeFile(stateFile, JSON.stringify({ onAir: state.onAir }, null, 2));
+}
+
+/** Put a scene on air: for the switcher (POST /api/onair) and for agents (go_on_air). */
+async function goOnAir(b: OnAirRequest): Promise<LiveState> {
+  if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
+  state.onAir = await onAirFor(config.library, b);
+  state.warnings = [];
+  await persist();
+  publishState();
+  return state;
+}
+
+/** A scene was renamed (switcher or agent): if it's the one on air, the on-air record follows it. */
+async function renamed(from: string, name: string, r: Extract<RenameResult, { ok: true }>) {
+  const on = state.onAir;
+  if (!on || on.path !== from) return;
+  state.onAir = renamedOnAir(on, from, name, r);
+  // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
+  publishState();
+  await persist().catch((e) => console.error("[state] couldn't save:", (e as Error).message));
 }
 
 const obs = new OBSClient({
@@ -171,7 +198,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   const root = config.library;
   const post = req.method === "POST";
   /** One org's folder; every mutation below works inside it. */
-  const org = (id: unknown) => inside(root, plainName(String(id ?? "")));
+  const org = (id: unknown) => orgDir(root, id);
 
   if (path === "/api/orgs" && req.method === "GET") return json(await lib.listOrgs(root));
   if (path === "/api/orgs" && post) {
@@ -181,29 +208,24 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
   // For the Mac app's menu (Open Library Folder): the one response with an absolute path in it.
-  // Only for this Mac: the connection must come from loopback, be addressed to a loopback host, and
-  // carry no proxy headers (tailscale serve also connects from 127.0.0.1, but adds X-Forwarded-For).
+  // Only for this Mac (local.ts).
   if (path === "/api/info" && req.method === "GET") {
-    const peer = server.requestIP(req)?.address ?? "";
-    const local =
-      ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer) &&
-      /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(req.headers.get("host") ?? "") &&
-      !req.headers.has("x-forwarded-for") && !req.headers.has("x-forwarded-host") && !req.headers.has("forwarded");
-    if (!local) return json({ error: "Not found" }, 404);
+    if (!isLocalRequest(req, server.requestIP(req)?.address)) return json({ error: "Not found" }, 404);
     return json({ library: root, port: server.port });
   }
 
   if (path === "/api/onair" && post) {
     const b = await body(req);
-    inside(root, b.path);
-    if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
-    const o = await lib.readOrg(root, orgOf(b.path));
-    const transition = await lib.resolveTransition(root, b.path);
-    state.onAir = { path: b.path, org: o.id, ground: o.ground, transition, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };
-    state.warnings = [];
-    await persist();
+    return json(await goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId }));
+  }
+
+  // What agents connected over MCP may put on air (agent-guard.ts); people in the switcher are never limited.
+  if (path === "/api/agent/settings" && post) {
+    const b = await body(req);
+    const s = await writeSettings(root, { agentOnAir: b.onAir });
+    state.agent = { ...state.agent, onAir: s.agentOnAir };
     publishState();
-    return json(state);
+    return json(state.agent);
   }
 
   if (path === "/api/program/slots" && post) {
@@ -232,15 +254,12 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/scenes/from-template" && post) {
     const b = await body(req);
-    const { name } = await lib.addFromTemplate(org(b.org), b.template, b.projectId, b.streamId);
     // Where the copy is, so the switcher can open it in the editor.
-    const dir = b.streamId ? `projects/${b.projectId}/streams/${b.streamId}` : `projects/${b.projectId}/scenes`;
-    return json({ name, path: `${plainName(String(b.org))}/${dir}/${name}.html` });
+    return json(await sceneFromTemplate(root, { org: b.org, template: b.template, projectId: b.projectId, streamId: b.streamId }));
   }
   if (path === "/api/scenes/customize" && post) {
     const b = await body(req);
-    const { name } = await lib.customize(org(b.org), b.projectId, b.streamId, b.name);
-    return json({ name, path: `${plainName(String(b.org))}/projects/${b.projectId}/streams/${b.streamId}/${name}.html` });
+    return json(await customizeScene(root, { org: b.org, projectId: b.projectId, streamId: b.streamId, name: b.name }));
   }
   if (path === "/api/transition/customize" && post) {
     const b = await body(req);
@@ -259,8 +278,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/scenes/duplicate" && post) {
     const b = await body(req);
-    const { name } = await lib.duplicate(root, b.path);
-    return json({ name, path: `${String(b.path).slice(0, String(b.path).lastIndexOf("/"))}/${name}.html` });
+    return json(await duplicateScene(root, b.path));
   }
   if (path === "/api/assets" && post) {
     const form = await req.formData();
@@ -292,16 +310,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     const b = await body(req);
     const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
-    const on = state.onAir;
-    if (on && on.path === b.path) {
-      // The label is "<scene> · <stream>": swap the scene's old name for the new one, keep the rest.
-      const name = String(b.name).replace(/\s+/g, " ").trim();
-      const label = r.was && on.label.startsWith(r.was) ? name + on.label.slice(r.was.length) : on.label.includes(" · ") ? name + on.label.slice(on.label.lastIndexOf(" · ")) : name;
-      state.onAir = { ...on, path: r.path, label, renamedFrom: r.path !== b.path ? b.path : on.renamedFrom };
-      // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
-      publishState();
-      await persist().catch((e) => console.error("[state] couldn't save:", (e as Error).message));
-    }
+    await renamed(b.path, b.name, r);
     return json(r);
   }
   if (path === "/api/scene/preview" && post) {
@@ -334,6 +343,22 @@ async function fileResponse(abs: string, cache = "no-store") {
   return new Response(Bun.file(abs), { headers: { "cache-control": cache } });
 }
 
+// The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
+const mcp: McpDeps = {
+  root: config.library,
+  kit: config.libraryKit,
+  port: config.port,
+  state: () => state,
+  goOnAir,
+  renamed,
+  previewer: noPreview(config.port),
+};
+function agentSeen(client: string | null) {
+  const seen = noteSeen(state.agent, client, Date.now());
+  state.agent = seen.agent;
+  if (seen.publish) publishState();
+}
+
 const server = Bun.serve({
   hostname: process.env.HOST ?? "127.0.0.1",
   port: config.port,
@@ -343,12 +368,15 @@ const server = Bun.serve({
     try {
       // DNS rebinding: a page at evil.example that now resolves to 127.0.0.1 sends Host: evil.example.
       // The API, the library and the live socket answer only to hosts this server is known by (origin.ts).
-      if ((path === "/ws" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(req.headers.get("host"), config.allowedOrigins)) {
+      if ((path === "/ws" || path === "/mcp" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(req.headers.get("host"), config.allowedOrigins)) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${req.headers.get("host")}`);
         return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
       }
       if (path === "/ws") {
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
+      }
+      if (path === "/mcp") {
+        return await handleMcp(req, server.requestIP(req)?.address, { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
       }
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
@@ -391,7 +419,7 @@ const server = Bun.serve({
       const index = await fileResponse(join(config.webDist, "index.html"));
       return index ?? new Response("The switcher isn't built yet. Run `bun run build`, or use the dev server (`bun run dev`, then http://localhost:5173).", { status: 503 });
     } catch (e) {
-      if (e instanceof PathError || e instanceof EditError) return json({ error: e.message }, 400);
+      if (e instanceof PathError || e instanceof EditError || e instanceof SettingsError) return json({ error: e.message }, 400);
       console.error(e);
       return json({ error: (e as Error).message }, 500);
     }
