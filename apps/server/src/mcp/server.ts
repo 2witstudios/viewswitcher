@@ -119,12 +119,20 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const g = agentGuard({ setting: s.agent.onAir, live: s.obs.streaming || s.obs.recording, onAir, action: checked });
     if (!g.ok) throw new Refusal(g.reason);
   };
-  /** The files the scene on air (and its transition) load, read only when the guard would use them. */
-  const onAirLoads = async () => {
+  /**
+   * The files the scene on air (and its transition) load, read only when the guard would use them,
+   * or (`evenIfIdle`) whenever something is on air, for a check that runs again later. `pages` says
+   * which on-air scene and transition the list is for.
+   */
+  const onAirLoads = async (evenIfIdle = false) => {
     const s = deps.state();
-    if (!s.onAir || s.agent.onAir === "always" || !(s.obs.streaming || s.obs.recording)) return undefined;
+    if (!s.onAir || s.agent.onAir === "always" || (!evenIfIdle && !(s.obs.streaming || s.obs.recording))) return undefined;
     const pages = [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p);
-    return (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]);
+    return { pages: pages.join("\n"), files: (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]) };
+  };
+  const pagesOnAir = () => {
+    const s = deps.state();
+    return s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p).join("\n") : "";
   };
   /** Files a tool reads or writes: each really inside the library, through links too (library-files.ts checked). */
   const contained = async (...paths: string[]) => {
@@ -133,7 +141,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
   const writes = async (...paths: string[]) => {
     await contained(...paths);
-    guardNow({ kind: "write", paths }, await onAirLoads());
+    guardNow({ kind: "write", paths }, (await onAirLoads())?.files);
   };
 
   const exists = (abs: string) => stat(abs).then(() => true, () => false);
@@ -257,16 +265,24 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const target = String(path).replace(/\/+$/, "");
     await writes(target);
     // Checked again in turn (OBS may have gone live while it waited), and once more in the same tick
-    // as the rename, against the state at that instant. (If OBS went live only in between, the files
-    // the scene loads weren't read; the scene, its transition and _shared are still covered.)
-    let loads: string[] | undefined;
+    // as the rename, against the state at that instant. The files the scene on air loads are read in
+    // turn even while idle, so the last check has them if OBS goes live in between; if what's on air
+    // changed meanwhile, that list is stale and the write is refused rather than guessed.
+    let loads: Awaited<ReturnType<typeof onAirLoads>>;
     const r = await writeText(root, path, body, hash, {
       beforeWrite: async () => {
         await contained(target);
-        loads = await onAirLoads();
-        guardNow({ kind: "write", paths: [target] }, loads);
+        loads = await onAirLoads(true);
+        guardNow({ kind: "write", paths: [target] }, loads?.files);
       },
-      atCommit: () => guardNow({ kind: "write", paths: [target] }, loads),
+      atCommit: () => {
+        const s = deps.state();
+        const live = s.obs.streaming || s.obs.recording;
+        if (live && s.agent.onAir !== "always" && (loads?.pages ?? "") !== pagesOnAir()) {
+          throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the scene on air.");
+        }
+        guardNow({ kind: "write", paths: [target] }, loads?.files);
+      },
     });
     if (!r.ok) return refusal(r.hash ? `${r.reason} (current hash: ${r.hash})` : r.reason);
     return text({ path: r.path, hash: r.hash, ...(r.created ? { created: true } : {}), ...(r.changed ? {} : { unchanged: true }) });

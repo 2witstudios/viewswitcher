@@ -1,7 +1,7 @@
 // Library changes that both the switcher's /api routes and the MCP tools make, so the two follow one
 // set of rules and return the same shapes (paths start with the org id).
 import { realpath, stat } from "node:fs/promises";
-import { isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { orgOf } from "@viewswitcher/shared";
 import type { OnAir } from "@viewswitcher/shared";
 import * as lib from "./library";
@@ -45,7 +45,11 @@ export async function reallyInside(root: string, path: string): Promise<void> {
 
 /** A copy of a scene beside it ("<name>-copy"): for the switcher's Duplicate and the agents' duplicate_scene. */
 export async function duplicateScene(root: string, path: string): Promise<SceneRef> {
+  // Library paths start with the org id: "/org/…" would come back as a path nothing else accepts.
+  if (String(path).startsWith("/")) throw new PathError(`Bad path: ${path}. Paths start with the org id, like "my-channel/templates/brb.html".`);
+  // The scene it reads, and the folder the copy goes in (a scene may link back inside from a folder that links out).
   await reallyInside(root, path);
+  await reallyInside(root, dirname(path));
   const { name } = await lib.duplicate(root, path);
   return { name, path: `${path.slice(0, path.lastIndexOf("/"))}/${name}.html` };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentClients, AgentStatus } from "@viewswitcher/shared";
-import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, SETUP_GUIDE_URL, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
+import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, otherPortNote, SETUP_GUIDE_URL, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
 
 const NOW = 1_800_000_000_000;
 const agent = (lastSeen: number | null, client: string | null = "claude-code"): AgentStatus => ({ onAir: "not-live", lastSeen, client });
@@ -50,6 +50,28 @@ describe("ports (the kit's configs name 7420)", () => {
   });
   test("the stdio command carries the port", () => {
     expect(defaultStdio(7433)).toBe("/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7433");
+  });
+});
+
+describe("the on-air setting's requests (CodeRabbit)", () => {
+  test("go one at a time, in the order they were made, even when the first is slow or fails", async () => {
+    const run = inOrder();
+    const sent: string[] = [];
+    const server: string[] = [];
+    // A stand-in for POST /api/agent/settings: the first answer is slow, so unordered they'd land Never, Always.
+    const post = (v: string, ms: number, fail = false) => () => {
+      sent.push(v);
+      return new Promise<void>((resolve, reject) => setTimeout(() => (server.push(v), fail ? reject(new Error("x")) : resolve()), ms));
+    };
+    const a = run(post("always", 30));
+    const b = run(post("never", 1));
+    expect(sent).toEqual([]); // nothing goes out in the same tick: the first waits for the queue too
+    await Promise.all([a, b]);
+    expect(sent).toEqual(["always", "never"]);
+    expect(server).toEqual(["always", "never"]);
+    await run(post("not-live", 5, true)).catch(() => {});
+    await run(post("never", 1));
+    expect(server.slice(-2)).toEqual(["not-live", "never"]);
   });
 });
 

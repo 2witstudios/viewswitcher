@@ -33,6 +33,8 @@ const fresh = (): LiveState => ({
 let state = fresh();
 /** Runs inside goOnAir after the scene is looked up and before it commits (a test makes OBS go live there). */
 let beforeCommit: (() => void) | null = null;
+/** Runs on every read of the switcher state by the tools (a test counts reads to pick an instant). */
+let onStateRead: (() => void) | null = null;
 let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -48,7 +50,7 @@ beforeAll(async () => {
     root,
     kit: config.libraryKit,
     port: PORT,
-    state: () => state,
+    state: () => (onStateRead?.(), state),
     // As main.ts does it: look the scene up, run the agent's check, then commit.
     goOnAir: async (b, check) => {
       const next = await onAirFor(root, b);
@@ -74,6 +76,7 @@ afterAll(() => {
 beforeEach(() => {
   state = fresh();
   beforeCommit = null;
+  onStateRead = null;
   previews = { scene: { ok: true, png, width: 960, height: 540 }, program: { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/program` } };
 });
 
@@ -578,6 +581,44 @@ describe("the guard covers what the scene on air loads, and is checked again as 
     expect(res.isError).toBe(true);
     expect(res.text).toContain("on air and you're live");
     expect(await readFile(join(root, p), "utf8")).toBe("<title>Late</title>");
+  });
+});
+
+describe("CodeRabbit follow-ups", () => {
+  test("write_file: a file the scene on air loads, with OBS going live between the in-turn check and the commit, is refused", async () => {
+    await writeFile(join(root, ORG, "assets/race.css"), ".a{}");
+    const scene = `${ORG}/templates/race-scene.html`;
+    await writeFile(join(root, scene), `<title>R</title><link rel="stylesheet" href="/library/${ORG}/assets/race.css">`);
+    await data("go_on_air", { path: scene });
+    // A dry run while idle counts how often the tool reads the state; the commit check is the last three reads.
+    let reads = 0;
+    onStateRead = () => void reads++;
+    const first = await data("read_file", { path: `${ORG}/assets/race.css` });
+    reads = 0;
+    expect((await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:red}", hash: first.hash })).isError).toBe(false);
+    const total = reads;
+    // Again, going live just as the commit check starts.
+    const second = await data("read_file", { path: `${ORG}/assets/race.css` });
+    reads = 0;
+    onStateRead = () => {
+      if (++reads === total - 2) live();
+    };
+    const r = await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:blue}", hash: second.hash });
+    onStateRead = null;
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("The scene on air uses that file");
+    expect(await readFile(join(root, ORG, "assets/race.css"), "utf8")).toBe(".a{color:red}");
+  });
+  test("the switcher's Duplicate: a copy never lands in a folder linked outside, and a leading slash is refused", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    const { mkdir } = await import("node:fs/promises");
+    // A folder that links outside, holding a link back to a scene inside the library.
+    await mkdir(join(outside, "escape"), { recursive: true });
+    await symlink(join(outside, "escape"), join(root, ORG, "templates", "escape"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(outside, "escape", "back.html"));
+    await expect(duplicateScene(root, `${ORG}/templates/escape/back.html`)).rejects.toThrow("outside the library");
+    expect((await readdir(join(outside, "escape"))).sort()).toEqual(["back.html"]);
+    await expect(duplicateScene(root, `/${ORG}/templates/brb.html`)).rejects.toThrow("Paths start with the org id");
   });
 });
 

@@ -76,6 +76,19 @@ export function sheetParts(kind: ClientKind) {
 export const SETUP_GUIDE_URL = "https://viewswitcher.com/ai";
 
 // What agents may do to the show (apps/server/src/agent-guard.ts); people in the switcher are never limited.
+/**
+ * Runs tasks one after another, in the order they were asked for: the on-air setting's requests, so
+ * Always then Never, clicked quickly, reach the server (whose writes are in order too) as Always, Never.
+ */
+export function inOrder() {
+  let last: Promise<unknown> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const run = last.then(task, task);
+    last = run.catch(() => {});
+    return run;
+  };
+}
+
 /** What the setting covers (Decisions: it steers agents through the tools; it isn't a lock on the files). */
 export const ON_AIR_SCOPE = "This applies to agents working through ViewSwitcher's tools. An agent that edits the library's files directly isn't held to it.";
 

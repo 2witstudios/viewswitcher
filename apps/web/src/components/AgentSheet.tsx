@@ -5,7 +5,7 @@ import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
-  agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
+  agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
   wantsAgentSheet, withoutAgentSheet,
 } from "../lib/agent";
 import { clientKind } from "../lib/client-kind";
@@ -46,6 +46,8 @@ export const SparkleIcon = () => (
 
 // ---------------------------------------------------------------- the sheet
 
+/** One settings request at a time, in the order they're made (lib/agent.ts inOrder). */
+const settingsInOrder = inOrder();
 const kind = typeof navigator !== "undefined" ? clientKind(navigator.userAgent) : "browser";
 const inMacApp = kind === "mac";
 
@@ -95,7 +97,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
   const connected = !!agent?.lastSeen && now - agent.lastSeen <= CONNECTED_FOR_MS;
   const setOnAir = async (v: AgentOnAir) => {
     try {
-      await api.agentSettings(v);
+      await settingsInOrder(() => api.agentSettings(v));
     } catch (e) {
       toast((e as Error).message);
     }
