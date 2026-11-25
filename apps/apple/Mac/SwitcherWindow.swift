@@ -338,14 +338,14 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         }
     }
 
-    /// <input type=file>: adding assets to an org, a picture in the scene editor, a style pack (.zip) on Templates.
+    /// <input type=file>: adding assets to an org, a picture in the scene editor, a template pack (.zip) on Templates.
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor ([URL]?) -> Void) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.canChooseFiles = true
         // WKOpenPanelParameters doesn't pass on the input's accept list, so this allows what any of the
-        // page's inputs take: pictures, video, audio, and style packs (EDIT-24).
+        // page's inputs take: pictures, video, audio, and template packs (EDIT-24).
         panel.allowedContentTypes = [.image, .movie, .audio, .zip]
         panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
     }

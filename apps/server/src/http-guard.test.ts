@@ -180,8 +180,16 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     expect((await request("/library/my-channel/templates/_shared/scene.js")).headers["access-control-allow-origin"]).toBe("*");
     expect((await request("/library/my-channel/org.json")).headers["access-control-allow-origin"]).toBeUndefined();
     expect((await request("/library/my-channel/templates/brb.html")).headers["access-control-allow-origin"]).toBeUndefined();
-    // An org's pictures aren't readable by other websites open on this Mac.
-    expect((await request("/library/my-channel/templates/_shared/brand/mark.svg")).headers["access-control-allow-origin"]).toBeUndefined();
+    // Templates' pictures are design files a CSS mask fetches in CORS mode; an org's own media isn't.
+    expect((await request("/library/my-channel/templates/_shared/brand/mark.svg")).headers["access-control-allow-origin"]).toBe("*");
+    await Bun.write(join(library, "my-channel/assets/photo.jpg"), "x");
+    expect((await request("/library/my-channel/assets/photo.jpg")).status).toBe(200);
+    expect((await request("/library/my-channel/assets/photo.jpg")).headers["access-control-allow-origin"]).toBeUndefined();
+    // A staged pack's preview copy is a template pack's design files too (covers before installing).
+    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg"), "<svg/>");
+    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
+    const sneaky = await request("/library/my-channel/templates/%2e%2e/assets/photo.jpg");
+    expect(sneaky.headers["access-control-allow-origin"]).toBeUndefined();
   });
   test("?bridge adds the bridge; ?edit tags; neither touches the file", async () => {
     const r = await request("/library/my-channel/templates/brb.html?edit&bridge");

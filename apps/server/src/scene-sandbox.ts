@@ -1,5 +1,6 @@
+import { posix } from "node:path";
 // How library files are served (EDIT-26). Scenes are HTML that anyone may have written: an agent, a
-// style pack from a stranger. Served plainly from /library/, a scene would be same-origin with the
+// template pack from a stranger. Served plainly from /library/, a scene would be same-origin with the
 // switcher, so its scripts could call /api (go on air, edit files, upload), open the live socket,
 // or reach into the page that frames it.
 //
@@ -23,12 +24,19 @@
 //
 // The switcher's own frames carry the same sandbox attribute, so this holds twice. Scripts, styles
 // and fonts are sent with CORS (an opaque-origin page's @font-face and module scripts need it).
-// Pictures, media, documents and JSON never are: any website open on this Mac could read them then.
+// So are the pictures and media of templates (theme, brand marks, a template set's own pictures):
+// a CSS mask is always fetched in CORS mode (Daisy's chapter card masks its petals), and so is a
+// crossorigin <img>. An opaque-origin scene sends no Referer, so the server can't tell a scene from
+// another website: these are design files, so that's fine. An org's own media (assets/, projects/:
+// uploads, dropped photos) is never sent with CORS, so other websites on this Mac can't read it.
+// Documents and JSON never are.
 // The CSP goes on every /library/ response, whatever its name: what a browser renders comes from the
 // file's type, not the request path ("x.html/", ".shtml", ".xsl" are documents too), and a CSP on an
 // image or a stylesheet does nothing.
-/** Library files a scene loads in CORS mode (module scripts, @font-face): code and styles, never an org's pictures, media, documents or JSON. */
+/** Library files a scene loads in CORS mode (module scripts, @font-face): code, styles and fonts. Never documents or JSON. */
 const CORS_OK = /\.(woff2?|ttf|otf|js|mjs|css)$/i;
+/** Pictures and media of templates (`<org>/templates/…`, and a staged pack's preview copy): design files, sent with CORS. */
+const TEMPLATE_MEDIA = /^[^/]+\/(templates|\.viewswitcher\/staging\/[0-9a-f]+\/preview)\/.+\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
 
 export const SCENE_CSP = "sandbox allow-scripts; connect-src https: wss:; object-src 'none'; base-uri 'none'; form-action 'none'";
 export const INERT_CSP = "sandbox allow-same-origin allow-scripts; script-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'";
@@ -36,7 +44,8 @@ export const INERT_CSP = "sandbox allow-same-origin allow-scripts; script-src 'n
 /** Headers for a /library/ response: `rel` is its library path. */
 export function libraryHeaders(rel: string, inert = false): Record<string, string> {
   const h: Record<string, string> = { "x-content-type-options": "nosniff", "content-security-policy": inert ? INERT_CSP : SCENE_CSP };
-  if (CORS_OK.test(rel)) h["access-control-allow-origin"] = "*";
+  // Matched on the path the file is really served from: "templates/../assets/x.jpg" is the org's own media.
+  if (CORS_OK.test(rel) || TEMPLATE_MEDIA.test(posix.normalize(rel))) h["access-control-allow-origin"] = "*";
   return h;
 }
 

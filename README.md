@@ -14,7 +14,7 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 - **Orgs**: one library holds any number of orgs (brands or channels). Each has its own templates, assets, projects and brand.
 - **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
 - **Scenes are files you edit by talking to an agent** (Claude Code, Claude Desktop, Cursor, Codex or any other), connected over MCP (below) and using the library's `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
-- **Style packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own set of templates in the org's name and colors ([docs/style-packs.md](docs/style-packs.md)).
+- **Template packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own template set in the org's name and colors. Seven come built in (the starter and the site's six example shows): pick them for a new org, or with **Add templates** ([docs/template-packs.md](docs/template-packs.md)).
 - **iPad app over USB-C**: the ViewSwitcher iPad app talks to the Mac over the cable, for low latency and no dependence on Wi-Fi.
 
 ## How it works
@@ -25,13 +25,13 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 │  ├─ org.json                     { name, accent, ground }
 │  ├─ BRAND.md                     the org's brand rules, for agents
 │  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, transition.html, brand/mark.svg}
-│  ├─ templates/<set>/              a template set installed from a style pack: pack.json, views, _shared/, assets/
+│  ├─ templates/<set>/              a template set installed from a template pack: pack.json, views, _shared/, assets/
 │  ├─ assets/
 │  └─ projects/<project>/{project.json, transition.html?, scenes/*.html, streams/<MM-DD-slug>/*.html}
 └─ .claude/skills/viewswitcher-scenes/SKILL.md     from apps/server/library-kit (changes ship there)
 ```
 
-Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's style pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/style-packs.md](docs/style-packs.md#scripts-and-the-sandbox)).
+Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's template pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/template-packs.md](docs/template-packs.md#scripts-and-the-sandbox)).
 
 OBS has one scene with one browser source showing `/program`. Each scene file marks device boxes with `data-slot="Camera"` and similar; the server moves and crops those OBS sources into the boxes over obs-websocket, and paints the ground color of the org that's on air.
 
@@ -54,7 +54,7 @@ ViewSwitcher is an MCP server for the AI agent you already use. **Edit with AI**
 - **stdio**, for clients that only launch commands: `/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7420` (from source, `bun apps/server/src/index.ts --mcp-stdio --port <port>`; `VIEWSWITCHER_PORT` works too, `PORT` is ignored). It relays to the running switcher and never starts a second one; it opens the app if nothing answers, and never sends a call twice.
 - **Port 7420:** the library's `.mcp.json`, `.cursor/mcp.json` and `AGENTS.md` name it, as the Mac app always uses it. On another port, Edit with AI gives the address to add instead.
 - **Connecting:** the library has `.mcp.json` (Claude Code, which asks once to allow it), `.cursor/mcp.json` and `AGENTS.md` (with the Codex snippet). Edit with AI adds a per-install Claude Desktop extension (`.mcpb`), a Cursor install link, and the URL, stdio command and Codex TOML for the rest.
-- **Tools:** `get_state`, `list_orgs`, `scan_library`, `list_files`, `read_file`, `get_guide` to read; `preview_scene`, `see_program` to look; `write_file`, `add_asset`, `create_project`, `create_stream`, `scene_from_template`, `customize_scene`, `revert_scene`, `duplicate_scene`, `rename_scene`, `customize_transition`, `revert_transition` to change; `go_on_air`. Paths start with the org id; writes to an existing file need the hash from `read_file`, as in the switcher's editor.
+- **Tools:** `get_state`, `list_orgs`, `scan_library`, `list_files`, `read_file`, `get_guide` to read; `preview_scene`, `see_program` to look; `write_file`, `add_asset`, `list_template_sets` / `add_template_set` (the built-in template sets, as Add templates), `create_project`, `create_stream`, `scene_from_template`, `customize_scene`, `revert_scene`, `duplicate_scene`, `rename_scene`, `customize_transition`, `revert_transition` to change; `go_on_air`. Paths start with the org id; writes to an existing file need the hash from `read_file`, as in the switcher's editor.
 - **Previews:** `preview_scene` renders a library scene in OBS, in a muted "ViewSwitcher Preview" scene that's never switched to, and returns the picture; `see_program` returns what OBS is putting out, camera and screen included. Without OBS, they return the scene's preview URL instead.
 - **On air:** the agent setting (Edit with AI on the Mac; `.viewswitcher/settings.json`) says what agents may put on air: **Never**, **When not live** (the default: not while OBS is streaming or recording, and no changes then to the scene on air, its transition, the org's shared files or anything the scene loads) or **Always**. It limits agents' MCP tools only, never people in the switcher. It steers agents that use the tools; it isn't a security boundary: an agent with plain file access to the library is outside it. Scenes can't get around it: they run sandboxed (opaque origin), so their requests to the switcher's API are refused.
 
@@ -149,13 +149,13 @@ ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into the i
 post/            YouTube post pipeline (from Daisy Debate's daisy-video); see post/README.md
 ```
 
-`bun run packs:export` writes the starter kit and the site's six example styles as style packs (`dist/packs/<id>.zip`).
+`bun run packs:export` writes the starter kit and the site's six example shows as template packs, the same ones the app has built in (`dist/packs/<id>.zip`).
 
-`bun test` runs the shared logic, usbmux protocol, path-safety, library kit, style pack and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
+`bun test` runs the shared logic, usbmux protocol, path-safety, library kit, template pack and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
 
 ## Mac app
 
-ViewSwitcher.app is the `ViewSwitcher` target in `apps/apple`: a native window (WKWebView) and menu-bar item around the server, compiled by `bun build --compile` into `Contents/Helpers/viewswitcher-server` next to the built switcher, the starter kit and the library kit in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
+ViewSwitcher.app is the `ViewSwitcher` target in `apps/apple`: a native window (WKWebView) and menu-bar item around the server, compiled by `bun build --compile` into `Contents/Helpers/viewswitcher-server` next to the built switcher, the starter kit, the library kit and the built-in template packs in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
 
 ```sh
 bun run mac:build              # apps/apple/build/ViewSwitcher.dmg (universal) + appcast.xml, signed with the Developer ID in your keychain

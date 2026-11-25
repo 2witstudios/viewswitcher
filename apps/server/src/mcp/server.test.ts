@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { LiveState } from "@viewswitcher/shared";
+import { type BuiltinPack, buildBuiltins } from "../builtin-packs";
 import { config } from "../config";
 import { onAirFor, renamedOnAir } from "../library-actions";
 import { writeText } from "../library-files";
@@ -43,6 +44,7 @@ let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
 let client: Client;
+let builtins: Promise<BuiltinPack[]> | undefined;
 /** Every result text, to check none of them has the library's absolute path. */
 const seen: string[] = [];
 
@@ -69,6 +71,9 @@ beforeAll(async () => {
     previewer: { scene: async () => previews.scene, program: async () => previews.program },
     onCommit: () => atCommit?.(),
     outputsKnown: () => outputsKnown,
+    // The real built-in sets, built from the repo as a source run does.
+    templateSets: () => (builtins ??= buildBuiltins(config.starter, config.site)),
+    starterScript: null,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
@@ -125,12 +130,13 @@ describe("initialize", () => {
       "add_asset", "create_project", "create_stream", "customize_scene", "customize_transition", "duplicate_scene", "get_guide", "get_state",
       "go_on_air", "list_files", "list_orgs", "preview_scene", "read_file", "rename_scene", "revert_scene", "revert_transition", "scan_library",
       "scene_from_template", "see_program", "write_file",
-    ]);
-    for (const n of ["get_state", "list_orgs", "scan_library", "list_files", "read_file", "get_guide", "preview_scene"]) {
+      "add_template_set", "list_template_sets",
+    ].sort());
+    for (const n of ["get_state", "list_orgs", "scan_library", "list_files", "read_file", "get_guide", "preview_scene", "list_template_sets"]) {
       expect({ n, ro: byName[n]!.annotations?.readOnlyHint }).toEqual({ n, ro: true });
     }
     for (const n of ["go_on_air", "revert_scene", "revert_transition"]) expect({ n, d: byName[n]!.annotations?.destructiveHint }).toEqual({ n, d: true });
-    for (const n of ["write_file", "add_asset", "create_project", "create_stream", "scene_from_template", "customize_scene", "duplicate_scene", "rename_scene", "customize_transition"]) {
+    for (const n of ["write_file", "add_asset", "add_template_set", "create_project", "create_stream", "scene_from_template", "customize_scene", "duplicate_scene", "rename_scene", "customize_transition"]) {
       expect({ n, ro: byName[n]!.annotations?.readOnlyHint, d: byName[n]!.annotations?.destructiveHint }).toEqual({ n, ro: false, d: false });
     }
     expect(byName.see_program!.description).toContain("INCLUDING the live camera");
@@ -271,7 +277,30 @@ describe("write_file", () => {
     expect((await call("write_file", { path: `${ORG}/assets/x.png`, text: "x" })).text).toContain("Only text files");
     expect((await call("write_file", { path: `${ORG}/run.sh`, text: "x" })).text).toContain("Only text files");
     expect((await call("write_file", { path: `${ORG}/big.txt`, text: "x".repeat(2 * 1024 * 1024 + 1) })).text).toContain("over 2 MB");
-    for (const ext of ["html", "css", "js", "json", "md", "svg", "txt"]) expect((await call("write_file", { path: `${ORG}/t.${ext}`, text: "x" })).isError).toBe(false);
+    for (const ext of ["css", "js", "json", "md", "svg", "txt"]) expect((await call("write_file", { path: `${ORG}/t.${ext}`, text: "x" })).isError).toBe(false);
+    expect((await call("write_file", { path: `${ORG}/templates/t.html`, text: "x" })).isError).toBe(false);
+  });
+  test("pages follow the template pack rules: lower-case .html, scene names, where scenes live", async () => {
+    const refused = async (path: string) => (await call("write_file", { path, text: "<title>X</title>" })).text;
+    expect(await refused(`${ORG}/templates/loud.HTML`)).toContain("lower-case .html");
+    expect(await refused(`${ORG}/templates/Big Title.html`)).toContain('"big-title.html"');
+    expect(await refused(`${ORG}/assets/page.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/templates/_shared/extra.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/page.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/projects/p/page.html`)).toContain("isn't where scenes go");
+    expect(await stat(join(root, ORG, "assets/page.html")).catch(() => null)).toBeNull();
+    const { projectId } = await data("create_project", { org: ORG, name: "Pages" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Ep 1", date: "2026-12-07" });
+    for (const path of [
+      `${ORG}/templates/lower-third.html`,
+      `${ORG}/projects/${projectId}/scenes/intro-2.html`,
+      `${ORG}/projects/${projectId}/streams/${streamId}/halftime.html`,
+      `${ORG}/projects/${projectId}/transition.html`,
+    ]) expect({ path, err: (await call("write_file", { path, text: "<title>X</title>" })).isError }).toEqual({ path, err: false });
+    // A page that's there already keeps its name: only where new ones go is decided here.
+    await writeFile(join(root, ORG, "templates/Old Name.html"), "<title>Old</title>");
+    const { hash } = await data("read_file", { path: `${ORG}/templates/Old Name.html` });
+    expect((await call("write_file", { path: `${ORG}/templates/Old Name.html`, text: "<title>New</title>", hash })).isError).toBe(false);
   });
   test("never outside an existing org, in dot-folders or through links out of the library", async () => {
     await symlink(outside, join(root, ORG, "out"));
@@ -460,7 +489,7 @@ describe("structural tools stay inside the library (CodeRabbit)", () => {
   });
 });
 
-describe("template sets (installed style packs)", () => {
+describe("template sets (installed template packs)", () => {
   test("scene_from_template, create_project and go_on_air take a set's template as <set>/<view>", async () => {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(root, ORG, "templates", "neon"), { recursive: true });
@@ -474,6 +503,35 @@ describe("template sets (installed style packs)", () => {
     expect((await call("scene_from_template", { org: ORG, template: "neon/nope", projectId })).text).toContain('no template "neon/nope"');
     await data("go_on_air", { path: `${ORG}/templates/neon/glow.html` });
     expect(state.onAir).toMatchObject({ path: `${ORG}/templates/neon/glow.html`, label: "Glow" });
+  });
+});
+
+describe("built-in template sets (the switcher's Add templates)", () => {
+  test("list, add by name, then a scene from one of its views in a stream", async () => {
+    const sets = await data("list_template_sets");
+    const grace = sets.find((s: { id: string }) => s.id === "grace");
+    expect(grace).toMatchObject({ name: "Grace Community" });
+    expect(grace.views.length).toBeGreaterThan(2);
+    expect(sets.map((s: { id: string }) => s.id)).toContain("starter");
+    const added = await data("add_template_set", { org: ORG, set: "Grace Community" });
+    expect(added.set).toBe("grace");
+    expect(added.templates).toContain(`grace/${grace.views[0]}`);
+    // Installed as the switcher installs it: its own set, filled in with the org's name.
+    const lib = await data("scan_library", { org: ORG });
+    expect(lib.sets.map((x: { id: string }) => x.id)).toContain("grace");
+    const html = await readFile(join(root, ORG, `templates/grace/${grace.views[0]}.html`), "utf8");
+    expect(html).not.toContain("{{");
+    // Nothing left in staging.
+    expect(await readdir(join(root, ORG, ".viewswitcher/staging")).catch(() => [])).toEqual([]);
+    // Again: a second copy, never over the first.
+    expect((await data("add_template_set", { org: ORG, set: "grace" })).set).toBe("grace-2");
+    expect((await data("list_template_sets", { org: ORG })).find((s: { id: string }) => s.id === "grace").added).toEqual(["grace", "grace-2"]);
+    const { projectId } = await data("create_project", { org: ORG, name: "Sunday service" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Advent 1", date: "2026-11-29" });
+    const made = await data("scene_from_template", { org: ORG, template: `grace/${grace.views[0]}`, projectId, streamId });
+    expect(made.path).toStartWith(`${ORG}/projects/${projectId}/streams/${streamId}/`);
+    expect((await call("add_template_set", { org: ORG, set: "nope" })).text).toContain("list_template_sets shows them");
+    expect((await call("add_template_set", { org: "nope", set: "grace" })).isError).toBe(true);
   });
 });
 

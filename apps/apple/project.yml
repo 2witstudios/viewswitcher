@@ -13,7 +13,7 @@ options:
 settings:
   base:
     DEVELOPMENT_TEAM: M96WTV3CKX
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     # Sparkle compares CFBundleVersion, so it follows the version (bump MARKETING_VERSION for a release).
     CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
     SWIFT_VERSION: "5.10"
@@ -83,7 +83,7 @@ targets:
     postBuildScripts:
       # The server and what it serves (scripts/build.sh puts them in build/payload; see README.md):
       # Contents/Helpers/viewswitcher-server (signed by build.sh with its own entitlements) and
-      # Contents/Resources/{web,starter,library-kit}. Release only: a Debug build runs the server
+      # Contents/Resources/{web,starter,library-kit,packs}. Release only: a Debug build runs the server
       # from the checkout instead (VIEWSWITCHER_REPO, set by scripts/dev.sh).
       - name: Embed server payload
         basedOnDependencyAnalysis: false
@@ -99,7 +99,7 @@ targets:
           fi
           mkdir -p "$contents/Helpers" "$contents/Resources"
           ditto "$payload/viewswitcher-server" "$contents/Helpers/viewswitcher-server"
-          for d in web starter library-kit; do rm -rf "$contents/Resources/$d"; ditto "$payload/$d" "$contents/Resources/$d"; done
+          for d in web starter library-kit packs; do rm -rf "$contents/Resources/$d"; ditto "$payload/$d" "$contents/Resources/$d"; done
   ViewSwitcher iPad:
     type: application
     platform: iOS

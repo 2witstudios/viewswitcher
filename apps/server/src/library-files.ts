@@ -4,6 +4,7 @@
 // version that was read (the same hash the scene editor uses, so the two never overwrite each other).
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { slugify } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
 import { inside, PathError } from "./paths";
 import { replaceChecked, sceneHash, serial } from "./scene-edit";
@@ -33,6 +34,39 @@ export async function checked(root: string, path: unknown): Promise<{ path: stri
 }
 
 const isText = (path: string) => TEXT_TYPES.includes(extname(path).toLowerCase());
+
+/** A scene's name, as a template pack's views and the switcher's own new scenes have them (slugify). */
+const SCENE_NAME = /^[a-z0-9][a-z0-9-]{0,60}$/;
+/** Where scenes live in an org, by the path after the org id: the folders the switcher lists. */
+const SCENE_HOMES = [
+  /^templates\/[^/]+\.html$/, // the org's own templates
+  /^templates\/[^/_][^/]*\/[^/]+\.html$/, // a template set's views
+  /^projects\/[^/]+\/scenes\/[^/]+\.html$/,
+  /^projects\/[^/]+\/streams\/[^/]+\/[^/]+\.html$/,
+];
+const TRANSITIONS = [/^templates\/_shared\/transition\.html$/, /^templates\/[^/_][^/]*\/_shared\/transition\.html$/, /^projects\/[^/]+\/transition\.html$/];
+
+/**
+ * Why a page (an .html) an agent writes can't be written there, or null. Scenes follow the template
+ * pack rules (template-pack.ts planPack): exactly ".html", which is how the switcher lists them
+ * ("brb.HTML" would sit unseen), and a new one is named like a pack's views (lower-case letters,
+ * numbers and dashes) in a folder where scenes live. assets/ and _shared/ hold no pages, except a
+ * transition. A page that exists may keep its name: this only decides where new ones go.
+ */
+export function pageProblem(path: string, exists: boolean): string | null {
+  const ext = extname(path);
+  if (ext.toLowerCase() !== ".html") return null;
+  if (ext !== ".html") return `Name it with a lower-case .html (${path.slice(0, -ext.length)}.html): the switcher only lists those.`;
+  if (exists) return null;
+  const rest = path.split("/").slice(1).join("/");
+  if (TRANSITIONS.some((r) => r.test(rest))) return null;
+  const name = rest.split("/").pop()!.slice(0, -".html".length);
+  if (!SCENE_HOMES.some((r) => r.test(rest))) {
+    return `${path} isn't where scenes go. A new scene goes in templates/, a template set's folder, projects/<id>/scenes/ or projects/<id>/streams/<id>/ (assets/ and _shared/ hold no pages, except _shared/transition.html). Prefer scene_from_template, which picks the place and name.`;
+  }
+  if (!SCENE_NAME.test(name)) return `Name new scenes with lower-case letters, numbers and dashes, like "${slugify(name) || "my-scene"}.html"; its <title> is the name people see.`;
+  return null;
+}
 
 export type Entry = { name: string; path: string; type: "file" | "dir"; size: number };
 
@@ -89,6 +123,8 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
     if (!isText(p)) throw new PathError(`Only text files can be written (${TEXT_TYPES.join(", ")}). Add images and other media with add_asset.`);
     if (Buffer.byteLength(text) > MAX_TEXT_BYTES) throw new PathError("That's over 2 MB, too big for a library text file");
     const real = await realpath(abs).catch(() => null);
+    const page = pageProblem(p, !!real);
+    if (page) throw new PathError(page);
     if (real) {
       const read = await stat(real);
       if (!read.isFile()) throw new PathError(`${p} is a folder`);

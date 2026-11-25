@@ -1,4 +1,4 @@
-// Installing style packs (EDIT-24 · EDIT-25). A pack arrives as a .zip or a dropped folder's files.
+// Installing template packs (EDIT-24 · EDIT-25). A pack arrives as a .zip or a dropped folder's files.
 //
 // 1. stage: list it, check every path and size before anything is written (planPack), unpack it into
 //    <org>/.viewswitcher/staging/<token>/raw (inside the org, so preview paths start with its id), check what it is (checkPack), and write a preview

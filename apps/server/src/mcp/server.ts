@@ -11,9 +11,11 @@ import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
 import type { LiveState } from "@viewswitcher/shared";
 import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
+import { asDropped, type BuiltinPack } from "../builtin-packs";
 import * as lib from "../library";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
 import { checked, listFiles, readText, writeText } from "../library-files";
+import { cancelPack, installPack, PackError, stagePack } from "../packs";
 import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
@@ -34,6 +36,10 @@ export type McpDeps = {
   /** After a scene was renamed: keeps the on-air record pointing at it, as the switcher's rename does. */
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
+  /** The built-in template sets (builtin-packs.ts), as the switcher's Add templates lists them. */
+  templateSets?: () => Promise<BuiltinPack[]>;
+  /** The starter kit's scene.js, which a pack's own copy is compared with on install (packs.ts). */
+  starterScript?: string | null;
   /** Whether OBS has said, since it connected, whether it's streaming or recording (OBSClient.outputsKnown). */
   outputsKnown?: () => boolean;
   /** Tests only: runs at write_file's commit instant, before its last check (to change the state right then). */
@@ -46,6 +52,7 @@ export const INSTRUCTIONS = [
   "Every path starts with the org id, like \"my-channel/templates/brb.html\". list_orgs and scan_library show what's there.",
   "To change a file: read_file it, then write_file with the hash read_file gave you. A stale or missing hash is refused; read again and redo the change.",
   "preview_scene after every visual change, look at the picture, and fix what you see before you say it's done.",
+  "To start from a ready-made look, list_template_sets shows the built-in template sets and add_template_set adds one to an org (as the switcher's Add templates does); then scene_from_template makes scenes from its views (\"<set>/<view>\") in a project or stream.",
   "Use the structural tools (scene_from_template, customize_scene, duplicate_scene, rename_scene, customize_transition) instead of copying files by hand.",
   "Only use go_on_air when the user asks. While OBS is streaming or recording, the scene on air and its shared files may be protected; the refusal says what to do instead.",
 ].join("\n");
@@ -93,7 +100,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     try {
       return await fn(args);
     } catch (e) {
-      if (e instanceof Refusal || e instanceof PathError || e instanceof EditError) return refusal(e.message);
+      if (e instanceof Refusal || e instanceof PathError || e instanceof EditError || e instanceof PackError) return refusal(e.message);
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return refusal("That file or folder doesn't exist. scan_library or list_files shows what's there.");
       return refusal(`Couldn't do that: ${(e as Error).message}`);
     }
@@ -356,6 +363,54 @@ export function createMcpServer(deps: McpDeps): McpServer {
     return text({ path: `${org}/${saved.path}` });
   }));
 
+  // ------------------------------------------------------------ template sets
+
+  const setView = (b: BuiltinPack) => ({ id: b.id, name: b.name, description: b.description, views: b.views });
+  /** A built-in set by its id ("grace") or its name ("Grace Community"), in any case. */
+  const findSet = async (set: string) => {
+    const all = (await deps.templateSets?.()) ?? [];
+    const want = String(set ?? "").trim().toLowerCase();
+    const b = all.find((x) => x.id === want) ?? all.find((x) => x.name.toLowerCase() === want) ?? all.find((x) => slugify(x.name) === slugify(want));
+    if (!b) throw new Refusal(`There's no built-in template set "${set}". list_template_sets shows them: ${all.map((x) => `${x.id} (${x.name})`).join(", ") || "none"}.`);
+    return b;
+  };
+
+  server.registerTool("list_template_sets", {
+    title: "List built-in template sets",
+    description: "The template sets that come with ViewSwitcher (the switcher's Add templates): each a whole look with its views (starting soon, main, break, ending…), filled in with the org's name and colors when added. With org, also says which the org has already (an org's installed sets are in scan_library's sets).",
+    inputSchema: { org: orgArg.optional() },
+    annotations: READ,
+  }, run(async ({ org }: { org?: string }) => {
+    const sets = ((await deps.templateSets?.()) ?? []).map(setView);
+    if (!org) return text(sets);
+    await existingOrg(root, org);
+    const have = (await lib.scanLibrary(root, plainName(org))).sets.map((s) => s.id);
+    // An added set's folder is its id, or "<id>-2"… when the org had one already.
+    return text(sets.map((s) => ({ ...s, added: have.filter((h) => h === s.id || new RegExp(`^${s.id}-\\d+$`).test(h)) })));
+  }));
+
+  server.registerTool("add_template_set", {
+    title: "Add a built-in template set",
+    description: "Add one of the built-in template sets (list_template_sets: by id, like \"grace\", or name, like \"Grace Community\") to an org, exactly as the switcher's Add templates does: it lands as its own set in templates/<set>/, in the org's name and colors. Adding one the org has makes a second copy (\"<id>-2\"). Returns { set, templates }: pass a template to scene_from_template to make a scene from it.",
+    inputSchema: { org: orgArg, set: z.string().describe("The built-in set's id or name.") },
+    annotations: WRITE,
+  }, run(async ({ org, set }: { org: string; set: string }) => {
+    await existingOrg(root, org);
+    const b = await findSet(set);
+    // It lands in a new folder in templates/ (claimed with a plain mkdir, so never over a file on air),
+    // and templates/ itself must really be in the library.
+    await contained(`${plainName(org)}/templates/${b.id}`);
+    const staged = await stagePack(root, plainName(org), { files: asDropped(b) }, deps.starterScript ?? null);
+    let installed: { set: string };
+    try {
+      installed = await installPack(root, plainName(org), staged.token);
+    } catch (e) {
+      await cancelPack(root, plainName(org), staged.token).catch(() => {});
+      throw e;
+    }
+    return text({ set: installed.set, name: b.name, templates: staged.views.map((v) => `${installed.set}/${v.name}`), ...(staged.warnings.length ? { warnings: staged.warnings } : {}) });
+  }));
+
   server.registerTool("create_project", {
     title: "Create a project",
     description: "A new project in an org (a show or series), optionally starting with copies of some templates as its shared scenes. Returns { projectId }.",
@@ -385,7 +440,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("scene_from_template", {
     title: "New scene from a template",
-    description: "Copy one of the org's templates into a project's shared scenes, or into one stream with streamId. Returns { name, path } of the new scene (a free name is picked if needed).",
+    description: "Copy one of the org's templates (its own, or a template set's, such as one add_template_set added) into a project's shared scenes, or into one stream with streamId. Returns { name, path } of the new scene (a free name is picked if needed); then edit it with read_file and write_file, and preview_scene it.",
     inputSchema: { org: orgArg, template: z.string().describe("Template name: a file name without .html (\"brb\"), or \"<set>/<view>\" for a template set's (scan_library's sets)."), projectId: z.string(), streamId: z.string().optional() },
     annotations: WRITE,
   }, run(async ({ org, template, projectId, streamId }: { org: string; template: string; projectId: string; streamId?: string }) => {

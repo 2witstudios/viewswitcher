@@ -108,7 +108,7 @@ export type AgentInfo = { library: string; port: number; claudeCode: string; std
 /** The Claude Desktop extension made for this install (this Mac only); the Mac app saves and opens it. */
 export const MCPB_URL = "/api/agent/viewswitcher.mcpb";
 
-/** A style pack the server has checked and staged, ready to install (apps/server/src/packs.ts). */
+/** A template pack the server has checked and staged, ready to install (apps/server/src/packs.ts). */
 export type StagedPack = {
   token: string;
   set: string;
@@ -142,7 +142,17 @@ export const packs = {
   install: (org: string, token: string) => post<{ set: string }>("/api/packs/install", { org, token }),
   cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
   removeSet: (org: string, set: string) => post<{ kept: number }>("/api/sets/remove", { org, set }),
+  /** The built-in template packs (EDIT-29): the starter and the site's six shows. */
+  builtin: async (): Promise<BuiltinPack[]> => {
+    const r = await fetch("/api/packs/builtin");
+    if (!r.ok) throw new Error("Couldn't list the built-in templates");
+    return r.json();
+  },
+  stageBuiltin: (org: string, id: string) => post<StagedPack>("/api/packs/builtin/stage", { org, id }),
 };
+
+/** A built-in template pack, as /api/packs/builtin lists it. */
+export type BuiltinPack = { id: string; name: string; description: string; views: string[] };
 
 /** Copy text; falls back to a prompt where the clipboard API is unavailable (plain http on the iPad). */
 export async function copy(text: string) {

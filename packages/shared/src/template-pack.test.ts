@@ -1,6 +1,6 @@
-// EDIT-23: the style pack format's validator.
+// EDIT-23: the template pack format's validator.
 import { describe, expect, test } from "bun:test";
-import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, type PackEntry, planPack, readManifest } from "./style-pack";
+import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, type PackEntry, planPack, readManifest } from "./template-pack";
 
 const file = (path: string, size = 100): PackEntry => ({ path, size, type: "file" });
 const manifest = (over: Record<string, unknown> = {}) => JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "Bright.", views: ["main", "brb"], placeholders: ["ORG_NAME", "PACK"], ...over });

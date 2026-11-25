@@ -160,6 +160,10 @@ try {
   check(existsSync(join(library, "my-channel/org.json")), "first run: a first org");
   check(existsSync(join(library, ".git")) || !Bun.which("git"), "first run: git init (when git is available)");
   check(readFileSync(join(library, ".gitignore"), "utf8").includes(".viewswitcher/"), "first run: .gitignore");
+  // EDIT-29: the built-in template packs ship in Resources/packs and the bundled server lists them.
+  const builtin = await fetch(`${BASE}/api/packs/builtin`).then((r) => r.json(), () => []) as { id: string }[];
+  check(existsSync(join(appPath, "Contents/Resources/packs/fullcount/pack.json")), "the app ships the built-in template packs (Resources/packs)");
+  check(builtin.map((p) => p.id).join() === "starter,fullcount,nova,grace,remi,riverside,kitchen", `the bundled server lists them (${builtin.map((p) => p.id).join(", ")})`);
   check(await until(async () => (await state()).window?.url.startsWith(`${BASE}/`)), `the window shows the switcher`);
   check(await until(() => evalJs("return document.readyState === 'complete' && !!document.querySelector('.app')")), "the switcher page has loaded");
   const ua = await evalJs<string>("return navigator.userAgent");
@@ -223,7 +227,18 @@ try {
   ]);
   relay.kill();
   const tools = listed?.result?.tools?.length;
-  check(tools === 20 && relayed.slice(0, relayed.lastIndexOf("\n")).split("\n").filter(Boolean).every((l) => JSON.parse(l).jsonrpc === "2.0"), `<sidecar> --mcp-stdio relays tools/list: ${tools} tools, only JSON-RPC on stdout`);
+  check(tools === 22 && relayed.slice(0, relayed.lastIndexOf("\n")).split("\n").filter(Boolean).every((l) => JSON.parse(l).jsonrpc === "2.0"), `<sidecar> --mcp-stdio relays tools/list: ${tools} tools, only JSON-RPC on stdout`);
+
+  // The bundled server's built-in template sets (Resources/packs) reach agents, as Add templates lists them.
+  const setsCall = await fetch(`${BASE}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify(rpc(3, "tools/call", { name: "list_template_sets", arguments: {} })) }).then((r) => r.json(), () => null);
+  const setIds = ((): string[] => {
+    try {
+      return JSON.parse(setsCall.result.content[0].text).map((s: { id: string }) => s.id);
+    } catch {
+      return [];
+    }
+  })();
+  check(setIds.includes("starter") && setIds.includes("grace") && setIds.length === 7, `/mcp list_template_sets: the 7 built-in template sets (${setIds.join(", ")})`);
 
   check((await state()).menu.includes("Edit with AI…"), 'menu bar: "Edit with AI…"');
   await cmd("menu", { item: "Edit with AI…" });

@@ -124,7 +124,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className={`agent-status${connected ? " on" : ""}`} role="status"><span className="dot" />{agentStatusText(agent, now)}</p>
-        <p className="agent-lede">Connect the AI agent you already use. It reads your library, edits scenes, looks at each one rendered in OBS and fixes what it sees.</p>
+        <p className="agent-lede">Connect the AI agent you already use. It reads your library, adds template sets, makes scenes from your templates and edits them, looks at each one rendered in OBS and fixes what it sees.</p>
 
         {parts.connectOnMac && <p className="agent-note">Connect an agent on your Mac: open Edit with AI there.</p>}
         {parts.waysIn && <WaysIn info={info} clients={clients} />}

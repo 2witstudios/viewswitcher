@@ -6,7 +6,8 @@ import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { queryClient, useLive } from "../lib/live";
 import { AskAgent } from "./AgentSheet";
-import { Mark, Modal, PlusIcon } from "./ui";
+import { TemplatePicker } from "./TemplatePicker";
+import { Mark, Modal, PlusIcon, toast } from "./ui";
 
 const ICON = "#a3a8b5";
 const COLLAPSED = "viewswitcher.sidebar";
@@ -123,6 +124,7 @@ function OrgSwitcher({ current }: { current?: string }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [picking, setPicking] = useState<{ id: string; name: string } | null>(null);
   const org = orgs?.find((o) => o.id === current);
 
   useEffect(() => {
@@ -165,9 +167,26 @@ function OrgSwitcher({ current }: { current?: string }) {
       {creating && (
         <NewOrg
           onClose={() => setCreating(false)}
-          onCreated={async (id) => {
+          onCreated={async (id, name) => {
             await queryClient.invalidateQueries({ queryKey: ["library", "orgs"] });
             navigate({ to: "/$org", params: { org: id } });
+            setPicking({ id, name });
+          }}
+        />
+      )}
+      {picking && (
+        // EDIT-30: a new org starts from a built-in template set, if it likes.
+        <TemplatePicker
+          org={picking.id}
+          orgName={picking.name}
+          have={["starter"]}
+          title="Pick your templates"
+          intro={`${picking.name} starts with the neutral Starter templates. Add any of these to start from too.`}
+          skipLabel="Just the starter"
+          onClose={() => setPicking(null)}
+          onAdded={async (names) => {
+            await queryClient.invalidateQueries({ queryKey: ["library", picking.id] });
+            if (names.length) toast(`Added ${names.join(", ")} to Templates`);
           }}
         />
       )}
@@ -175,22 +194,22 @@ function OrgSwitcher({ current }: { current?: string }) {
   );
 }
 
-function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => Promise<void> }) {
+function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string, name: string) => Promise<void> }) {
   const [name, setName] = useState("");
   const [accent, setAccent] = useState("#d4a548");
   return (
     <Modal title="New org" submitLabel="Create org" onClose={onClose}
-      onSubmit={async () => onCreated((await api.createOrg(name, accent)).orgId)}>
+      onSubmit={async () => onCreated((await api.createOrg(name, accent)).orgId, name.trim())}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Bible Study" /></label>
       <label className="field">Accent color<input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} /></label>
-      <p className="empty" style={{ margin: 0, fontSize: 13 }}>Starts with neutral templates in its own folder. <AskAgent>Ask your agent</AskAgent> to brand them.</p>
+      <p className="empty" style={{ margin: 0, fontSize: 13 }}>Starts with neutral templates in its own folder; next, pick any built-in template sets to start from. <AskAgent>Ask your agent</AskAgent> to brand them.</p>
     </Modal>
   );
 }
 
 function NewProject({ org, groups, onClose }: { org: string; groups: ReturnType<typeof templateGroups>; onClose: () => void }) {
   const [name, setName] = useState("");
-  // The org's own templates start ticked (not "chapter", a one-off); a style pack's, unticked.
+  // The org's own templates start ticked (not "chapter", a one-off); a template pack's, unticked.
   const [picked, setPicked] = useState<string[]>(groups[0]?.set === null ? groups[0].templates.map(templateId).filter((t) => t !== "chapter") : []);
   return (
     <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => api.createProject(org, name, picked).then(() => {})}>

@@ -4,6 +4,7 @@ import { AskAgent } from "../../../components/AgentSheet";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
+import { TemplatePicker } from "../../../components/TemplatePicker";
 import { attempt, type MenuItem, PlusIcon, toast } from "../../../components/ui";
 import { api, copy, packs, type StagedPack } from "../../../lib/api";
 import { templateGroups, templateId, useLibrary } from "../../../lib/library";
@@ -20,11 +21,12 @@ export const Route = createFileRoute("/_app/$org/templates")({
     const [checking, setChecking] = useState(false);
     const [staged, setStaged] = useState<StagedPack | null>(null);
     const [refused, setRefused] = useState<string | null>(null);
+    const [adding, setAdding] = useState(false);
     const picker = useRef<HTMLInputElement>(null);
 
     /** Send a dropped or chosen pack to the server to check; show what's in it, or why it can't go in. */
     const stage = async (pack: DroppedPack) => {
-      if (!pack) return toast("Drop a style pack: a .zip, or its folder");
+      if (!pack) return toast("Drop a template pack: a .zip, or its folder");
       if ("files" in pack && !pack.files.length) return toast("That folder is empty");
       setChecking(true);
       setRefused(null);
@@ -91,8 +93,9 @@ export const Route = createFileRoute("/_app/$org/templates")({
       >
         <PageHead crumb="Starting points. Templates never go on air." title="Templates" />
         <div className="pack-bar">
-          <button type="button" className="btn" disabled={checking} onClick={() => picker.current?.click()}><PlusIcon />{checking ? "Checking the pack…" : "Import a style pack"}</button>
-          <span className="empty">or drop a style pack's .zip or folder anywhere on this page. It becomes its own set of templates.</span>
+          <button type="button" className="btn primary" onClick={() => setAdding(true)}><PlusIcon />Add templates</button>
+          <button type="button" className="btn" disabled={checking} onClick={() => picker.current?.click()}>{checking ? "Checking the pack…" : "Import a template pack"}</button>
+          <span className="empty">or drop a template pack's .zip or folder anywhere on this page. Each becomes its own template set.</span>
           <input ref={picker} type="file" accept=".zip,application/zip" hidden onChange={(e) => {
             const pack = fromPicker(e.target.files);
             e.target.value = "";
@@ -110,7 +113,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
           <section key={g.set?.id ?? ""} className="section">
             <div className="section-head">
               <h2>{g.set ? g.name.toUpperCase() : "YOUR TEMPLATES"}</h2>
-              <span>{g.set ? `style pack${g.set.version ? ` · ${g.set.version}` : ""}${g.set.author ? ` · ${g.set.author}` : ""} · ${org}/templates/${g.set.id}/` : `${org}/templates/`}</span>
+              <span>{g.set ? `template set${g.set.version ? ` · ${g.set.version}` : ""}${g.set.author ? ` · ${g.set.author}` : ""} · ${org}/templates/${g.set.id}/` : `${org}/templates/`}</span>
               {g.set && <button type="button" className="btn ghost small" onClick={() => removeSet(g.set!)}>Remove set</button>}
             </div>
             {g.set?.description && <p className="set-note">{g.set.description}</p>}
@@ -141,7 +144,22 @@ export const Route = createFileRoute("/_app/$org/templates")({
           </div>
         </section>
 
-        {over && <div className="drop-hint" aria-hidden="true"><span>Drop the style pack to see what's in it</span></div>}
+        {over && <div className="drop-hint" aria-hidden="true"><span>Drop the template pack to see what's in it</span></div>}
+        {adding && data && (
+          <TemplatePicker
+            org={org}
+            orgName={data.org.name}
+            have={data.sets.map((s) => s.id)}
+            title="Add templates"
+            intro="Built-in template sets, ready to use. Pick one or more."
+            skipLabel="Cancel"
+            onClose={() => setAdding(false)}
+            onAdded={async (names) => {
+              await queryClient.invalidateQueries({ queryKey: ["library", org] });
+              if (names.length) toast(`Added ${names.join(", ")}`);
+            }}
+          />
+        )}
         {staged && data && (
           <PackPreview
             pack={staged}

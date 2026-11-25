@@ -329,7 +329,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .picker-item:hover img, .picker-item:focus-visible img { outline-color: var(--cream); }
 .picker-item span { font-size: 12px; color: var(--sage); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------------------------------------------------------------- style packs and sets (EDIT-22 · EDIT-24 · EDIT-25) */
+/* ---------------------------------------------------------------- template packs and sets (EDIT-22 · EDIT-24 · EDIT-25) */
 .menu-heading { padding: 10px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
 .checks-head { flex-basis: 100%; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
 .drop-page { position: relative; flex: 1; display: flex; flex-direction: column; gap: 28px; }
@@ -346,6 +346,15 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .modal.pack { width: min(920px, 100%); max-height: calc(100dvh - 48px); overflow-y: auto; }
 .pack-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
 .pack-meta { font-size: 14px; color: var(--sage); }
+.builtin-grid { display: grid; grid-template-columns: repeat(auto-fill, 276px); gap: 16px; }
+.builtin { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 2px solid var(--line); border-radius: 14px; background: var(--raised); color: var(--cream); text-align: left; font: inherit; cursor: pointer; }
+.builtin:disabled { cursor: default; opacity: 0.7; }
+.builtin.on { border-color: var(--cream); }
+.builtin .cover { width: 256px; height: 144px; }
+.builtin .cover iframe { transform: scale(0.1333333); }
+.builtin-name { font-weight: 700; font-size: 15px; }
+.builtin-note { font-size: 12px; color: var(--sage); }
+.picker-note.quiet { color: var(--sage); font-size: 13px; margin: 0; }
 .pack-covers { display: grid; grid-template-columns: repeat(auto-fill, 200px); gap: 16px 14px; }
 .pack-covers figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .pack-covers .cover { width: 200px; height: 113px; }
