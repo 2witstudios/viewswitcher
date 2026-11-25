@@ -11,7 +11,7 @@ const hasDemoVideo = existsSync(fileURLToPath(new URL("./public/demo/viewswitche
 export default defineConfig({
   site: "https://viewswitcher.com",
   output: "static",
-  trailingSlash: "ignore",
+  trailingSlash: "never",
   integrations: [sitemap({ filter: (page) => !page.includes("/404") })],
   build: { inlineStylesheets: "always" },
   server: { port: 4321, host: "127.0.0.1" },

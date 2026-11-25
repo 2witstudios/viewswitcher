@@ -4,6 +4,20 @@
   "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.viewswitcher.com"
+        }
+      ],
+      "destination": "https://viewswitcher.com/:path",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/_astro/(.*)",
