@@ -74,6 +74,22 @@ describe("sceneRefs", () => {
       "daisy/templates/_shared/fonts.css",
     ]);
   });
+  test("inline SVG <image>/<use>, CSS image-set(), and a module's imports", () => {
+    const html = `<svg><image href="/library/daisy/assets/logo.svg"/><use xlink:href="icons.svg#a"/></svg><div style="background:image-set('/library/daisy/assets/bg.png' 1x, &quot;bg@2x.png&quot; 2x)"></div>`;
+    expect(sceneRefs(html, scene).sort()).toEqual([
+      "daisy/assets/bg.png",
+      "daisy/assets/logo.svg",
+      "daisy/projects/ld/streams/12-04-x/bg@2x.png",
+      "daisy/projects/ld/streams/12-04-x/icons.svg",
+    ]);
+    const js = `import { a } from "./a.js"; import "/library/daisy/assets/side.mjs"; export * from '../b.js'; const m = await import("./lazy.js"); const s = "url(not-this.png)";`;
+    expect(sceneRefs(js, "daisy/templates/_shared/scene.js").sort()).toEqual([
+      "daisy/assets/side.mjs",
+      "daisy/templates/_shared/a.js",
+      "daisy/templates/_shared/lazy.js",
+      "daisy/templates/b.js",
+    ]);
+  });
   test("a page's own tags only in HTML; a stylesheet never self-lists", () => {
     expect(sceneRefs(`<img src="a.png">`, "daisy/notes.md")).toEqual([]);
     expect(sceneRefs(`.x{background:url(theme.css)}`, "daisy/templates/_shared/theme.css")).toEqual([]);
@@ -91,7 +107,7 @@ describe("loadedFiles", () => {
     put(scene, `<link rel="stylesheet" href="/library/daisy/templates/_shared/theme.css"><img src="/library/daisy/assets/logo.svg"><img src="/library/daisy/assets/missing.png">`);
     put("daisy/templates/_shared/theme.css", `@import "more.css"; .a{background:url(brand/mark.svg)}`);
     put("daisy/templates/_shared/more.css", `.b{background:url(theme.css)} .c{background:url(/library/daisy/assets/tex.png)}`);
-    put("daisy/assets/logo.svg", `<svg><image href="x.png"/></svg>`);
+    put("daisy/assets/logo.svg", `<svg/>`);
     expect((await loadedFiles(root, [scene])).sort()).toEqual([
       "daisy/assets/logo.svg",
       "daisy/assets/missing.png",

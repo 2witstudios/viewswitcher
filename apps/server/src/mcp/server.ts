@@ -147,6 +147,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
     if (!(await exists(inside(dir, `projects/${projectId}/streams/${plainName(streamId)}`)))) throw new Refusal(`Project ${projectId} has no stream "${streamId}". scan_library shows its streams.`);
     return dir;
   };
+  /** A template by its name: "brb", or "<set>/<view>" for one from an installed template set (library.ts templateFile). */
+  const templateAt = (org: string, dir: string, template: string) => {
+    const { file, name } = lib.templateFile(dir, template);
+    return { file, name, path: `${plainName(org)}/${relative(dir, file).split("\\").join("/")}` };
+  };
   const needScene = async (path: string) => {
     if (!(await exists(scenePath(root, path)))) throw new Refusal(`There's no scene at ${path}. scan_library shows the scenes.`);
   };
@@ -290,12 +295,15 @@ export function createMcpServer(deps: McpDeps): McpServer {
   server.registerTool("create_project", {
     title: "Create a project",
     description: "A new project in an org (a show or series), optionally starting with copies of some templates as its shared scenes. Returns { projectId }.",
-    inputSchema: { org: orgArg, name: z.string().describe("The project's name."), templates: z.array(z.string()).optional().describe("Template names (file names without .html) to copy into the project.") },
+    inputSchema: { org: orgArg, name: z.string().describe("The project's name."), templates: z.array(z.string()).optional().describe("Template names to copy into the project: a file name without .html (\"brb\"), or \"<set>/<view>\" for a template set's (scan_library's sets).") },
     annotations: WRITE,
   }, run(async ({ org, name, templates }: { org: string; name: string; templates?: string[] }) => {
     const dir = await existingOrg(root, org);
     // The templates it copies must really be in the library (a linked template would copy a file from elsewhere).
-    for (const t of templates ?? []) if (await exists(inside(dir, `templates/${plainName(t)}.html`))) await contained(`${org}/templates/${plainName(t)}.html`);
+    for (const t of templates ?? []) {
+      const tpl = templateAt(org, dir, t);
+      if (await exists(tpl.file)) await contained(tpl.path);
+    }
     await writes(`${org}/projects/${slugify(name)}/project.json`);
     return text(await lib.createProject(dir, name, templates ?? []));
   }));
@@ -314,13 +322,14 @@ export function createMcpServer(deps: McpDeps): McpServer {
   server.registerTool("scene_from_template", {
     title: "New scene from a template",
     description: "Copy one of the org's templates into a project's shared scenes, or into one stream with streamId. Returns { name, path } of the new scene (a free name is picked if needed).",
-    inputSchema: { org: orgArg, template: z.string().describe("Template name (file name without .html)."), projectId: z.string(), streamId: z.string().optional() },
+    inputSchema: { org: orgArg, template: z.string().describe("Template name: a file name without .html (\"brb\"), or \"<set>/<view>\" for a template set's (scan_library's sets)."), projectId: z.string(), streamId: z.string().optional() },
     annotations: WRITE,
   }, run(async ({ org, template, projectId, streamId }: { org: string; template: string; projectId: string; streamId?: string }) => {
     const dir = streamId ? await needStream(org, projectId, streamId) : await needProject(org, projectId);
-    if (!(await exists(inside(dir, `templates/${plainName(template)}.html`)))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates.`);
-    await contained(`${org}/templates/${template}.html`);
-    await writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${template}.html`);
+    const tpl = templateAt(org, dir, template);
+    if (!(await exists(tpl.file))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates and sets.`);
+    await contained(tpl.path);
+    await writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${tpl.name}.html`);
     return text(await sceneFromTemplate(root, { org, template, projectId, streamId }));
   }));
 
@@ -418,7 +427,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     await needScene(path);
     const l = await lib.scanLibrary(root, plainName(orgOf(path)));
     let found: OnAirRequest | null = null;
-    const t = l.templates.find((s) => s.path === path);
+    // The org's own templates and those of its installed template sets.
+    const t = [...l.templates, ...l.sets.flatMap((set) => set.templates)].find((s) => s.path === path);
     if (t) found = { path, label: t.label };
     for (const p of l.projects) {
       const s = p.scenes.find((x) => x.path === path);

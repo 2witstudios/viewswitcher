@@ -436,7 +436,8 @@ const server = Bun.serve({
         // No idle timeout for agents' calls: Bun drops a connection that's quiet for 10 s, and a tool
         // call can be quiet longer than that (previews run one at a time, ~1.5 s each, so a few in
         // parallel queue up), which the agent would see as a transport error, not an answer.
-        server.timeout(req, 0);
+        // Only for this Mac's requests: anything else is refused at once by handleMcp, and keeps the default.
+        if (isLocalRequest(req, server.requestIP(req))) server.timeout(req, 0);
         return await handleMcp(req, server.requestIP(req), { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
       }
       if (path.startsWith("/api/")) {

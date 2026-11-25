@@ -449,6 +449,23 @@ describe("structural tools stay inside the library (CodeRabbit)", () => {
   });
 });
 
+describe("template sets (installed style packs)", () => {
+  test("scene_from_template, create_project and go_on_air take a set's template as <set>/<view>", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "templates", "neon"), { recursive: true });
+    await writeFile(join(root, ORG, "templates/neon/pack.json"), JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "x", views: ["glow"] }));
+    await writeFile(join(root, ORG, "templates/neon/glow.html"), "<title>Glow</title>");
+    const lib = await data("scan_library", { org: ORG });
+    expect(lib.sets.map((x: { id: string }) => x.id)).toContain("neon");
+    const { projectId } = await data("create_project", { org: ORG, name: "Neon show", templates: ["neon/glow"] });
+    const made = await data("scene_from_template", { org: ORG, template: "neon/glow", projectId });
+    expect(made.path).toStartWith(`${ORG}/projects/${projectId}/scenes/glow`);
+    expect((await call("scene_from_template", { org: ORG, template: "neon/nope", projectId })).text).toContain('no template "neon/nope"');
+    await data("go_on_air", { path: `${ORG}/templates/neon/glow.html` });
+    expect(state.onAir).toMatchObject({ path: `${ORG}/templates/neon/glow.html`, label: "Glow" });
+  });
+});
+
 describe("go_on_air for a stream", () => {
   test("a project scene a stream shares goes on air for that stream, as the stream page does", async () => {
     const { projectId } = await data("create_project", { org: ORG, name: "Shared", templates: ["teaching", "brb"] });
