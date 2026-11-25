@@ -1,7 +1,40 @@
 import AppKit
 import WebKit
 import ServiceManagement
+import SwiftUI
 import ViewSwitcherKit
+
+struct MenuRow: Identifiable {
+    let id = UUID()
+    let title: String?
+    let on: Bool
+    let enabled: Bool
+}
+
+/// A picture of the status menu for scripts/e2e.ts (menuPicture).
+struct MenuPicture: View {
+    let rows: [MenuRow]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { r in
+                if let t = r.title {
+                    HStack(spacing: 6) {
+                        Text(r.on ? "✓" : " ").frame(width: 14)
+                        Text(t).foregroundStyle(r.enabled ? .primary : .secondary)
+                    }
+                    .font(.system(size: 13))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                } else {
+                    Divider().padding(.vertical, 4).padding(.horizontal, 8)
+                }
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(width: 380, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(white: 0.17)))
+        .padding(1)
+    }
+}
 
 /// The end-to-end check's handle on the app (scripts/e2e.ts). Only when VIEWSWITCHER_E2E_DIR is set:
 /// the script drops `cmd-<n>.json` files there ({"op": …}) and reads back `res-<n>.json`. Setting an
@@ -47,6 +80,19 @@ final class E2E {
         init(_ s: String) { errorDescription = s }
     }
 
+    private func remotesState() -> Any {
+        guard let r = app.remotes else { return NSNull() }
+        let m = r.model
+        var out: [String: Any] = [:]
+        out["visible"] = r.window.isVisible
+        out["enabled"] = m.status?.enabled ?? false
+        out["code"] = m.codeOpen ? (m.code ?? "") : ""
+        out["pairUrl"] = m.pairUrl ?? ""
+        out["devices"] = (m.status?.devices ?? []).map(\.name)
+        out["error"] = m.error ?? ""
+        return out
+    }
+
     private func run(_ cmd: [String: Any]) async throws -> Any {
         let w = app.switcher
         switch cmd["op"] as? String {
@@ -78,6 +124,8 @@ final class E2E {
                 "updater": app.menuHasUpdater,
                 "undoRoute": app.lastUndoRoute,
                 "feed": Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? "",
+                "wifi": Env.wifi,
+                "remotes": remotesState(),
             ] as [String: Any]
         case "eval":
             guard let w, let js = cmd["js"] as? String else { throw Failure("no window") }
@@ -143,6 +191,36 @@ final class E2E {
             NSGraphicsContext.restoreGraphicsState()
             try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
             return [size.width, size.height]
+        case "remotesSnapshot":
+            // The Phones and Tablets window as drawn (no Screen Recording permission needed).
+            guard let r = app.remotes, let path = cmd["path"] as? String, let view = r.window.contentView?.superview ?? r.window.contentView else { throw Failure("no remotes window") }
+            guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw Failure("no bitmap") }
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            return [view.bounds.width, view.bounds.height]
+        case "menuItems":
+            // The status menu as it lists (an open NSMenu can't be captured from here): checkmarks and disabled items marked.
+            return app.statusMenu.items.map { i -> String in
+                if i.isSeparatorItem { return "—" }
+                return (i.state == .on ? "✓ " : "") + i.title + (i.isEnabled ? "" : " (disabled)")
+            }
+        case "menuPicture":
+            // The status menu drawn from its real items (titles, checkmarks, enabled state), for the PR:
+            // an open NSMenu can't be captured without Screen Recording permission.
+            guard let path = cmd["path"] as? String else { throw Failure("no path") }
+            let rows = app.statusMenu.items.map { i in MenuRow(title: i.isSeparatorItem ? nil : i.title, on: i.state == .on, enabled: i.isEnabled) }
+            let view = NSHostingView(rootView: MenuPicture(rows: rows))
+            view.frame = NSRect(origin: .zero, size: view.fittingSize)
+            view.appearance = NSAppearance(named: .darkAqua)
+            guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw Failure("no bitmap") }
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            return true
+        case "remotes": app.openRemotes(); return true
+        case "remotesRemove":
+            guard let r = app.remotes, let name = cmd["name"] as? String, let d = r.model.status?.devices.first(where: { $0.name == name }) else { throw Failure("no such device") }
+            await r.model.remove(d.id)
+            return true
         case "open": app.openWindow(); return true
         case "close": w?.window.performClose(nil); return true
         case "fullscreen": w?.window.toggleFullScreen(nil); return true

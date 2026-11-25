@@ -35,6 +35,11 @@ bun apps/apple/AppStore/check.ts              # App Store listing lengths
 - `SwitcherWindow.swift`: the window and its WKWebView. Closing hides it. Navigation stays on the server,
   other http(s) links open in the browser, other schemes are refused; no camera or microphone; no
   downloads; window.open never opens a window. alert/confirm/prompt and file inputs are native.
+- `RemotesWindow.swift`: Phones and Tablets (MAC-23 … MAC-26): the Wi-Fi setting (UserDefaults
+  `wifiRemotes`, passed to the server as `VIEWSWITCHER_LAN`; the e2e keeps its own in memory), Bonjour
+  while it's on, a one-time code with its QR code (ViewSwitcherKit `qrCode`, CoreImage), and the paired
+  devices. It calls the server's `/api/remote…` with `Env.adminToken`, a secret made at each launch.
+  Attached to a server it didn't start, pairing isn't available (that server has another secret).
 - `E2E.swift`: the e2e script's handle on the app, active only with `VIEWSWITCHER_E2E_DIR`.
 
 AppKit, not SwiftUI scenes: the window has to hide on close, its title bar holds the traffic lights in the

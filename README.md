@@ -64,7 +64,10 @@ Environment (all optional; the Mac app passes them through to its server):
 |---|---|
 | `VIEWSWITCHER_LIBRARY` | `~/ViewSwitcher Library` |
 | `PORT` | `7420` |
-| `HOST` | `127.0.0.1` (Tailscale serve proxies to it) |
+| `HOST` | `127.0.0.1` (Tailscale serve proxies to it). Loopback only: the server refuses to start with another address; the Wi-Fi setting is the way onto the network (below) |
+| `VIEWSWITCHER_LAN` | `1` also listens on the Wi-Fi from the start (the Mac app passes its "Let Phones and Tablets on This Wi-Fi Connect" setting) |
+| `VIEWSWITCHER_LAN_HOST` | `0.0.0.0`: the address the Wi-Fi listener binds (tests bind this Mac's LAN IP) |
+| `VIEWSWITCHER_ADMIN_TOKEN` | set by the Mac app at each launch: the secret for the pairing endpoints (`/api/remote…`); unset, they answer 404 |
 | `OBS_URL` / `OBS_PASSWORD` | `ws://127.0.0.1:4455` / read from OBS's own settings on this Mac |
 | `OBS_SCENE` / `OBS_PROGRAM_SOURCE` / `OBS_GROUND_SOURCE` | `ViewSwitcher` / `ViewSwitcher Program` / `ViewSwitcher Ground` |
 | `OBS_DEVICES` | `Camera,Screen,iPad` (sources a scene can place; others stay untouched) |
@@ -74,7 +77,7 @@ Environment (all optional; the Mac app passes them through to its server):
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
 | `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |
-| `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net` and `*.local`, and refuses changes sent by other websites |
+| `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net`, and (while Wi-Fi is on) this Mac's own `<name>.local` and LAN addresses, and refuses changes sent by other websites |
 
 ## OBS setup (once)
 
@@ -104,7 +107,19 @@ How the link works: iOS gives apps no network over the cable. The only path is u
 - The app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each WebView connection through one of those tunnels to the server.
 - So the app simply loads `http://127.0.0.1:7420/`, the real switcher, served over the cable. A "USB" pill in the header confirms it, the Mac's switcher and menu bar show "iPad · USB", and the server log shows `[usb] … tunnels ready`.
 
-**Without the cable:** the app's connector page falls back to a network address you save on it, such as Tailscale (`tailscale serve --bg 7420`, then `https://<this-mac>.<tailnet>.ts.net`). The same address also works in Safari. If the link drops for 4 s, the app returns to the connector, which picks whichever link works.
+**Without the cable:** the app's connector page falls back to a network address you save on it: the Mac's `http://<name>.local:7420` once Wi-Fi pairing is on (below), or a Tailscale address (`tailscale serve --bg 7420`, then `https://<this-mac>.<tailnet>.ts.net`). Either way the iPad pairs once with a code from the Mac. The same address also works in Safari. If the link drops for 4 s, the app returns to the connector, which picks whichever link works. (User-facing copy never names Tailscale; it's a developer path.)
+
+## Phones and tablets over Wi-Fi (MAC-23 … MAC-27)
+
+Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Connect** opens a second listener on the network (and announces it over Bonjour); **Phones and Tablets…** shows a one-time code, its QR code and the paired devices.
+
+- **Who gets in** (`apps/server/src/gate.ts`): a request is "this Mac" only if the socket's remote address is loopback, the Host is a loopback name, and it carries no proxy headers. That's the Mac app, browsers on the Mac, OBS's program page and the USB-C iPad (its tunnel ends on 127.0.0.1): unchanged. Everything else (the Wi-Fi, and anything forwarded, such as tailscale serve) needs a paired device token; without one it gets the pairing page and 401 for everything else (API, `/library`, `/ws`, assets).
+- **Codes** (`pairing.ts`): 8 characters, 5 minutes, single use, one open at a time; 5 wrong guesses per address per 5 minutes (behind a local proxy, per forwarded client), and a code is cancelled after 10 wrong guesses, which the Mac window points out. An expired code isn't counted as a guess. The pairing POST is at most 2 KB. **Device tokens**: 32 random bytes in an `HttpOnly; SameSite=Strict` cookie (`vs_device`), sent again once a day while the device is used, so it lasts 400 days from last use; only their SHA3-256 hash is kept, in `<library>/.viewswitcher/devices.json` (0600, gitignored). Secrets are compared by hashing both sides with SHA3-256.
+- **Remove** a device in the window: its token stops at once, its live socket closes, and devices.json is written before the window hears back (and again on quit), so a quit or crash can't bring it back.
+- **The live socket** (`/ws`) refuses a cross-site Origin, so a website open in a browser on the Mac can't read it. **Turning Wi-Fi off** closes the listener and drops every Wi-Fi socket; devices stay paired for next time.
+- **Pairing endpoints** (`/api/remote`, `/api/remote/code`, `/api/remote/remove`) answer only this Mac with the secret the app started the server with (`VIEWSWITCHER_ADMIN_TOKEN`), so a paired phone can't mint codes or remove devices. `/api/info` stays loopback only.
+- **Known limit**: Wi-Fi traffic is plain HTTP (no self-signed TLS). The setting says to use it on networks you trust, like home or church Wi-Fi.
+- On a phone (≤ 600 px) the switcher is a remote: the library folds into a button, scenes come in two columns, and what's on air with EDIT, REC and GO LIVE stays at the bottom, above the home indicator.
 
 ## Repo layout
 

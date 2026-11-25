@@ -1240,7 +1240,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
           )}
         </div>
         {onAir && <span className="onair-pill"><span className="dot" />ON AIR</span>}
-        <div style={{ flex: 1 }} />
+        <div className="editor-spacer" style={{ flex: 1 }} />
         <div className="add-wrap">
           <button type="button" className="btn add-btn" aria-haspopup="menu" aria-expanded={addOpen} disabled={!ready || busy || !!conflict || !!editing}
             onClick={() => setAddOpen((o) => !o)}>{Icon.plus}Add</button>
@@ -1258,7 +1258,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
           )}
         </div>
         <button type="button" className="btn ghost" disabled={!undo.length || !!conflict || busy} onClick={doUndo}>{Icon.undo}Undo</button>
-        <button type="button" className="btn" onClick={() => attempt(() => api.open(path))}>{Icon.code}Open the file</button>
+        <button type="button" className="btn open-file" onClick={() => attempt(() => api.open(path))}>{Icon.code}Open the file</button>
         <button type="button" className="btn primary" disabled={leaving} onClick={leave}>{leaving ? "Saving…" : "Done"}</button>
       </header>
 

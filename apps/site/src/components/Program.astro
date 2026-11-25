@@ -31,7 +31,7 @@ const slotData = JSON.stringify(views.map((v) => v.slots.map(({ name, x, y, w, h
   <div class="window on-dark">
     <div class="titlebar">
       <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="app"><Mark size={18} /><b>{views[0]!.show.name}</b><span class="ep">{views[0]!.show.episode}</span></span>
+      <span class="app"><Mark size={20} tile={false} /><b>{views[0]!.show.name}</b><span class="ep">{views[0]!.show.episode}</span></span>
       <span class="obs"><i></i>OBS connected</span>
     </div>
     <div class="body">
@@ -107,7 +107,6 @@ const slotData = JSON.stringify(views.map((v) => v.slots.map(({ name, x, y, w, h
   .lights i:nth-child(3) { background: #28c840; }
   .app { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
   .app :global(svg) { flex: none; }
-  .app :global(svg rect:last-child) { fill: #f4f5f7; stroke: #1b1e24; }
   .app b { font-weight: 600; white-space: nowrap; }
   .ep { color: var(--on-monitor-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .obs { margin-left: auto; display: inline-flex; align-items: center; gap: 0.4rem; color: var(--on-monitor-2); white-space: nowrap; }

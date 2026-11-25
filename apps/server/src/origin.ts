@@ -10,10 +10,18 @@
 //   (hostTrusted), and the Origin check only trusts "same host" for those hosts.
 //
 // Trusted hosts: this Mac's loopback names, *.ts.net (tailscale serve, which forwards the Host
-// header), *.local (Bonjour names on the LAN), and the hosts in VIEWSWITCHER_ORIGINS. Rebinding
-// needs a domain the attacker controls; none of these are.
+// header), the hosts in VIEWSWITCHER_ORIGINS, and, while phones and tablets may connect over Wi-Fi
+// (MAC-23), this Mac's own Bonjour name (<name>.local) and its current LAN addresses. Rebinding
+// needs a domain the attacker controls; none of these are. (Any *.local was trusted before MAC-25; a
+// device on the LAN can answer mDNS for a name of its choosing, so now only this Mac's name is.)
+//
+// Passing the host guard isn't being let in: anything that isn't from this Mac itself also needs a
+// paired device token (gate.ts).
 
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+/** While Wi-Fi devices may connect: this Mac's .local name and LAN addresses (lan.ts). */
+export type Lan = { localName?: string | null; addresses?: string[] } | null;
 
 /** "mac.tail1.ts.net:443" → "mac.tail1.ts.net", "[::1]:7420" → "[::1]". */
 const hostname = (host: string) => host.replace(/:\d+$/, "").toLowerCase();
@@ -27,17 +35,21 @@ const originHosts = (extra: string[]) =>
     }
   });
 
+/** Whether a Host header is one of this Mac's loopback names. */
+export const loopbackHost = (host: string | null) => !!host && LOOPBACK.has(hostname(host));
+
 /** Whether a Host header names this server (see above). */
-export function hostTrusted(host: string | null, extra: string[] = []): boolean {
+export function hostTrusted(host: string | null, extra: string[] = [], lan: Lan = null): boolean {
   if (!host) return false;
   const name = hostname(host);
   if (!name || /[^a-z0-9.\-\[\]:]/.test(name)) return false;
-  return LOOPBACK.has(name) || name.endsWith(".ts.net") || name.endsWith(".local") || originHosts(extra).includes(name);
+  if (lan && ((lan.localName && name === lan.localName.toLowerCase()) || lan.addresses?.includes(name))) return true;
+  return LOOPBACK.has(name) || name.endsWith(".ts.net") || originHosts(extra).includes(name);
 }
 
 export function originAllowed(
   origin: string | null,
-  { host, forwardedHost, extra = [] }: { host: string | null; forwardedHost?: string | null; extra?: string[] },
+  { host, forwardedHost, extra = [], lan = null }: { host: string | null; forwardedHost?: string | null; extra?: string[]; lan?: Lan },
 ): boolean {
   if (origin === null) return true;
   let url: URL;
@@ -50,5 +62,5 @@ export function originAllowed(
   if (LOOPBACK.has(url.hostname)) return true;
   if (extra.some((o) => o.replace(/\/+$/, "") === url.origin)) return true;
   // The page's own host (e.g. through tailscale serve), but only a host this server is known by.
-  return [host, forwardedHost].some((h) => !!h && h.toLowerCase() === url.host.toLowerCase() && hostTrusted(h, extra));
+  return [host, forwardedHost].some((h) => !!h && h.toLowerCase() === url.host.toLowerCase() && hostTrusted(h, extra, lan));
 }

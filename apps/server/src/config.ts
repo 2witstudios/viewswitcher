@@ -36,6 +36,14 @@ export const config = {
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
   allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  /** Where the server listens for this Mac (HOST: an old escape hatch; everything not from this Mac is still gated, gate.ts). */
+  host: env.HOST ?? "127.0.0.1",
+  /** Phones and tablets on the Wi-Fi (MAC-23): listen on the network too, from the start. The Mac app passes its remembered setting. */
+  lan: env.VIEWSWITCHER_LAN === "1",
+  /** The address the Wi-Fi listener binds: every IPv4 interface, or one address (the integration test binds this Mac's LAN IP). */
+  lanHost: env.VIEWSWITCHER_LAN_HOST || "0.0.0.0",
+  /** A secret the Mac app makes at each launch, for the pairing endpoints only it may call (/api/remote…). Unset: they answer 404. */
+  adminToken: env.VIEWSWITCHER_ADMIN_TOKEN || "",
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
     password: env.OBS_PASSWORD ?? localObsPassword(),

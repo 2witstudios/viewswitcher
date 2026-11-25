@@ -32,7 +32,7 @@ beforeAll(async () => {
     });
   });
   proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" },
+    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "", VIEWSWITCHER_LAN: "", VIEWSWITCHER_ADMIN_TOKEN: "" },
     stdout: "ignore",
     stderr: "ignore",
   });
@@ -59,10 +59,53 @@ describe("DNS rebinding: Host evil.example:7420", () => {
     expect((await onAir({ ...evil, origin: "http://evil.example:7420" })).status).toBe(421);
   });
   test("the names this server is known by still work", async () => {
-    for (const host of [`127.0.0.1:${port}`, `localhost:${port}`, "localhost:5173", "mac.tail1234.ts.net", "studio.local"]) {
+    for (const host of [`127.0.0.1:${port}`, `localhost:${port}`, "localhost:5173"]) {
       expect({ host, status: (await request("/api/state", { headers: { host } })).status }).toEqual({ host, status: 200 });
     }
     expect((await request("/library/my-channel/org.json")).status).toBe(200);
+  });
+  test("a known name that isn't this Mac's own (tailscale serve) is let past the host guard, then needs pairing (MAC-25)", async () => {
+    expect((await request("/api/state", { headers: { host: "mac.tail1234.ts.net" } })).status).toBe(401);
+    expect((await request("/api/state", { headers: { "x-forwarded-for": "100.64.0.9" } })).status).toBe(401);
+  });
+  test("a .local name that isn't this Mac's is refused (any device on the LAN can answer mDNS for one)", async () => {
+    expect((await request("/api/state", { headers: { host: "studio.local" } })).status).toBe(421);
+  });
+});
+
+describe("the live socket", () => {
+  const ws = (origin?: string) =>
+    new Promise<string>((resolve) => {
+      const w = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: origin ? { origin } : {} } as any);
+      w.onmessage = () => (resolve("open"), w.close());
+      w.onclose = () => resolve("closed");
+      w.onerror = () => {};
+    });
+  test("a website open in a browser on this Mac can't read it; the switcher's own pages and native clients can", async () => {
+    expect(await ws("https://evil.example")).toBe("closed");
+    expect(await ws(`http://127.0.0.1:${port}`)).toBe("open");
+    expect(await ws()).toBe("open");
+  });
+});
+
+describe("HOST", () => {
+  test("a non-loopback HOST is refused at start (the Wi-Fi setting is the way onto the network)", async () => {
+    const p = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
+      env: { ...process.env, PORT: "1", HOST: "0.0.0.0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    expect(await p.exited).toBe(1);
+    expect(await new Response(p.stderr).text()).toContain("isn't a loopback address");
+  });
+});
+
+describe("the Mac app's own endpoints", () => {
+  test("/api/info and /api/remote are not for anything forwarded; /api/remote needs the app's secret", async () => {
+    expect((await request("/api/info")).status).toBe(200);
+    expect((await request("/api/info", { headers: { "x-forwarded-for": "1.2.3.4" } })).status).toBe(401);
+    expect((await request("/api/remote")).status).toBe(404); // this server was started without one
+    expect((await request("/api/remote/code", { method: "POST", headers: { "x-viewswitcher-admin": "" } })).status).toBe(404);
   });
 });
 
@@ -78,10 +121,9 @@ describe("cross-site POST: Origin from another site", () => {
     expect((await onAir({ origin: "http://evil.example:7420" })).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).onAir).toBeNull();
   });
-  test("the switcher's own pages are accepted: this Mac, Vite dev, tailscale serve", async () => {
+  test("the switcher's own pages are accepted: this Mac, Vite dev", async () => {
     expect((await onAir({ origin: `http://127.0.0.1:${port}` })).status).toBe(200);
     expect((await onAir({ origin: "http://localhost:5173", host: "localhost:5173" })).status).toBe(200);
-    expect((await onAir({ origin: "https://mac.tail1234.ts.net", host: "mac.tail1234.ts.net" })).status).toBe(200);
     expect((await onAir({})).status).toBe(200); // no Origin: curl, the Mac app
   });
 });

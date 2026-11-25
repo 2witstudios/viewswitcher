@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var stopped = false
     private var updater: SPUStandardUpdaterController?
     private var e2e: E2E?
+    private(set) var remotes: RemotesWindow?
+    private let announcer = Announcer()
 
     // ------------------------------------------------------------ lifecycle
 
@@ -98,8 +100,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             return false
         }
+        announceWifi()
         server?.onExit = { [weak self] code in
             guard let self else { return }
+            self.announcer.set(false, port: 0)
             self.server = nil
             self.live = nil
             self.renderStatus()
@@ -143,6 +147,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         liveClient = client
         client.start()
+    }
+
+    // ------------------------------------------------------------ phones and tablets (MAC-23 … MAC-26)
+
+    /// Bonjour follows the setting, for a server this app started (it was launched with the setting).
+    func announceWifi() {
+        announcer.set(Env.wifi && server?.owned == true, port: Int(Env.port) ?? 7420)
+    }
+
+    @objc func openRemotes() {
+        if remotes == nil {
+            let w = RemotesWindow()
+            w.model.onEnabled = { [weak self] on, _ in
+                Env.wifi = on
+                self?.announceWifi()
+                self?.buildStatusMenu()
+            }
+            remotes = w
+        }
+        remotes?.show()
+    }
+
+    /// The menu's checkbox: the server opens or closes its Wi-Fi listener now (closing it disconnects every device).
+    @objc func toggleWifi() {
+        let on = !Env.wifi
+        Task {
+            do {
+                let s = try await RemoteAPI.setEnabled(on)
+                Env.wifi = s.enabled
+                announceWifi()
+                buildStatusMenu()
+                // A code made while Wi-Fi was off has no Wi-Fi link for the QR code: make a fresh one.
+                if let w = remotes, w.window.isVisible {
+                    if s.enabled { await w.model.newCode() } else { await w.model.refresh() }
+                }
+            } catch {
+                Outside.alert("Couldn't change Wi-Fi connections", error.localizedDescription)
+            }
+        }
     }
 
     // ------------------------------------------------------------ window
@@ -189,6 +232,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         m.addItem(item("Open in Browser", #selector(openInBrowser), enabled: server != nil))
         m.addItem(item("Open Library Folder", #selector(openLibrary), enabled: server != nil))
         m.addItem(item(s.obsReady ? "Set Up OBS Again" : "Set Up OBS…", #selector(setUpObs), enabled: live?.obs.connected == true && server != nil))
+        m.addItem(.separator())
+        let wifi = item("Let Phones and Tablets on This Wi-Fi Connect", #selector(toggleWifi), enabled: server?.owned == true)
+        wifi.state = Env.wifi ? .on : .off
+        wifi.toolTip = RemoteText.help
+        m.addItem(wifi)
+        m.addItem(item("Phones and Tablets…", #selector(openRemotes), enabled: server?.owned == true))
         m.addItem(.separator())
         if server == nil { m.addItem(item(restarting ? "Starting Server…" : "Restart Server", #selector(restartServer), enabled: !restarting)) }
         m.addItem(item("Check for Updates…", #selector(checkForUpdates), enabled: updater != nil))

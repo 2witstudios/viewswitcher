@@ -49,6 +49,10 @@ targets:
         # The switcher is plain http on 127.0.0.1.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Phones and tablets on the Wi-Fi (MAC-23): announce the switcher over Bonjour while that's on.
+        NSLocalNetworkUsageDescription: ViewSwitcher lets the phones and tablets you pair switch scenes over this Wi-Fi, when you turn that on.
+        NSBonjourServices:
+          - _http._tcp
         # Sparkle (MAC-15): the appcast on the latest published GitHub release (ViewSwitcherKit.UpdateFeed).
         SUFeedURL: https://github.com/2witstudios/viewswitcher/releases/latest/download/appcast.xml
         SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)

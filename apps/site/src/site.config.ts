@@ -11,9 +11,13 @@ const MAC_APP_RELEASED = true;
 // A build can override it with SITE_IPAD_APP_URL.
 const IPAD_APP_URL: string | null = null;
 
-// THE STYLES SWITCH (SITE-26): the page where the example shows' styles download free, once it's live.
-// Before: the show cards say the style is free to download soon and link /download. After: they link here.
-const STYLE_DOWNLOADS_URL: string | null = null;
+// THE TEMPLATES SWITCH (SITE-26): where the example shows' template packs download free.
+// Set: the show cards say "Download these templates" and link each set's page. Null: "Download coming soon".
+const TEMPLATE_DOWNLOADS_URL: string | null = "/templates";
+
+// THE PACK INSTALL SWITCH: the first ViewSwitcher release that installs template packs (EDIT-24 shipped after 1.0.0).
+// Null: the template pages say installing packs comes with the next update. Set (e.g. "1.1.0"): "Needs ViewSwitcher 1.1.0 or later."
+const PACK_INSTALL_VERSION: string | null = null;
 
 export const site = {
   url: "https://viewswitcher.com",
@@ -27,18 +31,19 @@ export const site = {
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),
   ipadApp: ipadApp(process.env.SITE_IPAD_APP_URL || IPAD_APP_URL),
-  styleDownloads: process.env.SITE_STYLE_DOWNLOADS_URL || STYLE_DOWNLOADS_URL,
+  templateDownloads: process.env.SITE_TEMPLATE_DOWNLOADS_URL || TEMPLATE_DOWNLOADS_URL,
+  packInstallVersion: process.env.SITE_PACK_INSTALL_VERSION || PACK_INSTALL_VERSION,
 };
 
 export const cta = ctas(site);
 export const github = `https://github.com/${site.repo}`;
 export const releases = `${github}/releases`;
 /** The persistent descriptor (SITE-19): what ViewSwitcher is, in the words people search for. */
-export const descriptor = "The free, one-click OBS scene switcher for Mac.";
+export const descriptor = "The free, custom scene manager and one-click switcher for OBS on Mac.";
 
 /** The Mac app as schema.org sees it, for the homepage and /download (free, macOS 14+). */
 export const macAppSchema = (path: string) => softwareApp({
   url: new URL(path, site.url).href, name: site.name, version: site.mac.version, minOS: site.mac.minOS,
   description: "A one-click scene switcher for OBS. Pick a view and your camera, screen and titles move into place.",
-  downloadUrl: site.dmgUrl, image: new URL("/og.png", site.url).href, releaseNotes: `${releases}/latest`,
+  downloadUrl: site.dmgUrl, image: new URL("/og/home.jpg", site.url).href, releaseNotes: `${releases}/latest`,
 });

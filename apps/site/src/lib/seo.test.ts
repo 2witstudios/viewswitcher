@@ -3,7 +3,7 @@ import { breadcrumbs, faqPage, howTo, jsonLd, softwareApp } from "./seo";
 
 const app = {
   url: "https://viewswitcher.com/download", name: "ViewSwitcher", version: "1.0.0", minOS: "14", description: "d",
-  downloadUrl: "https://example.com/ViewSwitcher.dmg", image: "https://viewswitcher.com/og.png", releaseNotes: "https://example.com/releases",
+  downloadUrl: "https://example.com/ViewSwitcher.dmg", image: "https://viewswitcher.com/og/home.jpg", releaseNotes: "https://example.com/releases",
 };
 
 describe("softwareApp", () => {
