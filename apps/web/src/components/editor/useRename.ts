@@ -17,8 +17,8 @@ export function useRename(opts: {
   /** The library's name for the scene, until the file is read. */
   fallback: string;
   onAir: () => boolean;
-  /** Finish typing and nudges, then wait for every save; false if a conflict came up. */
-  settle: () => Promise<boolean>;
+  /** Finish typing and nudges, then wait for every save, then run `then`; false if a conflict came up. */
+  settle: (then?: () => void) => Promise<boolean>;
   setBase: (b: SceneBase) => void;
   load: () => Promise<unknown>;
   /** The file moved (a stream scene's name is its file name): edit it there. */
@@ -37,12 +37,13 @@ export function useRename(opts: {
       const { mode, path } = o.current;
       setNaming(false);
       const clean = name.trim();
-      if (!clean || clean === title || mode.now().kind === "saving-structure") return;
-      if (!(await o.current.settle())) return;
+      if (!clean || clean === title) return;
+      // The rename is saved straight after the saves before it, with nothing in between.
+      if (!(await o.current.settle(() => mode.dispatch({ t: "structure" })))) return;
       const b = o.current.current();
-      if (!b) return;
-      if (mode.dispatch({ t: "structure" }).kind !== "saving-structure") return;
+      if (mode.now().kind !== "saving-structure") return;
       try {
+        if (!b) return;
         const r = await api.renameScene(path, b.hash, clean);
         setNamed(clean);
         if (r.path !== path) {

@@ -60,7 +60,8 @@ export function reduce(mode: Mode, e: ModeEvent): Mode {
     case "resize":
       return mode.kind === "idle" || (mode.kind === "resizing" && mode.id === e.id) ? { kind: "resizing", id: e.id, width: e.width, height: e.height } : mode;
     case "structure":
-      return mode.kind === "idle" ? { kind: "saving-structure" } : mode;
+      // A rename saves straight after the saves before it have landed, without passing through idle.
+      return mode.kind === "idle" || mode.kind === "leaving" ? { kind: "saving-structure" } : mode;
     case "pick":
       return mode.kind === "idle" ? { kind: "picking", replace: e.replace, made: e.made } : mode;
     case "dropChoice":

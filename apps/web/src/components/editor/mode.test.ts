@@ -27,10 +27,14 @@ describe("starting a mode", () => {
     for (const busy of [typing, drag(8), { t: "structure" } as ModeEvent, { t: "pick", replace: 1, made } as ModeEvent, { t: "leave" } as ModeEvent]) {
       const before = run(busy);
       for (const next of [typing, { t: "structure" } as ModeEvent, { t: "pick", replace: null, made } as ModeEvent, { t: "resize", id: 2, width: 1, height: 1 } as ModeEvent]) {
-        if (next.t === busy.t) continue;
+        if (next.t === busy.t || (busy.t === "leave" && next.t === "structure")) continue;
         expect(reduce(before, next)).toBe(before);
       }
     }
+  });
+
+  test("a rename saves straight after the saves before it: leaving goes to saving, not through idle", () => {
+    expect(run({ t: "leave" }, { t: "structure" }).kind).toBe("saving-structure");
   });
 
   test("a drag updates as it goes, but only for the box being dragged", () => {

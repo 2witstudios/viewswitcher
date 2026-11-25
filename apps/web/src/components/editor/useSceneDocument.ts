@@ -11,6 +11,7 @@ import { toast } from "../ui";
 import { canReloadIn } from "./mode";
 import { newestOnly } from "./newest";
 import { refreshVerdict } from "./refresh";
+import { settleSaves } from "./settle";
 import type { ModeStore } from "./useMode";
 import type { UndoEntry } from "./useUndo";
 
@@ -151,18 +152,8 @@ export function useSceneDocument(path: string, opts: {
   }
   const saver = saverRef.current;
 
-  /** Every queued save has finished, and none of them hit a conflict (that screen is up instead). */
-  const settle = async () => {
-    // An add or delete that's saving finishes first, as every other save does.
-    await mode.until((m) => m.kind !== "saving-structure");
-    if (mode.dispatch({ t: "leave" }).kind !== "leaving") return false;
-    try {
-      await saver.idle();
-    } finally {
-      mode.dispatch({ t: "end", kind: "leaving" });
-    }
-    return mode.now().kind !== "conflict" && !pendingConflict.current;
-  };
+  /** Every queued save has finished, and none of them hit a conflict (see settle.ts). */
+  const settle = (then?: () => void) => settleSaves({ mode, idle: saver.idle, conflictPending: () => pendingConflict.current !== null }, then);
 
   // ------------------------------------------------------------ a change made elsewhere
   // The server says when the file changes (versions[path]). When the editor is free (no save on its

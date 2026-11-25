@@ -130,13 +130,14 @@ export function usePictureDrop(opts: {
 
   /** The picture going in now, if any: leaving waits for it, so Done never drops a picture on the floor. */
   const inFlight = useRef<Promise<void> | null>(null);
-  const place = (file: File, at: Point, image: { id: number; made: Made } | null) => {
-    const p = placeNow(file, at, image).finally(() => {
+  const track = (work: Promise<void>) => {
+    const p = work.finally(() => {
       if (inFlight.current === p) inFlight.current = null;
     });
     inFlight.current = p;
     return p;
   };
+  const place = (file: File, at: Point, image: { id: number; made: Made } | null) => track(placeNow(file, at, image));
   const placeNow = async (file: File, at: Point, image: { id: number; made: Made } | null) => {
     uploadingRef.current = true;
     setUploading(true);
@@ -219,9 +220,9 @@ export function usePictureDrop(opts: {
       return;
     }
     // Its natural size keeps its shape.
-    void naturalSize(src).then(async ({ width, height }) => {
+    void track(naturalSize(src).then(async ({ width, height }) => {
       if (await whenFree()) o.current.add({ src, width: width || 1, height: height || 1 });
-    });
+    }));
   };
 
   // A picture dropped just outside the scene would make the browser open the file instead of the

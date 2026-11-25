@@ -323,10 +323,10 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   // ------------------------------------------------------------ leaving, rename, Edit a copy
 
   /** Done or Back while typing saves what was typed, as Return would; then every save lands. False if one hit a conflict: stay so it can be dealt with. */
-  const settle = () => {
+  const settle = (then?: () => void) => {
     text.finish(true);
     nudges.flush();
-    return doc.settle();
+    return doc.settle(then);
   };
   const leave = async () => {
     // A picture still uploading goes in first ("Adding the picture…" says so meanwhile).
