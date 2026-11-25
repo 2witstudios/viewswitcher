@@ -329,6 +329,8 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     return doc.settle();
   };
   const leave = async () => {
+    // A picture still uploading goes in first ("Adding the picture…" says so meanwhile).
+    await pictures.settled();
     if (!(await settle())) return;
     if (window.history.length > 1) router.history.back();
     else navigate({ to: "/$org", params: { org } });

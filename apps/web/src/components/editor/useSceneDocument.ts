@@ -153,6 +153,8 @@ export function useSceneDocument(path: string, opts: {
 
   /** Every queued save has finished, and none of them hit a conflict (that screen is up instead). */
   const settle = async () => {
+    // An add or delete that's saving finishes first, as every other save does.
+    await mode.until((m) => m.kind !== "saving-structure");
     if (mode.dispatch({ t: "leave" }).kind !== "leaving") return false;
     try {
       await saver.idle();

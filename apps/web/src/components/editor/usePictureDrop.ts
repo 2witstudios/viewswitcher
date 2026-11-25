@@ -128,7 +128,16 @@ export function usePictureDrop(opts: {
     return m.kind !== "conflict" && alive.current;
   };
 
-  const place = async (file: File, at: Point, image: { id: number; made: Made } | null) => {
+  /** The picture going in now, if any: leaving waits for it, so Done never drops a picture on the floor. */
+  const inFlight = useRef<Promise<void> | null>(null);
+  const place = (file: File, at: Point, image: { id: number; made: Made } | null) => {
+    const p = placeNow(file, at, image).finally(() => {
+      if (inFlight.current === p) inFlight.current = null;
+    });
+    inFlight.current = p;
+    return p;
+  };
+  const placeNow = async (file: File, at: Point, image: { id: number; made: Made } | null) => {
     uploadingRef.current = true;
     setUploading(true);
     try {
@@ -139,7 +148,10 @@ export function usePictureDrop(opts: {
         if (await replaceWith(image.made, image.id, src)) toast("Replaced");
         return;
       }
-      if (!(await whenFree())) return toast("The scene changed meanwhile, so the picture wasn't added. Try again.");
+      if (!(await whenFree())) {
+        if (alive.current) toast("The scene changed meanwhile, so the picture wasn't added. Try again.");
+        return;
+      }
       o.current.add({ src, width: size.width || 1, height: size.height || 1 }, at);
     } catch (e) {
       toast(`Couldn't add the picture: ${(e as Error).message}`);
@@ -226,5 +238,5 @@ export function usePictureDrop(opts: {
     };
   }, []);
 
-  return { dropAt, uploading, isUploading: () => uploadingRef.current, onDragOver, onDragLeave, onDrop, choose, openPicker, picked };
+  return { dropAt, uploading, isUploading: () => uploadingRef.current, settled: () => inFlight.current ?? Promise.resolve(), onDragOver, onDragLeave, onDrop, choose, openPicker, picked };
 }
