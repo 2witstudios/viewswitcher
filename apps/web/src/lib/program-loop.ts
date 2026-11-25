@@ -117,6 +117,11 @@ export function createProgramLoop(fx: ProgramEffects) {
         fx.unload(old);
         frameVersion[old] = null;
       }
+      // Idle: the hidden frame is empty. A load abandoned for the scene already on screen (a tap on
+      // another scene, then back) must not keep playing behind it.
+      const back: FrameIndex = front === 0 ? 1 : 0;
+      fx.unload(back);
+      frameVersion[back] = null;
     } catch (e) {
       fx.log({ error: String(e) });
     } finally {

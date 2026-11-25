@@ -71,6 +71,21 @@ describe("the program loop", () => {
     expect(p.frames.filter(Boolean)).toHaveLength(1);
   });
 
+  test("a tap on another scene and straight back leaves nothing loading or playing behind the scene on air", async () => {
+    let release!: () => void;
+    const p = page({ load: (url) => (url.includes("brb") ? new Promise<void>((r) => (release = r)) : Promise.resolve()) });
+    p.loop.request(job("org/a.html"));
+    await settle();
+    p.loop.request(job("org/brb.html"));
+    await settle();
+    p.loop.request(job("org/a.html"));
+    await settle();
+    release();
+    await settle();
+    expect(p.onScreen()).toContain("a.html");
+    expect(p.frames.filter(Boolean)).toEqual([job("org/a.html").url]);
+  });
+
   test("the scene that goes off air is unloaded after the wipe, so its media and timers stop", async () => {
     const p = page();
     p.loop.request(job("org/a.html"));
