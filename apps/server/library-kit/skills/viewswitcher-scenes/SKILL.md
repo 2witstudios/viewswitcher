@@ -1,6 +1,6 @@
 ---
 name: viewswitcher-scenes
-description: Create or edit live-stream scenes for ViewSwitcher (the HTML files its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any change to an org's templates/, projects/ or assets/ — a new scene, a stream-specific version, restyling, new text, using an uploaded image or video, branding a new org.
+description: Make or change what's on screen in a live stream run with ViewSwitcher (the HTML scenes its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any ask about the stream's look or scenes — "make a BRB screen", "brand my channel", "change the title for tonight", "add my logo", a new scene, a starting-soon or ending screen, a lower third, a stream-only version, restyling, new text, using an uploaded image or video, a transition, branding a new org — and for anything in an org's templates/, projects/ or assets/.
 ---
 
 # ViewSwitcher scenes
@@ -10,6 +10,53 @@ Every on-air screen is one plain HTML file. The ViewSwitcher app shows these fil
 **People edit these files too.** The switcher has a scene editor (the pencil on every scene): anyone can retype text in place, drag and resize panels and camera boxes, add text, a title bar, an image or a camera, screen or guest box, delete elements, swap an image and rename a scene, and each change is saved straight into the file, often while it's on air. It patches only what changed: the text between an element's tags, the numbers in its inline `left`/`top`/`width`/`height`, an image's `src`, the `<title>`, or one whole element added or removed. It never rewrites anything else. So write scenes it can edit (see "Editable by people" below), and **re-read a file right before you change it**: what you read earlier may be out of date.
 
 The library holds one folder per **org** (a brand or channel). Orgs never share files: each has its own templates, assets, projects and brand. Work out which org the user means first (ask if it isn't clear).
+
+## With the ViewSwitcher tools
+
+When the ViewSwitcher app is open, its MCP server gives you tools (`get_state`, `scan_library`, `read_file`, `write_file`, `preview_scene` and the rest below). If you have them, work through them: they follow the same rules as the switcher, and they let you see your work. If you don't, use "Without the tools" at the end.
+
+Every path you pass or get back starts with the org id: `<org>/projects/<project>/scenes/<name>.html`.
+
+1. **`get_state` first.** It tells you what's on air (path, label, org), whether OBS is streaming or recording (the show is **live**), and the user's setting for what agents may do while live.
+2. **Find the org and the file.** `list_orgs` if you don't know the org. `scan_library { org }` lists its templates, projects, streams and scenes, and which stream scenes override a project scene. Pick the file with the override rule (below). Read `<org>/BRAND.md` with `read_file` before designing anything.
+3. **Use the structural tools instead of copying files by hand:**
+
+   | to | call |
+   |---|---|
+   | change a scene for this stream only | `customize_scene { org, projectId, streamId, name }`, then edit the `path` it returns |
+   | undo a stream's own copy | `revert_scene { org, projectId, streamId, name }` (deletes the copy: ask first) |
+   | add a new scene from a template | `scene_from_template { org, template, projectId, streamId? }` |
+   | try a variation next to the original | `duplicate_scene { path }` |
+   | rename a scene (its cover label) | `rename_scene { path, hash, name }` |
+   | give a project its own transition | `customize_transition { org, projectId }`; `revert_transition` goes back to the org's |
+   | use an image or video the user gives you | `add_asset { org, name, base64 }`, then reference `/library/<path it returns>` |
+   | start a new series or show | `create_project { org, name, templates? }`, `create_stream { org, projectId, name, date? }` |
+
+   `list_files { path }` shows what's in a folder (an org or any folder in it).
+4. **Read, then write with the hash.** Call `read_file { path }` right before you change a file; it returns `{ text, hash }`. Make your change to that text and call `write_file { path, text, hash }`. Omit `hash` only to create a new file. If the write is refused because the hash is stale, someone changed the file since you read it (often in the switcher): read it again, apply your change to what's there now, and write again. Never work around the check.
+5. **Preview, look, fix** (next section) after every visual change.
+6. **Tell the user** which file you changed and whether the change applies to one stream, the whole project, or a template.
+
+### Preview, look, fix
+
+After every change someone will see, call `preview_scene { path }`. It returns a picture of the scene at 1920×1080 (sent at 960×540; pass `full: true` to check fine text), rendered by OBS with the ground color painted in and the slots labeled. Actually look at it and check:
+
+- **Slots clear:** nothing paints over a camera, screen or guest box unless it's meant to.
+- **Text fits:** no line cut off, wrapped badly or overflowing its panel; long names and titles still fit.
+- **On the canvas:** nothing off the 1920×1080 frame or jammed against its edge.
+- **Contrast:** text and marks read clearly against the ground and the panels.
+- **Brand:** colors, type and marks as BRAND.md says, from the theme's variables.
+- **Contract:** what's under "Scene contract" and "Editable by people" still holds.
+
+Fix what's wrong and preview again until it's right; usually 1–3 rounds. If `preview_scene` returns a URL instead of a picture, OBS isn't available: say so, and give the user the URL to open.
+
+`see_program { full? }` shows what OBS is actually putting out right now, **including the user's live camera and screen**. Use it only when the user asks about what's on stream, and tell them it includes their camera.
+
+### On air
+
+- Call `go_on_air { path }` only when the user asks to put something on air.
+- When `get_state` says the show is live, tell the user before you change anything that's on air: the on-air scene, its project's transition, or the org's `templates/_shared/` files (the theme every scene uses).
+- The server refuses some changes while live, depending on the user's setting in Edit with AI (by default, going on air and writing to what's on air). When it refuses, tell the user why in plain words, and offer the way around it: make a stream copy with `customize_scene` (or `duplicate_scene`) and change that, or wait until the show is off air. Don't retry the same change.
 
 ## Where things live
 
@@ -32,7 +79,7 @@ The library holds one folder per **org** (a brand or channel). Orgs never share 
 New orgs are created from the switcher (org menu → New org), which copies a neutral starter kit. To brand one, edit its `theme.css`, `brand/mark.svg`, `BRAND.md` and `org.json`.
 
 **The override rule.** A stream shows the project's scenes plus its own files. A stream file with the same name as a project scene replaces it for that stream only. So:
-- "Change X for this stream" → copy `<org>/projects/<p>/scenes/X.html` to `<org>/projects/<p>/streams/<s>/X.html` (if it isn't there) and edit the copy.
+- "Change X for this stream" (or "for tonight") → the stream's own copy, `<org>/projects/<p>/streams/<s>/X.html`. Make it with `customize_scene` if it isn't there (without the tools, copy `<org>/projects/<p>/scenes/X.html` there), then edit the copy.
 - "Change X for the whole series" → edit `<org>/projects/<p>/scenes/X.html`.
 - "Change the template" → edit `<org>/templates/X.html`. Existing projects keep their own copies; say so.
 
@@ -65,7 +112,7 @@ If the user doesn't say which, ask, or pick the narrowest scope (the stream) and
   - Nothing may paint over a slot unless it's meant to cover the video (a ring or badge on the edge is fine).
   - A scene with no slots hides all devices (e.g. BRB).
 - Reference files with absolute library URLs inside the same org: `/library/<org>/templates/_shared/...` and `/library/<org>/assets/<file>`. Never point at another org's files.
-- `?preview` (added by switcher covers) paints the ground and labels slots; don't depend on it otherwise.
+- `?preview` (added by switcher covers and previews) paints the ground and labels slots; don't depend on it otherwise.
 - Keep `<title>` short; it's the label on the cover.
 
 ## Editable by people
@@ -102,26 +149,29 @@ A transition is a page that covers the screen while one scene switches to the ne
 
 A blank fade is the default and often the best choice: anything with words flashes by too fast to read and distracts. Only make a transition page when the user asks for one, and prefer something simple (a mark, a color sweep) over text.
 
-- "Change the transition" → edit the org's. "A transition for this series" → copy the org's into `<org>/projects/<p>/transition.html` (the switcher's "Customize for this project" does this) and edit the copy.
+- "Change the transition" → edit the org's. "A transition for this series" → `customize_transition` (without the tools, copy the org's into `<org>/projects/<p>/transition.html`; the switcher's "Customize for this project" does the same) and edit the copy.
 - Same head and `main.scene` as a scene, but **opaque**: give `body` the ground (or any) background, since it must hide the switch. No slots.
 - Keep it short. `<meta name="viewswitcher:hold" content="120">` sets how long it stays fully on screen in ms (default 90, max 5000). Long holds slow every switch.
-- Animate on the `play` class, which `scene.js` restarts on `<html>` every switch: `.play .x { animation: … }`. Make the resting (un-animated) state the finished look, and animate *from* the start state, so the switcher's cover shows the finished design.
+- Animate on the `play` class, which `scene.js` restarts on `<html>` every switch: `.play .x { animation: … }`. Make the resting (un-animated) state the finished look, and animate *from* the start state, so the switcher's cover (and `preview_scene`) shows the finished design.
 - Only use brand marks that are real (from BRAND.md or the user). Don't invent a logo; a wordmark in the theme's type is fine.
 
 ## Brand
 
-Each org has its own brand in `<org>/BRAND.md` (tokens, type, marks, rules) and `<org>/templates/_shared/theme.css`. **Read the org's BRAND.md before designing anything.** Use the theme's CSS variables; don't hard-code new colors. If you change `--ground`, change `ground` in `<org>/org.json` to match (OBS paints it).
+Each org has its own brand in `<org>/BRAND.md` (tokens, type, marks, rules) and `<org>/templates/_shared/theme.css`. **Read the org's BRAND.md before designing anything.** Use the theme's CSS variables; don't hard-code new colors. If you change `--ground`, change `ground` in `<org>/org.json` to match (OBS paints it). A logo or image the user gives you goes in `<org>/assets/` (`add_asset`); a mark that's part of the brand goes in `templates/_shared/brand/`.
 
-## Workflow
+## Without the tools
+
+When the ViewSwitcher tools aren't there (the app is closed, or your agent has no MCP), work on the files directly:
 
 1. Find the right file with the override rule. Read it right before editing (people may have just changed it in the switcher).
-2. Edit in place. Keep the contract: head links, `main.scene`, slot names, `scene.js`, text in its own small elements, positions as inline px.
-3. To check it, open `http://localhost:7420/library/<path>?preview` (1920×1080; use the switcher's port if it isn't 7420). If a headless browser is available, screenshot it at 1920×1080 and look.
+2. Edit in place. Keep the contract: head links, `main.scene`, slot names, `scene.js`, text in its own small elements, positions as inline px. For a stream-only change, copy the project scene into the stream folder first.
+3. To check it, open `http://localhost:7420/library/<path>?preview` (1920×1080; use the switcher's port if it isn't 7420). If a headless browser is available, screenshot it at 1920×1080, look, and fix it with the checklist under "Preview, look, fix".
 4. Tell the user which file you changed and whether the change applies to one stream, the whole project, or a template.
 
 ## Don't
 
 - Rename or move folders (orgs, projects, streams). The app keys on folder names.
 - Touch `.viewswitcher/` (live app state).
+- Put a scene on air unless the user asked.
 - Add build tools, frameworks or npm packages. Scenes are plain HTML/CSS with a little inline JS when needed.
 - Delete user assets.
