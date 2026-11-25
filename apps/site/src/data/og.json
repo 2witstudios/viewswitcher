@@ -1,4 +1,8 @@
 {
+  "/ai": {
+    "image": "/og/ai.jpg",
+    "alt": "ViewSwitcher: Connect the AI agent you already use."
+  },
   "/church-livestream": {
     "image": "/og/church-livestream.jpg",
     "alt": "ViewSwitcher: A church livestream that looks cared for, run by one volunteer. Grace Community's sermon view: Romans 12:2 in large serif type beside the pastor preaching, letterboxed, with the sermon title underneath"
@@ -13,7 +17,7 @@
   },
   "/ipad": {
     "image": "/og/ipad.jpg",
-    "alt": "ViewSwitcher: Run the show from the iPad beside you. ViewSwitcher for iPad in landscape, running its demo: Saltwater Kitchen's Guest cook view on air with two cooks side by side, and six views to tap on the right, the one on air outlined in red."
+    "alt": "ViewSwitcher: Run the show from your iPhone or iPad. ViewSwitcher for iPad in landscape, running its demo: Saltwater Kitchen's Guest cook view on air with two cooks side by side, and six views to tap on the right, the one on air outlined in red."
   },
   "/privacy": {
     "image": "/og/privacy.jpg",

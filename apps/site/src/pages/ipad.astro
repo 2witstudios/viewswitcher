@@ -1,5 +1,6 @@
 ---
-// SITE-22: the iPad workflow. Screenshots are the iPad app's own (App Store screenshots, MAC-20).
+// SITE-22: the iPhone and iPad app (one universal app, PHONE-1). /iphone redirects here (vercel.json).
+// Screenshots are the app's own (App Store screenshots, MAC-20, PHONE-9).
 import Base from "../layouts/Base.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
@@ -12,46 +13,56 @@ import { IPAD_PRICE } from "../lib/cta";
 import { breadcrumbs } from "../lib/seo";
 import demo from "../assets/app/ipad-demo-landscape.webp";
 import usb from "../assets/app/ipad-landscape.webp";
+import phone from "../assets/app/iphone-demo-landscape.webp";
 import editor from "../assets/app/editor.webp";
 const store = site.ipadApp.state === "store";
 ---
 <Base
-  title="ViewSwitcher for iPad: switch OBS scenes from an iPad"
-  description={`Switch OBS scenes from an iPad beside you. ViewSwitcher for iPad connects to your Mac over Wi-Fi or USB-C, edits titles with a finger, and has a demo. ${IPAD_PRICE} once.`}
+  title="ViewSwitcher for iPhone and iPad: switch OBS scenes from your phone"
+  description={`Switch OBS scenes from your iPhone or the iPad beside you. One app for both connects to your Mac over Wi-Fi or a cable, turns a phone sideways into a deck of views, and has a demo. ${IPAD_PRICE} once.`}
   path="/ipad"
-  schema={[breadcrumbs(site.url, [{ name: "iPad", path: "/ipad" }])]}>
+  schema={[breadcrumbs(site.url, [{ name: "iPhone and iPad", path: "/ipad" }])]}>
   <Header />
   <main id="main" class="wrap prose guide">
-    <p class="eyebrow">ViewSwitcher for iPad · {IPAD_PRICE} once</p>
-    <h1>Run the show from the iPad beside you</h1>
-    <p class="lede">ViewSwitcher for iPad is the remote for ViewSwitcher on your Mac. Every view is a big cover you can tap without looking twice, and the one on air is marked in red. Tap another and OBS switches.</p>
+    <p class="eyebrow">ViewSwitcher for iPhone and iPad · {IPAD_PRICE} once</p>
+    <h1>Run the show from your iPhone or iPad</h1>
+    <p class="lede">ViewSwitcher for iPhone and iPad is the remote for ViewSwitcher on your Mac. Every view is a big cover you can tap without looking twice, and the one on air is marked in red. Tap another and OBS switches. One purchase covers both.</p>
     <IpadStore />
-    <Shot src={demo} alt="ViewSwitcher for iPad in landscape, running its demo: Saltwater Kitchen's Guest cook view on air with two cooks side by side, and six views to tap on the right, the one on air outlined in red." caption="The iPad app's demo: a sample cooking show you can switch with no Mac nearby." />
+    <Shot src={demo} alt="ViewSwitcher for iPad in landscape, running its demo: Saltwater Kitchen's Guest cook view on air with two cooks side by side, and six views to tap on the right, the one on air outlined in red." caption="The app's demo on an iPad: a sample cooking show you can switch with no Mac nearby." />
 
-    <h2 id="usb-c">Plug it in: USB-C, no Wi-Fi</h2>
-    <p>Plug the iPad into the Mac with a USB-C cable and open the app. It finds ViewSwitcher on the Mac and connects by itself, and the same views as on the Mac appear. A <strong>USB</strong> label at the top confirms it, and the Mac shows "iPad · USB" too.</p>
-    <p>The cable keeps the switch fast and doesn't depend on the venue's Wi-Fi. The first time, tap <strong>Trust</strong> on the iPad when it asks about the computer.</p>
-    <Shot src={usb} alt="ViewSwitcher for iPad connected over USB-C: Grace Community's templates, with Nothing on air, Rec, Go Live, USB and OBS offline at the top." caption="Connected over the cable: the USB label sits beside Go Live and Rec." />
+    <h2 id="iphone">On your iPhone: a deck of views</h2>
+    <p>Turn the iPhone sideways and your views fill the screen, four across, with what's on air, Rec and Go Live in one slim bar on top. Tap a view and it's on air. Hold it upright and the view on air shows large above the rest. Your shows and streams are behind the title.</p>
+    <p>The iPhone is for running the show. Adding views and editing them stays on the Mac and the iPad.</p>
+    <Shot src={phone} alt="ViewSwitcher on an iPhone held sideways, running its demo: Saltwater Kitchen's Guest cook view on air on the left, and the views to tap on the right, the one on air outlined in red." caption="The demo on an iPhone held sideways: what's on air beside the views you can tap." />
 
-    <h2 id="wi-fi">Or pair it over Wi-Fi</h2>
-    <p>No cable needed: in ViewSwitcher's menu bar on the Mac, turn on <strong>Let Phones and Tablets on This Wi-Fi Connect</strong> and scan the QR code. Only phones and tablets you pair can switch scenes, and you can remove one any time from the same window. Use it on Wi-Fi you trust, like home or church Wi-Fi. A phone works too, in its browser.</p>
+    <h2 id="wi-fi">Pair it over Wi-Fi</h2>
+    <ol>
+      <li>On the Mac, in ViewSwitcher's menu bar, turn on <strong>Let Phones and Tablets on This Wi-Fi Connect</strong>. A window shows a QR code and a code.</li>
+      <li>Open the app on your iPhone or iPad and tap <strong>Scan the code</strong>, then point it at the QR code. Or tap <strong>Enter code</strong>: the app finds your Mac on the Wi-Fi and you type the code.</li>
+    </ol>
+    <p>Scan from inside the app, not with the Camera app: the Camera app would pair Safari instead. Only phones and tablets you pair can switch scenes, and you can remove one any time from the same window on the Mac. The app remembers your Mac, so next time it connects by itself. Use it on Wi-Fi you trust, like home or church Wi-Fi.</p>
 
-    <h2 id="what-you-can-do">What you can do from the iPad</h2>
+    <h2 id="usb-c">Or plug it in: no Wi-Fi</h2>
+    <p>Plug the iPad or iPhone into the Mac with its cable and open the app. It finds ViewSwitcher on the Mac and connects by itself, and the same views as on the Mac appear. A <strong>USB</strong> label at the top confirms it, and the Mac shows which one is plugged in, like "iPad · USB".</p>
+    <p>The cable keeps the switch fast and doesn't depend on the venue's Wi-Fi. The first time, tap <strong>Trust</strong> when it asks about the computer.</p>
+    <Shot src={usb} alt="ViewSwitcher for iPad connected over USB-C: Grace Community's templates, with Nothing on air, Rec, Go Live, USB and OBS offline at the top." caption="An iPad connected over the cable: the USB label sits beside Go Live and Rec." />
+
+    <h2 id="what-you-can-do">What you can do from the app</h2>
     <ul>
       <li><strong>Switch views</strong> with a tap. The one on air is outlined in red.</li>
       <li><strong>Go live and record</strong>, and see that OBS is connected.</li>
       <li><strong>Change between streams and projects</strong>: this Sunday's service, last week's, a midweek class.</li>
-      <li><strong>Edit with a finger.</strong> Long-press or double-tap a title to retype it, and drag a camera box or a panel to move it. On air, viewers see the change as you make it.</li>
+      <li><strong>On the iPad, edit with a finger.</strong> Long-press or double-tap a title to retype it, and drag a camera box or a panel to move it. On air, viewers see the change as you make it.</li>
     </ul>
     <Shot src={editor} alt="ViewSwitcher's editor on a church's sermon view: the scripture, the sermon title and a dashed camera box, with Add, Undo and Done at the top." caption="The editor, the same on the Mac and the iPad. Hints at the bottom show how to edit text, move boxes and add things." />
-    <p>It works in portrait or landscape, full screen, Split View or Stage Manager, and the screen stays awake while you run the show.</p>
+    <p>It works in portrait or landscape, on the iPad in Split View and Stage Manager too, and the screen stays awake while you run the show.</p>
 
     <h2 id="demo">Try it with no Mac: the demo</h2>
     <p>Open the app with no Mac connected and it starts a demo by itself: <strong>Saltwater Kitchen</strong>, a sample cooking show. Tap any view and the program cuts to it, the cooks move into their new places, and the red on-air outline moves with your tap. Nothing in the demo is streamed or sent anywhere, and it works offline. <strong>Connect your Mac</strong> at the top goes back to connecting.</p>
 
     <h2 id="price">Price and availability</h2>
-    <p>ViewSwitcher for iPad is {IPAD_PRICE}, once: no subscription, no account, no ads, and it collects no data. To install it on another iPad, download it again with the same Apple Account at no charge. It needs iPadOS 17 or later, and a Mac running ViewSwitcher (free) and OBS for anything beyond the demo.</p>
-    <p>{store ? "It's on the App Store now." : "It's coming to the App Store. The Mac app is free and works on its own in the meantime: switch from the app or a browser on the Mac."}</p>
+    <p>ViewSwitcher for iPhone and iPad is {IPAD_PRICE}, once, and one purchase covers both: no subscription, no account, no ads, and it collects no data. To install it on another iPhone or iPad, download it again with the same Apple Account at no charge. It needs iOS or iPadOS 17 or later, and a Mac running ViewSwitcher (free) and OBS for anything beyond the demo.</p>
+    <p>{store ? "It's on the App Store now." : "It's coming to the App Store. The Mac app is free and works on its own in the meantime: switch from the app or a browser on the Mac, or pair your phone's browser by scanning the Mac's QR code with its camera."}</p>
     <IpadStore />
     <Cta />
 

@@ -28,6 +28,11 @@
       ],
       "destination": "https://viewswitcher.com/:path",
       "permanent": true
+    },
+    {
+      "source": "/iphone",
+      "destination": "/ipad",
+      "permanent": true
     }
   ],
   "headers": [
