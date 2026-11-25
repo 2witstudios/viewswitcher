@@ -48,9 +48,9 @@ if [ "$RELEASE" = 1 ]; then
   # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
   BUILT="$(git -C "$REPO" rev-parse HEAD)"
   # node_modules is gitignored, so the clean tree says nothing about it: reinstall every locked package
-  # (--force also undoes files patched by hand). A dirty local test build installs what package.json
-  # says now instead, since its bun.lock may have changed.
-  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ]; then (cd "$REPO" && bun install)
+  # (--force also undoes files patched by hand). A local test build from a dirty tree (ALLOW_DIRTY)
+  # installs what package.json says now instead, since its bun.lock may have changed.
+  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then (cd "$REPO" && bun install)
   else (cd "$REPO" && bun install --frozen-lockfile --force); fi
 fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }

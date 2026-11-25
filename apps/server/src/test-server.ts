@@ -57,7 +57,8 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
     // A server that accepts the connection but never answers mustn't hang past the deadline.
     let timer: Timer | undefined;
     const left = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()))));
-    const ok = await Promise.race([ready().catch(() => false), left]);
+    // An exit ends the wait at once too, instead of at the deadline.
+    const ok = await Promise.race([ready().catch(() => false), left, proc.exited.then(() => false)]);
     clearTimeout(timer);
     if (ok) return proc;
     await Bun.sleep(50);
