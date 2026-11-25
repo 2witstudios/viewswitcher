@@ -25,7 +25,7 @@ const shows = SHOWS;
             ))}
           </div>
           <h3>{downloads ? <a class="title" href={setPath(s)}>{s.name}</a> : s.name} <span class="kind">{s.kind}</span></h3>
-          <p class="get">{downloads ? <a href={setPath(s)}>Download these templates</a> : <a href="/download">Download coming soon</a>}</p>
+          <p class="get">{downloads ? <a href={setPath(s)}>Built in, or download these templates</a> : <a href="/download">Download coming soon</a>}</p>
           <p>{s.blurb}{s.id === "grace" && <> <a href="/church-livestream">Church livestreaming with ViewSwitcher</a></>}</p>
         </li>
       ))}

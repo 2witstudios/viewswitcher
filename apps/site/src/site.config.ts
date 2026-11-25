@@ -17,7 +17,7 @@ const TEMPLATE_DOWNLOADS_URL: string | null = "/templates";
 
 // THE PACK INSTALL SWITCH: the first ViewSwitcher release that installs template packs (EDIT-24 shipped after 1.0.0).
 // Null: the template pages say installing packs comes with the next update. Set (e.g. "1.1.0"): "Needs ViewSwitcher 1.1.0 or later."
-const PACK_INSTALL_VERSION: string | null = null;
+const PACK_INSTALL_VERSION: string | null = "1.1.0";
 
 export const site = {
   url: "https://viewswitcher.com",
@@ -26,7 +26,7 @@ export const site = {
   /** MAC-8 must publish a release asset with exactly this name for this link to resolve. */
   dmgUrl: "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg",
   /** The Mac app's current release (SITE-20). Update with each release: the version that /download and the structured data state. */
-  mac: { version: "1.0.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
+  mac: { version: "1.1.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
   /** Drop SITE-11's recording here (public/demo/viewswitcher-demo.mp4) and the hero plays it. */
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),

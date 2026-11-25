@@ -38,7 +38,7 @@ const v = site.mac.version;
     <ul>
       <li><strong>OBS</strong>, the free streaming app, from <a href="https://obsproject.com">obsproject.com</a>. OBS does the streaming; ViewSwitcher tells it what to show.</li>
       <li><strong>A camera</strong> OBS can see: the Mac's own camera, a USB webcam, or a camera through a capture card.</li>
-      <li>Optional: a second camera, a screen to share, and an iPad to switch from.</li>
+      <li>Optional: a second camera, a screen to share, and a phone or iPad to switch from.</li>
     </ul>
 
     <h2 id="after-you-open-it">After you open it</h2>
@@ -52,6 +52,16 @@ const v = site.mac.version;
     </ol>
     <p>Each step, with screenshots and what to do if something doesn't show up: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
     <p>Closing the window keeps ViewSwitcher running in the menu bar, so OBS and the iPad stay connected. Quit it from the menu bar icon or with ⌘Q.</p>
+
+    <h2 id="whats-new">What's new in {v}</h2>
+    <ul>
+      <li><strong>Pair your phone or iPad over Wi-Fi.</strong> In the menu bar, turn on Let Phones and Tablets on This Wi-Fi Connect, then scan the QR code. Only devices you pair can switch scenes, and you can remove one any time. Use it on Wi-Fi you trust, like home or church Wi-Fi.</li>
+      <li><strong>Built-in template sets.</strong> Full Count, NOVA_PLAYS, Grace Community, Roam with Remi, Riverside Live and Saltwater Kitchen come with ViewSwitcher, in your show's name and colors. Pick one for a new show, or use Templates → Add templates.</li>
+      <li><strong>Install template packs.</strong> Download one from <a href="/templates">viewswitcher.com/templates</a> and drop the .zip on the Templates page.</li>
+      <li><strong>Drop a picture onto a scene</strong> in the editor to add it, or onto an image to replace it.</li>
+      <li><strong>Safer scenes.</strong> Templates from anyone run sandboxed, so they can't control the switcher.</li>
+    </ul>
+    <p>Already on 1.0? ViewSwitcher offers this update by itself. <a href={`${releases}/tag/v${v}`}>Full release notes</a></p>
 
     <h2 id="release-notes">Release notes and updates</h2>
     <p>Every version is published on GitHub with its notes: <a href={releases}>all releases</a>. ViewSwitcher installs updates from there, so there's nothing to download again by hand.</p>
