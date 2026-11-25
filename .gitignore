@@ -3,7 +3,6 @@ dist/
 .DS_Store
 *.log
 .env
-ios/inkcast/InkCast.xcodeproj/
 xcuserdata/
 post/build/
 __pycache__/

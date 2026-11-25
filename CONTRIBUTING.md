@@ -17,10 +17,11 @@ The README's [For developers](README.md#for-developers-and-self-builders) sectio
 
 ```sh
 bun test
-cd apps/web && bunx tsc --noEmit && bunx tsc -p tsconfig.test.json
-cd apps/server && bunx tsc -p .
+bun run typecheck   # apps/web, apps/server, packages/shared
 cd apps/site && bun run check
 ```
+
+CI runs the same checks, the switcher build and ViewSwitcherKit's `swift test` on every pull request; a PR merges once they pass. Use the Bun version in `.bun-version`.
 
 Keep `packages/shared` dependency-free and tested. The Apple apps have XCTest; see [apps/apple/README.md](apps/apple/README.md).
 

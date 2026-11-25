@@ -22,6 +22,9 @@ for arg in "$@"; do
 done
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 
+source "$APPLE/scripts/release-guard.sh"
+require_clean_tree "$APPLE/../.."
+
 source "$APPLE/scripts/release-env.sh"
 load_release_env "$APPLE"
 AUTH=()
