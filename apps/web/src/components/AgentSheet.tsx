@@ -98,15 +98,17 @@ function Sheet({ onClose }: { onClose: () => void }) {
         {parts.connectOnMac && <p className="agent-note">Connect an agent on your Mac: open Edit with AI there.</p>}
         {parts.waysIn && <WaysIn info={info} clients={clients} />}
 
-        <fieldset className="agent-onair">
-          <legend>Agents put scenes on air</legend>
-          {ON_AIR_CHOICES.map((c) => (
-            <label key={c.value} className="agent-choice">
-              <input type="radio" name="agent-onair" value={c.value} checked={agent?.onAir === c.value} disabled={!agent} onChange={() => setOnAir(c.value)} />
-              <span><b>{c.label}</b><small>{c.hint}</small></span>
-            </label>
-          ))}
-        </fieldset>
+        {parts.onAirSetting && (
+          <fieldset className="agent-onair">
+            <legend>Agents put scenes on air</legend>
+            {ON_AIR_CHOICES.map((c) => (
+              <label key={c.value} className="agent-choice">
+                <input type="radio" name="agent-onair" value={c.value} checked={agent?.onAir === c.value} disabled={!agent} onChange={() => setOnAir(c.value)} />
+                <span><b>{c.label}</b><small>{c.hint}</small></span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         {parts.builtIn && (
           // A plain link out (the Mac app opens it in the browser): nothing is sent or kept from here.

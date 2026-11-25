@@ -8,8 +8,14 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentStatus } from "@viewswitcher/shared";
+import type { Previewer } from "../preview-types";
 import { clientName, handleMcp, noteSeen } from "./http";
-import { noPreview } from "./no-preview";
+
+/** A previewer for a server these tests never ask for pictures. */
+const noPreview = (port: number): Previewer => ({
+  scene: async (path) => ({ ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${port}/library/${encodeURI(path)}?preview` }),
+  program: async () => ({ ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${port}/program` }),
+});
 
 let port = 0;
 let proc: ReturnType<typeof Bun.spawn>;

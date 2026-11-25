@@ -54,12 +54,12 @@ describe("ports (the kit's configs name 7420)", () => {
 });
 
 describe("per client", () => {
-  test("the iPad gets status, the setting and a pointer to the Mac: no installs, no built-in row", () => {
-    expect(sheetParts("ipad")).toEqual({ waysIn: false, connectOnMac: true, builtIn: false });
+  test("the iPad gets status and a pointer to the Mac only: no installs, no on-air setting, no built-in row", () => {
+    expect(sheetParts("ipad")).toEqual({ waysIn: false, connectOnMac: true, onAirSetting: false, builtIn: false });
   });
   test("the Mac app and browsers get the ways in and the built-in row", () => {
-    expect(sheetParts("mac")).toEqual({ waysIn: true, connectOnMac: false, builtIn: true });
-    expect(sheetParts("browser")).toEqual({ waysIn: true, connectOnMac: false, builtIn: true });
+    expect(sheetParts("mac")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, builtIn: true });
+    expect(sheetParts("browser")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, builtIn: true });
   });
   test("three on-air choices, each with one line", () => {
     expect(ON_AIR_CHOICES.map((c) => [c.value, c.label])).toEqual([["never", "Never"], ["not-live", "When not live"], ["always", "Always"]]);

@@ -63,12 +63,13 @@ export function waysIn(clients: AgentClients | null): { way: Way; installed: boo
 }
 
 /**
- * What the sheet shows in each client. The iPad can't run an agent or install anything: status and
- * the setting, and a pointer to the Mac. The built-in AI row is for the Mac app and desktop browsers.
+ * What the sheet shows in each client. The iPad can't run an agent or install anything: status and a
+ * pointer to the Mac only (the on-air setting is set on the Mac too). The built-in AI row is for the
+ * Mac app and desktop browsers.
  */
 export function sheetParts(kind: ClientKind) {
   const ipad = kind === "ipad";
-  return { waysIn: !ipad, connectOnMac: ipad, builtIn: !ipad };
+  return { waysIn: !ipad, connectOnMac: ipad, onAirSetting: !ipad, builtIn: !ipad };
 }
 
 export const BUILT_IN_URL = "https://viewswitcher.com/ai";
