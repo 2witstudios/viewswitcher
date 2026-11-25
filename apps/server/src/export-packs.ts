@@ -108,20 +108,29 @@ export function genericView(html: string, show: SiteShow): string {
   const words = show.name.split(/\s+/).map((w) => esc(w).replace(/&/g, "(?:&|&amp;)")).join(gap);
   const upper = show.name.toUpperCase();
   if (upper !== show.name) {
-    // In capitals as typed: the element it starts keeps the look with text-transform on itself, so
-    // the element stays one piece of plain text people can retype ("ROAM WITH REMI · DAY 4").
-    const caps = show.name.toUpperCase().split(/\s+/).map((w) => esc(w).replace(/&/g, "(?:&|&amp;)")).join(gap);
-    out = out.replace(new RegExp(`<([a-z][\\w-]*)([^>]*)>([^<]*?)${caps}`, "g"), (_m, tag: string, attrs: string, before: string) => {
-      const styled = /\sstyle="/.test(attrs) ? attrs.replace(/\sstyle="([^"]*)"/, (_s, v: string) => ` style="${v.replace(/;?\s*$/, "")}; text-transform: uppercase"`) : `${attrs} style="text-transform: uppercase"`;
-      return `<${tag}${styled}>${before}{{ORG_NAME}}`;
+    const caps = upper.split(/\s+/).map((w) => esc(w).replace(/&/g, "(?:&|&amp;)")).join(gap);
+    // In capitals, as the whole text of an element (or beside other capitals: "ROAM WITH REMI · DAY 4"):
+    // the element keeps the look with text-transform on itself, so it stays one piece of plain text
+    // people can retype. Never on a void element (<br>, <img>…): that falls through to a span.
+    const notVoid = "(?!(?:area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr)\\b)";
+    out = out.replace(new RegExp(`<${notVoid}([a-z][\\w-]*)([^>]*)>([^<]*?)${caps}([^<]*)`, "g"), (m: string, tag: string, attrs: string, before: string, after: string) => {
+      if (/[a-z]/.test(before + after)) return m; // lower-case text beside it would turn capitals too: a span instead
+      const q = /\sstyle=(["'])(.*?)\1/.exec(attrs);
+      const styled = q
+        ? attrs.replace(q[0], () => ` style=${q[1]}${q[2]!.replace(/;?\s*$/, "")}; text-transform: uppercase${q[1]}`)
+        : `${attrs} style="text-transform: uppercase"`;
+      return `<${tag}${styled}>${before}{{ORG_NAME}}${after}`;
     });
-    // Capitals after other markup in the same element (`<div><i></i>RIVERSIDE LIVE</div>`): that element
-    // holds tags already, so it isn't plain text to retype either way; a span keeps the look.
+    // Inside a tag (an alt, a title, a data- value): the plain name, no markup.
+    out = out.replace(new RegExp(`${caps}(?=[^<]*>)`, "g"), "{{ORG_NAME}}");
+    // Anywhere else in text (after other markup, beside lower-case words): a span keeps the look.
     out = out.replace(new RegExp(caps, "g"), `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`);
   }
   out = out.replace(new RegExp(words, "g"), "{{ORG_NAME}}");
   // Fail rather than ship another show's branding: compare as people read it, in any case and spacing.
-  const read = (t: string) => t.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, "").replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").toLowerCase();
+  // Tags become their attribute values, so a name left in an alt or a title counts too.
+  const read = (t: string) =>
+    t.replace(/<[^>]*>/g, (tag) => ` ${tag.replace(/^<\/?\S+|\/?>$/g, "")} `).replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").toLowerCase();
   if (read(out).includes(read(show.name))) throw new Error(`${show.id}: the show's name is still in a view`);
   return out;
 }
@@ -133,13 +142,14 @@ export function genericView(html: string, show: SiteShow): string {
  * --paper-ground, since an org's dark ground under dark ink wouldn't read).
  */
 export function genericTheme(css: string, show: SiteShow): string {
-  const ground = new RegExp(`(^|[;{\\s])--ground:\\s*${esc(show.ground)};`, "i");
-  const accent = new RegExp(`(^|[;{\\s])(--[\\w-]+:\\s*)${esc(show.accent)};`, "gi");
+  // Lookbehinds: a match mustn't use up the ";" the next declaration starts after (compact CSS).
+  const ground = new RegExp(`(?<=^|[;{\\s])--ground:\\s*${esc(show.ground)};`, "i");
+  const accent = new RegExp(`(?<=^|[;{\\s])(--[\\w-]+:\\s*)${esc(show.accent)};`, "gi");
   if (!ground.test(css) || !new RegExp(accent.source, "i").test(css)) throw new Error(`${show.id}: theme.css has no --ground ${show.ground} or no variable set to the accent ${show.accent}`);
   const paper = /\.ground\.paper\s*\{[^}]*var\(--ground\)/.test(css);
-  let out = css.replace(ground, paper ? `$1--ground: {{GROUND}};\n  --paper-ground: ${show.ground};` : "$1--ground: {{GROUND}};");
+  let out = css.replace(ground, paper ? `--ground: {{GROUND}};\n  --paper-ground: ${show.ground};` : "--ground: {{GROUND}};");
   if (paper) out = out.replace(/(\.ground\.paper\s*\{[^}]*)var\(--ground\)/, "$1var(--paper-ground)");
-  return out.replace(accent, "$1$2{{ACCENT}};");
+  return out.replace(accent, "$1{{ACCENT}};");
 }
 
 /**

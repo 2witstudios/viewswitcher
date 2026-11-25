@@ -31,9 +31,12 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
   const installed = useRef(new Set<string>());
   /** Tokens being installed right now: closing the picker mustn't cancel one mid-install. */
   const installing = useRef(new Set<string>());
+  /** False once the picker has closed: a running Add stops, and nothing is staged after the cleanup. */
+  const mounted = useRef(true);
 
   useEffect(() => {
     let live = true;
+    mounted.current = true;
     void (async () => {
       try {
         const list = await packs.builtin();
@@ -54,46 +57,59 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
     })();
     return () => {
       live = false;
+      mounted.current = false;
       // Whatever was staged and not added goes (the server also sweeps staging after an hour).
       for (const t of tokens.current) if (!installed.current.has(t) && !installing.current.has(t)) void packs.cancel(org, t).catch(() => {});
     };
   }, [org]);
 
-  /** Stage a card again (after a failed install, whose staging is gone, or a staging that expired). */
+  /** Stage a card again (after a failed install, whose staging is gone). If that fails too, it's unpicked. */
   const restage = async (id: string) => {
+    if (!mounted.current) return;
     const staged = await packs.stageBuiltin(org, id).catch(() => null);
+    if (!mounted.current) return void (staged && packs.cancel(org, staged.token).catch(() => {}));
     if (staged) tokens.current.push(staged.token);
+    else setPicked((p) => p.filter((x) => x !== id));
     setCards((cs) => cs && cs.map((c) => (c.pack.id === id ? { ...c, staged, error: staged ? null : "Couldn't get it ready. Close and try again." } : c)));
   };
+
+  /** A server message, worded for a built-in pack (there's nothing to drop again). */
+  const plain = (m: string) => m.replace(/\s*Drop (?:it|the pack) again[^.]*\./g, "").trim();
 
   const add = async () => {
     setBusy(true);
     setError("");
     const names: string[] = [];
-    let current: Card | null = null;
-    try {
-      for (const c of cards ?? []) {
-        if (!picked.includes(c.pack.id) || !c.staged || installed.current.has(c.staged.token)) continue;
-        current = c;
-        installing.current.add(c.staged.token);
-        await packs.install(org, c.staged.token);
-        installed.current.add(c.staged.token);
-        installing.current.delete(c.staged.token);
+    let failed: { card: Card; message: string } | null = null;
+    for (const c of cards ?? []) {
+      if (!mounted.current) return; // closed mid-way: the rest were cancelled with it
+      if (!picked.includes(c.pack.id) || !c.staged || installed.current.has(c.staged.token)) continue;
+      const token = c.staged.token;
+      installing.current.add(token);
+      try {
+        await packs.install(org, token);
+        installed.current.add(token);
         names.push(c.pack.name);
+      } catch (e) {
+        failed = { card: c, message: (e as Error).message };
+        break;
+      } finally {
+        installing.current.delete(token);
       }
-      await onAdded(names);
-      onClose();
-    } catch (e) {
-      // A failed install takes its staging with it: get that card ready again, so Add can be tried again.
-      if (current?.staged) {
-        installing.current.delete(current.staged.token);
-        await restage(current.pack.id);
-      }
-      setError(`${current ? `${current.pack.name}: ` : ""}${(e as Error).message.replace(/ ?Drop it again\.?/, "")} ${names.length ? `(${names.join(", ")} went in.) ` : ""}Try again.`);
-      setPicked((p) => p.filter((id) => !names.includes(cards?.find((c) => c.pack.id === id)?.pack.name ?? "")));
-      if (names.length) await onAdded(names);
-      setBusy(false);
     }
+    // Only a failed install restages (its staging went with it), so Add can be tried again.
+    if (failed) await restage(failed.card.pack.id);
+    try {
+      if (names.length || !failed) await onAdded(names);
+    } catch {
+      // The sets went in; only refreshing the page around the picker failed.
+    }
+    if (!mounted.current) return;
+    if (!failed) return onClose();
+    const addedIds = new Set((cards ?? []).filter((c) => names.includes(c.pack.name)).map((c) => c.pack.id));
+    setPicked((p) => p.filter((id) => !addedIds.has(id)));
+    setError(`${failed.card.pack.name}: ${plain(failed.message)}${names.length ? ` (${names.join(", ")} went in.)` : ""} Try again.`);
+    setBusy(false);
   };
 
   return (

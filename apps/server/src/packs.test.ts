@@ -165,6 +165,16 @@ describe("built-in template packs (EDIT-29)", () => {
     const out = genericView(`<small>ROAM WITH REMI · DAY 4</small>`, show);
     expect(out).not.toContain("<span");
   });
+  test("capitals: never styled onto a void element, nor onto lower-case words beside them; either quote; never markup inside an attribute", () => {
+    const span = `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`;
+    expect(genericView(`<p>Live from<br>ROAM WITH REMI</p>`, show)).toBe(`<p>Live from<br>${span}</p>`);
+    expect(genericView(`<p>Live with ROAM WITH REMI, day 4</p>`, show)).toBe(`<p>Live with ${span}, day 4</p>`);
+    expect(genericView(`<p style='color: red'>ROAM WITH REMI</p>`, show)).toBe(`<p style='color: red; text-transform: uppercase'>{{ORG_NAME}}</p>`);
+    expect(genericView(`<img alt="ROAM WITH REMI" src="x.png">`, show)).toBe(`<img alt="{{ORG_NAME}}" src="x.png">`);
+  });
+  test("a show name left in an attribute fails the export too", () => {
+    expect(() => genericView(`<img alt="Roam With Remi">`, show)).toThrow(/still in a view/);
+  });
   test("a show name it can't turn generic fails the export, however it's written", () => {
     for (const v of [`<p>Roam With Remi</p>`, `<p>roam with remi</p>`, `<p>Roam&nbsp;with remi</p>`, `<p><b>ROAM</b> WITH REMI</p>`]) {
       expect(() => genericView(v, show)).toThrow(/still in a view/);
@@ -174,6 +184,9 @@ describe("built-in template packs (EDIT-29)", () => {
     const css = `:root {\n  --ground: #e6dcc8;\n  --red: #D9472B;\n}\n.ground.paper { background-color: var(--ground); }`;
     expect(genericTheme(css, show)).toBe(`:root {\n  --ground: {{GROUND}};\n  --paper-ground: #e6dcc8;\n  --red: {{ACCENT}};\n}\n.ground.paper { background-color: var(--paper-ground); }`);
     expect(() => genericTheme(":root { --ground: #000; }", show)).toThrow(/no --ground/);
+  });
+  test("compact CSS: every accent variable, one after another", () => {
+    expect(genericTheme(`:root{--ground:#e6dcc8;--red:#d9472b;--edge:#d9472b;}`, show)).toBe(`:root{--ground: {{GROUND}};--red:{{ACCENT}};--edge:{{ACCENT}};}`);
   });
   test("every variable set to the accent takes the org's; only --ground itself is the ground", () => {
     const css = `:root { --x-ground: #e6dcc8; --ground: #e6dcc8; --red: #d9472b; --edge: #d9472b; }`;
