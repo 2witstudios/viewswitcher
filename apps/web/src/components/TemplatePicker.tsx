@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type BuiltinPack, packs, type StagedPack } from "../lib/api";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
-import { Overlay } from "./ui";
+import { Overlay, useEscape } from "./ui";
 
 type Card = { pack: BuiltinPack; staged: StagedPack | null; error: string | null };
 
@@ -111,6 +111,7 @@ export function TemplatePicker({ org, have, title, intro, skipLabel, onClose, on
     setBusy(false);
   };
 
+  useEscape(() => !busy && onClose());
   return (
     <Overlay>
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>

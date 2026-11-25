@@ -60,6 +60,7 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useEscape(() => !busy && onClose());
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -88,6 +89,20 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
     </div>
     </Overlay>
   );
+}
+
+/** Escape closes a dialog, like Cancel; it stops there, so the sideways library drawer behind stays open. */
+export function useEscape(close: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      close();
+    };
+    // Capture, so the dialog sees it before the drawer's own Escape listener.
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  });
 }
 
 /**

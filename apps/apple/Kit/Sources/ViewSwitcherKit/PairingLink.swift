@@ -27,7 +27,8 @@ public enum PairingLink {
         guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let name = parts.queryItems?.first(where: { $0.name == "mac" })?.value,
               let code = parts.queryItems?.first(where: { $0.name == "code" })?.value,
-              let base = bonjourMac(host: name, port: url.port ?? 80)
+              let port = url.port, // the Mac's links always name it; no guessing 80 or 443
+              let base = bonjourMac(host: name, port: port)
         else { return nil }
         var out = URLComponents(string: base)
         out?.path = "/pair"

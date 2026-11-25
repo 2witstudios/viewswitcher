@@ -92,7 +92,13 @@
   // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
   // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
   let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
-  const go = (url) => { leaving = true; location.replace(url); };
+  // If the page is still here a while later, the navigation was cancelled (the app refused it, or the Mac
+  // didn't answer): let the connector work again rather than freezing on "Connecting…".
+  const go = (url) => {
+    leaving = true;
+    location.replace(url);
+    setTimeout(() => { leaving = scanning = false; status.textContent = ""; }, 10000);
+  };
 
   // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app. `scanning` holds
   // from the tap until the page leaves (or the scan comes back empty), so no other flow starts or navigates meanwhile.
@@ -109,6 +115,13 @@
     // it outlasts the Mac's LAN address changing. Else the address in the code.
     const answers = async (u) => (await VS.reachable(u, 5000)) || (await VS.reachable(u, 5000));
     const local = scanned.local && VS.usable(scanned.local) && (await answers(new URL(scanned.local).origin)) ? scanned.local : null;
+    // A Mac with only a public address put its name in the code (PairingLink.parse made that the link):
+    // when the name doesn't answer either, say so rather than navigating to nothing.
+    if (!local && new URL(scanned.link).hostname.endsWith(".local") && !(await answers(new URL(scanned.link).origin))) {
+      scanning = false;
+      status.textContent = "Your Mac's name doesn't answer on this network. Plug in with USB-C.";
+      return;
+    }
     const link = local || scanned.link;
     VS.saveNetwork(new URL(link).origin);
     go(link);
@@ -168,7 +181,7 @@
     busy = true;
     try {
       const found = await VS.find();
-      if (leaving) return;
+      if (leaving || scanning) return; // a scan started while this probe waited: it decides where the page goes
       if (found) {
         status.textContent = `Connected over ${found.how}…`;
         leaving = true;

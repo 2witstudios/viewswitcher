@@ -59,5 +59,7 @@ final class PairingLinkTests: XCTestCase {
         XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB")!), "no name")
         XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB&mac=evil.ts.net")!), "only .local")
         XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB&mac=127.0.0.1")!))
+        XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20/pair?code=AB&mac=studio-mac.local")!), "no port: no guess")
+        XCTAssertNil(PairingLink.parse("https://129.132.10.20/pair?code=AB&mac=studio-mac.local"), "a public host with no port")
     }
 }
