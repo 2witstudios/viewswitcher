@@ -86,6 +86,7 @@ export class Pairing {
   codeGuessed = false;
   private peers = new Map<string, number[]>(); // wrong-guess times per address (only addresses that guessed wrong)
   private renewed = new Map<string, number>(); // when each device's cookie was last sent
+  private lastSaved = 0; // when a lastSeen change was last scheduled for writing
   private readonly now: () => number;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private saving: Promise<void> = Promise.resolve();
@@ -171,10 +172,12 @@ export class Pairing {
     const d = this.devices.get(sha3(token)); // a lookup by digest: hash first, never the raw token
     if (!d) return null;
     const t = this.now();
-    if (t - d.lastSeen > 60_000) {
-      d.lastSeen = t;
+    d.lastSeen = t;
+    // Written at most once a minute, however often devices ask (a write per request would be too many).
+    if (t - this.lastSaved > 60_000) {
+      this.lastSaved = t;
       this.save();
-    } else d.lastSeen = t;
+    }
     return info(d);
   }
 
@@ -236,8 +239,17 @@ export class Pairing {
       }
     });
     await this.saving;
+    // Keep trying: until devices.json matches, a restart would bring back what it still holds.
+    if (!ok) this.retry();
     return ok;
   }
+
+  private retry() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => void this.flush(), 5000);
+  }
+
+
 }
 
 const info = ({ tokenHash: _, ...d }: Device): DeviceInfo => ({ ...d });

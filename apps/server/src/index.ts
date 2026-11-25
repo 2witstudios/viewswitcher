@@ -536,7 +536,9 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
     } catch (e) {
       if (e instanceof PathError || e instanceof EditError) return json({ error: e.message }, 400);
       console.error(e);
-      return json({ error: (e as Error).message }, 500);
+      // The full message (it may name a file on this Mac) only for this Mac; a paired device gets a plain one.
+      const local = fromThisMac(srv.requestIP(req)?.address, req.headers);
+      return json({ error: local ? (e as Error).message : "Something went wrong on the Mac. Its server log has the details." }, 500);
     }
 }
 

@@ -44,7 +44,8 @@ export type Gate =
 export function gate({ local, paired, method, path }: { local: boolean; paired: boolean; method: string; path: string }): Gate {
   if (local || paired) return { kind: "pass" };
   if (path === "/api/pair" && method === "POST") return { kind: "pair" };
-  const page = (method === "GET" || method === "HEAD") && path !== "/ws" && !path.startsWith("/api/") && !path.startsWith("/library/") && !path.startsWith("/assets/") && !/\.[a-z0-9]+$/i.test(path);
+  const under = (root: string) => path === root || path.startsWith(`${root}/`);
+  const page = (method === "GET" || method === "HEAD") && !under("/ws") && !under("/api") && !under("/library") && !under("/assets") && !/\.[a-z0-9]+$/i.test(path);
   return page ? { kind: "pair-page" } : { kind: "deny" };
 }
 

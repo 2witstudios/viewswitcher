@@ -178,7 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 Env.wifi = s.enabled
                 announceWifi()
                 buildStatusMenu()
-                if let w = remotes, w.window.isVisible { await w.model.refresh(newCodeIfNone: true) }
+                // A code made while Wi-Fi was off has no Wi-Fi link for the QR code: make a fresh one.
+                if let w = remotes, w.window.isVisible {
+                    if s.enabled { await w.model.newCode() } else { await w.model.refresh() }
+                }
             } catch {
                 Outside.alert("Couldn't change Wi-Fi connections", error.localizedDescription)
             }

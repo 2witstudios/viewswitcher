@@ -76,6 +76,9 @@ function fromLan(path: string, { method = "GET", headers = {} as Record<string, 
       res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data, cookie: String(res.headers["set-cookie"]?.[0] ?? "").split(";")[0] }));
     });
     req.on("error", reject);
+    // A stalled connection mustn't hold up the polling around it: give up after 3 s.
+    const deadline = setTimeout(() => req.destroy(new Error("timed out")), 3000);
+    req.on("close", () => clearTimeout(deadline));
     req.end(body);
   });
 }

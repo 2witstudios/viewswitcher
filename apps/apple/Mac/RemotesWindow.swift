@@ -69,6 +69,9 @@ final class RemotesModel: ObservableObject {
     var onEnabled: (Bool, Int) -> Void = { _, _ in }
 
     private var timer: Timer?
+    /// Bumped by every change this window makes; a status read that started before one is dropped,
+    /// so an old snapshot can't clear a new code or flip the setting back.
+    private var generation = 0
 
     var codeOpen: Bool {
         guard code != nil, let open = status?.code else { return false }
@@ -97,7 +100,9 @@ final class RemotesModel: ObservableObject {
 
     func refresh(newCodeIfNone: Bool = false) async {
         do {
+            let started = generation
             let s = try await RemoteAPI.status()
+            guard started == generation else { return }
             apply(s)
             if newCodeIfNone, !codeOpen { await newCode() }
         } catch {
@@ -114,6 +119,7 @@ final class RemotesModel: ObservableObject {
     }
 
     func newCode() async {
+        generation += 1
         do {
             let s = try await RemoteAPI.newCode()
             code = s.code?.code
@@ -126,6 +132,7 @@ final class RemotesModel: ObservableObject {
 
     func setEnabled(_ on: Bool) async {
         busy = true
+        generation += 1
         defer { busy = false }
         do {
             apply(try await RemoteAPI.setEnabled(on))
@@ -137,6 +144,7 @@ final class RemotesModel: ObservableObject {
     }
 
     func remove(_ id: String) async {
+        generation += 1
         do { apply(try await RemoteAPI.remove(id)) } catch { self.error = error.localizedDescription }
     }
 }

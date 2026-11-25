@@ -39,7 +39,8 @@ describe("gate", () => {
   test("an unpaired device gets the pairing page for pages, and 401 for everything else", () => {
     for (const p of ["/", "/program", "/pair", "/edit/x"]) expect(g(false, false, p)).toBe("pair-page");
     expect(g(false, false, "/", "HEAD")).toBe("pair-page");
-    for (const p of ["/api/state", "/api/info", "/api/remote", "/library/a/org.json", "/ws", "/assets/index-x.js", "/favicon.svg"]) expect(g(false, false, p)).toBe("deny");
+    for (const p of ["/api/state", "/api/info", "/api/remote", "/library/a/org.json", "/ws", "/assets/index-x.js", "/favicon.svg", "/api", "/library", "/assets", "/ws/"]) expect(g(false, false, p)).toBe("deny");
+    expect(g(false, false, "/libraryish")).toBe("pair-page");
     expect(g(false, false, "/api/onair", "POST")).toBe("deny");
     expect(g(false, false, "/", "POST")).toBe("deny");
   });
