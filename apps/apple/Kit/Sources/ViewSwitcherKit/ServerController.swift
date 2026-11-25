@@ -1,15 +1,17 @@
 #if os(macOS)
 import Foundation
 
-// The ViewSwitcher server behind the Mac app (port of apps/mac/src/server.ts, MAC-11): attach to one
-// that already answers on the port (e.g. `bun run dev`), otherwise start the bundled one and own it.
-// Only a server this app started is ever stopped.
+// The ViewSwitcher server behind the Mac app: attach to one that already answers on the port (e.g.
+// `bun run dev`), otherwise start the bundled one and own it. Only a server this app started is ever
+// stopped, and an orphan an earlier run left behind is replaced. ServerSupervisor keeps it running.
 
 public enum Probe: Equatable, Sendable {
     /// A ViewSwitcher server answers.
     case viewswitcher
-    /// Something else holds the port (or answers too slowly to be ours).
+    /// Something else answers on the port.
     case other
+    /// Something holds the port but didn't answer in time: a busy server, or not a server at all.
+    case slow
     /// Nothing listens.
     case none
 }
@@ -31,8 +33,7 @@ public func probe(_ base: URL, timeout: TimeInterval = 1.5) async -> Probe {
         else { return .other }
         return .viewswitcher
     } catch let e as URLError where e.code == .timedOut {
-        // Something holds the port but doesn't answer like us.
-        return .other
+        return .slow
     } catch {
         return .none
     }
@@ -174,13 +175,44 @@ public final class Server: @unchecked Sendable {
     }
 }
 
-/// Attach to a running ViewSwitcher server at `base`, or start one with `launch` and wait until it answers.
-public func connectOrStart(_ base: URL, launch: Launch, readyTimeout: TimeInterval = 20) async throws -> Server {
-    switch await probe(base) {
-    case .viewswitcher: return Server(attachedTo: base)
-    case .other: throw ServerError.portTaken(base.port.map(String.init) ?? "")
-    case .none: return try await start(base, launch: launch, readyTimeout: readyTimeout)
+/// What answers at `base`, asking again for up to `slowFor` seconds while it's slow: a server busy
+/// with a big library, or one still starting, isn't "something else" yet.
+public func settledProbe(_ base: URL, slowFor: TimeInterval = 5, timeout: TimeInterval = 1.5) async -> Probe {
+    let deadline = Date().addingTimeInterval(slowFor)
+    while true {
+        let p = await probe(base, timeout: timeout)
+        if p != .slow || Date() >= deadline { return p }
+        try? await Task.sleep(for: .milliseconds(250))
     }
+}
+
+/// Attach to a running ViewSwitcher server at `base`, or start one with `launch` and wait until it
+/// answers. An orphan sidecar (ServerInfo.isOrphan) is stopped first, then replaced.
+public func connectOrStart(_ base: URL, launch: @autoclosure @Sendable () throws -> Launch, readyTimeout: TimeInterval = 20, slowFor: TimeInterval = 5) async throws -> Server {
+    switch await settledProbe(base, slowFor: slowFor) {
+    case .viewswitcher:
+        guard let info = try? await ServerAPI(base: base).info(), info.isOrphan(), let pid = info.pid else { return Server(attachedTo: base) }
+        try await stopOrphan(pid, base: base)
+        return try await start(base, launch: launch(), readyTimeout: readyTimeout)
+    case .other, .slow: throw ServerError.portTaken(base.port.map(String.init) ?? "")
+    case .none: return try await start(base, launch: launch(), readyTimeout: readyTimeout)
+    }
+}
+
+/// SIGTERM (it saves paired devices on the way out), SIGKILL after 3 s; returns once the port is free.
+func stopOrphan(_ pid: Int32, base: URL) async throws {
+    kill(pid, SIGTERM)
+    let started = Date()
+    var killed = false
+    while Date().timeIntervalSince(started) < 6 {
+        if !processExists(pid), await probe(base, timeout: 0.5) == .none { return }
+        if !killed, Date().timeIntervalSince(started) > 3 {
+            kill(pid, SIGKILL)
+            killed = true
+        }
+        try? await Task.sleep(for: .milliseconds(100))
+    }
+    throw ServerError.startFailed("A ViewSwitcher server left over from before (process \(pid)) wouldn't stop. Quit it in Activity Monitor, then open ViewSwitcher again.")
 }
 
 func start(_ base: URL, launch: Launch, readyTimeout: TimeInterval) async throws -> Server {
