@@ -53,8 +53,7 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
   let exited: number | null = null;
   void proc.exited.then((code) => (exited = code));
   const deadline = Date.now() + readyMs;
-  while (Date.now() < deadline) {
-    if (exited !== null) throw await fail(`server exited with code ${exited} before it was ready`);
+  while (exited === null && Date.now() < deadline) {
     // A server that accepts the connection but never answers mustn't hang past the deadline.
     let timer: Timer | undefined;
     const left = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()))));
@@ -63,7 +62,6 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
     if (ok) return proc;
     await Bun.sleep(50);
   }
-  // It may have exited during the last check: say so rather than calling it slow.
-  if (exited !== null) throw await fail(`server exited with code ${exited} before it was ready`);
-  throw await fail(`server wasn't ready within ${readyMs / 1000} s`);
+  // Checked after the loop too: a server that exits during the last check is named as exited, not slow.
+  throw await fail(exited !== null ? `server exited with code ${exited} before it was ready` : `server wasn't ready within ${readyMs / 1000} s`);
 }
