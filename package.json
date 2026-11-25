@@ -13,6 +13,7 @@
     "test": "bun test",
     "obs:setup": "bun apps/server/src/obs-setup.ts",
     "ipad:deploy": "bash apps/apple/scripts/deploy-ipad.sh",
+    "ipad:release": "bash apps/apple/scripts/ipad-release.sh",
     "mac:dev": "bash apps/apple/scripts/dev.sh",
     "mac:build": "bash apps/apple/scripts/build.sh",
     "mac:release": "bash apps/apple/scripts/build.sh --release",

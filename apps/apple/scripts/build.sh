@@ -9,9 +9,11 @@
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
 #
-# Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary).
-# No credentials live in the repo: signing uses the login keychain, notarizing a notarytool profile,
-# and the appcast's EdDSA signature Sparkle's private key in the login keychain (see README.md).
+# Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary),
+# and when that profile doesn't exist, the App Store Connect API key: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
+# (env or the gitignored apps/apple/.release.env; scripts/release-env.sh).
+# No credentials live in the repo: signing uses the login keychain, notarizing a notarytool profile or the
+# API key's .p8 file, and the appcast's EdDSA signature Sparkle's private key in the login keychain (README.md).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -45,19 +47,34 @@ if [ "$UNSIGNED" = 0 ]; then
     echo "No Developer ID certificate for $TEAM found: building with an ad hoc signature." >&2
   fi
 fi
-if [ "$RELEASE" = 1 ] && ! xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
-  cat >&2 <<MSG
-
-✗ Can't notarize: there's no notarytool keychain profile "$PROFILE" (MAC-7a).
-  Create it once with an app-specific password from appleid.apple.com, for the Apple ID on team $TEAM:
-
-    xcrun notarytool store-credentials $PROFILE --apple-id <apple-id-email> --team-id $TEAM
-
-  (It prompts for the app-specific password and stores it in the login keychain.)
-  Or set APPLE_KEYCHAIN_PROFILE to an existing profile. A signed but unnotarized build: bun run mac:build
-
-MSG
-  exit 1
+# Notarizing (MAC-17): the notarytool keychain profile if it exists (MAC-7a), else the App Store Connect
+# API key (scripts/release-env.sh: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH from env or .release.env).
+NOTARY=()
+if [ "$RELEASE" = 1 ]; then
+  if xcrun notarytool history --keychain-profile "$PROFILE" >/dev/null 2>&1; then
+    NOTARY=(--keychain-profile "$PROFILE")
+    echo "Notarizing with the keychain profile $PROFILE."
+  else
+    source "$APPLE/scripts/release-env.sh"
+    load_release_env "$APPLE"
+    require_asc "notarize (there's no notarytool keychain profile \"$PROFILE\" either)" || {
+      echo "  Or create the profile once: xcrun notarytool store-credentials $PROFILE --apple-id <apple-id-email> --team-id $TEAM" >&2
+      echo "  A signed but unnotarized build: bun run mac:build" >&2
+      exit 1
+    }
+    NOTARY=(--key "$ASC_KEY_PATH" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID")
+    echo "Notarizing with App Store Connect API key $ASC_KEY_ID."
+    # Fail now, not after a ten-minute build, if Apple refuses the key.
+    xcrun notarytool history "${NOTARY[@]}" >/dev/null 2>&1 || {
+      echo "✗ notarytool refused API key $ASC_KEY_ID (issuer $ASC_ISSUER_ID, key file $ASC_KEY_PATH): check the IDs and that the key has the Developer role or higher." >&2
+      exit 1
+    }
+  fi
+fi
+if [ "$PUBLISH" = 1 ]; then
+  gh auth status >/dev/null 2>&1 || { echo "✗ --publish needs the GitHub CLI signed in (gh auth login)." >&2; exit 1; }
+  ! gh release view "v$VERSION" --repo 2witstudios/viewswitcher >/dev/null 2>&1 || {
+    echo "✗ A release v$VERSION already exists: bump MARKETING_VERSION in project.yml first." >&2; exit 1; }
 fi
 sign() { # sign <path> [entitlements]: Developer ID + hardened runtime + timestamp, or ad hoc
   local ent=()
@@ -131,7 +148,7 @@ fi
 if [ "$RELEASE" = 1 ]; then
   step "Notarize and staple the app"
   ditto -c -k --keepParent "$APP" "$BUILD/ViewSwitcher-notarize.zip"
-  xcrun notarytool submit "$BUILD/ViewSwitcher-notarize.zip" --keychain-profile "$PROFILE" --wait
+  xcrun notarytool submit "$BUILD/ViewSwitcher-notarize.zip" "${NOTARY[@]}" --wait
   xcrun stapler staple "$APP"
   rm -f "$BUILD/ViewSwitcher-notarize.zip"
 fi
@@ -149,7 +166,7 @@ rm -rf "$STAGE"
 [ -n "$IDENTITY" ] && codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 if [ "$RELEASE" = 1 ]; then
   step "Notarize and staple the dmg"
-  xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+  xcrun notarytool submit "$DMG" "${NOTARY[@]}" --wait
   xcrun stapler staple "$DMG"
   spctl -a -vv -t exec "$APP"
   spctl -a -vv -t open --context context:primary-signature "$DMG"
