@@ -55,6 +55,8 @@ targets:
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 21600
         SUVerifyUpdateBeforeExtraction: true
+        # Only the OS's own TLS (https to a Tailscale address): exempt (MAC-20).
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: Mac/ViewSwitcher.entitlements
     settings:
@@ -122,18 +124,24 @@ targets:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
         # Split View, Slide Over and Stage Manager (MAC-13a) need every orientation and no full-screen lock.
+        # App Store validation reads both keys for an iPad-only app (MAC-20), so both list all four.
         UIRequiresFullScreen: false
-        UISupportedInterfaceOrientations~ipad:
+        UISupportedInterfaceOrientations: &orientations
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad: *orientations
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: true
         # The switcher is plain http from 127.0.0.1 (the USB-C tunnel) or the LAN.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # The only permission the app asks for (MAC-20): camera, microphone, motion and location are refused
+        # in the web view without asking, so they have no usage strings.
         NSLocalNetworkUsageDescription: ViewSwitcher connects to the ViewSwitcher server on your Mac when the USB-C cable isn't plugged in.
+        # Only the OS's own TLS (https to a Tailscale address): exempt, no export compliance documents (MAC-20).
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher
@@ -173,3 +181,5 @@ schemes:
         - ViewSwitcher iPad UITests
     run:
       config: Debug
+    archive:
+      config: Release

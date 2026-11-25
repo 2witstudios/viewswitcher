@@ -72,7 +72,11 @@ public let logMaxBytes = 5 * 1024 * 1024
 /// Start a fresh log once it's past `max` bytes, so it never grows forever.
 public func capLog(_ file: URL, max: Int = logMaxBytes) {
     try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-    if let size = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int, size > max {
+    // fileSizeKey, not attributesOfItem: no file-timestamp API for the privacy manifest to declare.
+    // (A URL caches resource values, so read it fresh.)
+    var fresh = file
+    fresh.removeAllCachedResourceValues()
+    if let size = (try? fresh.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > max {
         try? Data().write(to: file)
     }
 }
