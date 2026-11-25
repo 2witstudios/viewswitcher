@@ -92,13 +92,15 @@
   // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
   // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
   let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
-  // If the page is still here a while later, the navigation was cancelled (the app refused it, or the Mac
-  // didn't answer): let the connector work again rather than freezing on "Connecting…".
-  const go = (url) => {
+  // Every navigation away goes through leave(). If the page is still here 10 s later, the navigation was
+  // cancelled or is stuck (the app refused it, or the Mac's old address doesn't answer): stop it, so it can't
+  // fail or land later under a new scan, and let the connector work again rather than freeze.
+  const leave = (navigate) => {
     leaving = true;
-    location.replace(url);
-    setTimeout(() => { leaving = scanning = false; status.textContent = ""; }, 10000);
+    navigate();
+    setTimeout(() => { window.stop(); leaving = scanning = false; status.textContent = ""; }, 10000);
   };
+  const go = (url) => leave(() => location.replace(url));
 
   // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app. `scanning` holds
   // from the tap until the page leaves (or the scan comes back empty), so no other flow starts or navigates meanwhile.
@@ -184,8 +186,7 @@
       if (leaving || scanning) return; // a scan started while this probe waited: it decides where the page goes
       if (found) {
         status.textContent = `Connected over ${found.how}…`;
-        leaving = true;
-        VS.open(found.base);
+        leave(() => VS.open(found.base));
         return;
       }
       // No Mac. Until one has been connected, the app opens on the demo (App Review and new buyers
@@ -194,8 +195,7 @@
       // launch the Mac's usb-bridge dials the tunnel on a 1 s retry and UsbTunnel holds a request up to 4 s.
       if (!touched && !VS.connectedBefore() && !VS.network() && !VS.leftDemo()) {
         if (Date.now() - started < 4500) return;
-        leaving = true;
-        location.replace("demo/");
+        leave(() => location.replace("demo/"));
         return;
       }
       if (!browsing && !scanning && status.querySelector(".dot") && Date.now() - started > 2500) status.textContent = "";

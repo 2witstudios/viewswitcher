@@ -111,10 +111,11 @@ export function TemplatePicker({ org, have, title, intro, skipLabel, onClose, on
     setBusy(false);
   };
 
-  useEscape(() => !busy && onClose());
+  const wrap = useRef<HTMLDivElement>(null);
+  useEscape(wrap, () => !busy && onClose());
   return (
     <Overlay>
-    <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="modal-wrap" ref={wrap} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal pack" role="dialog" aria-label={title}>
         <h2>{title}</h2>
         {intro && <p className="picker-note">{intro}</p>}

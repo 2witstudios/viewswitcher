@@ -176,7 +176,6 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     private func search() {
-        denied = false // only the latest attempt counts; didNotSearch sets it again
         browser.stop()
         browser = NetServiceBrowser()
         browser.delegate = self
@@ -223,6 +222,12 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
             guard let self, self.done != nil else { return }
             self.search()
         }
+    }
+
+    /// A search actually started (access allowed): only now is an earlier refusal out of date. Clearing it on
+    /// every retry instead would lose the refusal when the limit lands between a retry and its answer.
+    nonisolated func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+        MainActor.assumeIsolated { denied = false }
     }
 
     nonisolated func netServiceDidResolveAddress(_ sender: NetService) {
