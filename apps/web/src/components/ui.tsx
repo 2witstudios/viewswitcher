@@ -77,7 +77,7 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
   };
   return (
     <Overlay>
-    <div className="modal-wrap" ref={wrap} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-wrap" ref={wrap} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <form className="modal" role="dialog" aria-label={title} onSubmit={submit}>
         <h2>{title}</h2>
         {children}
