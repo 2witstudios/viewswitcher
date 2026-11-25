@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type BuiltinPack, packs, type StagedPack } from "../lib/api";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
+import { Overlay } from "./ui";
 
 type Card = { pack: BuiltinPack; staged: StagedPack | null; error: string | null };
 
@@ -76,6 +77,7 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
   };
 
   return (
+    <Overlay>
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal pack" role="dialog" aria-label={title}>
         <h2>{title}</h2>
@@ -109,5 +111,6 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
         </div>
       </div>
     </div>
+    </Overlay>
   );
 }

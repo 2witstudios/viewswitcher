@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 export function Mark({ size = 22 }: { size?: number }) {
   return <img src="/icon.svg" width={size} height={size} alt="" />;
@@ -72,6 +73,7 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
     }
   };
   return (
+    <Overlay>
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="modal" role="dialog" aria-label={title} onSubmit={submit}>
         <h2>{title}</h2>
@@ -83,8 +85,15 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
         </div>
       </form>
     </div>
+    </Overlay>
   );
 }
+
+/**
+ * A dialog's layer, rendered into <body>: a modal opened from the sidebar would otherwise sit in the
+ * sidebar's stacking context (it's position: sticky on wide screens) under the page.
+ */
+export const Overlay = ({ children }: { children: ReactNode }) => createPortal(children, document.body);
 
 let toastSet: ((t: string) => void) | null = null;
 export function toast(text: string) {
