@@ -49,8 +49,9 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
           {appLink && <span className="pill link" title={appLink === "USB" ? "Connected to the Mac over the USB-C cable" : "Connected to the Mac over the network"}>{appLink}</span>}
           {!obs?.connected && <span className="pill off" title="Open OBS with Tools → WebSocket Server Settings enabled"><span className="dot" />OBS offline</span>}
           {!appLink && state?.usb.attached && (
-            <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "The iPad app is connected over the USB-C cable" : "An iPad is plugged in: open ViewSwitcher on it"}>
-              {state.usb.connected ? "IPAD · USB" : "IPAD · OPEN THE APP"}
+            // PHONE-8: named for the device plugged in (iPhone or iPad); an unknown one reads as before.
+            <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? `The ${state.usb.device ?? "iPad"} app is connected over the USB-C cable` : `An ${state.usb.device ?? "iPad"} is plugged in: open ViewSwitcher on it`}>
+              {(state.usb.device ?? "iPad").toUpperCase()} · {state.usb.connected ? "USB" : "OPEN THE APP"}
             </span>
           )}
         </div>

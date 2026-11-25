@@ -43,6 +43,11 @@ final class MenuStatusTests: XCTestCase {
         XCTAssertEqual(MenuStatus(s).ipad, "iPad: plugged in · open ViewSwitcher on it")
         s.usb = .init(enabled: false)
         XCTAssertEqual(MenuStatus(s).ipad, "iPad: USB link off")
+        // PHONE-8: an iPhone plugged in is named as one.
+        s.usb = .init(enabled: true, attached: true, connected: true, device: "iPhone")
+        XCTAssertEqual(MenuStatus(s).ipad, "iPhone: connected over USB")
+        s.usb = .init(enabled: true, attached: true, connected: false, device: "iPhone")
+        XCTAssertEqual(MenuStatus(s).ipad, "iPhone: plugged in · open ViewSwitcher on it")
     }
 
     func testNoServer() {

@@ -123,15 +123,18 @@ export type ObsSetup = {
   missingDevices: string[];
 };
 
-/** The USB-C link to the iPad app (see the server's usb-bridge.ts). */
+/** The USB-C link to the iPhone or iPad app (see the server's usb-bridge.ts). */
 export type UsbStatus = {
   /** The bridge is running (macOS, usbmuxd present, VIEWSWITCHER_USB isn't 0). */
   enabled: boolean;
-  /** An iPad is plugged in over USB. */
+  /** An iPhone or iPad is plugged in over USB. */
   attached: boolean;
   /** The ViewSwitcher app on it is open and its tunnels are ready. */
   connected: boolean;
+  /** Which kind it is (PHONE-8), from usbmuxd's product id; absent when unknown. */
+  device?: UsbDevice;
 };
+export type UsbDevice = "iPhone" | "iPad";
 
 /** What an AI agent connected over MCP may put on air: never, only while OBS isn't streaming or recording, or always. */
 export type AgentOnAir = "never" | "not-live" | "always";

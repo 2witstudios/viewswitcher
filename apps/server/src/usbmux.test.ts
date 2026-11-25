@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { concat, connectMessage, decodeMessages, decodeOne, encodeMessage, parsePlist, resultNumber, swapPort } from "./usbmux";
+import { concat, connectMessage, decodeMessages, decodeOne, deviceKind, encodeMessage, parsePlist, resultNumber, swapPort } from "./usbmux";
 
 describe("usbmux", () => {
   test("port is sent in network byte order", () => {
@@ -68,5 +68,13 @@ describe("usbmux", () => {
       MessageType: "Attached",
       Properties: { ConnectionSpeed: 480000000, ConnectionType: "USB", EscapedFullServiceName: "a & b", USBSerialNumber: new Uint8Array([0, 1, 2]), Flag: true, List: [1, "x"] },
     });
+  });
+
+  test("names the device from its product id (PHONE-8)", () => {
+    expect(deviceKind(0x12a8)).toBe("iPhone");
+    expect(deviceKind(4779)).toBe("iPad");
+    expect(deviceKind("4776")).toBe("iPhone");
+    expect(deviceKind(0x1234)).toBeUndefined();
+    expect(deviceKind(undefined)).toBeUndefined();
   });
 });
