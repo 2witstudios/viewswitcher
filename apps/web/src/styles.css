@@ -288,3 +288,35 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .picker-item img { width: 100%; aspect-ratio: 16 / 10; object-fit: contain; border-radius: 10px; background: var(--raised); outline: 2px solid transparent; outline-offset: 2px; }
 .picker-item:hover img, .picker-item:focus-visible img { outline-color: var(--cream); }
 .picker-item span { font-size: 12px; color: var(--sage); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------------------------------------------------------------- style packs and sets (EDIT-22 · EDIT-24 · EDIT-25) */
+.menu-heading { padding: 10px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
+.checks-head { flex-basis: 100%; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
+.drop-page { position: relative; flex: 1; display: flex; flex-direction: column; gap: 28px; }
+.drop-hint { position: fixed; inset: 0; z-index: 25; pointer-events: none; display: grid; place-items: center; background: rgba(4, 5, 8, 0.55); }
+.drop-hint span { padding: 22px 30px; border: 2px dashed var(--cream); border-radius: 16px; background: var(--stage); font-size: 18px; font-weight: 600; }
+.pack-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: -8px; }
+.pack-bar .btn { display: inline-flex; align-items: center; gap: 8px; }
+.pack-bar .empty { font-size: 14px; }
+.pack-refused { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 14px 18px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--raised); font-size: 15px; }
+.pack-refused .btn { margin-left: auto; height: 34px; }
+.btn.small { height: 32px; padding: 0 12px; font-size: 13px; }
+.section-head .btn.small { margin-left: auto; }
+.set-note { margin: -4px 0 0; font-size: 14px; color: var(--sage); max-width: 70ch; }
+.modal.pack { width: min(920px, 100%); max-height: calc(100dvh - 48px); overflow-y: auto; }
+.pack-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.pack-meta { font-size: 14px; color: var(--sage); }
+.pack-covers { display: grid; grid-template-columns: repeat(auto-fill, 200px); gap: 16px 14px; }
+.pack-covers figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.pack-covers .cover { width: 200px; height: 113px; }
+.pack-covers .cover iframe { transform: scale(0.1041667); }
+.pack-covers figcaption { font-size: 13px; color: var(--sage); }
+.pack-runs, .pack-warnings { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); font-size: 14px; }
+.pack-runs .quiet { color: var(--sage); }
+.pack-warnings span { color: var(--sage); }
+.ed-drop { position: absolute; border-radius: 8px; outline: 3px dashed var(--cream); outline-offset: 2px; background: rgba(244, 245, 247, 0.12); pointer-events: none; }
+.ed-drop span, .ed-drop-point span { position: absolute; left: -2px; top: -30px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--cream); color: var(--on-cream); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; display: inline-flex; align-items: center; }
+.ed-drop-point { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; border: 3px solid var(--cream); pointer-events: none; }
+.ed-drop-point span { left: 14px; top: -26px; }
+.ed-uploading { position: absolute; z-index: 22; left: 50%; top: 16px; transform: translateX(-50%); height: 36px; padding: 0 16px; border-radius: 10px; background: var(--cream); color: var(--on-cream); font-size: 14px; font-weight: 600; display: flex; align-items: center; }
+.menu { max-height: min(72dvh, 640px); overflow-y: auto; }

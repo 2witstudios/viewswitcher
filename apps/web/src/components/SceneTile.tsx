@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
+import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
 
 /** Open the scene editor on `path`; `rename`: with the name ready to retype (a fresh copy). */
@@ -44,7 +45,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
         onClick={onActivate ?? (() => openMenu())}
         onContextMenu={openMenu}
       >
-        <iframe title={label} src={sceneUrl(path, versions, true)} loading="lazy" tabIndex={-1} />
+        <iframe title={label} src={sceneUrl(path, versions, true)} sandbox={SCENE_SANDBOX} loading="lazy" tabIndex={-1} />
         {live ? <span className="badge">ON AIR</span> : badge ? <span className="badge quiet">{badge}</span> : null}
       </button>
       <div className="tile-meta">

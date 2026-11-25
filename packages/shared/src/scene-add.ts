@@ -9,8 +9,12 @@ export const DEVICE_SLOTS: Partial<Record<AddKind, string>> = { camera: "Camera"
 
 const attr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
-/** A box of `w`×`h` in the middle of the scene. */
-const middle = (w: number, h: number) => ({ left: Math.round((SCENE.width - w) / 2), top: Math.round((SCENE.height - h) / 2), w, h });
+/** A box of `w`×`h` in the middle of the scene, or centred on `at` and kept inside the scene. */
+const middle = (w: number, h: number, at?: { x: number; y: number }) => {
+  if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) return { left: Math.round((SCENE.width - w) / 2), top: Math.round((SCENE.height - h) / 2), w, h };
+  const clamp = (v: number, size: number, room: number) => Math.round(Math.max(0, Math.min(room - size, v - size / 2)));
+  return { left: clamp(at.x, w, SCENE.width), top: clamp(at.y, h, SCENE.height), w, h };
+};
 const box = (b: { left: number; top: number; w: number; h: number }) => `left: ${b.left}px; top: ${b.top}px; width: ${b.w}px; height: ${b.h}px`;
 
 /** A slot name not used in the scene yet: "Camera", then "Camera 2", "Camera 3"… */
@@ -24,8 +28,10 @@ export function freeSlotName(base: string, used: string[]): string {
 /**
  * The markup for a new element of `kind`. `slots` are the scene's slot names (so a second camera box
  * asks for "Camera 2"); `image` is the picture for an image (its natural size keeps its shape).
+ * `at`: where it was dropped (EDIT-22), in scene pixels: it's centred there, inside the scene, and a
+ * picture smaller than the 600 px box keeps its own size instead of being blown up.
  */
-export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src: string; width?: number; height?: number } } = {}): string {
+export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src: string; width?: number; height?: number }; at?: { x: number; y: number } } = {}): string {
   switch (kind) {
     case "text":
       return `<p class="abs display" style="${box(middle(720, 96))}; margin: 0; font-size: 72px; line-height: 1.15">New text</p>`;
@@ -40,10 +46,10 @@ export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src
       const src = opts.image?.src;
       if (!src) throw new Error("An image needs a picture");
       const nw = opts.image?.width || 1, nh = opts.image?.height || 1;
-      // Fit inside 600×600, keeping its shape.
-      const k = Math.min(600 / nw, 600 / nh);
+      // Fit inside 600×600, keeping its shape (a dropped picture is never made bigger than it is).
+      const k = Math.min(600 / nw, 600 / nh, opts.at && nw > 1 && nh > 1 ? 1 : Infinity);
       const w = Math.max(16, Math.round(nw * k)), h = Math.max(16, Math.round(nh * k));
-      return `<img class="abs" src="${attr(src)}" alt="" style="${box(middle(w, h))}; object-fit: contain">`;
+      return `<img class="abs" src="${attr(src)}" alt="" style="${box(middle(w, h, opts.at))}; object-fit: contain">`;
     }
     case "camera":
     case "guest":
