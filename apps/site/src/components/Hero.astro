@@ -1,26 +1,22 @@
 ---
 import Cta from "./Cta.astro";
 import Program from "./Program.astro";
-import { cta } from "../site.config";
 ---
 <section class="hero wrap" aria-labelledby="hero-title">
   <div class="copy">
     <h1 id="hero-title">Look professional when you go live.</h1>
-    <div class="act">
-      <p class="lede">ViewSwitcher is a one-click scene switcher for OBS. Pick a view (intro, teaching, interview, break) and your camera, screen and titles move into place.</p>
-      <Cta secondary={{ label: "See how it works", href: "#how" }} />
-      <p class="quiet">{cta.note}</p>
-    </div>
+    <p class="lede">A one-click scene switcher for OBS.</p>
+    <Cta />
   </div>
   <Program />
 </section>
 <style>
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 4vw, 3rem); padding-block: clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem); }
-  .copy { display: grid; gap: 1.5rem; }
-  .act { display: grid; gap: 1.25rem; align-content: end; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2.25rem, 4vw, 2.75rem); padding-block: clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem); }
+  .copy { display: grid; justify-items: center; gap: 1.35rem; text-align: center; }
   h1 { font-size: clamp(2.6rem, 6.4vw, 4.75rem); max-width: 11ch; }
-  @media (min-width: 64rem) {
-    .copy { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 3.5rem; align-items: end; }
-    h1 { font-size: clamp(3.5rem, 5.2vw, 4.75rem); max-width: 16ch; }
-  }
+  .lede { font-size: clamp(1.125rem, 1.6vw, 1.25rem); color: var(--ink-2); margin-inline: auto; }
+  .copy :global(.actions) { justify-content: center; margin-top: 0.4rem; width: 100%; }
+  /* Phones: a wide, easy-to-hit button. */
+  @media (max-width: 40rem) { .copy :global(.btn-primary) { width: min(100%, 22rem); justify-content: center; } }
+  @media (min-width: 64rem) { h1 { font-size: clamp(3.5rem, 5.2vw, 4.75rem); max-width: 900px; } }
 </style>

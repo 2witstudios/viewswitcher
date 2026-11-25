@@ -1,13 +1,10 @@
 ---
-// The primary button (one config switch, see site.config.ts) plus an optional plain link beside it.
+// The primary button (one config switch, see site.config.ts).
 import Icon from "./Icon.astro";
 import { cta } from "../site.config";
-interface Props { secondary?: { label: string; href: string } }
-const { secondary } = Astro.props;
 ---
 <div class="actions">
   <a class="btn btn-primary" href={cta.primary.href}>
     <Icon name={cta.state === "download" ? "download" : "bell"} />{cta.primary.label}
   </a>
-  {secondary && <a class="btn btn-secondary" href={secondary.href}>{secondary.label}</a>}
 </div>
