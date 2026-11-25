@@ -182,7 +182,7 @@ environment or in `apps/apple/.release.env` (gitignored; copy `.release.env.exam
 
 | variable | what | where |
 |---|---|---|
-| `ASC_KEY_ID` | the key's ID (`BS7KAPCGBR`) | App Store Connect → Users and Access → Integrations → App Store Connect API |
+| `ASC_KEY_ID` | the key's ID (10 characters, like `AB12CD34EF`) | App Store Connect → Users and Access → Integrations → App Store Connect API |
 | `ASC_ISSUER_ID` | the issuer ID, a UUID | the same page, above the list of keys |
 | `ASC_KEY_PATH` | the `.p8` file | default `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` |
 

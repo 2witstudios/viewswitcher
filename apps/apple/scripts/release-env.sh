@@ -1,7 +1,7 @@
 # App Store Connect API key for releases (MAC-17). Sourced by build.sh (mac:release) and
 # ipad-release.sh (ipad:release); never run on its own.
 #
-#   ASC_KEY_ID      the key's ID (Users and Access → Integrations → App Store Connect API), e.g. BS7KAPCGBR
+#   ASC_KEY_ID      the key's ID (Users and Access → Integrations → App Store Connect API), e.g. AB12CD34EF
 #   ASC_ISSUER_ID   the issuer ID shown above the keys on that same page (a UUID)
 #   ASC_KEY_PATH    the .p8 file; default ~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8
 #
@@ -36,7 +36,7 @@ load_release_env() {
 
 # The values that are missing or wrong, one per line (empty when the key is usable).
 asc_problems() {
-  [ -n "$ASC_KEY_ID" ] || echo "ASC_KEY_ID is not set: the key's ID, e.g. BS7KAPCGBR (App Store Connect → Users and Access → Integrations → App Store Connect API)."
+  [ -n "$ASC_KEY_ID" ] || echo "ASC_KEY_ID is not set: the key's ID, e.g. AB12CD34EF (App Store Connect → Users and Access → Integrations → App Store Connect API)."
   if [ -z "$ASC_ISSUER_ID" ]; then
     echo "ASC_ISSUER_ID is not set: the issuer ID, a UUID shown above the list of keys at App Store Connect → Users and Access → Integrations → App Store Connect API (MAC-21)."
   elif ! [[ "$ASC_ISSUER_ID" =~ ^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$ ]]; then

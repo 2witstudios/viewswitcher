@@ -145,6 +145,9 @@ stream,live,streaming,scene,scenes,switcher,church,podcast,teacher,remote,contro
 ```
 ViewSwitcher for iPhone and iPad is the remote for ViewSwitcher on the Mac, which drives OBS (the free streaming app). Full use needs a Mac running ViewSwitcher and OBS, connected by a USB-C cable or paired over the same Wi-Fi. The same app runs on iPhone and iPad; on iPhone, sideways shows the views as a deck.
 
+WHAT THE APP DOES ON THE DEVICE
+Like a presentation remote, the app is the touch surface for software on the user's Mac. On the device itself it: runs a USB-C tunnel to the Mac over the cable (Network framework), so no Wi-Fi is needed; scans the Mac's pairing QR code with VisionKit and pairs the device; finds the Mac on the Wi-Fi with Bonjour when the user types the code instead; keeps the screen awake while a show runs; and includes a complete offline demo show, so every control can be tried without a Mac.
+
 TRY IT WITHOUT A MAC: THE DEMO
 1. Open the app. With no Mac connected it opens the demo by itself: a sample cooking show, "Saltwater Kitchen", with a white bar along the top that reads "Demo · Connect your Mac to go live".
 2. Tap any view on the right (in portrait, below; on iPhone sideways, beside the program). The program on the left cuts to it, the camera and guest move into their new places, and the red "On air" tally moves to the view you tapped.
