@@ -50,10 +50,13 @@ describe("startServer", () => {
     const pidFile = join(library, "stubborn.pid");
     writeFileSync(entry, `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
     const t0 = Date.now();
-    const err = await startServer({}, async () => existsSync(pidFile) && false, { readyMs: 1_000, entry }).then(() => null, (e: Error) => e);
-    expect(err?.message).toStartWith("server wasn't ready within 1 s");
+    // Roomy: on a cold, busy runner Bun can take seconds to start the stub, and SIGTERM must reach it
+    // only after it has set its handler, or this tests nothing.
+    const err = await startServer({}, async () => existsSync(pidFile) && false, { readyMs: 5_000, entry }).then(() => null, (e: Error) => e);
+    expect(err?.message).toStartWith("server wasn't ready within 5 s");
+    expect(existsSync(pidFile)).toBe(true); // the stub was up, so SIGTERM met its handler and SIGKILL did the rest
     // SIGTERM grace, SIGKILL and the stderr drain fit inside the margin READY_MS leaves before the hook.
-    expect(Date.now() - t0).toBeLessThan(1_000 + (SERVER_START_MS - READY_MS));
+    expect(Date.now() - t0).toBeLessThan(5_000 + (SERVER_START_MS - READY_MS));
     const pid = Number(readFileSync(pidFile, "utf8"));
     expect(() => process.kill(pid, 0)).toThrow(); // ESRCH: it's gone
   }, SERVER_START_MS);
