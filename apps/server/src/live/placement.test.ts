@@ -72,16 +72,65 @@ describe("placement", () => {
     expect(obs.transformOf("ViewSwitcher", "Screen")).toEqual(coverTransform(screen, { width: 1920, height: 1080 }, { width: 1920, height: 1080 }));
   });
 
-  test("batched: the scene's items and canvas once, then one batch to read sizes and one to change OBS per report", async () => {
+  test("batched: the scene's items once, then one batch to read the canvas and sizes and one to change OBS per report", async () => {
     const { obs, placer } = setup();
     await placer.report("org/templates/talk.html", [camera]);
     await placer.report("org/templates/talk.html", [{ ...camera, x: 10 }]);
     await placer.report("org/templates/brb.html", []);
     expect(obs.requests.filter((r) => r.type === "RequestBatch").map((r) => r.data[0])).toEqual([
-      "GetVideoSettings", "GetSceneItemTransform", "SetInputSettings", // first: list, sizes, ground + changes
-      "GetSceneItemTransform", "SetSceneItemEnabled", // the ground is already this org's
+      "GetSceneItemList", "GetVideoSettings", "SetInputSettings", // first: the items, canvas + sizes, ground + changes
+      "GetVideoSettings", "SetSceneItemEnabled", // the ground is already this org's
       "SetSceneItemEnabled", // nothing slotted: nothing to read
     ]);
+  });
+
+  test("a new canvas size is used at the next placement, though OBS sends no event for it", async () => {
+    const { obs, placer } = setup();
+    await placer.report("org/a.html", [screen]);
+    Object.assign(obs.video, { baseWidth: 1280, baseHeight: 720 }); // changed in OBS's settings
+    await placer.report("org/a.html", [screen]);
+    expect(obs.transformOf("ViewSwitcher", "Screen")).toEqual(coverTransform(screen, { width: 1920, height: 1080 }, { width: 1280, height: 720 }));
+  });
+
+  test("a ground source deleted and made again gets the org's color again", async () => {
+    const { obs, placer } = setup({}, () => "#123456");
+    await placer.report("org/a.html", []);
+    obs.inputs.get("ViewSwitcher Ground")!.settings = {}; // made again, with OBS's default color
+    placer.onEvent("InputCreated");
+    await placer.report("org/a.html", []);
+    expect(obs.inputs.get("ViewSwitcher Ground")!.settings.color).toBe(obsColor("#123456"));
+  });
+
+  test("a missing ground source costs no extra listing of the scene", async () => {
+    const { obs, placer } = setup();
+    obs.inputs.delete("ViewSwitcher Ground");
+    for (let i = 0; i < 3; i++) await placer.report("org/a.html", [camera]);
+    expect(obs.requests.filter((r) => r.type === "GetSceneItemList")).toHaveLength(1);
+  });
+
+  test("a report made while an older one is placed resolves only once the newest is placed, with its warnings", async () => {
+    const { placer, placed } = setup();
+    const first = placer.report("org/a.html", [camera]);
+    await Bun.sleep(0);
+    const second = placer.report("org/b.html", [{ ...camera, source: "Phone" }]);
+    const third = placer.report("org/c.html", [{ ...camera, source: "Tablet" }]);
+    const order: string[] = [];
+    await Promise.all([first.then(() => order.push("a")), second.then(() => order.push("b")), third.then(() => order.push("c"))]);
+    // Whichever finished, all three saw the newest placement done: its warning was the last one reported.
+    expect(placed.at(-1)?.[0]).toContain('"Tablet" slot');
+    expect(order).toHaveLength(3);
+  });
+
+  test("a placement that throws doesn't stop the next one", async () => {
+    const obs = Object.assign(fakeObs({ scenes: { ViewSwitcher: SCENE_ITEMS }, inputs: INPUTS }), { status: { connected: true } });
+    let calls = 0;
+    const placer = createPlacer({ obs, names, ground: () => null, placed: placedSet(), onPlaced: () => {
+      if (++calls === 1) throw new Error("listener broke");
+    } });
+    await placer.report("org/a.html", [camera]);
+    await placer.report("org/b.html", [guest]);
+    expect(calls).toBe(2);
+    expect(obs.shown("ViewSwitcher").Guest).toBe(true);
   });
 
   test("items added in OBS are seen after OBS says so", async () => {

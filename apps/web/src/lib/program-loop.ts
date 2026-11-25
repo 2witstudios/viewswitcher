@@ -10,7 +10,7 @@ import type { Slot } from "@viewswitcher/shared";
 import type { FrameState } from "./scene-frame";
 
 /** `from`: the path the scene had before (renamed on air, or the stream copy it replaced): no transition for that. */
-export type Job = { url: string; path: string; from?: string; /** Reload even if the file version is the one on screen. */ force?: boolean };
+export type Job = { url: string; path: string; from?: string };
 /** One of the two scene frames the page swaps between. */
 export type FrameIndex = 0 | 1;
 
@@ -22,8 +22,6 @@ export type ProgramEffects = {
   loadTransition(): Promise<void>;
   /** Ask scene frame `i` (its bridge) for its slots and version; null when it doesn't answer. */
   ask(i: FrameIndex): Promise<FrameState | null>;
-  /** The file version `url` would load (the server's scene hash), without loading it; null if unknown. */
-  version(url: string): Promise<string | null>;
   /** Tell the server where the shown scene's slots are, so OBS places the sources there. */
   reportSlots(path: string, slots: Slot[]): Promise<unknown>;
   /** Show scene frame `i`, hiding the other. */
@@ -79,17 +77,6 @@ export function createProgramLoop(fx: ProgramEffects) {
         const newer = nudge.promise;
         const superseded = () => desired !== job;
         const back = other(front);
-        // The scene on screen under a new URL (every URL changes when the live socket comes back; a
-        // save changes the file). When the file is the version already playing, keep that frame
-        // rather than load a second copy behind it, whose music would play twice.
-        if (!job.force && shown?.path === job.path && frameVersion[front]) {
-          const v = await unlessNewer(fx.version(job.url), newer);
-          if (superseded()) continue;
-          if (v === frameVersion[front]) {
-            shown = job;
-            continue;
-          }
-        }
         await unlessNewer(Promise.all([fx.load(back, job.url), fx.loadTransition()]), newer);
         if (superseded()) continue; // go straight to the newer one
         const v = versionOf(job.url);

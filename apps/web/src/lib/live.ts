@@ -40,13 +40,20 @@ let downTimer: ReturnType<typeof setTimeout> | undefined;
 /** The built entry script this page runs (undefined under the Vite dev server, which never reloads this way). */
 const ownBuild = typeof document !== "undefined" ? document.querySelector<HTMLScriptElement>('script[src*="/assets/index-"]')?.getAttribute("src") ?? undefined : undefined;
 
-/** Whether a socket has been open before: the next one opening is a reconnect. */
-let wasOpen = false;
+/** The server run and its last library change this page heard; null until the first hello. */
+let heard: { server: string; seq: number } | null = null;
 
 /**
- * After a gap in the live socket (Wi-Fi dropped, the server restarted), the library changes sent
- * meanwhile were never heard: every file may have changed. Bumps every version (the shared `*`, in
- * every scene url) and refetches the library.
+ * Whether a page coming back to the live socket missed library changes: the server restarted (a new
+ * run) or sent changes while the page was away. A short drop with nothing changed reloads nothing.
+ */
+export function missedChanges(last: { server: string; seq: number } | null, hello: { server: string; seq: number }): boolean {
+  return last !== null && (last.server !== hello.server || last.seq !== hello.seq);
+}
+
+/**
+ * After changes were missed, any file may have changed: bump every version (the shared `*`, in every
+ * scene url) so each scene loads what's on disk now.
  */
 export function caughtUp(versions: Record<string, number>): Record<string, number> {
   return { ...versions, "*": (versions["*"] ?? 0) + 1 };
@@ -58,11 +65,7 @@ function connect() {
   ws.onopen = () => {
     clearTimeout(downTimer);
     downTimer = undefined;
-    if (wasOpen) {
-      set({ connected: true, versions: caughtUp(live.versions) });
-      queryClient.invalidateQueries({ queryKey: ["library"] });
-    } else set({ connected: true });
-    wasOpen = true;
+    set({ connected: true });
   };
   ws.onclose = () => {
     set({ connected: false });
@@ -71,6 +74,13 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data) as ServerMessage;
+    if (msg.t === "hello") {
+      if (missedChanges(heard, msg)) {
+        set({ versions: caughtUp(live.versions) });
+        queryClient.invalidateQueries({ queryKey: ["library"] });
+      }
+      heard = { server: msg.server, seq: msg.seq };
+    }
     if (msg.t === "state") set({ state: msg.state });
     if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.hash, msg.edit, { session: msg.session, seq: msg.seq }));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
@@ -83,6 +93,7 @@ function connect() {
       }
       set({ versions });
       queryClient.invalidateQueries({ queryKey: ["library"] });
+      if (heard) heard = { ...heard, seq: msg.seq };
     }
   };
 }

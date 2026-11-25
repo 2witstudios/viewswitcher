@@ -165,6 +165,9 @@ obs.start();
 // ---------------------------------------------------------------- library watcher
 
 let changed = new Set<string>();
+/** This run of the server, and its library changes so far: a reconnecting client asks whether it missed any. */
+const serverRun = crypto.randomUUID();
+let librarySeq = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
@@ -177,7 +180,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
     changed = new Set();
     // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
     await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
-    publish({ t: "library:changed", paths });
+    publish({ t: "library:changed", paths, seq: ++librarySeq });
   }, 120);
 });
 
@@ -625,6 +628,7 @@ const websocket = {
     ws.subscribe("all");
     ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
     ws.send(JSON.stringify({ t: "build", build } satisfies ServerMessage));
+    ws.send(JSON.stringify({ t: "hello", server: serverRun, seq: librarySeq } satisfies ServerMessage));
   },
   message() {},
   close(ws: Socket) {

@@ -9,8 +9,8 @@
 // Only the latest report is applied, one placement at a time: overlapping placements would interleave
 // their requests and could leave sources from an older scene. Every request has a deadline, so an OBS
 // that stalls with its socket open costs one placement, never the rest of the show. Each placement
-// reads the slotted sources' sizes in one batch and makes every change in one more; the canvas size
-// and the scene's item ids are kept until OBS says its items or sources changed.
+// reads the canvas and the slotted sources' sizes in one batch and makes every change in one more;
+// the scene's item ids are kept until OBS says its items or sources changed.
 import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
@@ -27,8 +27,8 @@ export type SceneItem = { sourceName: string; sceneItemId: number };
 export type Canvas = { width: number; height: number };
 
 /**
- * After these OBS events the kept item ids or canvas may be wrong: items were added, removed or
- * renamed, or another scene collection or profile was loaded.
+ * After these OBS events the kept item ids may be wrong: items were added, removed or renamed, or
+ * another scene collection or profile was loaded.
  */
 const PLACEMENT_EVENTS = new Set([
   "SceneItemCreated", "SceneItemRemoved", "InputNameChanged", "InputRemoved", "InputCreated",
@@ -107,45 +107,48 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
   let latest: { path: string; slots: Slot[] } | null = null;
   let seq = 0;
   let queue = Promise.resolve();
-  let scene: { canvas: Canvas; items: SceneItem[] } | null = null;
+  /** The scene's items, kept until OBS reports a change to them. */
+  let items: SceneItem[] | null = null;
   /** The ground color OBS has now, as far as we know. */
   let groundShown: string | null = null;
 
   const fail = (r: BatchResult | undefined, what: string) => new Error(`${what}: ${r?.requestStatus.comment ?? `error ${r?.requestStatus.code ?? "?"}`}`);
 
   async function sceneItems() {
-    if (scene) return scene;
-    const [video, list] = await obs.requestBatch([
-      { requestType: "GetVideoSettings" },
-      { requestType: "GetSceneItemList", requestData: { sceneName: names.scene } },
-    ], { timeoutMs });
-    if (!video?.requestStatus.result) throw fail(video, "GetVideoSettings");
+    if (items) return items;
+    const [list] = await obs.requestBatch([{ requestType: "GetSceneItemList", requestData: { sceneName: names.scene } }], { timeoutMs });
     if (!list?.requestStatus.result) {
       if (list?.requestStatus.code === 600) throw new Error(`OBS has no scene "${names.scene}". Press Set up OBS in the switcher.`);
       throw fail(list, "GetSceneItemList");
     }
-    const items = ((list.responseData?.sceneItems ?? []) as SceneItem[]).map(({ sourceName, sceneItemId }) => ({ sourceName, sceneItemId }));
-    scene = { canvas: { width: video.responseData.baseWidth, height: video.responseData.baseHeight }, items };
-    return scene;
+    items = ((list.responseData?.sceneItems ?? []) as SceneItem[]).map(({ sourceName, sceneItemId }) => ({ sourceName, sceneItemId }));
+    return items;
   }
 
   async function placeOnce(path: string, slots: Slot[]): Promise<string[]> {
     // The org's ground color is looked up while OBS is asked for the scene and the sizes.
     const color = Promise.resolve(ground(path)).catch(() => null);
-    const { canvas, items } = await sceneItems();
-    const inSlots = slotted(items, slots);
+    const list = await sceneItems();
+    const inSlots = slotted(list, slots);
     const ids = [...inSlots.keys()];
+    // The canvas is read with the sizes: OBS sends no event when its resolution changes.
     const read = ids.length
-      ? await obs.requestBatch(ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })), { timeoutMs })
+      ? await obs.requestBatch([
+          { requestType: "GetVideoSettings" },
+          ...ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })),
+        ], { timeoutMs })
       : [];
+    const [video, ...transforms] = read;
+    if (video && !video.requestStatus.result) throw fail(video, "GetVideoSettings");
+    const canvas = { width: Number(video?.responseData?.baseWidth) || 1920, height: Number(video?.responseData?.baseHeight) || 1080 };
     const sizes = new Map<number, Canvas>();
-    read.forEach((r, i) => {
+    transforms.forEach((r, i) => {
       const t = r.responseData?.sceneItemTransform;
       if (r.requestStatus.result && t) sizes.set(ids[i]!, { width: Number(t.sourceWidth) || 0, height: Number(t.sourceHeight) || 0 });
-      else if (r.requestStatus.code === 600) scene = null; // an item went away under us: list again next time
+      else if (r.requestStatus.code === 600) items = null; // an item went away under us: list again next time
     });
     placed.remember([...inSlots.values()].map((s) => s.source));
-    const plan = planPlacement({ items, slots, sizes, canvas, names, placed });
+    const plan = planPlacement({ items: list, slots, sizes, canvas, names, placed });
     const wanted = await color;
     const recolor = wanted && wanted !== groundShown ? wanted : null;
     const requests = recolor
@@ -154,37 +157,51 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
     const results = await obs.requestBatch(requests, { timeoutMs });
     const warnings = [...plan.warnings];
     results.forEach((r, i) => {
+      const isGround = recolor !== null && i === 0;
       if (r.requestStatus.result) {
-        if (recolor && i === 0) groundShown = recolor;
+        if (isGround) groundShown = recolor;
         return;
       }
-      if (r.requestStatus.code === 600) scene = null;
-      // A missing ground source isn't worth a warning (scenes still show).
-      if (!(recolor && i === 0)) warnings.push(`Couldn't place sources in OBS: ${fail(r, r.requestType).message}`);
+      // A missing ground source isn't worth a warning (scenes still show), nor a fresh item list.
+      if (isGround) return;
+      if (r.requestStatus.code === 600) items = null;
+      warnings.push(`Couldn't place sources in OBS: ${fail(r, r.requestType).message}`);
     });
     return [...new Set(warnings)];
   }
 
   function apply(): Promise<void> {
     const mine = ++seq;
-    queue = queue.then(async () => {
-      if (mine !== seq || !latest) return; // superseded: only the newest report is worth placing
-      const { path, slots } = latest;
-      if (!obs.status.connected) return onPlaced([]);
-      log?.(`[place] ${path.split("/").slice(-2).join("/")}`);
-      let warnings: string[];
-      try {
-        warnings = await placeOnce(path, slots);
-      } catch (e) {
-        warnings = [`Couldn't place sources in OBS: ${(e as Error).message}`];
-      }
-      onPlaced(warnings);
-    });
-    return queue;
+    queue = queue
+      .then(async () => {
+        if (mine !== seq || !latest) return; // superseded: only the newest report is worth placing
+        const { path, slots } = latest;
+        if (!obs.status.connected) return onPlaced([]);
+        log?.(`[place] ${path.split("/").slice(-2).join("/")}`);
+        let warnings: string[];
+        try {
+          warnings = await placeOnce(path, slots);
+        } catch (e) {
+          warnings = [`Couldn't place sources in OBS: ${(e as Error).message}`];
+        }
+        onPlaced(warnings);
+      })
+      // Whatever went wrong in this one, the next placement still runs.
+      .catch((e) => console.error("[place]", (e as Error).message));
+    return settled();
+  }
+
+  /** Resolves once the queue is idle: the newest report asked so far has been placed. */
+  async function settled() {
+    let q: Promise<void>;
+    do {
+      q = queue;
+      await q;
+    } while (q !== queue);
   }
 
   return {
-    /** Place `slots` for `path`, the scene now on screen; resolves once it (or a newer report) is placed. */
+    /** Place `slots` for `path`, the scene now on screen; resolves once the newest report (this or a later one) is placed. */
     report(path: string, slots: Slot[]): Promise<void> {
       latest = { path, slots };
       return apply();
@@ -195,12 +212,17 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
     },
     /** OBS (re)connected: nothing kept from before is trusted. */
     reset() {
-      scene = null;
+      items = null;
       groundShown = null;
     },
-    /** An OBS event: forget the kept items and canvas when it may have changed them. */
+    /**
+     * An OBS event: forget the kept items when it may have changed them, and the ground color too
+     * (a ground source deleted and made again starts with the default color).
+     */
     onEvent(eventType: string) {
-      if (PLACEMENT_EVENTS.has(eventType)) scene = null;
+      if (!PLACEMENT_EVENTS.has(eventType)) return;
+      items = null;
+      groundShown = null;
     },
   };
 }

@@ -180,8 +180,10 @@ export function fakeObs(init: FakeObsInit = {}) {
     transformOf: (scene: string, sourceName: string) => Record<string, unknown> | undefined;
     /** Where to send OBS's events (stream and record state changes). */
     onEvent: (send: typeof emit) => void;
+    /** The canvas; change it to change OBS's resolution. */
+    video: typeof video;
   } = {
-    scenes, inputs, requests, program: () => program,
+    scenes, inputs, requests, program: () => program, video,
     onEvent: (send) => void (emit = send),
     request: (type: string, d?: any) => answer(type, d),
     requestBatch: batch,

@@ -14,8 +14,6 @@ function page(opts: {
   load?: (url: string) => Promise<void>;
   answer?: (url: string) => FrameState | null | Promise<FrameState | null>;
   report?: () => Promise<unknown>;
-  /** The file version the server would serve for a url (default: unknown). */
-  version?: (url: string) => string | null;
 } = {}) {
   const frames: [string | null, string | null] = [null, null];
   const events: string[] = [];
@@ -30,7 +28,6 @@ function page(opts: {
       return opts.load ? opts.load(url) : Promise.resolve();
     },
     loadTransition: async () => {},
-    version: async (url) => opts.version?.(url) ?? null,
     ask: async (i) => {
       const url = frames[i]!;
       asks.push(url);
@@ -162,32 +159,6 @@ describe("the program loop", () => {
     await settle();
     expect(p.reports.at(-1)).toEqual({ path: "org/a.html", slots: [camera] });
     expect(p.asks.filter((u) => u.includes("a.html"))).toHaveLength(2); // known: one ask, not two
-  });
-
-  test("the same file version again (every url changed when the live socket came back) keeps the frame that's playing, without loading a second copy", async () => {
-    let file = "hash-1";
-    const p = page({ answer: () => ({ id: 1, slots: [camera], version: file, hold: null }), version: () => file });
-    p.loop.request(job("org/a.html", "0.0"));
-    await settle();
-    const playing = p.onScreen();
-    const loads = () => p.events.filter((e) => e.startsWith("load")).length;
-    const before = loads();
-    p.loop.request(job("org/a.html", "0.1"));
-    await settle();
-    expect(p.onScreen()).toBe(playing);
-    expect(p.loop.shown()?.url).toBe(job("org/a.html", "0.1").url);
-    expect(loads()).toBe(before); // nothing loaded behind it: its music doesn't play twice
-    expect(p.frames.filter(Boolean)).toHaveLength(1);
-    // A real change to the file (a save) loads and swaps in.
-    file = "hash-2";
-    p.loop.request(job("org/a.html", "1.1"));
-    await settle();
-    expect(p.onScreen()).toContain("v=1.1");
-    expect(p.frames.filter(Boolean)).toHaveLength(1);
-    // Unless the reload is wanted (live previews to throw away).
-    p.loop.request(job("org/a.html", "0.1", { url: `${job("org/a.html", "0.1").url}&fresh=1`, force: true }));
-    await settle();
-    expect(p.onScreen()).toContain("fresh=1");
   });
 
   test("however fast the taps, it ends on the last one", async () => {
