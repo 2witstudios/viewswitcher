@@ -225,7 +225,15 @@ describe("program picture (MCP-1, MCP-6)", () => {
     const previewer = createPreviewer(obs, opts());
     expect(await previewer.program()).toEqual({ ok: true, png: png([0, 99, 99, 255]), width: 960, height: 540 });
     expect(await previewer.program({ full: true })).toEqual({ ok: true, png: png([1, 99, 99, 255], 1920, 1080), width: 1920, height: 1080 });
-    expect(obs.requests.map((r) => r.type)).toEqual(["GetSourceScreenshot", "GetSourceScreenshot"]);
+    expect(obs.requests.map((r) => r.type)).toEqual(["GetCurrentProgramScene", "GetSourceScreenshot", "GetCurrentProgramScene", "GetSourceScreenshot"]);
+  });
+
+  test("is whatever OBS has on program: someone cut to another scene in OBS", async () => {
+    const obs = connected({ screenshot: (source, { width, height }) => png(source === "Wide shot" ? [5, 5, 200, 255] : [99, 99, 99, 255], width, height) });
+    await setupObs(obs, names, PORT);
+    await obs.request("CreateScene", { sceneName: "Wide shot" });
+    await obs.request("SetCurrentProgramScene", { sceneName: "Wide shot" });
+    expect(await createPreviewer(obs, opts()).program()).toEqual({ ok: true, png: png([5, 5, 200, 255]), width: 960, height: 540 });
   });
 
   test("a missing scene or an empty picture says why", async () => {

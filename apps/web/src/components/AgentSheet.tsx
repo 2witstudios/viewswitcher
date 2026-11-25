@@ -2,7 +2,7 @@
 // and choose what agents may put on air. Opened from the header, "ask your agent" hints, and the Mac
 // app's Edit with AI… menu item (/?ai or #ai).
 import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
   agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
@@ -11,6 +11,7 @@ import {
 import { clientKind } from "../lib/client-kind";
 import { useLive } from "../lib/live";
 import { toast } from "./ui";
+import { trapTab } from "../lib/modal";
 
 // ---------------------------------------------------------------- open / close, from anywhere
 
@@ -61,8 +62,25 @@ function Sheet({ onClose }: { onClose: () => void }) {
   const [info, setInfo] = useState<AgentInfo | null | undefined>(undefined);
   const [clients, setClients] = useState<AgentClients | null>(null);
 
+  const dialog = useRef<HTMLElement>(null);
+  // Focus moves into the sheet and back to where it was on close; Tab stays inside it. (The editor
+  // behind ignores keys while it's open: lib/modal.ts.)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const before = document.activeElement as HTMLElement | null;
+    dialog.current?.focus();
+    return () => before?.focus?.();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return onClose();
+      if (e.key !== "Tab" || !dialog.current) return;
+      const items = [...dialog.current.querySelectorAll<HTMLElement>("a[href], button, input:not([disabled]), [tabindex]:not([tabindex='-1'])")];
+      const next = trapTab(items, document.activeElement as HTMLElement | null, e.shiftKey);
+      if (next) {
+        e.preventDefault();
+        next.focus();
+      }
+    };
     addEventListener("keydown", onKey);
     const tick = setInterval(() => setNow(Date.now()), 15_000);
     return () => (removeEventListener("keydown", onKey), clearInterval(tick));
@@ -85,7 +103,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <section className="modal agent-sheet" role="dialog" aria-modal="true" aria-labelledby="agent-sheet-title">
+      <section ref={dialog} tabIndex={-1} className="modal agent-sheet" role="dialog" aria-modal="true" aria-labelledby="agent-sheet-title">
         <div className="agent-head">
           <h2 id="agent-sheet-title">Edit with AI</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>

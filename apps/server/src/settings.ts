@@ -24,13 +24,22 @@ export async function readSettings(root: string): Promise<Settings> {
   return { agentOnAir: isAgentOnAir(saved.agentOnAir) ? saved.agentOnAir : DEFAULT_SETTINGS.agentOnAir };
 }
 
-/** Change some settings; keeps any other keys already in the file. */
-export async function writeSettings(root: string, patch: Partial<Settings>): Promise<Settings> {
-  if ("agentOnAir" in patch && !isAgentOnAir(patch.agentOnAir)) throw new SettingsError(`onAir is one of ${AGENT_ON_AIR.join(", ")}`);
-  const next = { ...(await readRaw(root)), ...patch };
-  await mkdir(join(root, ".viewswitcher"), { recursive: true });
-  await writeFile(file(root), JSON.stringify(next, null, 2) + "\n");
-  return readSettings(root);
+let queue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Change some settings; keeps any other keys already in the file. One write at a time, in the order
+ * they came: Always then Never, picked quickly, must end on Never, never on whichever finished last.
+ */
+export function writeSettings(root: string, patch: Partial<Settings>): Promise<Settings> {
+  if ("agentOnAir" in patch && !isAgentOnAir(patch.agentOnAir)) return Promise.reject(new SettingsError(`onAir is one of ${AGENT_ON_AIR.join(", ")}`));
+  const run = queue.then(async () => {
+    const next = { ...(await readRaw(root)), ...patch };
+    await mkdir(join(root, ".viewswitcher"), { recursive: true });
+    await writeFile(file(root), JSON.stringify(next, null, 2) + "\n");
+    return readSettings(root);
+  });
+  queue = run.catch(() => {});
+  return run;
 }
 
 export class SettingsError extends Error {}

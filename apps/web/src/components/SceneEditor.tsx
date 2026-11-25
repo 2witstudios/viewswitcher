@@ -16,6 +16,7 @@ import { EDITOR_SANDBOX } from "../lib/scene-frame";
 import { createSceneSaver } from "../lib/scene-saver";
 import { AskAgent, openAgentSheet } from "./AgentSheet";
 import { attempt, toast } from "./ui";
+import { modalOpen } from "../lib/modal";
 
 const W = 1920;
 const H = 1080;
@@ -919,6 +920,8 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.defaultPrevented) return; // already handled (e.g. Return/Esc in the text being typed)
+    // Edit with AI (or another modal) is open over the editor: its keys are its own.
+    if (modalOpen(document)) return;
     // An add or delete is saving: element ids are about to change, so nothing may start on the old ones.
     if (busyRef.current) {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Backspace"].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) e.preventDefault();

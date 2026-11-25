@@ -121,12 +121,16 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
       const without = "The URL shows the scene on air, without the camera or screen.";
       if (!obs.status.connected) return { ok: false, reason: `OBS isn't connected, so there's no picture of the program. ${without}`, url };
       const dims = size(full);
+      // Whatever OBS has on program (someone may have cut to another scene in OBS), else the ViewSwitcher scene.
+      const scene = await obs
+        .request<{ currentProgramSceneName?: string; sceneName?: string }>("GetCurrentProgramScene")
+        .then((r) => r.currentProgramSceneName || r.sceneName || opts.obs.scene, () => opts.obs.scene);
       try {
-        const { png } = await screenshot(opts.obs.scene, dims);
-        if (isBlankPng(png)) return { ok: false, reason: `OBS returned an empty picture of "${opts.obs.scene}". ${without}`, url };
+        const { png } = await screenshot(scene, dims);
+        if (isBlankPng(png)) return { ok: false, reason: `OBS returned an empty picture of "${scene}". ${without}`, url };
         return { ok: true, png, ...dims };
       } catch (e) {
-        return { ok: false, reason: `OBS couldn't take a picture of "${opts.obs.scene}" (${(e as Error).message}). ${without}`, url };
+        return { ok: false, reason: `OBS couldn't take a picture of "${scene}" (${(e as Error).message}). ${without}`, url };
       }
     },
   };

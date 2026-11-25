@@ -356,3 +356,4 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .ed-drop-point span { left: 14px; top: -26px; }
 .ed-uploading { position: absolute; z-index: 22; left: 50%; top: 16px; transform: translateX(-50%); height: 36px; padding: 0 16px; border-radius: 10px; background: var(--cream); color: var(--on-cream); font-size: 14px; font-weight: 600; display: flex; align-items: center; }
 .menu { max-height: min(72dvh, 640px); overflow-y: auto; }
+.agent-sheet:focus { outline: none; }

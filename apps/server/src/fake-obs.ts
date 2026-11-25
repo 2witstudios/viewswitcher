@@ -98,6 +98,8 @@ export function fakeObs(init: FakeObsInit = {}) {
           list.splice(d.sceneItemIndex, 0, it!);
           return {};
         }
+        case "GetCurrentProgramScene":
+          return { currentProgramSceneName: program, sceneName: program } as never;
         case "SetCurrentProgramScene":
           items(d.sceneName);
           program = d.sceneName;

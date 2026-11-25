@@ -37,4 +37,11 @@ describe("settings.json", () => {
     await expect(writeSettings(temp(), { agentOnAir: "sometimes" as never })).rejects.toThrow("onAir is one of never, not-live, always");
     await expect(writeSettings(temp(), { agentOnAir: undefined })).rejects.toThrow("onAir is one of");
   });
+  test("quick changes land in the order they were made: the last one wins", async () => {
+    const root = temp();
+    const picks = ["always", "never", "not-live", "always", "never"] as const;
+    const results = await Promise.all(picks.map((agentOnAir) => writeSettings(root, { agentOnAir })));
+    expect(results.map((r) => r.agentOnAir)).toEqual([...picks]);
+    expect((await readSettings(root)).agentOnAir).toBe("never");
+  });
 });
