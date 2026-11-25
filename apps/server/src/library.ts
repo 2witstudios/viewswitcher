@@ -290,7 +290,17 @@ export async function saveAsset(root: string, file: File) {
   await mkdir(dir, { recursive: true });
   const clean = file.name.replace(/[^A-Za-z0-9._ -]/g, "-").replace(/^[.\-]+/, "") || "upload";
   const ext = extname(clean);
-  const name = await freeName(dir, plainName(clean.slice(0, clean.length - ext.length) || "upload"), ext);
-  await Bun.write(join(dir, name + ext), file);
-  return { path: `assets/${name}${ext}` };
+  const base = plainName(clean.slice(0, clean.length - ext.length) || "upload");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Claim the name as it's written ("wx"): two uploads of logo.png at once get logo.png and logo-2.png,
+  // never one overwriting the other while both report the same path.
+  for (;;) {
+    const name = await freeName(dir, base, ext);
+    try {
+      await writeFile(join(dir, name + ext), bytes, { flag: "wx" });
+      return { path: `assets/${name}${ext}` };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+  }
 }

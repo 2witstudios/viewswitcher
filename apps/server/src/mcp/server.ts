@@ -13,7 +13,7 @@ import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
 import * as lib from "../library";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
-import { listFiles, readText, writeText } from "../library-files";
+import { checked, listFiles, readText, writeText } from "../library-files";
 import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
@@ -126,8 +126,15 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const pages = [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p);
     return (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]);
   };
-  /** Refuses (throws) a change to `paths` that the agent on-air setting doesn't allow right now. */
-  const writes = async (...paths: string[]) => guardNow({ kind: "write", paths }, await onAirLoads());
+  /** Files a tool reads or writes: each really inside the library, through links too (library-files.ts checked). */
+  const contained = async (...paths: string[]) => {
+    for (const p of paths) await checked(root, p);
+  };
+  /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
+  const writes = async (...paths: string[]) => {
+    await contained(...paths);
+    guardNow({ kind: "write", paths }, await onAirLoads());
+  };
 
   const exists = (abs: string) => stat(abs).then(() => true, () => false);
   const needProject = async (org: string, projectId: string) => {
@@ -298,6 +305,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, template, projectId, streamId }: { org: string; template: string; projectId: string; streamId?: string }) => {
     const dir = streamId ? await needStream(org, projectId, streamId) : await needProject(org, projectId);
     if (!(await exists(inside(dir, `templates/${plainName(template)}.html`)))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates.`);
+    await contained(`${org}/templates/${template}.html`);
     await writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${template}.html`);
     return text(await sceneFromTemplate(root, { org, template, projectId, streamId }));
   }));
@@ -310,6 +318,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, projectId, streamId, name }: { org: string; projectId: string; streamId: string; name: string }) => {
     const dir = await needStream(org, projectId, streamId);
     if (!(await exists(inside(dir, `projects/${projectId}/scenes/${plainName(name)}.html`)))) throw new Refusal(`Project ${projectId} has no scene "${name}". scan_library shows its scenes.`);
+    await contained(`${org}/projects/${projectId}/scenes/${name}.html`);
     await writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
     return text(await customizeScene(root, { org, projectId, streamId, name }));
   }));
@@ -334,6 +343,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ path }: { path: string }) => {
     await needScene(path);
+    // The scene it copies must really be in the library: a link to a file outside would be copied in.
+    await contained(path);
     await writes(`${path.slice(0, -5)}-copy.html`);
     return text(await duplicateScene(root, path));
   }));
@@ -360,6 +371,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, projectId }: { org: string; projectId: string }) => {
     const dir = await needProject(org, projectId);
     const path = `${org}/projects/${projectId}/transition.html`;
+    await contained(`${org}/templates/_shared/transition.html`);
     await writes(path);
     await lib.customizeTransition(dir, projectId);
     return text({ path });

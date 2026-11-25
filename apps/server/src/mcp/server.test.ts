@@ -399,6 +399,36 @@ describe("go_on_air and the agent guard", () => {
   });
 });
 
+describe("structural tools stay inside the library (CodeRabbit)", () => {
+  test("duplicate_scene of a link to a file outside is refused; a link inside still copies", async () => {
+    await writeFile(join(outside, "elsewhere.html"), "<title>Secret</title>");
+    await symlink(join(outside, "elsewhere.html"), join(root, ORG, "templates", "linked-out.html"));
+    const r = await call("duplicate_scene", { path: `${ORG}/templates/linked-out.html` });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+    expect(await stat(join(root, ORG, "templates/linked-out-copy.html")).catch(() => null)).toBeNull();
+    await symlink(join(root, ORG, "templates/brb.html"), join(root, ORG, "templates", "linked-in.html"));
+    expect((await data("duplicate_scene", { path: `${ORG}/templates/linked-in.html` })).path).toBe(`${ORG}/templates/linked-in-copy.html`);
+    // A leading slash isn't an org path.
+    expect((await call("duplicate_scene", { path: `/${ORG}/templates/brb.html` })).isError).toBe(true);
+  });
+  test("a destination folder linked outside the library is refused", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Linked", templates: [] });
+    await rm(join(root, ORG, "projects", projectId, "streams"), { recursive: true, force: true });
+    await symlink(outside, join(root, ORG, "projects", projectId, "streams"));
+    const r = await call("create_stream", { org: ORG, projectId, name: "Out", date: "2026-12-08" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+  });
+  test("two add_asset uploads with the same name at once get two files", async () => {
+    const b64 = (t: string) => Buffer.from(t).toString("base64");
+    const [a, b] = await Promise.all([data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>a</svg>") }), data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>b</svg>") })]);
+    expect(a.path).not.toBe(b.path);
+    const texts = [await readFile(join(root, a.path), "utf8"), await readFile(join(root, b.path), "utf8")].sort();
+    expect(texts).toEqual(["<svg>a</svg>", "<svg>b</svg>"]);
+  });
+});
+
 describe("go_on_air for a stream", () => {
   test("a project scene a stream shares goes on air for that stream, as the stream page does", async () => {
     const { projectId } = await data("create_project", { org: ORG, name: "Shared", templates: ["teaching", "brb"] });

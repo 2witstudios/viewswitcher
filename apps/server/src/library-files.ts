@@ -12,7 +12,11 @@ export const TEXT_TYPES = [".html", ".css", ".js", ".json", ".md", ".svg", ".txt
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 
 /** A library path checked segment by segment: org first, no dot-files or dot-folders, nothing empty. */
-async function checked(root: string, path: unknown): Promise<{ path: string; abs: string }> {
+/**
+ * A library path an agent gave: inside an existing org, never in a dot-folder, and (through any links)
+ * really inside the library, or for a new file, its nearest existing folder is.
+ */
+export async function checked(root: string, path: unknown): Promise<{ path: string; abs: string }> {
   const p = String(path ?? "").replace(/\/+$/, "");
   const parts = p.split("/");
   if (!p || parts.some((s) => !s || s.startsWith(".") || s.includes("\\") || s.includes("\0") || s.length > 255)) {
