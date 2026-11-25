@@ -136,7 +136,7 @@ describe("handleMcp from another machine", () => {
     let seen = 0;
     const deps = { root: library, kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
     const req = () => new Request(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { host: `127.0.0.1:${port}`, ...MCP_HEADERS }, body: JSON.stringify(initialize()) });
-    for (const peer of ["192.168.1.20", "100.64.0.3", "", null]) {
+    for (const peer of [{ address: "192.168.1.20" }, { address: "100.64.0.3" }, { address: "" }, null]) {
       const r = await handleMcp(req(), peer, { deps, allowedOrigins: [], onSeen: () => seen++ });
       expect({ peer, status: r.status }).toEqual({ peer, status: 404 });
     }

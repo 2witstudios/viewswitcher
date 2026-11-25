@@ -4,7 +4,7 @@
 // and never from a web page at another site.
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { AgentStatus } from "@viewswitcher/shared";
-import { isLocalRequest } from "../local";
+import { isLocalRequest, type Peer } from "../local";
 import { originAllowed } from "../origin";
 import { createMcpServer, type McpDeps } from "./server";
 
@@ -42,7 +42,7 @@ export function noteSeen(prev: AgentStatus, client: string | null, now: number):
   return { agent: { ...prev, lastSeen: now, client: client ?? prev.client }, publish: changed || stale };
 }
 
-export async function handleMcp(req: Request, peer: string | null | undefined, opts: McpHttpOptions): Promise<Response> {
+export async function handleMcp(req: Request, peer: Peer, opts: McpHttpOptions): Promise<Response> {
   if (!isLocalRequest(req, peer)) return refuse(404, "Not found");
   const origin = req.headers.get("origin");
   if (origin !== null && !originAllowed(origin, { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: opts.allowedOrigins })) {

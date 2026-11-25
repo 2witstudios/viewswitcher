@@ -219,7 +219,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/state" && req.method === "GET") return json(state);
   // For the Mac app's menu (Open Library Folder) and Edit with AI's commands: with the Claude Desktop
   // extension below, the only responses with absolute paths in them. Only for this Mac (local.ts).
-  const local = () => isLocalRequest(req, server.requestIP(req)?.address);
+  const local = () => isLocalRequest(req, server.requestIP(req));
   if (path === "/api/info" && req.method === "GET") {
     if (!local()) return json({ error: "Not found" }, 404);
     return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio) });
@@ -433,7 +433,7 @@ const server = Bun.serve({
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
       if (path === "/mcp") {
-        return await handleMcp(req, server.requestIP(req)?.address, { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
+        return await handleMcp(req, server.requestIP(req), { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
       }
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
