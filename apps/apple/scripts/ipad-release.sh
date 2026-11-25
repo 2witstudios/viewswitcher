@@ -88,6 +88,13 @@ for apps in d.values():
         if a.get("name", "").endswith(".app"):
             print(a.get("certificate", {}).get("SHA1", ""), a.get("profile", {}).get("UUID", ""))
 '; }
+  # xcodebuild writes no DistributionSummary.plist when the destination is upload (Xcode 26): then
+  # there's nothing to compare, and the upload used the same archive, options and signing as the export.
+  if [ ! -f "$OUT/upload/DistributionSummary.plist" ]; then
+    echo "✓ Uploaded ViewSwitcher iPad $VERSION ($BUILD_NUMBER). It appears in App Store Connect → TestFlight once processed."
+    echo "  (No DistributionSummary.plist from the upload, so its signing wasn't compared with the checked .ipa.)"
+    exit 0
+  fi
   [ "$(signed_with "$OUT/export")" = "$(signed_with "$OUT/upload")" ] || {
     echo "✗ The uploaded build was signed differently from the checked .ipa (certificate or profile): check App Store Connect before submitting." >&2
     exit 1

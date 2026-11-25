@@ -46,8 +46,8 @@ final class DemoTests: XCTestCase {
         XCTAssertTrue(web.staticTexts["Saltwater Kitchen"].waitForExistence(timeout: 10))
     }
 
-    /// Connecting a Mac leaves the demo. Needs a server: scripts/ipad-shots.sh passes one on 7437
-    /// (TEST_RUNNER_VIEWSWITCHER_MAC=http://127.0.0.1:7437); skipped otherwise.
+    /// Connecting a Mac leaves the demo. Needs a server: scripts/ipad-shots.sh passes one on 7445
+    /// (TEST_RUNNER_VIEWSWITCHER_MAC=http://127.0.0.1:7445); skipped otherwise.
     func testAMacAnsweringLeavesTheDemo() throws {
         guard let mac = ProcessInfo.processInfo.environment["VIEWSWITCHER_MAC"] else { throw XCTSkip("needs VIEWSWITCHER_MAC") }
         let app = launch(["VIEWSWITCHER_START": "demo", "VIEWSWITCHER_PROBE": mac])

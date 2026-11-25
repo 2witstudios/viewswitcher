@@ -8,7 +8,7 @@ Apple's; `bun apps/apple/AppStore/check.ts` checks them. The app record itself (
 
 | field | value |
 |---|---|
-| Name (30) | `ViewSwitcher` |
+| Name (30) | `ViewSwitcher Remote` ("ViewSwitcher" is taken on the store; the home-screen name stays ViewSwitcher) |
 | Subtitle (30) | `One-tap scene switcher for OBS` |
 | Bundle ID | `com.twowitstudios.viewswitcher` |
 | SKU | `viewswitcher-ipad` |
@@ -49,17 +49,21 @@ Result: **4+**.
   or tracking. `PrivacyInfo.xcprivacy` says the same (no tracking, no collected data types).
 - Privacy label shown on the store: **Data Not Collected**.
 
-## Version 1.0: iPad screenshots
+## First version (1.2.1): iPad screenshots
 
-13-inch iPad (2064 × 2752 portrait or 2752 × 2064 landscape), made by
-`bash apps/apple/scripts/ipad-shots.sh` (into `AppStore/screenshots/`, gitignored). Upload in this order:
+13-inch iPad (2752 × 2064 landscape or 2064 × 2752 portrait), made by
+`bash apps/apple/scripts/ipad-shots.sh` (into `AppStore/screenshots/`, gitignored): the real iPad app in
+the simulator, connected to a scratch switcher with a stand-in OBS that's live. Each one is there twice:
+`raw/<name>.png` is the capture, `<name>.png` the App Store version, in an iPad frame under a caption.
+Upload the framed ones, in this order:
 
-1. `demo-landscape.png`: the program and the views, a view on air
-2. `ipad-landscape.png`: the switcher on a show's views
-3. `demo-portrait.png`
-4. `ipad-portrait.png`
+1. `1-stream-landscape.png`, "Look professional when you go live.": Full Count's Ep. 112, Both hosts on air, OBS live
+2. `2-editor-landscape.png`, "Change titles live, right on the view.": the episode title retyped on the view that's on air
+3. `3-templates-landscape.png`, "Free templates for every kind of show.": the built-in template sets under Add templates
+4. `4-stream-portrait.png`, "Tap a view. OBS switches.": Grace Community's Sunday Live in portrait, the sermon on air
+5. `5-demo-landscape.png`, "Try it first: the demo needs no Mac.": the demo App Review sees without a Mac
 
-## Version 1.0: text
+## First version (1.2.1): text
 
 ### Promotional text (170)
 
@@ -112,7 +116,7 @@ stream,live,streaming,scene,scenes,switcher,church,podcast,teacher,remote,contro
 
 ### Version and copyright
 
-- Version: `MARKETING_VERSION` in `apps/apple/project.yml` (0.1.0 today; set it to 1.0.0 for the first App Store release). The build number is set by `bun run ipad:release` (UTC time, always increasing).
+- Version: `MARKETING_VERSION` in `apps/apple/project.yml` (1.2.1 for the first App Store release, the same as the Mac app). The build number is set by `bun run ipad:release` (UTC time, always increasing).
 - Copyright: `2026 2wit Studios`
 
 ## App Review Information

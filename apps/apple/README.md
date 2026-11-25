@@ -20,7 +20,7 @@ bun run ipad:release [--export]  # archive, export for App Store Connect, check,
 
 cd apps/apple && xcodegen && xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -destination platform=macOS test
 cd apps/apple/Kit && swift test  # the same XCTest, without Xcode's project
-bash apps/apple/scripts/ipad-shots.sh [dir]   # 13-inch iPad screenshots: demo + switcher (scratch server on 7437)
+bash apps/apple/scripts/ipad-shots.sh [dir]   # App Store screenshots: the app on a live show (fake OBS, scratch server on 7445), framed
 bun apps/apple/scripts/demo-assets.ts         # refresh the iPad demo's show from apps/site
 bun apps/apple/AppStore/check.ts              # App Store listing lengths
 ```
@@ -80,7 +80,7 @@ screen isn't required, so Split View and Stage Manager work.
 
 In the simulator the USB tunnel stays off: the simulator shares the Mac's ports, so its listener on
 127.0.0.1:7420 would be the Mac's own port. A Debug build opens `VIEWSWITCHER_SERVER` directly instead
-(`scripts/ipad-shots.sh` uses a scratch server on 7437), `VIEWSWITCHER_PROBE` points the connector's
+(`scripts/ipad-shots.sh` uses a scratch server on 7445), `VIEWSWITCHER_PROBE` points the connector's
 USB-C probe elsewhere, `VIEWSWITCHER_START=demo` opens the demo and `VIEWSWITCHER_RESET=1` starts as a
 first launch. Tests and screenshots always set the probe, so they never reach the Mac's own switcher.
 
@@ -99,6 +99,17 @@ boxes and the red On air tally moves. A white bar says "Demo · Connect your Mac
 - The demo keeps probing like the connector (`Connector/probe.js`, shared) and opens the real switcher
   as soon as a Mac answers.
 - `iPadUITests/DemoTests.swift` covers it (the Mac part runs from `scripts/ipad-shots.sh`).
+
+### Screenshots (MAC-19)
+
+`scripts/ipad-shots.sh` makes the App Store screenshots from the real app in the 13-inch iPad Pro
+simulator. It starts a stand-in OBS (`scripts/fake-obs-server.ts`: an obs-websocket server around the
+server tests' in-memory OBS, live) and a scratch switcher on 7445 with USB off, and seeds it through the
+API (`scripts/shots-seed.ts`: Full Count and Grace Community, a project and a stream each). Then
+`iPadUITests/AppStoreScreenshots.swift` taps through each screen in the app and waits while the script
+captures it with `simctl io screenshot`, under a 9:41 status bar. `scripts/frame-shots.ts` puts each in an
+iPad frame under a caption (Space Grotesk, on white) at the same size. The upload list is in
+`AppStore/listing.md`.
 
 ### App Store (MAC-19, MAC-20)
 

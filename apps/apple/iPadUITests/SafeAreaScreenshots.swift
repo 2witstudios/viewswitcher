@@ -1,8 +1,8 @@
 import XCTest
 
-/// MAC-13a and MAC-19 screenshots of the iPad app in each orientation. Not part of the regular test run:
-/// scripts/ipad-shots.sh runs it with a scratch server on 7437 (never the Mac's 7420).
-///   TEST_RUNNER_VIEWSWITCHER_SERVER=http://127.0.0.1:7437 TEST_RUNNER_VIEWSWITCHER_SHOTS=<dir> xcodebuild test …
+/// MAC-13a screenshots of the iPad app in each orientation (Split View widths). Not part of the regular test run:
+/// scripts/ipad-shots.sh runs it with a scratch server on 7445 (never the Mac's 7420).
+///   TEST_RUNNER_VIEWSWITCHER_SERVER=http://127.0.0.1:7445 TEST_RUNNER_VIEWSWITCHER_SHOTS=<dir> xcodebuild test …
 final class SafeAreaScreenshots: XCTestCase {
     private let orientations: [(String, UIDeviceOrientation)] = [("landscape", .landscapeLeft), ("portrait", .portrait)]
 
@@ -29,7 +29,9 @@ final class SafeAreaScreenshots: XCTestCase {
         for (name, orientation) in orientations {
             XCUIDevice.shared.orientation = orientation
             app.launch()
-            XCTAssertTrue(app.webViews.staticTexts["Templates"].firstMatch.waitForExistence(timeout: 20), "the switcher loaded")
+            // The sidebar's Templates, or at a narrow width the Library button that opens it.
+            let loaded = app.webViews.descendants(matching: .any).matching(NSPredicate(format: "label IN {'Templates', 'Library'}")).firstMatch
+            XCTAssertTrue(loaded.waitForExistence(timeout: 20), "the switcher loaded")
             sleep(2)
             try save(dir, "\(prefix)-\(name)")
             app.terminate()
