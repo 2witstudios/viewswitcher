@@ -1,5 +1,5 @@
-// Style packs (EDIT-23): one portable folder or .zip with a full set of views, which installs into an
-// org as its own template set. The format is in docs/style-packs.md; this is its validator. Pure: the
+// Template packs (EDIT-23): one portable folder or .zip with a full set of views, which installs into an
+// org as its own template set. The format is in docs/template-packs.md; this is its validator. Pure: the
 // server lists a zip's entries (or a dropped folder's files), asks `planPack` which of them to
 // extract, then reads the text files and asks `checkPack` whether the result is a pack.
 import { scanElements } from "./html-scan";
@@ -153,7 +153,7 @@ export function planPack(entries: PackEntry[]): PackPlan {
     out.push({ path, from: f.from, size: f.size });
   }
   if (out.length > PACK_LIMITS.files) return fail(`It has more than ${PACK_LIMITS.files} files`);
-  if (!out.some((f) => f.path === "pack.json")) return fail("There's no pack.json at the top. Is this a style pack?");
+  if (!out.some((f) => f.path === "pack.json")) return fail("There's no pack.json at the top. Is this a template pack?");
   return { ok: true, files: out, skipped };
 }
 
@@ -236,7 +236,7 @@ function remoteScripts(html: string): string[] {
 export function checkPack(files: PackFile[], texts: Record<string, string>): PackReport {
   const fail = (error: string): PackReport => ({ ok: false, error });
   const pj = texts["pack.json"];
-  if (pj === undefined) return fail("There's no pack.json at the top. Is this a style pack?");
+  if (pj === undefined) return fail("There's no pack.json at the top. Is this a template pack?");
   const read = readManifest(pj);
   if (!read.ok) return fail(read.error);
   const manifest = read.manifest;

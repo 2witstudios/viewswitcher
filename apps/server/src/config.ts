@@ -25,6 +25,13 @@ export const config = {
   starter: resolve(env.VIEWSWITCHER_STARTER ?? join(import.meta.dir, "../starter")),
   /** Built switcher/program SPA. */
   webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
+  /**
+   * The built-in template packs (EDIT-29), prebuilt by packs:export (the Mac app's Resources/packs).
+   * Unset in a source run: they're built from the repo (the starter and apps/site's shows) at start.
+   */
+  packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
+  /** The site's sources the built-in packs come from in a source run (see builtin-packs.ts). */
+  site: resolve(env.VIEWSWITCHER_SITE ?? join(import.meta.dir, "../../site")),
   /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */

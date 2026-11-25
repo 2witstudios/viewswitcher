@@ -1,6 +1,6 @@
 ---
 name: viewswitcher-scenes
-description: Create or edit live-stream scenes for ViewSwitcher (the HTML files its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any change to an org's templates/, projects/ or assets/ — a new scene, a stream-specific version, restyling, new text, using an uploaded image or video, branding a new org, or making a style pack (a set of views people install with a drop).
+description: Create or edit live-stream scenes for ViewSwitcher (the HTML files its switcher puts on air in OBS), for any org in this ViewSwitcher library. Use for any change to an org's templates/, projects/ or assets/ — a new scene, a stream-specific version, restyling, new text, using an uploaded image or video, branding a new org, or making a template pack (a set of views people install with a drop).
 ---
 
 # ViewSwitcher scenes
@@ -21,7 +21,7 @@ The library holds one folder per **org** (a brand or channel). Orgs never share 
 <org>/templates/_shared/scene.js                     ?preview mode, data-countdown, the transition "play" class
 <org>/templates/_shared/transition.html              the org's transition between scenes (optional)
 <org>/templates/_shared/brand/mark.svg               the org's mark
-<org>/templates/<set>/                               a template set installed from a style pack (see below):
+<org>/templates/<set>/                               a template set installed from a template pack (see below):
 <org>/templates/<set>/pack.json                        its name, version and views
 <org>/templates/<set>/<view>.html                      its templates
 <org>/templates/<set>/_shared/, assets/                its own theme, scripts, transition and pictures
@@ -105,14 +105,14 @@ Deleting removes one element and the whitespace before it. Renaming sets `<title
 The switcher shows every scene in a sandboxed frame with no origin of its own, so a scene's scripts can't reach the switcher (its API, its live socket, the page around it). For scenes that means:
 
 - Scripts run (countdowns, clocks, animations, `scene.js`), but `localStorage`, `sessionStorage`, cookies and `parent`/`top` are off limits and throw.
-- `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` work only to `https:`/`wss:` addresses (a public feed, say), never `http:`, `ws:` or the switcher itself, so a scene can't `fetch` its own library JSON: put data in the HTML. Library scripts (also `type="module"`), styles, pictures, media and fonts load fine; leave `crossorigin` off library pictures and media (they aren't sent with CORS, so a canvas can't read them back).
+- `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` work only to `https:`/`wss:` addresses (a public feed, say), never `http:`, `ws:` or the switcher itself, so a scene can't `fetch` its own library JSON: put data in the HTML. Library scripts (also `type="module"`), styles, pictures, media and fonts load fine. A template's pictures (anything under `<org>/templates/`) also work as a CSS `mask` or with `crossorigin`; the org's own media (`assets/`, `projects/`) doesn't, so leave `crossorigin` off it and don't mask with it.
 - No forms, pop-ups or navigating the page. Links and buttons do nothing on air anyway.
 - Fonts load from Google Fonts (or any https host with CORS) and from the library.
 - The scene editor shows the file **without running its scripts**, so text a script writes isn't editable there: keep text people should retype in the HTML itself.
 
-## Template sets and style packs
+## Template sets and template packs
 
-A **style pack** is a whole look (a set of views with their own theme, scripts, transition and pictures) in one folder or `.zip` that people install with a drop on the switcher's Templates page. It installs into an org as a **template set**, `<org>/templates/<set>/`, beside the org's own templates; the Templates page and New scene group templates by set. Scenes made from a set's template link the set's `_shared/` files, so:
+A **template pack** is a whole look (a set of views with their own theme, scripts, transition and pictures) in one folder or `.zip` that people install with a drop on the switcher's Templates page. It installs into an org as a **template set**, `<org>/templates/<set>/`, beside the org's own templates; the Templates page and New scene group templates by set. Scenes made from a set's template link the set's `_shared/` files, so:
 
 - To restyle every view of a set, edit `<org>/templates/<set>/_shared/theme.css`. Edit a set's views like any template.
 - Don't rename a set's folder or move its files: scenes made from it link them by path.
@@ -133,7 +133,7 @@ my-pack/
 - Link the pack's own files as `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg` (on install `{{PACK}}` becomes `/library/<org>/templates/<set>`). Views sit at `{{PACK}}/<view>.html`.
 - `{{ORG_NAME}}`, `{{ORG_INITIAL}}`, `{{ORG_ID}}`, `{{ACCENT}}` and `{{GROUND}}` are filled from the org it's installed into. Use them so the pack takes on any org's name and colors.
 - Same scene contract as above. Scripts go in `_shared/*.js` only; file names use letters, numbers, dots, dashes and spaces; views are lower-case-with-dashes. Up to 400 files, 25 MB each, 100 MB in all.
-- The full format is docs/style-packs.md in the ViewSwitcher repo. `bun run packs:export` there exports the starter kit and the site's example styles as example packs.
+- The full format is docs/template-packs.md in the ViewSwitcher repo. `bun run packs:export` there exports the starter kit and the site's six example shows as packs; the app has them built in (Templates → Add templates).
 
 ## Transitions
 
