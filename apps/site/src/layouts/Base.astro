@@ -4,9 +4,10 @@ import spaceGrotesk from "@fontsource-variable/space-grotesk/files/space-grotesk
 import instrumentSans from "@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2?url";
 import "../styles/global.css";
 import { site } from "../site.config";
+import { jsonLd } from "../lib/seo";
 
-interface Props { title: string; description: string; path?: string; noindex?: boolean }
-const { title, description, path = "/", noindex = false } = Astro.props;
+interface Props { title: string; description: string; path?: string; noindex?: boolean; schema?: Record<string, unknown>[] }
+const { title, description, path = "/", noindex = false, schema = [] } = Astro.props;
 const canonical = new URL(path, site.url).href;
 const og = new URL("/og.png", site.url).href;
 const fontFaces = `
@@ -42,6 +43,7 @@ const fontFaces = `
   <meta name="twitter:description" content={description}>
   <meta name="twitter:image" content={og}>
   <link rel="sitemap" href="/sitemap-index.xml">
+  {schema.length > 0 && <script type="application/ld+json" is:inline set:html={jsonLd(schema)} />}
   <slot name="head" />
 </head>
 <body>

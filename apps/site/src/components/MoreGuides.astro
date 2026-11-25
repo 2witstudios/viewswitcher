@@ -1,0 +1,26 @@
+---
+// The guides, linked from each other (SITE-21…23). The page you're on is left out.
+interface Props { current: string }
+const { current } = Astro.props;
+const guides = [
+  { href: "/download", title: "Download for Mac", text: "Version, requirements, and what to do after you open it." },
+  { href: "/setup", title: "Set up OBS with ViewSwitcher", text: "From install to your first stream, with troubleshooting." },
+  { href: "/ipad", title: "ViewSwitcher for iPad", text: "Run the show from an iPad beside you, over USB-C." },
+  { href: "/church-livestream", title: "Church livestreaming", text: "A Sunday service from welcome to goodbye." },
+].filter((g) => g.href !== current);
+---
+<nav class="more" aria-labelledby="more-title">
+  <h2 id="more-title">More guides</h2>
+  <ul>
+    {guides.map((g) => <li><a href={g.href}>{g.title}</a><span>{g.text}</span></li>)}
+  </ul>
+</nav>
+<style>
+  .more { margin-top: 2.5rem; border-top: 1px solid var(--rule); padding-top: 2rem; display: grid; gap: 1rem; }
+  .more h2 { font-size: clamp(1.25rem, 2.2vw, 1.5rem); margin: 0; }
+  .more ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+  @media (min-width: 48rem) { .more ul { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .more li { display: grid; gap: 0.3rem; align-content: start; }
+  a { font-weight: 600; color: var(--ink); }
+  span { color: var(--ink-2); font-size: 0.9375rem; }
+</style>

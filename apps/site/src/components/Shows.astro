@@ -22,7 +22,7 @@ const shows = SHOWS;
             ))}
           </div>
           <h3>{s.name} <span class="kind">{s.kind}</span></h3>
-          <p>{s.blurb}</p>
+          <p>{s.blurb}{s.id === "grace" && <> <a href="/church-livestream">Church livestreaming with ViewSwitcher</a></>}</p>
         </li>
       ))}
     </ul>

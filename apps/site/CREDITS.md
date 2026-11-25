@@ -17,4 +17,18 @@ Photos in the camera and screen boxes of the site's made-up example shows. Each 
 | src/assets/media/cook.jpg | Cook (Saltwater Kitchen) | [Woman cooking inside kitchen room](https://unsplash.com/photos/woman-cooking-inside-kitchen-room-7MAjXGUmaPw) | [@jsnbrsc](https://unsplash.com/@jsnbrsc) | Unsplash License |
 | src/assets/media/dough.jpg | Dough close-up (Saltwater Kitchen second camera) | [A pan of food sitting on top of a stove](https://unsplash.com/photos/a-pan-of-food-sitting-on-top-of-a-stove-dCC6nVVHvH4) | [@philhearing](https://unsplash.com/@philhearing) | Unsplash License |
 
+## The iPad app's demo
+
+The iPad app's demo (apps/apple/iPad/Connector/demo/), shown in the screenshots on /ipad, uses cook.jpg and dough.jpg above, and this photo:
+
+| file | used as | photo | photographer | license |
+|---|---|---|---|---|
+| apps/apple/iPad/Connector/demo/media/guest-cook.jpg | Guest cook (Saltwater Kitchen demo) | [A man in an apron is cooking on a stove](https://unsplash.com/photos/a-man-in-an-apron-is-cooking-on-a-stove-tHbD54jFeaI) | [@davidbenesph](https://unsplash.com/@davidbenesph) | Unsplash License |
+
+## Screenshots
+
+The app screenshots in src/assets/app/ are of ViewSwitcher itself: the Mac ones from scripts/app-shots.ts (the switcher running with OBS closed, against the site's scratch library), the iPad ones from the iPad app's App Store screenshots.
+
+## Text and fonts
+
 Grace Community's sermon view quotes Romans 12:2 (ESV). Fonts in the example views come from Google Fonts (SIL Open Font License) at render time: Oswald, Chakra Petch, Cormorant Garamond, Jost, Caveat, Fraunces, Work Sans and Inter Tight. The site itself self-hosts Space Grotesk and Instrument Sans (SIL OFL).

@@ -5,13 +5,14 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import { github } from "../site.config";
 ---
-<Base title="Support · ViewSwitcher" description="Help with ViewSwitcher for Mac and iPad: getting set up with OBS, fixing common problems, and how to reach us." path="/support">
+<Base title="Support for ViewSwitcher for Mac and iPad" description="Help with ViewSwitcher for Mac and iPad: getting set up with OBS, fixing common problems, and how to reach us." path="/support">
   <Header />
   <main id="main" class="wrap prose">
     <h1>Support</h1>
     <p class="lede">Help with ViewSwitcher for Mac and iPad. If your question isn't answered here, <a href={`${github}/issues/new`}>ask us on GitHub</a>. We read every one.</p>
 
     <h2>Getting set up</h2>
+    <p>The short version is below. The full guide, with screenshots and a first stream: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
     <ol>
       <li>Install <a href="https://obsproject.com">OBS</a>, the free streaming app, if you don't have it.</li>
       <li>In OBS, open <strong>Tools → WebSocket Server Settings</strong> and turn the server on. This is how ViewSwitcher talks to OBS.</li>
@@ -28,7 +29,7 @@ import { github } from "../site.config";
     <h3>My camera or screen doesn't show up in the view</h3>
     <p>Check that the source in the "ViewSwitcher" scene is named exactly <strong>Camera</strong> or <strong>Screen</strong>, then press Set up OBS again.</p>
     <h3>The iPad app won't connect</h3>
-    <p>Keep ViewSwitcher open on the Mac and plug the iPad in with a USB-C cable. The first time, tap <strong>Trust</strong> on the iPad when it asks about this computer. Without a cable, type your Mac's network address into the iPad app's connect screen; both need to be on the same network.</p>
+    <p>Keep ViewSwitcher open on the Mac and plug the iPad in with a USB-C cable. The first time, tap <strong>Trust</strong> on the iPad when it asks about this computer. Without a cable, the app connects through Tailscale: share ViewSwitcher from the Mac with <code>tailscale serve --bg 7420</code> and type the .ts.net address it prints into the iPad app's connect screen. More in <a href="/ipad">ViewSwitcher for iPad</a>.</p>
 
     <h2>Buying the iPad app</h2>
     <p>ViewSwitcher for iPad is a one-time purchase on the App Store, with nothing to subscribe to. To install it on another iPad, sign in with the same Apple Account and download it again from the App Store at no charge. For a refund, ask Apple at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</p>
