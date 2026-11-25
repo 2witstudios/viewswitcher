@@ -123,8 +123,9 @@ API (`scripts/shots-seed.ts`: Full Count and Grace Community, a project and a st
 site's photos in their camera boxes, in the scratch library only). Then
 `iPadUITests/AppStoreScreenshots.swift` (`testShots`, `testPhoneShots`) taps through each screen in the app and waits while the script
 captures it with `simctl io screenshot`, under a 9:41 status bar. `scripts/frame-shots.ts` puts each in a
-realistic device on a portrait canvas: dark ground, the logo, a two-line Space Grotesk headline and an
-Instrument Sans subtitle. The upload list is in
+realistic device on a portrait canvas, the whole device inside with a margin (a sideways iPhone capture
+goes in an upright phone, turned to fill it): dark ground, the logo, a two-line Space Grotesk headline
+and an Instrument Sans subtitle. The upload list is in
 `AppStore/listing.md`.
 
 ### App Store (MAC-19, MAC-20)
