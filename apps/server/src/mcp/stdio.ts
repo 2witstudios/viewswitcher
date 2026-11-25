@@ -131,7 +131,13 @@ export async function relayStdio(opts: RelayOptions): Promise<void> {
     }
   }
   start(buffer + decoder.decode());
-  while (pending.size) await Promise.all(pending);
+  // stdin is closed but answers may still be on their way: hold the process open until every one is written.
+  const hold = setInterval(() => {}, 60_000);
+  try {
+    while (pending.size) await Promise.all(pending);
+  } finally {
+    clearInterval(hold);
+  }
 }
 
 /** The --mcp-stdio entry point. */
@@ -139,10 +145,16 @@ export async function main() {
   // Nothing but JSON-RPC on stdout, even from a stray log line.
   console.log = console.info = console.debug = console.warn = console.error;
   const port = Number(process.env.PORT ?? 7420);
+  const out = Bun.stdout.writer();
   await relayStdio({
     port,
-    input: process.stdin,
-    write: (line) => process.stdout.write(line + "\n"),
+    input: Bun.stdin.stream(),
+    write: (line) => {
+      out.write(line + "\n");
+      out.flush();
+    },
     log: (m) => process.stderr.write(m + "\n"),
   });
+  // Every answer reaches the agent before the process ends.
+  await out.end();
 }

@@ -198,8 +198,13 @@ describe("look tools", () => {
     previews.scene = { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview` };
     const r = await call("preview_scene", { path: `${ORG}/templates/brb.html` });
     expect(r.isError).toBe(false);
-    expect(r.text).toContain("Previews need OBS");
+    expect(r.text).toBe(`No picture: Previews need OBS. Preview of ${ORG}/templates/brb.html is at http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`);
     expect(r.text).toContain(`http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`);
+    // A reason that already ends a sentence isn't given a second period.
+    previews.scene = { ok: false, reason: "OBS isn't connected. Open the URL in a browser at 1920×1080 if you can.", url: `http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview` };
+    expect((await call("preview_scene", { path: `${ORG}/templates/brb.html` })).text).toBe(
+      `No picture: OBS isn't connected. Open the URL in a browser at 1920×1080 if you can. Preview of ${ORG}/templates/brb.html is at http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`,
+    );
     const p = await call("see_program");
     expect(p.isError).toBe(false);
     expect(p.text).toContain(`http://127.0.0.1:${PORT}/program`);
