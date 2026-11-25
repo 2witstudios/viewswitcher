@@ -15,10 +15,15 @@ export function ctas(opts: { macAppReleased: boolean; repo: string; dmgUrl: stri
 
 /** The config value, unless an override (e.g. SITE_MAC_APP on a preview build) says otherwise. */
 export function macAppFlag(configured: boolean, override: string | undefined): boolean {
+  return flag("SITE_MAC_APP", configured, override);
+}
+
+/** A config switch, unless its env override (1, 0, true or false) says otherwise. */
+export function flag(name: string, configured: boolean, override: string | undefined): boolean {
   if (override === undefined || override === "") return configured;
   if (override === "1" || override === "true") return true;
   if (override === "0" || override === "false") return false;
-  throw new Error(`SITE_MAC_APP must be 1, 0, true or false, not "${override}"`);
+  throw new Error(`${name} must be 1, 0, true or false, not "${override}"`);
 }
 
 /** The iPad app: optional, a one-time price on the App Store. Before its listing is live it's "coming". */
