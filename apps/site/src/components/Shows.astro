@@ -1,24 +1,23 @@
 ---
-// SITE-14: four made-up shows, each a full set of views in its own colors, rendered from the
-// restyled starter kit (scripts/library.ts, scripts/shots.ts).
+// SITE-14: six made-up shows, each a full set of views with its own look (scripts/shows/<id>/,
+// rendered by scripts/library.ts and scripts/shots.ts). Each card leads with the show's main view.
 import ViewFrame from "./ViewFrame.astro";
 import { SHOWS } from "../data/shows";
-const order = ["kitchen", "watercolor", "grace", "longtable"];
-const lead: Record<string, string> = { watercolor: "teaching", grace: "teaching", longtable: "interview", kitchen: "teaching" };
-const shows = order.map((id) => SHOWS.find((s) => s.id === id)!);
+const lead = "main";
+const shows = SHOWS;
 ---
 <section class="section" id="shows" aria-labelledby="shows-title">
   <div class="wrap">
     <div class="section-head">
       <h2 id="shows-title">Don't be the only one live without a professional look.</h2>
-      <p class="lede">Every show gets a full set of views in its own colors and type. Here are four made-up shows to show the range.</p>
+      <p class="lede">Every show gets a full set of views with its own look, from the countdown to the goodbye. Here are six made-up shows to show the range.</p>
     </div>
     <ul class="shows">
       {shows.map((s) => (
         <li>
-          <ViewFrame show={s.id} file={lead[s.id]!} sizes="(min-width: 48rem) 36rem, calc(100vw - 2.5rem)" class="main" />
+          <ViewFrame show={s.id} file={lead} sizes="(min-width: 48rem) 36rem, calc(100vw - 2.5rem)" class="main" />
           <div class="strip">
-            {s.views.filter((v) => v.file !== lead[s.id]).slice(0, 3).map((v) => (
+            {s.views.filter((v) => v.file !== lead).slice(0, 3).map((v) => (
               <figure><ViewFrame show={s.id} file={v.file} sizes="(min-width: 48rem) 11rem, 30vw" widths={[240, 360, 480]} class="mini" /><figcaption>{v.name}</figcaption></figure>
             ))}
           </div>

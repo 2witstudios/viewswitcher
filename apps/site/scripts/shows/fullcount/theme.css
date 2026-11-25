@@ -1,0 +1,40 @@
+@import url("https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap");
+/* Full Count: a sports-broadcast look. A scoreboard title bar with a segment counter,
+   red, white and navy, Oswald in caps. */
+:root {
+  --ground: #0b1426;
+  --navy: #0b1426;
+  --red: #e63946;
+  --white: #f8f9fb;
+  --steel: #9fb0c8;
+}
+.scene { font-family: "Oswald", "Arial Narrow", sans-serif; color: var(--white); text-transform: uppercase; }
+
+/* The scoreboard: show name | episode and title | segment. */
+.board { position: absolute; display: flex; }
+.board .name { width: 290px; background: var(--red); display: flex; flex-direction: column; justify-content: center; padding: 0 34px; box-sizing: border-box; font-weight: 700; font-size: 64px; line-height: 0.92; }
+.board .title { flex: 1; min-width: 0; background: var(--white); color: var(--navy); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 44px; }
+.board .kicker { display: flex; align-items: center; gap: 14px; font-weight: 500; font-size: 28px; letter-spacing: 0.18em; color: var(--red); }
+.board .kicker i { width: 16px; height: 16px; border-radius: 50%; background: var(--red); }
+.board .headline { font-weight: 700; font-size: 66px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board .seg { width: 270px; background: var(--navy); border: 5px solid var(--white); box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.board .seg small { font-size: 26px; letter-spacing: 0.16em; color: var(--steel); }
+.board .seg b { font-size: 76px; font-weight: 700; line-height: 1; }
+
+/* A colored bar across the top of a camera box. */
+.stripe { position: absolute; height: 10px; }
+.stripe.red { background: var(--red); }
+.stripe.white { background: var(--white); }
+
+/* Name plate: navy name with a red edge, white role. */
+.plate { position: absolute; display: flex; height: 74px; }
+.plate b { display: flex; align-items: center; padding: 0 26px; background: var(--navy); border-left: 10px solid var(--red); font-weight: 600; font-size: 38px; letter-spacing: 0.05em; }
+.plate span { display: flex; align-items: center; padding: 0 22px; background: var(--white); color: var(--navy); font-weight: 500; font-size: 28px; letter-spacing: 0.14em; }
+
+/* The live cue. */
+.live { position: absolute; display: flex; align-items: center; gap: 14px; padding: 10px 24px; background: var(--red); font-weight: 700; font-size: 34px; letter-spacing: 0.14em; }
+.live i { width: 16px; height: 16px; border-radius: 50%; background: var(--white); }
+
+/* Darkens a device for text on top. */
+.shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(11, 20, 38, 0.5), rgba(11, 20, 38, 0.9)); }
+.steel { color: var(--steel); }

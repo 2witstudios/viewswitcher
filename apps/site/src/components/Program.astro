@@ -13,9 +13,9 @@ import Mark from "./Mark.astro";
 import { showViews, box, radius, type View } from "../lib/views";
 import { site } from "../site.config";
 
-const SHOW = "kitchen";
+const SHOW = "fullcount";
 const views = showViews(SHOW);
-const start = views.findIndex((v) => v.file === "teaching");
+const start = views.findIndex((v) => v.file === "main");
 const ground = views[0]!.ground;
 const devices = [...new Map(views.flatMap((v) => v.slots.map((s) => [s.name, s.media] as const))).entries()];
 const at = (v: View, name: string) => v.slots.find((s) => s.name === name);
@@ -31,7 +31,7 @@ const slotData = JSON.stringify(views.map((v) => v.slots.map(({ name, x, y, w, h
   <div class="window on-dark">
     <div class="titlebar">
       <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="app"><Mark size={18} /><b>{views[0]!.show.name}</b><span class="ep">Ep. 31 · Sunday bread</span></span>
+      <span class="app"><Mark size={18} /><b>{views[0]!.show.name}</b><span class="ep">{views[0]!.show.episode}</span></span>
       <span class="obs"><i></i>OBS connected</span>
     </div>
     <div class="body">
@@ -188,7 +188,7 @@ const slotData = JSON.stringify(views.map((v) => v.slots.map(({ name, x, y, w, h
     };
 
     // The demo: until someone clicks, a cursor walks the running order of the show.
-    const tour = [2, 3, 1, 2, 4, 0].map((n) => n % covers.length);
+    const tour = [1, 2, 3, 2, 4, 0].map((n) => n % covers.length);
     let step = 0, timer = 0, visible = false, stopped = false;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
     const stop = () => { stopped = true; clearTimeout(timer); cursor.classList.remove("show"); };

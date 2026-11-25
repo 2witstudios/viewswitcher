@@ -9,11 +9,13 @@
 //    with holes where the devices go. It's saved with its alpha as src/assets/views/<id>.webp,
 //    and its device boxes and ground color go to src/data/views.json. The site stacks
 //    ground → photos/screens in the boxes → the view, which is how OBS composites it.
-// 4. scripts/screens/*.html (the made-up screen shares) render to src/assets/media/<name>.webp.
-// Only rendered images enter the repo, never scene HTML.
+// 4. scripts/screens/*.html (made-up screen shares, if any) render to src/assets/media/<name>.webp.
+// The views' HTML stays in scripts/shows/ and the scratch library; only rendered images enter src/.
+// SHOTS_ONLY=fullcount,nova renders just those shows and keeps the rest of views.json.
 import { chromium } from "playwright-core";
 import sharp from "sharp";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { SHOWS, viewId } from "../src/data/shows";
@@ -30,7 +32,8 @@ async function up(): Promise<boolean> {
 }
 if (await up()) throw new Error(`something already answers on ${port}; stop it or set SHOTS_PORT`);
 
-const library = await buildLibrary();
+const only = process.env.SHOTS_ONLY?.split(",").map((s) => s.trim()).filter(Boolean);
+const library = await buildLibrary(only);
 const server = Bun.spawn(["bun", join(repo, "apps/server/src/index.ts")], {
   env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
   stdout: "ignore", stderr: "inherit",
@@ -39,7 +42,8 @@ for (let i = 0; i < 50 && server.exitCode === null && !(await up()); i++) await 
 if (server.exitCode !== null || !(await up())) { server.kill(); throw new Error(`server did not start on ${port}`); }
 
 export type Slot = { name: string; x: number; y: number; w: number; h: number; radius: string };
-const out: Record<string, { ground: string; slots: Slot[] }> = {};
+const viewsJson = join(site, "src/data/views.json");
+const out: Record<string, { ground: string; slots: Slot[] }> = only && existsSync(viewsJson) ? JSON.parse(await readFile(viewsJson, "utf8")) : {};
 const views: Record<string, Buffer> = {};
 const screens: Record<string, Buffer> = {};
 
@@ -51,12 +55,20 @@ try {
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(300);
   };
-  for (const show of SHOWS) for (const v of show.views) {
+  for (const show of SHOWS.filter((s) => !only || only.includes(s.id))) for (const v of show.views) {
     const id = viewId(show.id, v.file);
     const res = await page.goto(`${base}/library/${show.id}/templates/${v.file}.html`, { waitUntil: "networkidle" });
     if (!res?.ok()) throw new Error(`${id}: HTTP ${res?.status()}`);
-    // Freeze the countdown at a believable value.
-    await page.evaluate(() => document.querySelectorAll("[data-countdown]").forEach((el) => { el.removeAttribute("data-countdown"); el.textContent = "4:32"; }));
+    // Freeze the countdown and the clock at believable values.
+    await page.evaluate(() => {
+      // Swap in a frozen copy: the page's timers keep writing to the original, now detached.
+      const freeze = (sel: string, text: string) => document.querySelectorAll(sel).forEach((el) => {
+        const copy = el.cloneNode(false) as HTMLElement;
+        copy.removeAttribute(sel.slice(1, -1)); copy.textContent = text; el.replaceWith(copy);
+      });
+      freeze("[data-countdown]", "4:32");
+      freeze("[data-clock]", "8:42 PM");
+    });
     await settle();
     const slots = await page.$$eval("[data-slot]", (els) => els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -70,7 +82,7 @@ try {
     console.log(`${id.padEnd(28)} slots: ${slots.map((s) => s.name).join(", ") || "none"}`);
   }
   const dir = join(site, "scripts/screens");
-  for (const f of (await readdir(dir)).filter((n) => n.endsWith(".html"))) {
+  for (const f of existsSync(dir) ? (await readdir(dir)).filter((n) => n.endsWith(".html")) : []) {
     await page.goto(pathToFileURL(join(dir, f)).href, { waitUntil: "networkidle" });
     await settle();
     screens[f.replace(/\.html$/, "")] = await sharp(await page.screenshot({ type: "png" })).webp({ quality: 88, effort: 6 }).toBuffer();
@@ -84,5 +96,5 @@ try {
 await mkdir(join(site, "src/assets/views"), { recursive: true });
 for (const [id, webp] of Object.entries(views)) await writeFile(join(site, "src/assets/views", `${id}.webp`), new Uint8Array(webp));
 for (const [id, webp] of Object.entries(screens)) await writeFile(join(site, "src/assets/media", `${id}.webp`), new Uint8Array(webp));
-await writeFile(join(site, "src/data/views.json"), JSON.stringify(out, null, 2) + "\n");
+await writeFile(viewsJson, JSON.stringify(out, null, 2) + "\n");
 console.log(`wrote ${Object.keys(out).length} views and ${Object.keys(screens).length} screens`);

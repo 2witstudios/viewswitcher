@@ -1,0 +1,22 @@
+/* Base for every view of the site's example shows (and, later, starter styles).
+   A view is a transparent 1920×1080 page: OBS paints the show's ground color behind it and puts each
+   device (Camera, Screen, Guest) into the box with that data-slot name, underneath the view. */
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+.scene { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+.scene p, .scene h1, .scene h2 { margin: 0; }
+.abs { position: absolute; }
+
+/* A device box. Keep it unrotated and transparent; draw frames and borders around it, not behind it.
+   --radius rounds the device's corners (the switcher reads it). */
+.slot { position: absolute; --radius: 0px; border-radius: var(--radius); }
+
+/* A patterned ground (paper, grid): view.js cuts every device box out of it, so it never covers one. */
+.ground { position: absolute; inset: 0; }
+
+/* Preview mode (switcher covers, ?preview): paint the ground and label the boxes. */
+.preview body { background: var(--ground); }
+.preview .slot { background: #00000055; outline: 2px dashed #ffffff66; outline-offset: -2px; }
+.preview .slot::before {
+  content: attr(data-slot); position: absolute; inset: 0; display: grid; place-items: center;
+  font: 600 18px/1 system-ui, sans-serif; letter-spacing: 0.28em; text-transform: uppercase; color: #ffffffaa;
+}

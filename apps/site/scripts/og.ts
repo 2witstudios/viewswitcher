@@ -28,8 +28,8 @@ ico.writeUInt32LE(png32.length, 14); ico.writeUInt32LE(22, 18);
 await writeFile(join(pub, "favicon.ico"), new Uint8Array(Buffer.concat([ico, png32])));
 
 // ---- social card
-const id = "kitchen-teaching";
-const spec = SHOWS.find((x) => x.id === "kitchen")!.views.find((v) => v.file === "teaching")!;
+const id = "fullcount-main";
+const spec = SHOWS.find((x) => x.id === "fullcount")!.views.find((v) => v.file === "main")!;
 const view = (data as Record<string, { ground: string; slots: { name: string; x: number; y: number; w: number; h: number; radius: string }[] }>)[id]!;
 const shot = await b64(join(site, `src/assets/views/${id}.webp`));
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
