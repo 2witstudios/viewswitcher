@@ -5,6 +5,7 @@
 // Requests that are superseded while loading are dropped; the screen always ends on the latest one.
 // A new version of the scene already on air (a saved edit) swaps in without the transition, and the
 // scene editor's live previews apply to the on-air frame in place.
+import { editKind } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -32,7 +33,8 @@ let slotSeq = 0;
 const slotOrder = () => ({ page: slotPage, seq: ++slotSeq });
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Job = { url: string; path: string };
+/** `from`: the path this scene had before it was renamed on air (EDIT-19): no transition for that. */
+type Job = { url: string; path: string; from?: string };
 
 function readSlots(frame: HTMLIFrameElement) {
   const doc = frame.contentDocument;
@@ -123,7 +125,8 @@ export const Route = createFileRoute("/program")({
           const slots = refs[back].current ? readSlots(refs[back].current!) : [];
           const firstShow = shown.current === null;
           // Same scene, new version (an edit was saved): swap frames with no transition.
-          const wipeIt = !firstShow && shown.current?.path !== job.path;
+          // Renamed on air (EDIT-19): the same scene under a new path, also no transition.
+          const wipeIt = !firstShow && shown.current?.path !== job.path && !(job.from && job.from === shown.current?.path);
           if (wipeIt) {
             // Tell the transition page to play (it can animate on the "play" class; see scene.js).
             transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
@@ -170,7 +173,8 @@ export const Route = createFileRoute("/program")({
           latestFor = version ?? "";
         }
         // Previews are separate requests and can arrive out of order: never step back to an older one.
-        const key = `${order.session}:${edit.id}:${"text" in edit ? "t" : "p"}`;
+        const kind = editKind(edit);
+        const key = `${order.session}:${edit.id}:${kind === "text" ? "t" : kind === "src" ? "s" : "p"}`;
         if (hash === version) {
           if (order.seq <= (latest.get(key) ?? -1)) return;
           latest.set(key, order.seq);
@@ -202,7 +206,7 @@ export const Route = createFileRoute("/program")({
     useEffect(() => {
       if (!target || !onAir) return;
       if (desired.current?.url === target) return;
-      desired.current = { url: target, path: onAir.path };
+      desired.current = { url: target, path: onAir.path, from: onAir.renamedFrom };
       run();
     }, [target]);
 
