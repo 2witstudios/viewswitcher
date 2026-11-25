@@ -36,6 +36,8 @@ export type ModeEvent =
   | { t: "drag"; id: number; left: number; top: number; guides: Guides }
   | { t: "resize"; id: number; width: number; height: number }
   | { t: "structure" }
+  /** A rename, once the saves before it have landed: from leaving straight to saving, never through idle. */
+  | { t: "rename" }
   | { t: "pick"; replace: number | null; made: Made }
   | { t: "dropChoice"; choice: DropChoice }
   | { t: "leave" }
@@ -60,8 +62,9 @@ export function reduce(mode: Mode, e: ModeEvent): Mode {
     case "resize":
       return mode.kind === "idle" || (mode.kind === "resizing" && mode.id === e.id) ? { kind: "resizing", id: e.id, width: e.width, height: e.height } : mode;
     case "structure":
-      // A rename saves straight after the saves before it have landed, without passing through idle.
-      return mode.kind === "idle" || mode.kind === "leaving" ? { kind: "saving-structure" } : mode;
+      return mode.kind === "idle" ? { kind: "saving-structure" } : mode;
+    case "rename":
+      return mode.kind === "leaving" ? { kind: "saving-structure" } : mode;
     case "pick":
       return mode.kind === "idle" ? { kind: "picking", replace: e.replace, made: e.made } : mode;
     case "dropChoice":

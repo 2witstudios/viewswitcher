@@ -39,7 +39,7 @@ export function useRename(opts: {
       const clean = name.trim();
       if (!clean || clean === title) return;
       // The rename is saved straight after the saves before it, with nothing in between.
-      if (!(await o.current.settle(() => mode.dispatch({ t: "structure" })))) return;
+      if (!(await o.current.settle(() => mode.dispatch({ t: "rename" })))) return;
       const b = o.current.current();
       if (mode.now().kind !== "saving-structure") return;
       try {

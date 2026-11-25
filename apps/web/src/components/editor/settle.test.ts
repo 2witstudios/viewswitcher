@@ -52,7 +52,7 @@ describe("settleSaves", () => {
     const order: string[] = [];
     // A rename waits for the saves before it; meanwhile a Replace's upload finishes and waits too.
     const rename = settleSaves({ mode, idle: () => queue.promise, conflictPending: () => false }, () => {
-      mode.dispatch({ t: "structure" });
+      mode.dispatch({ t: "rename" });
       order.push("rename");
     });
     await tick();
