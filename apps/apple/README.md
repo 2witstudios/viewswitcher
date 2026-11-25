@@ -16,10 +16,13 @@ bun run mac:build --app          # just build/export/ViewSwitcher.app
 bun run mac:e2e                  # drives that app on port 7435 (E2E_PORT), OBS offline, USB off, a temp library
 bun run mac:release [--publish]  # + notarize and staple; --publish makes a DRAFT GitHub release
 bun run ipad:deploy              # build, install and launch on the plugged-in iPad (replaces what's there)
+bun run ipad:release [--export]  # archive, export for App Store Connect, check, upload (--export: no upload)
 
 cd apps/apple && xcodegen && xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -destination platform=macOS test
 cd apps/apple/Kit && swift test  # the same XCTest, without Xcode's project
-bash apps/apple/scripts/ipad-shots.sh <dir>   # iPad screenshots in the simulator (scratch server on 7435)
+bash apps/apple/scripts/ipad-shots.sh [dir]   # 13-inch iPad screenshots: demo + switcher (scratch server on 7437)
+bun apps/apple/scripts/demo-assets.ts         # refresh the iPad demo's show from apps/site
+bun apps/apple/AppStore/check.ts              # App Store listing lengths
 ```
 
 ## Mac app
@@ -72,7 +75,35 @@ screen isn't required, so Split View and Stage Manager work.
 
 In the simulator the USB tunnel stays off: the simulator shares the Mac's ports, so its listener on
 127.0.0.1:7420 would be the Mac's own port. A Debug build opens `VIEWSWITCHER_SERVER` directly instead
-(`scripts/ipad-shots.sh` uses a scratch server on 7435).
+(`scripts/ipad-shots.sh` uses a scratch server on 7437), `VIEWSWITCHER_PROBE` points the connector's
+USB-C probe elsewhere, `VIEWSWITCHER_START=demo` opens the demo and `VIEWSWITCHER_RESET=1` starts as a
+first launch. Tests and screenshots always set the probe, so they never reach the Mac's own switcher.
+
+### Demo (MAC-18)
+
+With no Mac, the app has a demo for App Review and new buyers: `iPad/Connector/demo/`, served at
+`viewswitcher://connector/demo/`. It's static web content bundled in the app, like the connector (one
+web view, one scheme handler, nothing to load), so it works offline. The show is the site's made-up
+Saltwater Kitchen: its rendered views and Unsplash photos (apps/site/CREDITS.md), copied by
+`scripts/demo-assets.ts`. Tap a view and the program cuts to it, the camera and guest glide into its
+boxes and the red On air tally moves. A white bar says "Demo · Connect your Mac to go live".
+
+- The connector opens the demo by itself until a Mac has answered once (`viewswitcher.connectedOnce`
+  in the web view's storage); after that it offers "Try the demo" when no Mac answers.
+- "Connect your Mac" goes back to the connector, which then stays until the next launch.
+- The demo keeps probing like the connector (`Connector/probe.js`, shared) and opens the real switcher
+  as soon as a Mac answers.
+- `iPadUITests/DemoTests.swift` covers it (the Mac part runs from `scripts/ipad-shots.sh`).
+
+### App Store (MAC-19, MAC-20)
+
+`AppStore/listing.md` holds the listing in App Store Connect's order: name, subtitle, description,
+keywords, promotional text, URLs, review notes, age rating, privacy label (no data collected) and
+export compliance. The app ships with every iPad icon size from one 1024 px source, a launch screen
+(`UILaunchScreen`), `PrivacyInfo.xcprivacy` (the Mac app has one too), `ITSAppUsesNonExemptEncryption`
+NO, one usage string (Local Network: the network address), and all four orientations without
+`UIRequiresFullScreen`. `scripts/ipad-check.sh` checks all of that on the exported .ipa, and
+`ipad:release` runs it before any upload.
 
 ## Signing: what each part is allowed
 
@@ -112,8 +143,33 @@ one Sparkle archive. The dmg is about 52 MB.
 
 ## Releasing
 
+### Credentials (MAC-17)
+
+One App Store Connect team API key notarizes the Mac app and uploads the iPad app. Set these in the
+environment or in `apps/apple/.release.env` (gitignored; copy `.release.env.example`):
+
+| variable | what | where |
+|---|---|---|
+| `ASC_KEY_ID` | the key's ID (`BS7KAPCGBR`) | App Store Connect → Users and Access → Integrations → App Store Connect API |
+| `ASC_ISSUER_ID` | the issuer ID, a UUID | the same page, above the list of keys |
+| `ASC_KEY_PATH` | the `.p8` file | default `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` |
+
+The scripts pass only the path and IDs to Apple's tools; nothing prints the key, and it's never in the repo.
+With a value missing, `mac:release` and `ipad:release` stop before building and name it.
+
+### Mac (free, GitHub Releases)
+
 1. Bump `MARKETING_VERSION` in `project.yml`.
-2. `bun run mac:release --publish`. It signs, notarizes and staples the app and the dmg (keychain profile
-   `viewswitcher-notary`, MAC-7a), writes the appcast, and uploads `ViewSwitcher.dmg` and `appcast.xml`
-   to a draft release `v<version>`.
+2. `bun run mac:release --publish`. It signs, notarizes and staples the app and the dmg, writes the
+   appcast, and uploads `ViewSwitcher.dmg` and `appcast.xml` to a draft release `v<version>`. It
+   notarizes with the keychain profile `viewswitcher-notary` when it exists (MAC-7a), else with the API key.
 3. A person checks the draft and publishes it.
+
+### iPad ($9.99, App Store)
+
+1. `bun run ipad:release`. It archives the Release build with the build number set to the UTC time
+   (`YYYYMMDDHHMM`, or `BUILD_NUMBER`), exports it for App Store Connect, runs `scripts/ipad-check.sh`,
+   and uploads it with the API key. `--export` stops before the upload (build/ipad/export/ViewSwitcher.ipa)
+   and signs with the Xcode account when the API key isn't complete.
+2. In App Store Connect: pick the build, fill the version from `AppStore/listing.md`, add the screenshots
+   from `scripts/ipad-shots.sh`, and submit for review.

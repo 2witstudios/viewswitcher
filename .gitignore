@@ -15,3 +15,5 @@ apps/apple/Kit/.build/
 apps/apple/Kit/.swiftpm/
 apps/apple/Mac/Info.plist
 apps/apple/iPad/Info.plist
+apps/apple/.release.env
+apps/apple/AppStore/screenshots/
