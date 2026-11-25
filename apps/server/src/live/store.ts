@@ -43,17 +43,22 @@ export class LiveStore {
   private placementWarnings: string[] = [];
   private onAirWarnings: string[] = [];
   private queue: Promise<unknown> = Promise.resolve();
+  /** Every OBS source a scene has placed in a slot, ever: placement hides these when a scene has no slot for them. */
+  private placed: Set<string>;
   /** Each org's ground color, read once from org.json and forgotten when that file changes. */
   private grounds = new Map<string, Promise<string | null>>();
 
-  private constructor(private opts: LiveStoreOptions, onAir: OnAir | null) {
+  private constructor(private opts: LiveStoreOptions, onAir: OnAir | null, placed: string[]) {
     this.state = { ...opts.initial, onAir, warnings: [] };
+    this.placed = new Set(placed);
   }
 
   /** The store as it was saved: the scene that was on air, with its transition looked up again. */
   static async open(opts: LiveStoreOptions): Promise<LiveStore> {
-    const saved = await Bun.file(opts.file).json().then((v) => (v?.onAir ?? null) as OnAir | null, () => null);
-    const store = new LiveStore(opts, saved && typeof saved.path === "string" ? saved : null);
+    const file = await Bun.file(opts.file).json().catch(() => null);
+    const saved = (file?.onAir ?? null) as OnAir | null;
+    const placed = Array.isArray(file?.placed) ? file.placed.filter((p: unknown): p is string => typeof p === "string") : [];
+    const store = new LiveStore(opts, saved && typeof saved.path === "string" ? saved : null, placed);
     const on = store.state.onAir;
     if (on) {
       on.transition = await lib.resolveTransition(opts.root, on.path).catch(() => null);
@@ -131,6 +136,17 @@ export class LiveStore {
     });
   }
 
+  /** The sources placed before, for placement: `has` asks, `remember` notes new ones and saves them. */
+  readonly placedSources = {
+    has: (source: string) => this.placed.has(source),
+    remember: (sources: string[]) => {
+      const added = sources.filter((s) => !this.placed.has(s));
+      if (!added.length) return;
+      for (const s of added) this.placed.add(s); // seen by the very next placement, before it's saved
+      void this.serial(() => this.persist(this.state.onAir)).catch((e) => console.error("[state] couldn't save:", (e as Error).message));
+    },
+  };
+
   /** The ground color of the org `path` belongs to, from its org.json (cached). */
   groundFor(path: string): Promise<string | null> {
     const org = orgOf(path);
@@ -191,9 +207,10 @@ export class LiveStore {
     this.state.warnings = [...this.onAirWarnings, ...this.placementWarnings];
   }
 
+  /** state.json: the on-air record and the sources ever placed. */
   private persist(onAir: OnAir | null) {
     const { missing: _, ...saved } = onAir ?? ({} as OnAir);
-    return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null }, null, 2));
+    return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null, placed: [...this.placed].sort() }, null, 2));
   }
 
   private abs(path: string) {

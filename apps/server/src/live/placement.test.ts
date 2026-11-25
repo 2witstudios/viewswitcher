@@ -6,8 +6,9 @@ import { fakeObs, type FakeObsInit, serveFakeObs } from "../fake-obs";
 import { OBSClient } from "../obs";
 import { createPlacer, type PlacementObs } from "./placement";
 
-const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground" };
-const SCENE_ITEMS = ["ViewSwitcher Ground", "Camera", "Screen", "Guest", "Camera 2", "Logo", "ViewSwitcher Program"];
+const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"] };
+// Guest and Camera 2 are boxes from the editor, not configured devices; Mic and Logo were added in OBS by hand.
+const SCENE_ITEMS = ["ViewSwitcher Ground", "Camera", "Screen", "Guest", "Camera 2", "Mic", "Logo", "ViewSwitcher Program"];
 const input = (kind: string) => ({ kind, settings: {} });
 const INPUTS: FakeObsInit["inputs"] = Object.fromEntries(SCENE_ITEMS.map((n) => [n, input(n === "ViewSwitcher Ground" ? "color_source_v3" : "av_capture_input")]));
 
@@ -15,21 +16,50 @@ const camera: Slot = { source: "Camera", x: 1528, y: 32, w: 360, h: 450 };
 const guest: Slot = { source: "Guest", x: 1528, y: 500, w: 360, h: 450 };
 const screen: Slot = { source: "Screen", x: 32, y: 32, w: 1472, h: 828 };
 
-function setup(init: FakeObsInit = {}, ground: (path: string) => string | null = () => "#112233") {
+/** The sources placed before, as the store keeps them (`before`: from an earlier run). */
+const placedSet = (before: string[] = []) => {
+  const set = new Set(before);
+  return { set, has: (s: string) => set.has(s), remember: (list: string[]) => list.forEach((s) => set.add(s)) };
+};
+
+function setup(init: FakeObsInit = {}, ground: (path: string) => string | null = () => "#112233", before: string[] = []) {
   const obs = Object.assign(fakeObs({ scenes: { ViewSwitcher: SCENE_ITEMS }, inputs: INPUTS, ...init }), { status: { connected: true } });
   const placed: string[][] = [];
-  const placer = createPlacer({ obs, names, ground, onPlaced: (w) => placed.push(w) });
-  return { obs, placer, placed, shown: () => obs.shown("ViewSwitcher") };
+  const sources = placedSet(before);
+  const placer = createPlacer({ obs, names, ground, onPlaced: (w) => placed.push(w), placed: sources });
+  /** Every item a request changed, by source name. */
+  const touched = () => {
+    const ids = new Map(obs.scenes.get("ViewSwitcher")!.map((i) => [i.sceneItemId, i.sourceName]));
+    return new Set(obs.requests.filter((r) => r.data?.sceneItemId !== undefined).map((r) => ids.get(r.data.sceneItemId)));
+  };
+  return { obs, placer, placed, sources, touched, shown: () => obs.shown("ViewSwitcher") };
 }
 
 describe("placement", () => {
   test("a Guest or Camera 2 box from the last scene is hidden when the next scene has none", async () => {
-    const { placer, shown } = setup();
+    const { placer, shown, sources } = setup();
     await placer.report("org/projects/p/scenes/interview.html", [camera, guest, { ...guest, source: "Camera 2", y: 40 }]);
-    expect(shown()).toMatchObject({ Camera: true, Guest: true, "Camera 2": true, Screen: false, Logo: false });
-    // A BRB with no slots: every source goes, the program and the ground stay.
+    expect(shown()).toMatchObject({ Camera: true, Guest: true, "Camera 2": true, Screen: false });
+    expect([...sources.set].sort()).toEqual(["Camera", "Camera 2", "Guest"]);
+    // A BRB with no slots: every source a scene places goes; the program, the ground and the rest stay.
     await placer.report("org/templates/brb.html", []);
-    expect(shown()).toEqual({ "ViewSwitcher Ground": true, Camera: false, Screen: false, Guest: false, "Camera 2": false, Logo: false, "ViewSwitcher Program": true });
+    expect(shown()).toEqual({ "ViewSwitcher Ground": true, Camera: false, Screen: false, Guest: false, "Camera 2": false, Mic: true, Logo: true, "ViewSwitcher Program": true });
+  });
+
+  test("after a restart, a Guest some earlier scene placed is still hidden by a scene without one", async () => {
+    const { placer, shown } = setup({}, () => null, ["Guest"]);
+    await placer.report("org/templates/brb.html", []);
+    expect(shown()).toMatchObject({ Guest: false, "Camera 2": true });
+  });
+
+  test("an item nothing ever placed (a mic, a watermark) and the program and ground are never touched", async () => {
+    const { placer, touched } = setup();
+    await placer.report("org/a.html", [camera, guest]);
+    await placer.report("org/b.html", [screen]);
+    await placer.report("org/brb.html", []);
+    const changed = touched();
+    for (const name of ["Mic", "Logo", "Camera 2", "ViewSwitcher Program", "ViewSwitcher Ground"]) expect(changed.has(name)).toBe(false);
+    expect([...changed].sort()).toEqual(["Camera", "Guest", "Screen"]);
   });
 
   test("each report moves the slotted source to its box, covering it", async () => {
@@ -55,12 +85,14 @@ describe("placement", () => {
   });
 
   test("items added in OBS are seen after OBS says so", async () => {
-    const { obs, placer, shown } = setup();
+    const { obs, placer, placed } = setup();
     await placer.report("org/templates/brb.html", []);
     await obs.request("CreateInput", { sceneName: "ViewSwitcher", inputName: "Guest 2", inputKind: "av_capture_input", inputSettings: {} });
     placer.onEvent("SceneItemCreated");
-    await placer.report("org/templates/brb.html", []);
-    expect(shown()["Guest 2"]).toBe(false);
+    const box = { ...guest, source: "Guest 2" };
+    await placer.report("org/templates/panel.html", [box]);
+    expect(placed.at(-1)).toEqual([]);
+    expect(obs.transformOf("ViewSwitcher", "Guest 2")).toEqual(coverTransform(box, { width: 1920, height: 1080 }, { width: 1920, height: 1080 }));
   });
 
   test("only the newest of reports made close together is placed, and it's placed last", async () => {
@@ -69,7 +101,7 @@ describe("placement", () => {
     const read = () => obs.requests.filter((r) => r.type === "GetSceneItemTransform").map((r) => r.data.sceneItemId);
     // Three reports before any reaches OBS: only the last one is placed.
     await Promise.all([placer.report("org/a.html", [camera]), placer.report("org/b.html", [guest]), placer.report("org/c.html", [screen])]);
-    expect(shown()).toMatchObject({ Camera: false, Guest: false, Screen: true });
+    expect(shown()).toMatchObject({ Camera: false, Screen: true });
     expect(read()).toEqual([ids.Screen]);
     // One already being placed finishes, and the newest report waiting behind it goes next.
     const a = placer.report("org/a.html", [camera]);
@@ -130,7 +162,7 @@ describe("placement with an OBS that stalls", () => {
     stop.push(() => client.stop(), served.stop);
     await client.ready(2000);
     const placed: string[][] = [];
-    const placer = createPlacer({ obs: client as PlacementObs, names, ground: () => null, onPlaced: (w) => placed.push(w), timeoutMs: 150 });
+    const placer = createPlacer({ obs: client as PlacementObs, names, ground: () => null, onPlaced: (w) => placed.push(w), placed: placedSet(), timeoutMs: 150 });
     await placer.report("org/a.html", [camera]); // warm: items and canvas known
     expect(fake.shown("ViewSwitcher").Camera).toBe(true);
 

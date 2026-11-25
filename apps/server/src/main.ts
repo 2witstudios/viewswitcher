@@ -143,6 +143,7 @@ const placer = createPlacer({
   names: config.obs,
   ground: (path) => store.groundFor(path),
   onPlaced: (warnings) => store.setPlacementWarnings(warnings),
+  placed: store.placedSources,
   log,
 });
 

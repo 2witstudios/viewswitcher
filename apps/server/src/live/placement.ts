@@ -1,6 +1,11 @@
 // Places OBS sources into the data-slot boxes of the scene the program page is showing, and recolors
 // the ground for its org.
 //
+// Only sources ViewSwitcher manages are touched: the configured devices (OBS_DEVICES), any source a
+// scene has ever placed (a Guest or Camera 2 box from the editor; remembered across restarts), and
+// the current scene's slots. Anything else people put in the ViewSwitcher scene by hand (a mic, a
+// music input, a watermark) is never hidden: a hidden audio input is silent on air.
+//
 // Only the latest report is applied, one placement at a time: overlapping placements would interleave
 // their requests and could leave sources from an older scene. Every request has a deadline, so an OBS
 // that stalls with its socket open costs one placement, never the rest of the show. Each placement
@@ -10,7 +15,7 @@ import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
 
-export type PlacementNames = { scene: string; programSource: string; groundSource: string };
+export type PlacementNames = { scene: string; programSource: string; groundSource: string; /** Sources scenes may place (OBS_DEVICES). */ devices: string[] };
 
 /** What placement needs from OBSClient. */
 export type PlacementObs = {
@@ -35,24 +40,26 @@ export const PLACEMENT_TIMEOUT_MS = 2000;
 
 /**
  * The OBS changes for one placement, given the scene's items and the slotted sources' sizes (by item
- * id; 0×0 for a source with no picture yet). Every item that isn't the program, the ground or in one
- * of the slots is hidden: a guest camera from the last scene must not stay on top of a BRB.
+ * id; 0×0 for a source with no picture yet). Every managed item (a device, or a source some scene
+ * placed before: `placed`) that isn't in one of this scene's slots is hidden, so a guest camera from
+ * the last scene doesn't stay on top of a BRB. The program, the ground and anything else are left alone.
  */
 export function planPlacement(
-  { items, slots, sizes, canvas, names }: { items: SceneItem[]; slots: Slot[]; sizes: Map<number, Canvas>; canvas: Canvas; names: PlacementNames },
+  { items, slots, sizes, canvas, names, placed }: { items: SceneItem[]; slots: Slot[]; sizes: Map<number, Canvas>; canvas: Canvas; names: PlacementNames; placed: { has(source: string): boolean } },
 ): { requests: BatchRequest[]; warnings: string[] } {
   const warnings: string[] = [];
   const hide: BatchRequest[] = [];
   const show: BatchRequest[] = [];
   const sceneName = names.scene;
-  const placed = slotted(items, slots);
+  const inSlots = slotted(items, slots);
   for (const source of new Set(slots.map((s) => s.source))) {
     if (!items.some((i) => i.sourceName === source)) warnings.push(`This scene has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
   }
   for (const item of items) {
     if (item.sourceName === names.programSource || item.sourceName === names.groundSource) continue;
-    const slot = placed.get(item.sceneItemId);
+    const slot = inSlots.get(item.sceneItemId);
     if (!slot) {
+      if (!names.devices.includes(item.sourceName) && !placed.has(item.sourceName)) continue; // not ours
       hide.push({ requestType: "SetSceneItemEnabled", requestData: { sceneName, sceneItemId: item.sceneItemId, sceneItemEnabled: false } });
       continue;
     }
@@ -85,13 +92,18 @@ export type PlacerOptions = {
   ground: (path: string) => Promise<string | null> | string | null;
   /** After each placement that ran, with what went wrong (empty when nothing did). */
   onPlaced: (warnings: string[]) => void;
+  /**
+   * The sources scenes have placed before, and where to note new ones (the store keeps them across
+   * restarts). A source placed once is hidden by every scene without a slot for it from then on.
+   */
+  placed: { has(source: string): boolean; remember(sources: string[]): void };
   timeoutMs?: number;
   log?: (line: string) => void;
 };
 
 export type Placer = ReturnType<typeof createPlacer>;
 
-export function createPlacer({ obs, names, ground, onPlaced, timeoutMs = PLACEMENT_TIMEOUT_MS, log }: PlacerOptions) {
+export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs = PLACEMENT_TIMEOUT_MS, log }: PlacerOptions) {
   let latest: { path: string; slots: Slot[] } | null = null;
   let seq = 0;
   let queue = Promise.resolve();
@@ -129,7 +141,9 @@ export function createPlacer({ obs, names, ground, onPlaced, timeoutMs = PLACEME
       if (r.requestStatus.result && t) sizes.set(ids[i]!, { width: Number(t.sourceWidth) || 0, height: Number(t.sourceHeight) || 0 });
       else if (r.requestStatus.code === 600) scene = null; // an item went away under us: list again next time
     });
-    const plan = planPlacement({ items, slots, sizes, canvas, names });
+    const slotSources = items.filter((i) => slots.some((s) => s.source === i.sourceName)).map((i) => i.sourceName);
+    placed.remember(slotSources);
+    const plan = planPlacement({ items, slots, sizes, canvas, names, placed });
     const color = await Promise.resolve(ground(path)).catch(() => null);
     const recolor = color && color !== groundShown ? color : null;
     const requests = recolor

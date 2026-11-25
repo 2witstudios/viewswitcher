@@ -196,6 +196,22 @@ describe("the on-air file going away", () => {
   });
 });
 
+describe("sources placed before", () => {
+  test("are remembered across a restart, with nothing on air or with a scene going on air meanwhile", async () => {
+    const store = await open();
+    store.placedSources.remember(["Guest"]);
+    expect(store.placedSources.has("Guest")).toBe(true); // at once, before it's saved
+    await store.goOnAir({ path: `${ORG}/templates/a.html`, label: "A" });
+    store.placedSources.remember(["Camera 2", "Guest"]);
+    await store.goOnAir({ path: `${ORG}/templates/b.html`, label: "B" }); // queued after the save
+    expect(JSON.parse(await readFile(file, "utf8")).placed).toEqual(["Camera 2", "Guest"]);
+    const again = await open();
+    expect(again.placedSources.has("Guest") && again.placedSources.has("Camera 2")).toBe(true);
+    expect(again.placedSources.has("Mic")).toBe(false);
+    expect(again.state.onAir?.label).toBe("B");
+  });
+});
+
 describe("the ground color", () => {
   test("read once per org, and again after its org.json changes", async () => {
     const store = await open();
