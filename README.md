@@ -15,7 +15,7 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 - **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
 - **Scenes are files you edit by talking to an agent** (Claude Code, Claude Desktop, Cursor, Codex or any other), connected over MCP (below) and using the library's `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
 - **Template packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own template set in the org's name and colors. Seven come built in (the starter and the site's six example shows): pick them for a new org, or with **Add templates** ([docs/template-packs.md](docs/template-packs.md)).
-- **iPad app over USB-C**: the ViewSwitcher iPad app talks to the Mac over the cable, for low latency and no dependence on Wi-Fi.
+- **iPhone and iPad app over USB-C or Wi-Fi**: one app for both talks to the Mac over the cable, for low latency and no dependence on Wi-Fi, or over Wi-Fi once paired (scan the Mac's code in the app). Held sideways, an iPhone shows your scenes as a deck.
 
 ## How it works
 
