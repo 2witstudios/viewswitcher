@@ -1,0 +1,14 @@
+---
+// The ViewSwitcher wordmark (src/lib/brand.ts): the V of screens with the live one in red, then
+// "iewSwitcher". Letters take the text colour; set `label` when nothing around it names the link.
+import { LOGO, logoBody, logoViewBox } from "../lib/brand";
+interface Props { height?: number; label?: boolean }
+const { height = 22, label = false } = Astro.props;
+const width = Math.round((height * LOGO.w) / LOGO.h);
+---
+<svg class="logo" width={width} height={height} viewBox={logoViewBox} focusable="false"
+  {...(label ? { role: "img", "aria-label": "ViewSwitcher" } : { "aria-hidden": "true" })}
+  set:html={logoBody()} />
+<style>
+  .logo { display: block; flex: none; }
+</style>
