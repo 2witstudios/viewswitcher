@@ -17,6 +17,21 @@ public enum PairingLink {
         return url
     }
 
+    /// The same pairing on the Mac's .local name, when the link names it (`&mac=<name>.local`, PHONE-4). A
+    /// device paired on the name keeps finding the Mac when its LAN address changes; the connector uses it
+    /// when the name answers, else the link as it is.
+    public static func localAlternative(_ url: URL) -> URL? {
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let name = parts.queryItems?.first(where: { $0.name == "mac" })?.value,
+              let code = parts.queryItems?.first(where: { $0.name == "code" })?.value,
+              let base = bonjourMac(host: name, port: url.port ?? 80)
+        else { return nil }
+        var out = URLComponents(string: base)
+        out?.path = "/pair"
+        out?.queryItems = [URLQueryItem(name: "code", value: code)]
+        return out?.url
+    }
+
     /// The Mac's address the link points at (scheme, host, port): what the connector saves to come back to.
     public static func origin(_ url: URL) -> String {
         let host = url.host?.lowercased() ?? ""
@@ -36,7 +51,8 @@ public enum PairingLink {
         return "http://\(h):\(port)"
     }
 
-    /// 10/8, 172.16/12 or 192.168/16: an address on a home or office network, never the internet.
+    /// 10/8, 172.16/12, 192.168/16, or 100.64/10 (carrier-grade NAT: a phone hotspot, some campus networks):
+    /// an address the Mac can have on a local network, never a public one.
     public static func isPrivateIPv4(_ host: String) -> Bool {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 4 else { return false }
@@ -45,6 +61,6 @@ public enum PairingLink {
             return v
         }
         guard n.count == 4 else { return false }
-        return n[0] == 10 || (n[0] == 172 && (16...31).contains(n[1])) || (n[0] == 192 && n[1] == 168)
+        return n[0] == 10 || (n[0] == 172 && (16...31).contains(n[1])) || (n[0] == 192 && n[1] == 168) || (n[0] == 100 && (64...127).contains(n[1]))
     }
 }

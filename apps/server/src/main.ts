@@ -316,7 +316,10 @@ async function remoteApi(req: Request, path: string): Promise<Response> {
     const { code, expiresAt } = pairing.newCode();
     const s = remoteStatus();
     const [host] = s.urls.filter((u) => !u.includes(".local:")).concat(s.urls);
-    return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}` : null });
+    // The link opens on an address any phone can reach; `mac` also names this Mac's .local name, so the
+    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address (PHONE-4).
+    const mac = s.localName && host && !host.includes(".local:") ? `&mac=${encodeURIComponent(s.localName)}` : "";
+    return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}${mac}` : null });
   }
   if (path === "/api/remote/remove") {
     try {

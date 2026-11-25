@@ -116,7 +116,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
   let deviceId = "";
   test("a code pairs once; the cookie is HttpOnly and SameSite=Strict", async () => {
     const { code, pairUrl } = (await admin("/api/remote/code", {})) as { code: { code: string }; pairUrl: string };
-    expect(pairUrl).toBe(`http://${ip}:${port}/pair?code=${code.code}`);
+    expect(pairUrl).toBe(`http://${ip}:${port}/pair?code=${code.code}&mac=test-mac.local`);
     expect((await pairWith("WRONGCOD")).status).toBe(403);
     // The one POST an unpaired device may make is small.
     expect((await lan("/api/pair", { method: "POST", headers: { "content-type": "application/json", origin: `http://${ip}:${port}` }, body: JSON.stringify({ code: code.code, name: "x".repeat(4000) }) })).status).toBe(413);

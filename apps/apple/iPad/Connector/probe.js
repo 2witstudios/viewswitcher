@@ -14,13 +14,13 @@ window.VS = (() => {
 
   const network = () => get(localStorage, NETWORK);
   // Hosts the app shows (ViewSwitcherKit NavigationPolicy.iPadHostAllowed); anything else would open Safari.
-  // A private LAN address too: the Mac's pairing QR code carries one (PHONE-4, PairingLink.isPrivateIPv4).
+  // A private LAN address too (or carrier-grade NAT, 100.64/10): the Mac's pairing QR code carries one (PHONE-4, PairingLink.isPrivateIPv4).
   const privateIPv4 = (h) => {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
     if (!m) return false;
     const [a, b, c, d] = m.slice(1).map(Number);
     if ([a, b, c, d].some((n) => n > 255)) return false;
-    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+    return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
   };
   const usable = (v) => {
     try {
@@ -41,6 +41,7 @@ window.VS = (() => {
   }
 
   /** The first server that answers, as { base, how }, or null. */
+  // (reachable is exported too: the connector checks a scanned code's .local name before pairing on it.)
   async function find() {
     const saved = usable(network()) ? network() : "";
     for (const [base, how] of [[USB, "USB-C"], ...(saved ? [[saved, "the network"]] : [])]) {
@@ -56,7 +57,7 @@ window.VS = (() => {
   }
 
   return {
-    network, usable, find, open,
+    network, usable, find, open, reachable,
     saveNetwork: (v) => set(localStorage, NETWORK, v),
     connectedBefore: () => get(localStorage, CONNECTED) === "1",
     leftDemo: () => get(sessionStorage, LEFT_DEMO) === "1",

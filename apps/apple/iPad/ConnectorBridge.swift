@@ -6,7 +6,8 @@ import ViewSwitcherKit
 
 /// What the bundled connector page (viewswitcher://connector/) can ask the app for, as
 /// `window.webkit.messageHandlers.vs.postMessage(...)` with a reply (PHONE-4, PHONE-5):
-///  - `"scan"`: the camera reads the Mac's pairing QR code; replies with the pairing link, or null.
+///  - `"scan"`: the camera reads the Mac's pairing QR code; replies with { link, local } (local: the same
+///    pairing on the Mac's .local name, when the code names it), or null.
 ///  - `"browse"`: finds Macs running ViewSwitcher on this Wi-Fi by Bonjour; replies with
 ///    { macs: [{ name, url }], denied } (denied: Local Network access is off for the app).
 /// Only the connector may ask: never the switcher the Mac serves, a scene, or any other page.
@@ -18,7 +19,10 @@ final class ConnectorBridge: NSObject, WKScriptMessageHandlerWithReply {
             return replyHandler(nil, "Not available here")
         }
         switch message.body as? String {
-        case "scan": scan { replyHandler($0?.absoluteString, nil) }
+        case "scan": scan { link in
+            guard let link else { return replyHandler(nil, nil) }
+            replyHandler(["link": link.absoluteString, "local": PairingLink.localAlternative(link)?.absoluteString as Any], nil)
+        }
         case "browse": MacFinder.find { macs, denied in replyHandler(["macs": macs.map { ["name": $0.name, "url": $0.url] }, "denied": denied], nil) }
         default: replyHandler(nil, "Unknown request")
         }

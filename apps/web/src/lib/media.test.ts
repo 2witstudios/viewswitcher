@@ -4,7 +4,7 @@ import { DECK, isUprightPhone, UPRIGHT } from "./media";
 describe("phone layouts (PHONE-3, PHONE-12)", () => {
   test("the queries match styles.css", () => {
     expect(UPRIGHT).toBe("(max-width: 600px)");
-    expect(DECK).toBe("(max-height: 500px) and (pointer: coarse)");
+    expect(DECK).toBe("(max-height: 500px) and (max-width: 950px) and (pointer: coarse)");
   });
   test("upright is the narrow layout unless the deck applies (a small phone sideways is both)", () => {
     expect(isUprightPhone({ upright: true, deck: false })).toBe(true);

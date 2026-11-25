@@ -5,8 +5,9 @@ import { useSyncExternalStore } from "react";
 
 /** The phone layout (MAC-27): upright, the on-air cover on top. */
 export const UPRIGHT = "(max-width: 600px)";
-/** The deck: a phone held sideways, a short touch screen. Wins over UPRIGHT where both match. */
-export const DECK = "(max-height: 500px) and (pointer: coarse)";
+/** The deck: a phone held sideways, a short touch screen no wider than the largest phone (932 pt), so a
+ *  short iPad window (Stage Manager, the keyboard up) keeps its editing. Wins over UPRIGHT where both match. */
+export const DECK = "(max-height: 500px) and (max-width: 950px) and (pointer: coarse)";
 
 export const isUprightPhone = ({ upright, deck }: { upright: boolean; deck: boolean }) => upright && !deck;
 

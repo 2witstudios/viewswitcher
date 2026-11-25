@@ -6,7 +6,7 @@ final class MenuStatusTests: XCTestCase {
     let base = LiveState(obs: .init(connected: true), obsSetup: .init(scene: true, program: true, ground: true), usb: .init(enabled: true))
 
     func testNothingOnAir() {
-        XCTAssertEqual(MenuStatus(base), MenuStatus(title: "", live: false, onAir: "Nothing on air", obs: "OBS: connected", ipad: "iPad: not plugged in", obsReady: true))
+        XCTAssertEqual(MenuStatus(base), MenuStatus(title: "", live: false, onAir: "Nothing on air", obs: "OBS: connected", ipad: "iPhone or iPad: not plugged in", obsReady: true))
     }
 
     func testOnAirShortensTheTitle() {
@@ -42,7 +42,7 @@ final class MenuStatusTests: XCTestCase {
         s.usb = .init(enabled: true, attached: true, connected: false)
         XCTAssertEqual(MenuStatus(s).ipad, "iPad: plugged in · open ViewSwitcher on it")
         s.usb = .init(enabled: false)
-        XCTAssertEqual(MenuStatus(s).ipad, "iPad: USB link off")
+        XCTAssertEqual(MenuStatus(s).ipad, "iPhone or iPad: USB link off")
         // PHONE-8: an iPhone plugged in is named as one.
         s.usb = .init(enabled: true, attached: true, connected: true, device: "iPhone")
         XCTAssertEqual(MenuStatus(s).ipad, "iPhone: connected over USB")

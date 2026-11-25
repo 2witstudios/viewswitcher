@@ -42,9 +42,9 @@ public struct MenuStatus: Equatable, Sendable {
         let ipad: String
         if let usb = state.usb, usb.enabled {
             let device = usb.device ?? "iPad" // PHONE-8: an iPhone is named as one
-            ipad = usb.connected ? "\(device): connected over USB" : usb.attached ? "\(device): plugged in · open ViewSwitcher on it" : "iPad: not plugged in"
+            ipad = usb.connected ? "\(device): connected over USB" : usb.attached ? "\(device): plugged in · open ViewSwitcher on it" : "iPhone or iPad: not plugged in"
         } else {
-            ipad = "iPad: USB link off"
+            ipad = "iPhone or iPad: USB link off"
         }
 
         self.init(

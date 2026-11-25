@@ -6,7 +6,8 @@ import XCTest
 final class PairingLinkTests: XCTestCase {
     func testAcceptsTheMacsPairingLinks() {
         for s in ["http://192.168.1.20:7420/pair?code=ABCD-EFGH", "http://10.0.0.5:7420/pair?code=abcd1234",
-                  "http://172.20.1.2:7420/pair?code=X", "http://studio-mac.local:7420/pair?code=ABCD-EFGH"] {
+                  "http://172.20.1.2:7420/pair?code=X", "http://studio-mac.local:7420/pair?code=ABCD-EFGH",
+                  "http://100.72.3.4:7420/pair?code=AB", "http://192.168.1.20:7420/pair?code=AB&mac=studio-mac.local"] {
             XCTAssertEqual(PairingLink.parse(s)?.absoluteString, s, s)
         }
     }
@@ -30,8 +31,8 @@ final class PairingLinkTests: XCTestCase {
     }
 
     func testPrivateAddresses() {
-        for h in ["10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.1"] { XCTAssertTrue(PairingLink.isPrivateIPv4(h), h) }
-        for h in ["172.15.0.1", "172.32.0.1", "192.169.0.1", "8.8.8.8", "127.0.0.1", "169.254.1.1", "10.1.2", "10.1.2.300", "mac.local"] {
+        for h in ["10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.0.1", "100.64.0.1", "100.127.255.254"] { XCTAssertTrue(PairingLink.isPrivateIPv4(h), h) }
+        for h in ["100.63.255.255", "100.128.0.1", "172.15.0.1", "172.32.0.1", "192.169.0.1", "8.8.8.8", "127.0.0.1", "169.254.1.1", "10.1.2", "10.1.2.300", "mac.local"] {
             XCTAssertFalse(PairingLink.isPrivateIPv4(h), h)
         }
     }
@@ -43,5 +44,13 @@ final class PairingLinkTests: XCTestCase {
                        (".local", 7420), ("mac.local", 0), ("mac.local", 70000), ("ma c.local", 7420), ("mac.local/x", 7420), ("evil.com", 80)] {
             XCTAssertNil(PairingLink.bonjourMac(host: h, port: p), "\(h):\(p)")
         }
+    }
+
+    func testTheLinksLocalNameIsTheSamePairing() {
+        let link = PairingLink.parse("http://192.168.1.20:7420/pair?code=ABCD-EFGH&mac=Studio-Mac.local")!
+        XCTAssertEqual(PairingLink.localAlternative(link)?.absoluteString, "http://studio-mac.local:7420/pair?code=ABCD-EFGH")
+        XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB")!), "no name")
+        XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB&mac=evil.ts.net")!), "only .local")
+        XCTAssertNil(PairingLink.localAlternative(PairingLink.parse("http://192.168.1.20:7420/pair?code=AB&mac=127.0.0.1")!))
     }
 }
