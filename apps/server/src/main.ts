@@ -1,9 +1,11 @@
 // ViewSwitcher server: the switcher API, the library files, live state, OBS, and the MCP server for agents.
-import { watch } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, sep } from "node:path";
 import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
+import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, stdioLaunch } from "./agent-connect";
 import { config } from "./config";
 import * as lib from "./library";
 import { customizeScene, duplicateScene, onAirFor, type OnAirRequest, orgDir, renamedOnAir, sceneFromTemplate } from "./library-actions";
@@ -207,11 +209,23 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
-  // For the Mac app's menu (Open Library Folder): the one response with an absolute path in it.
-  // Only for this Mac (local.ts).
+  // For the Mac app's menu (Open Library Folder) and Edit with AI's commands: with the Claude Desktop
+  // extension below, the only responses with absolute paths in them. Only for this Mac (local.ts).
+  const local = () => isLocalRequest(req, server.requestIP(req)?.address);
   if (path === "/api/info" && req.method === "GET") {
-    if (!isLocalRequest(req, server.requestIP(req)?.address)) return json({ error: "Not found" }, 404);
-    return json({ library: root, port: server.port });
+    if (!local()) return json({ error: "Not found" }, 404);
+    return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio) });
+  }
+  // Which agent apps this Mac has, so Edit with AI lists them first. Booleans only.
+  if (path === "/api/agent/clients" && req.method === "GET") {
+    if (!local()) return json({ error: "Not found" }, 404);
+    return json(detectClients({ home: homedir(), path: process.env.PATH ?? "", exists: existsSync }));
+  }
+  // Add to Claude Desktop: an extension made for this install, whose command is this server's own executable.
+  if (path === "/api/agent/viewswitcher.mcpb" && req.method === "GET") {
+    if (!local()) return json({ error: "Not found" }, 404);
+    const file = mcpbFile(mcpbManifest({ launch: ownStdio, port: server.port ?? config.port, version: extensionVersion }));
+    return new Response(file, { headers: { "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="ViewSwitcher.mcpb"', "cache-control": "no-store" } });
   }
 
   if (path === "/api/onair" && post) {
@@ -342,6 +356,12 @@ async function fileResponse(abs: string, cache = "no-store") {
   if (!s?.isFile()) return null;
   return new Response(Bun.file(abs), { headers: { "cache-control": cache } });
 }
+
+// What an agent runs to connect over stdio: this executable with --mcp-stdio. In the Mac app's compiled
+// sidecar, import.meta.dir is inside the binary (/$bunfs/…); from source, bun runs index.ts.
+/** The Mac app passes its version (MCPB wants semver; a source checkout has none). */
+const extensionVersion = /^\d+\.\d+\.\d+$/.test(process.env.VIEWSWITCHER_VERSION ?? "") ? process.env.VIEWSWITCHER_VERSION! : "1.0.0";
+const ownStdio = stdioLaunch(process.execPath, import.meta.dir.startsWith("/$bunfs") ? null : join(import.meta.dir, "index.ts"));
 
 // The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
 const mcp: McpDeps = {

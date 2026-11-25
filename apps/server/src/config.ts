@@ -25,7 +25,7 @@ export const config = {
   starter: resolve(env.VIEWSWITCHER_STARTER ?? join(import.meta.dir, "../starter")),
   /** Built switcher/program SPA. */
   webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
-  /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
+  /** What a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, the MCP configs, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
   allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),

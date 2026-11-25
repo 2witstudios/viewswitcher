@@ -14,6 +14,7 @@ import { useLibrary } from "../lib/library";
 import { type PreviewDoc, shownVersion } from "../lib/apply-preview";
 import { libraryUrl, useLive } from "../lib/live";
 import { createSceneSaver } from "../lib/scene-saver";
+import { AskAgent, openAgentSheet } from "./AgentSheet";
 import { attempt, toast } from "./ui";
 
 const W = 1920;
@@ -517,7 +518,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     const b = baseRef.current;
     if (!b) return;
     const root = sceneRoot(b.source);
-    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.");
+    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
     const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image }) }).then((done) => {
@@ -529,7 +530,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const remove = (id: number) => {
     const b = baseRef.current;
     if (!b) return;
-    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.");
+    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.", { label: "Edit with AI", run: openAgentSheet });
     setMenu(null);
     void structural({ id, remove: true }).then((done) => done && toast("Deleted. Undo puts it back."));
   };
@@ -1339,7 +1340,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                   {Icon.changed}
                   <div>
                     <b>This scene changed while you were editing</b>
-                    <p>Your agent (or someone with the file open) saved a new version, so you're now looking at the latest. Your last change didn't save:</p>
+                    <p><AskAgent>Your agent</AskAgent> (or someone with the file open) saved a new version, so you're now looking at the latest. Your last change didn't save:</p>
                   </div>
                 </div>
                 {conflict.edits.map((e, i) => {

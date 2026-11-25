@@ -1,0 +1,71 @@
+---
+// Built-in AI, coming (SITE-19): what it would be, how to connect your own agent today, and an opt-in
+// waitlist. The app's Edit with AI sheet links here (MCP-11) and sends nothing itself.
+//
+// The waitlist keeps the site static: with no endpoint, the form opens an email to WAITLIST_ADDRESS
+// (a small script, emitted as a file for the CSP's script-src 'self'; vercel.json's form-action
+// 'self' rules out a mailto: action). Set WAITLIST_ENDPOINT to a same-origin path that accepts a
+// POSTed `email` field to collect them there instead.
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { github } from "../site.config";
+
+const WAITLIST_ADDRESS = "ai@viewswitcher.com";
+const WAITLIST_ENDPOINT: string | null = null;
+const SUBJECT = "Built-in AI waitlist";
+---
+<Base title="Built-in AI · ViewSwitcher" description="An AI agent built into ViewSwitcher is coming: ask in plain words and it designs and fixes your scenes, with no AI account or setup. Join the waitlist." path="/ai">
+  <Header />
+  <main id="main" class="wrap prose">
+    <p class="quiet">Coming soon</p>
+    <h1>Built-in AI</h1>
+    <p class="lede">Ask for what you want in plain words, and ViewSwitcher designs the scene, looks at it, and fixes what's off. No AI account, no keys, nothing to set up.</p>
+
+    <h2>What it would do</h2>
+    <ul>
+      <li><strong>Make scenes from a sentence.</strong> "A starting soon screen in our colors, with a countdown" becomes a scene in your library.</li>
+      <li><strong>Fix what you point at.</strong> "The title is cut off on the break scene" gets looked at, rendered and fixed.</li>
+      <li><strong>Stay out of your show.</strong> It follows the same rule as agents today: it changes what's on air only when you let it.</li>
+    </ul>
+
+    <h2>Today: connect your own agent</h2>
+    <p>If you already use Claude Code, Claude Desktop, Cursor or Codex, you can connect it now. In ViewSwitcher on your Mac, press <strong>Edit with AI</strong> and pick yours: it reads your library, edits scenes, sees each one rendered in OBS, and fixes what it sees. How it works: <a href={`${github}#agents-mcp`}>the README</a>, or <a href="/support">Support</a>.</p>
+
+    <h2>Tell us you'd use it</h2>
+    <p>Leave your email and we'll write once, when built-in AI is out. That's all it's used for.</p>
+    <form class="waitlist" id="waitlist" method="post" action={WAITLIST_ENDPOINT ?? undefined} data-address={WAITLIST_ADDRESS} data-subject={SUBJECT}>
+      <label for="waitlist-email">Email</label>
+      <div class="row">
+        <input id="waitlist-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+        <button class="btn btn-primary" type="submit">Join the waitlist</button>
+      </div>
+      <p class="quiet" id="waitlist-note">{WAITLIST_ENDPOINT ? "We keep only this email, only to tell you when it's out." : "This opens an email to us from your mail app; send it and you're on the list."}</p>
+    </form>
+    <noscript><p class="quiet">Or email <a href={`mailto:${WAITLIST_ADDRESS}?subject=${encodeURIComponent(SUBJECT)}`}>{WAITLIST_ADDRESS}</a> with the subject "{SUBJECT}".</p></noscript>
+    <p class="quiet">See <a href="/privacy">Privacy</a>.</p>
+  </main>
+  <Footer />
+</Base>
+
+<script>
+  const form = document.getElementById("waitlist") as HTMLFormElement | null;
+  form?.addEventListener("submit", (e) => {
+    if (form.getAttribute("action")) return; // a real endpoint takes the POST
+    e.preventDefault();
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
+    const { address = "", subject = "" } = form.dataset;
+    const body = `Please tell me when built-in AI is out: ${email}`;
+    location.href = `mailto:${address}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  });
+</script>
+
+<style>
+  .waitlist { display: grid; gap: 0.5rem; padding: 1.25rem; border: 1px solid var(--rule); border-radius: 14px; background: var(--raised); }
+  .waitlist label { font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .row input { flex: 1 1 16rem; min-height: 3rem; padding: 0 1rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; }
+  .row input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .row .btn { border: 0; cursor: pointer; }
+  .waitlist .quiet { margin: 0; }
+</style>

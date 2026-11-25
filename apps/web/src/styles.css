@@ -161,6 +161,43 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .error { color: #ffb3a8; font-size: 14px; }
 
 .toast { position: fixed; z-index: 40; left: 50%; bottom: calc(24px + var(--safe-bottom)); transform: translateX(-50%); padding: 12px 18px; border-radius: 12px; background: var(--cream); color: var(--stage); font-size: 14px; font-weight: 600; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast-action { flex: none; height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: var(--stage); color: var(--cream); font-size: 13px; font-weight: 700; }
+/* "ask your agent" in a hint: the same words, underlined, opening Edit with AI. */
+.text-link { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.text-link:hover { color: var(--cream); text-decoration-color: currentColor; }
+
+/* ---------------------------------------------------------------- Edit with AI (MCP-10) */
+.out-btn.ai-btn { color: var(--cream); }
+.modal.agent-sheet { width: min(600px, 100%); max-height: calc(100dvh - 48px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; gap: 16px; }
+.agent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agent-status { margin: 0; display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--sage); }
+.agent-status .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--quiet); }
+.agent-status.on { color: var(--cream); }
+.agent-status.on .dot { background: var(--cream); }
+.agent-lede, .agent-note { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+.agent-note { padding: 12px 14px; border-radius: 10px; background: var(--raised); color: var(--cream); }
+.agent-ways { display: flex; flex-direction: column; gap: 10px; }
+.agent-way { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--raised); }
+.agent-way h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
+.agent-here { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--sage); }
+.agent-way p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
+.agent-way p code { font-family: var(--mono); font-size: 12px; color: var(--cream); }
+.agent-copy { display: flex; align-items: center; gap: 8px; }
+.agent-copy code, .agent-copy pre { flex: 1; min-width: 0; margin: 0; padding: 9px 12px; border-radius: 8px; background: var(--bg); font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--cream); overflow-x: auto; white-space: pre; -webkit-user-select: text; user-select: text; }
+.agent-actions { display: flex; gap: 8px; }
+.agent-onair { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 4px; }
+.agent-onair legend { padding: 0 0 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.24em; text-transform: uppercase; color: var(--sage); }
+.agent-choice { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.agent-choice:hover { background: var(--hover); }
+.agent-choice input { margin: 3px 0 0; accent-color: var(--cream); }
+.agent-choice span { display: flex; flex-direction: column; gap: 2px; }
+.agent-choice b { font-size: 14px; font-weight: 600; }
+.agent-choice small { font-size: 13px; line-height: 1.4; color: var(--sage); }
+.agent-builtin { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-top: 1px solid var(--line); color: var(--sage); }
+.agent-builtin b { font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.agent-builtin small { font-size: 12px; color: var(--sage-deep); }
+.agent-builtin:hover b { color: var(--cream); }
 
 /* ---------------------------------------------------------------- assets */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }

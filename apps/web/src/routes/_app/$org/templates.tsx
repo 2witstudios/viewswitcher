@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AskAgent } from "../../../components/AgentSheet";
 import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, type MenuItem } from "../../../components/ui";
@@ -42,7 +43,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
                 { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
               ]} />
             ) : (
-              <p className="empty">Blank: scenes fade through the ground color. For a designed one, ask your agent for {org}/templates/_shared/transition.html.</p>
+              <p className="empty">Blank: scenes fade through the ground color. For a designed one, <AskAgent /> for {org}/templates/_shared/transition.html.</p>
             )}
           </div>
         </section>

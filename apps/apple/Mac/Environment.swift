@@ -19,6 +19,8 @@ enum Env {
         env["PORT"] = port
         // The server exits if this app goes away without stopping it (apps/server/src/index.ts).
         env["VIEWSWITCHER_PARENT_PID"] = String(getpid())
+        // The Claude Desktop extension the server makes carries the app's version.
+        env["VIEWSWITCHER_VERSION"] = version
         let contents = Bundle.main.bundleURL.appendingPathComponent("Contents")
         let sidecar = contents.appendingPathComponent("Helpers/viewswitcher-server")
         if FileManager.default.isExecutableFile(atPath: sidecar.path) {
@@ -49,10 +51,17 @@ enum Outside {
     static var alerts: [String] = []
     static var notices: [String] = []
 
-    /// http(s) only: a scene is a page anyone can write, and opening file: or an app URL scheme would launch things.
+    /// http(s), plus Cursor's MCP install link (NavigationPolicy): a scene is a page anyone can write,
+    /// and opening file: or any other app URL scheme would launch things.
     static func openInBrowser(_ url: URL) {
-        guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+        guard NavigationPolicy.opensOutside(url) else { return }
         if Env.e2e { opened.append(url.absoluteString); return }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// A file the app saved (Add to Claude Desktop's extension), opened in the app that handles it.
+    static func openFile(_ url: URL) {
+        if Env.e2e { opened.append(url.path); return }
         NSWorkspace.shared.open(url)
     }
 
