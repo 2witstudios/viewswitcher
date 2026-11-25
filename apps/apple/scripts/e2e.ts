@@ -288,8 +288,9 @@ try {
   check(JSON.stringify(typed) === JSON.stringify(["⌘z"]), `a typed ⌘Z reaches the page exactly once (${JSON.stringify(typed)}, ${(await state()).undoRoute})`);
   await evalJs(`const i = document.createElement("input"); i.id = "e2e-field"; document.body.append(i); i.focus(); document.execCommand("insertText", false, "abc"); window.__keys = []; return i.value;`);
   await cmd("menu", { menu: "Edit", item: "Undo" });
-  await sleep(400);
-  const field = await evalJs<string>(`return document.getElementById("e2e-field").value`);
+  // The native undo lands a moment later on a busy machine: wait for it rather than sample once.
+  let field = "abc";
+  await until(async () => (field = await evalJs<string>(`return document.getElementById("e2e-field").value`)) !== "abc", 3000);
   check(field !== "abc" && (await evalJs<string[]>("return window.__keys")).length === 0 && (await state()).undoRoute === "native", `in a text field, Undo is the native text undo ("abc" → "${field}")`);
   await evalJs(`document.getElementById("e2e-field")?.remove(); return true`);
 
