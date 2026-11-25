@@ -3,3 +3,5 @@
 Live-stream content for ViewSwitcher, one folder per org (a brand or channel). Each org has its own templates, assets, projects and brand (`<org>/BRAND.md`). The ViewSwitcher app serves this folder and switches scenes in OBS.
 
 Before creating or editing anything here, use the **viewswitcher-scenes** skill (`.claude/skills/viewswitcher-scenes/SKILL.md`). It covers the folder layout, the stream-over-project override rule, the scene file contract (1920×1080, transparent, `data-slot` device boxes), what people can edit in the switcher, and where each org's brand lives.
+
+When the ViewSwitcher MCP tools are available (the app is open; `.mcp.json` connects them), work through them instead of editing files directly, and preview every visual change with `preview_scene` and fix it until it looks right.
