@@ -1,6 +1,7 @@
 // The App Store versions of the screenshots (scripts/ipad-shots.sh). Each raw capture is shown in a
-// realistic device (a sideways one for a landscape capture) on a portrait canvas: ViewSwitcher's dark
-// ground with a soft lift and a faint red glow behind the device, the white logo at the top, a two-line
+// realistic device, all of it inside the canvas (a sideways iPad for a landscape iPad capture; an upright
+// iPhone with the capture turned to fill it for a sideways iPhone one) on a portrait canvas: ViewSwitcher's
+// dark ground with a soft lift and a faint red glow behind the device, the white logo at the top, a two-line
 // Space Grotesk headline (the second line red) and a one-line Instrument Sans subtitle.
 // Canvases are the App Store sizes, always portrait:
 //   iPad 13-inch            2064 × 2752   <dir>/*.png
@@ -74,14 +75,20 @@ function page(W: number, H: number, shot: { png: string; w: number; h: number },
   .stage { position: relative; flex: 1; width: 100%; margin-top: ${T.gap}px; margin-bottom: ${0.035 * H}px; display: flex; align-items: center; justify-content: center; }
   .rim { position: relative; background: linear-gradient(135deg, #6b6f7a 0%, #2a2c33 18%, #4d515b 42%, #24262c 62%, #5d616b 86%, #33363d 100%); box-shadow: 0 ${30 * k}px ${80 * k}px rgba(0, 0, 0, .55), 0 0 0 ${Math.max(1, k)}px rgba(255, 255, 255, .06); }
   .bezel { background: #050506; box-shadow: inset 0 0 0 ${Math.max(1, 1.5 * k)}px #1b1c20; }
+  .bezel { position: relative; overflow: hidden; }
   .bezel img { display: block; }
+  .bezel .turned { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(90deg); }
   .btn { position: absolute; background: linear-gradient(90deg, #3c3f47, #6b6f7a, #3c3f47); border-radius: ${2 * k}px; }
 </style>
 <div class="lift"></div><div class="glow" id="glow"></div>
 <header><img src="data:image/svg+xml;base64,${logo}" alt=""><h1 id="h"><span>${escape(c.head[0])}</span><span>${escape(c.head[1])}</span></h1><p id="sub">${escape(c.sub)}</p></header>
 <div class="stage" id="stage"><div class="rim" id="rim"><div class="bezel" id="bezel"><img id="shot" src="data:image/png;base64,${shot.png}"></div></div></div>
 <script>
-  const W = ${W}, landscape = ${landscape}, phone = ${phone}, D = ${JSON.stringify(D)}, sw = ${shot.w}, sh = ${shot.h};
+  const W = ${W}, phone = ${phone}, D = ${JSON.stringify(D)};
+  // A sideways iPhone capture is shown in an upright phone, turned a quarter (the phone's top, with the
+  // Dynamic Island, up): a sideways phone on a tall canvas would be small with empty space above and below.
+  const turn = phone && ${landscape}, landscape = ${landscape} && !turn;
+  const sw = turn ? ${shot.h} : ${shot.w}, sh = turn ? ${shot.w} : ${shot.h};
   // One line each: shrink the headline and the subtitle until they fit.
   for (const [id, max] of [["h", 0.92 * W], ["sub", 0.9 * W]]) {
     const el = document.getElementById(id);
@@ -90,15 +97,22 @@ function page(W: number, H: number, shot: { png: string; w: number; h: number },
   }
   // The device: as large as the stage allows, screen at the capture's own aspect.
   const stage = document.getElementById("stage").getBoundingClientRect();
-  // A sideways iPhone is as wide as the canvas allows: its screen spans the width and only the bezel bleeds off.
-  const maxW = (landscape ? (phone ? 1.04 : 0.95) : phone ? 0.8 : 0.86) * W, maxH = stage.height;
+  // The whole device stays inside the canvas, with a margin either side.
+  const maxW = (landscape ? 0.86 : phone ? 0.8 : 0.74) * W, maxH = stage.height;
   const frame = (short) => short * (D.rim + D.bezel) * 2; // rim + bezel on both sides, from the screen's short side
   let scale = Math.min(maxW / sw, maxH / sh);
   for (let i = 0; i < 4; i++) { const f = frame(Math.min(sw, sh) * scale); scale = Math.min((maxW - f) / sw, (maxH - f) / sh); }
   const w = sw * scale, h = sh * scale, s = Math.min(w, h);
   const rim = D.rim * s, bezel = D.bezel * s, radius = D.radius * s;
   const img = document.getElementById("shot"), bz = document.getElementById("bezel"), rm = document.getElementById("rim");
-  Object.assign(img.style, { width: w + "px", height: h + "px", borderRadius: radius + "px" });
+  if (turn) {
+    // The screen keeps its upright size; the capture inside it is turned to fill it.
+    const screen = document.createElement("div");
+    Object.assign(screen.style, { position: "relative", width: w + "px", height: h + "px", borderRadius: radius + "px", overflow: "hidden" });
+    img.replaceWith(screen); screen.appendChild(img);
+    img.className = "turned";
+    Object.assign(img.style, { width: h + "px", height: w + "px" });
+  } else Object.assign(img.style, { width: w + "px", height: h + "px", borderRadius: radius + "px" });
   Object.assign(bz.style, { padding: bezel + "px", borderRadius: radius + bezel + "px" });
   Object.assign(rm.style, { padding: rim + "px", borderRadius: radius + bezel + rim + "px" });
   // The iPhone's buttons on its edges: action and volume on the left, the side button on the right
