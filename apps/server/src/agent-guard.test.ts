@@ -49,6 +49,14 @@ describe("agentGuard", () => {
   test.each(rows)("%s, live %p, %o → allowed %p", (setting, live, action, allowed) => {
     expect(agentGuard({ setting, live, onAir, action }).ok).toBe(allowed);
   });
+  test("when the scan of what the scene loads was cut short, every write is refused while live (and only then)", () => {
+    const partial = { ...onAir, loadsComplete: false };
+    const g = agentGuard({ setting: "not-live", live: true, onAir: partial, action: write("daisy/assets/anything.png") });
+    expect(g.ok).toBe(false);
+    expect(g.ok ? "" : g.reason).toContain("loads more files than ViewSwitcher checks");
+    expect(agentGuard({ setting: "not-live", live: false, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
+    expect(agentGuard({ setting: "always", live: true, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
+  });
   test("nothing on air: writes are fine even while live", () => {
     expect(agentGuard({ setting: "not-live", live: true, onAir: null, action: write("daisy/templates/_shared/theme.css") })).toEqual({ ok: true });
   });

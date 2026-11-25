@@ -21,8 +21,8 @@ export async function existingOrg(root: string, id: unknown): Promise<string> {
 export type SceneRef = { name: string; path: string };
 
 /** A template copied into a project's shared scenes, or into one stream. */
-export async function sceneFromTemplate(root: string, b: { org: unknown; template: string; projectId: string; streamId?: string }): Promise<SceneRef> {
-  const { name } = await lib.addFromTemplate(orgDir(root, b.org), b.template, b.projectId, b.streamId);
+export async function sceneFromTemplate(root: string, b: { org: unknown; template: string; projectId: string; streamId?: string }, check?: lib.BeforeCreate): Promise<SceneRef> {
+  const { name } = await lib.addFromTemplate(orgDir(root, b.org), b.template, b.projectId, b.streamId, check);
   const dir = b.streamId ? `projects/${b.projectId}/streams/${b.streamId}` : `projects/${b.projectId}/scenes`;
   return { name, path: `${plainName(String(b.org))}/${dir}/${name}.html` };
 }
@@ -44,13 +44,13 @@ export async function reallyInside(root: string, path: string): Promise<void> {
 }
 
 /** A copy of a scene beside it ("<name>-copy"): for the switcher's Duplicate and the agents' duplicate_scene. */
-export async function duplicateScene(root: string, path: string): Promise<SceneRef> {
+export async function duplicateScene(root: string, path: string, check?: lib.BeforeCreate): Promise<SceneRef> {
   // Library paths start with the org id: "/org/…" would come back as a path nothing else accepts.
   if (String(path).startsWith("/")) throw new PathError(`Bad path: ${path}. Paths start with the org id, like "my-channel/templates/brb.html".`);
   // The scene it reads, and the folder the copy goes in (a scene may link back inside from a folder that links out).
   await reallyInside(root, path);
   await reallyInside(root, dirname(path));
-  const { name } = await lib.duplicate(root, path);
+  const { name } = await lib.duplicate(root, path, check);
   return { name, path: `${path.slice(0, path.lastIndexOf("/"))}/${name}.html` };
 }
 

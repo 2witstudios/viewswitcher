@@ -16,8 +16,8 @@ import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFr
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
-import { renameScene, sceneHash, scenePath, type RenameResult } from "../scene-edit";
-import { loadedFiles } from "../scene-refs";
+import { renameScene, scenePath, type RenameResult } from "../scene-edit";
+import { type Loaded, loadedFiles, textHash } from "../scene-refs";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
@@ -34,6 +34,8 @@ export type McpDeps = {
   /** After a scene was renamed: keeps the on-air record pointing at it, as the switcher's rename does. */
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
+  /** Whether OBS has said, since it connected, whether it's streaming or recording (OBSClient.outputsKnown). */
+  outputsKnown?: () => boolean;
   /** Tests only: runs at write_file's commit instant, before its last check (to change the state right then). */
   onCommit?: () => void;
 };
@@ -112,42 +114,46 @@ export function createMcpServer(deps: McpDeps): McpServer {
       return path;
     }
   };
+  /**
+   * Live, for the agents' guard: OBS streaming or recording, or connected without having said yet
+   * whether it is (just after connecting, before its first status answer). Unknown counts as live.
+   */
+  const isLive = (s: LiveState) => s.obs.streaming || s.obs.recording || (s.obs.connected && deps.outputsKnown?.() === false);
+  /** What the scene on air loads, as the guard needs it (OnAirLoads). */
+  type OnAirLoads = Loaded & { pages: string };
   /** The guard (agent-guard.ts) against the state right now; throws the refusal. `loads`: what the scene on air loads. */
-  const guardNow = (action: GuardAction, loads?: string[]) => {
+  const guardNow = (action: GuardAction, loads?: OnAirLoads) => {
     const s = deps.state();
-    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads };
+    const files = loads?.files.flatMap((p) => [p, realRel(p)]);
+    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads: files, loadsComplete: loads?.complete };
     // A link to the scene on air is the scene on air.
     const checked: GuardAction = action.kind === "write" ? { kind: "write", paths: action.paths.flatMap((p) => [p, realRel(p)]) } : action;
-    const g = agentGuard({ setting: s.agent.onAir, live: s.obs.streaming || s.obs.recording, onAir, action: checked });
+    const g = agentGuard({ setting: s.agent.onAir, live: isLive(s), onAir, action: checked });
     if (!g.ok) throw new Refusal(g.reason);
+  };
+  const pagesOnAir = () => {
+    const s = deps.state();
+    return s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p) : [];
   };
   /**
    * The files the scene on air (and its transition) load, read only when the guard would use them,
-   * or (`evenIfIdle`) whenever something is on air, for a check that runs again later. `pages` says
-   * which on-air scene and transition the list is for.
+   * or (`evenIfIdle`) whenever something is on air, for a check that runs again later.
    */
-  const onAirLoads = async (evenIfIdle = false) => {
+  const onAirLoads = async (evenIfIdle = false): Promise<OnAirLoads | undefined> => {
     const s = deps.state();
-    if (!s.onAir || s.agent.onAir === "always" || (!evenIfIdle && !(s.obs.streaming || s.obs.recording))) return undefined;
-    const pages = [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p);
-    return (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]);
+    if (!s.onAir || s.agent.onAir === "always" || (!evenIfIdle && !isLive(s))) return undefined;
+    const pages = pagesOnAir();
+    return { ...(await loadedFiles(root, pages)), pages: pages.join("\n") };
   };
-  /**
-   * What a list of loaded files depends on, read synchronously so it can be compared at the commit
-   * instant: the agent setting, the scene and transition on air, and those pages' text.
-   */
-  const onAirStamp = () => {
-    const s = deps.state();
-    const pages = s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p) : [];
-    const texts = pages.map((p) => {
+  /** Whether every file a scan read still has the text it read (checked synchronously, at a commit instant). */
+  const unchanged = (loads: OnAirLoads) =>
+    Object.entries(loads.read).every(([p, h]) => {
       try {
-        return sceneHash(readFileSync(inside(root, p), "utf8"));
+        return textHash(readFileSync(inside(root, p), "utf8")) === h;
       } catch {
-        return "-";
+        return false;
       }
     });
-    return { setting: s.agent.onAir, rest: [...pages, ...texts].join("\n") };
-  };
   /**
    * Files a tool reads or writes: each really inside the library, through links too (library-files.ts
    * checked), and so is every folder on the way to it from the org. A new file or folder may get
@@ -160,10 +166,21 @@ export function createMcpServer(deps: McpDeps): McpServer {
       for (let i = parts.length; i >= 2; i--) await checked(root, parts.slice(0, i).join("/"));
     }
   };
-  /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
+  /**
+   * Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't
+   * allow right now. Returns the same check for a file a library helper picks itself (a free name like
+   * "brb-2.html" or "logo-2.png"), by its absolute path, to run before it creates it.
+   */
   const writes = async (...paths: string[]) => {
     await contained(...paths);
-    guardNow({ kind: "write", paths }, await onAirLoads());
+    const loads = await onAirLoads();
+    guardNow({ kind: "write", paths }, loads);
+    return (abs: string) => guardNow({ kind: "write", paths: [relative(root, abs).split("\\").join("/")] }, loads);
+  };
+  /** Only the per-name check, for a tool whose file name is chosen by the library helper. */
+  const guardFor = async () => {
+    const loads = await onAirLoads();
+    return (abs: string) => guardNow({ kind: "write", paths: [relative(root, abs).split("\\").join("/")] }, loads);
   };
 
   const exists = (abs: string) => stat(abs).then(() => true, () => false);
@@ -291,24 +308,24 @@ export function createMcpServer(deps: McpDeps): McpServer {
     // turn even while idle, so the last check has them if OBS goes live in between. If what that list
     // depends on changed meanwhile (the setting, what's on air, or the on-air pages' text), the list
     // may be stale, so a live write is refused rather than guessed.
-    let loads: string[] | undefined;
-    let stamp: ReturnType<typeof onAirStamp> | undefined;
+    let loads: OnAirLoads | undefined;
+    let setting: string | undefined;
     const r = await writeText(root, path, body, hash, {
       beforeWrite: async () => {
         await contained(target);
-        stamp = onAirStamp();
+        setting = deps.state().agent.onAir;
         loads = await onAirLoads(true);
         guardNow({ kind: "write", paths: [target] }, loads);
       },
       atCommit: () => {
         deps.onCommit?.();
         const s = deps.state();
-        const now = onAirStamp();
-        if ((s.obs.streaming || s.obs.recording) && s.agent.onAir !== "always" && stamp) {
-          if (now.setting !== stamp.setting) {
+        if (isLive(s) && s.agent.onAir !== "always") {
+          if (s.agent.onAir !== setting) {
             throw new Refusal("The agent on-air setting changed while this was being written, and you're live. Check get_state, then read_file and redo the change if it's still allowed.");
           }
-          if (now.rest !== stamp.rest) {
+          // The list of what the scene loads was made for what was on air then, from the files as they were.
+          if ((loads?.pages ?? "") !== pagesOnAir().join("\n") || (loads && !unchanged(loads))) {
             throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the scene on air.");
           }
         }
@@ -331,11 +348,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const bytes = Buffer.from(base64, "base64");
     if (bytes.length === 0) throw new Refusal("That isn't base64 file data");
     if (bytes.length > MAX_ASSET) throw new Refusal("That file is over 15 MB");
-    // The assets folder must really be in the library, whatever name the file ends up with.
+    // The assets folder must really be in the library; the guard checks the name the file really gets
+    // (a taken name gets a free one, which the scene on air may be asking for).
     await contained(`${org}/assets/${plainName(name)}`);
-    // An existing name gets a free one instead (saveAsset), so only a new file at this name could show on air.
-    if (!(await exists(inside(dir, `assets/${plainName(name)}`)))) await writes(`${org}/assets/${name}`);
-    const saved = await lib.saveAsset(dir, new File([bytes], String(name)));
+    const check = await guardFor();
+    const saved = await lib.saveAsset(dir, new File([bytes], String(name)), check);
     return text({ path: `${org}/${saved.path}` });
   }));
 
@@ -351,8 +368,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
       const tpl = templateAt(org, dir, t);
       if (await exists(tpl.file)) await contained(tpl.path);
     }
-    await writes(`${org}/projects/${slugify(name)}/project.json`);
-    return text(await lib.createProject(dir, name, templates ?? []));
+    const check = await writes(`${org}/projects/${slugify(name)}/project.json`);
+    return text(await lib.createProject(dir, name, templates ?? [], check));
   }));
 
   server.registerTool("create_stream", {
@@ -376,8 +393,10 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const tpl = templateAt(org, dir, template);
     if (!(await exists(tpl.file))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates and sets.`);
     await contained(tpl.path);
-    await writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${tpl.name}.html`);
-    return text(await sceneFromTemplate(root, { org, template, projectId, streamId }));
+    // The copy may get a free name ("brb-2"): the folder is checked here, the name the copy gets as it's made.
+    await contained(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${tpl.name}.html`);
+    const check = await guardFor();
+    return text(await sceneFromTemplate(root, { org, template, projectId, streamId }, check));
   }));
 
   server.registerTool("customize_scene", {
@@ -415,8 +434,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
     await needScene(path);
     // The scene it copies must really be in the library: a link to a file outside would be copied in.
     await contained(path);
-    await writes(`${path.slice(0, -5)}-copy.html`);
-    return text(await duplicateScene(root, path));
+    await contained(`${path.slice(0, -5)}-copy.html`);
+    const check = await guardFor();
+    return text(await duplicateScene(root, path, check));
   }));
 
   server.registerTool("rename_scene", {

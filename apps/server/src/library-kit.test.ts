@@ -170,3 +170,18 @@ describe("ensureLibrary", () => {
     }
   });
 });
+
+describe("the scene skill's frontmatter", () => {
+  // Claude's skill upload (the site's skills/viewswitcher-scenes.zip) rejects malformed YAML frontmatter.
+  test("is a YAML mapping with a name and a one-paragraph description", async () => {
+    const text = await Bun.file(join(import.meta.dir, "../library-kit/skills/viewswitcher-scenes/SKILL.md")).text();
+    const m = text.match(/^---\n([\s\S]*?)\n---\n/);
+    expect(m).not.toBeNull();
+    const fm = Bun.YAML.parse(m![1]!) as Record<string, unknown>;
+    expect(Object.keys(fm).sort()).toEqual(["description", "name"]);
+    expect(fm.name).toBe("viewswitcher-scenes");
+    expect(typeof fm.description).toBe("string");
+    // Every frontmatter line is a key: a stray unindented line would be a YAML error in strict parsers.
+    for (const line of m![1]!.split("\n")) expect(line).toMatch(/^[a-z_]+: /);
+  });
+});

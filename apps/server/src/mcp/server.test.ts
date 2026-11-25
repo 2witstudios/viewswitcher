@@ -37,6 +37,8 @@ let beforeCommit: (() => void) | null = null;
 let onStateRead: (() => void) | null = null;
 /** Runs at write_file's commit instant (McpDeps.onCommit), so a test can change the state exactly then. */
 let atCommit: (() => void) | null = null;
+/** OBSClient.outputsKnown: false right after OBS connects, until it says whether it's streaming or recording. */
+let outputsKnown = true;
 let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -66,6 +68,7 @@ beforeAll(async () => {
     },
     previewer: { scene: async () => previews.scene, program: async () => previews.program },
     onCommit: () => atCommit?.(),
+    outputsKnown: () => outputsKnown,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
@@ -81,6 +84,7 @@ beforeEach(() => {
   beforeCommit = null;
   onStateRead = null;
   atCommit = null;
+  outputsKnown = true;
   previews = { scene: { ok: true, png, width: 960, height: 540 }, program: { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/program` } };
 });
 
@@ -717,6 +721,70 @@ describe("destination folders linked outside, with a name that links back in (Co
     const r = await call("create_project", { org: ORG, name: "Far show", templates: ["far/v"] });
     expect(r.isError).toBe(true);
     expect(r.text).toContain("outside the library");
+  });
+});
+
+describe("CodeRabbit pass 3: the guard sees the file really made, a changed dependency, a cut-short scan, and unknown OBS status", () => {
+  const onAirWith = async (name: string, html: string) => {
+    await writeFile(join(root, ORG, `templates/${name}.html`), html);
+    await data("go_on_air", { path: `${ORG}/templates/${name}.html` });
+  };
+  test("add_asset: a taken name gets a free one, and that one is guarded (the scene on air asks for it); an unasked-for one is fine", async () => {
+    await writeFile(join(root, ORG, "assets/pick.png"), "png");
+    await onAirWith("asks-pick2", `<title>P</title><img src="/library/${ORG}/assets/pick-2.png">`);
+    live();
+    const b64 = Buffer.from("png").toString("base64");
+    const r = await call("add_asset", { org: ORG, name: "pick.png", base64: b64 });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("The scene on air uses that file");
+    expect(await stat(join(root, ORG, "assets/pick-2.png")).catch(() => null)).toBeNull();
+    expect((await data("add_asset", { org: ORG, name: "other.png", base64: b64 })).path).toBe(`${ORG}/assets/other.png`);
+  });
+  test("scene_from_template and duplicate_scene: the free name they pick is guarded", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Picks", templates: ["brb"] }); // scenes/brb.html now exists
+    await writeFile(join(root, ORG, "templates/intro.html"), "<title>I</title>");
+    await writeFile(join(root, ORG, "templates/intro-copy.html"), "<title>I copy</title>");
+    await onAirWith("asks-copies", `<title>C</title><iframe src="/library/${ORG}/projects/${projectId}/scenes/brb-2.html"></iframe><iframe src="intro-copy-2.html"></iframe>`);
+    live();
+    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).text).toContain("The scene on air uses that file");
+    expect((await call("duplicate_scene", { path: `${ORG}/templates/intro.html` })).text).toContain("The scene on air uses that file");
+    expect(await stat(join(root, ORG, `projects/${projectId}/scenes/brb-2.html`)).catch(() => null)).toBeNull();
+    expect(await stat(join(root, ORG, "templates/intro-copy-2.html")).catch(() => null)).toBeNull();
+  });
+  test("write_file: a stylesheet the scene loads changing mid-write (so it now uses the file) refuses the live write", async () => {
+    await writeFile(join(root, ORG, "assets/dep.css"), ".a{}");
+    await writeFile(join(root, ORG, "assets/dep-logo.svg"), "<svg/>");
+    await onAirWith("dep-scene", `<title>D</title><link rel="stylesheet" href="/library/${ORG}/assets/dep.css">`);
+    live();
+    const { hash } = await data("read_file", { path: `${ORG}/assets/dep-logo.svg` });
+    atCommit = () => void writeFileSync(join(root, ORG, "assets/dep.css"), ".a{background:url(dep-logo.svg)}");
+    const r = await call("write_file", { path: `${ORG}/assets/dep-logo.svg`, text: "<svg>new</svg>", hash });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("What's on air changed while this was being written");
+    expect(await readFile(join(root, ORG, "assets/dep-logo.svg"), "utf8")).toBe("<svg/>");
+    // Nothing changing: an unrelated file is fine while live.
+    atCommit = null;
+    await writeFile(join(root, ORG, "assets/unrelated.svg"), "<svg/>");
+    const u = await data("read_file", { path: `${ORG}/assets/unrelated.svg` });
+    expect((await call("write_file", { path: `${ORG}/assets/unrelated.svg`, text: "<svg>x</svg>", hash: u.hash })).isError).toBe(false);
+  });
+  test("a scene that loads more than the scan follows: every live write is refused", async () => {
+    const many = Array.from({ length: 205 }, (_, i) => `<img src="/library/${ORG}/assets/m${i}.png">`).join("");
+    await onAirWith("too-many", `<title>M</title>${many}`);
+    live();
+    await writeFile(join(root, ORG, "assets/free.svg"), "<svg/>");
+    const { hash } = await data("read_file", { path: `${ORG}/assets/free.svg` });
+    const r = await call("write_file", { path: `${ORG}/assets/free.svg`, text: "<svg>x</svg>", hash });
+    expect(r.text).toContain("loads more files than ViewSwitcher checks");
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await call("write_file", { path: `${ORG}/assets/free.svg`, text: "<svg>x</svg>", hash })).isError).toBe(false);
+  });
+  test("OBS connected but not yet saying whether it's live counts as live for agents", async () => {
+    state.obs = { connected: true, streaming: false, recording: false };
+    outputsKnown = false;
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("streaming or recording");
+    outputsKnown = true;
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).isError).toBe(false);
   });
 });
 

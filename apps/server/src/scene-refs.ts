@@ -39,6 +39,7 @@ const CSS_IMPORT = /@import\s+(?:"([^"]*)"|'([^']*)')/gi;
 const IMAGE_SET = /image-set\(([^)]*)\)/gi;
 const QUOTED = /"([^"]*)"|'([^']*)'/g;
 // import x from "y", import "y", export … from "y", import("y")
+const INLINE_SCRIPT = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 const JS_IMPORT = /(?:\bimport\s*(?:[\w*{}\s,$]+\s*from\s*)?|\bexport\s*[\w*{}\s,$]+\s*from\s*|\bimport\s*\(\s*)(?:"([^"]+)"|'([^']+)')/g;
 
 /** What `text` (the file at library path `file`) loads, as library paths, without duplicates. */
@@ -54,6 +55,11 @@ export function sceneRefs(source: string, file: string): string[] {
         if (m[1]!.toLowerCase() === "srcset") raw.push(...value.split(",").map((c) => c.trim().split(/\s+/)[0] ?? ""));
         else raw.push(value);
       }
+    }
+    // A script written in the page (a module's `import "…"`, anyone's `import("…")`) loads files too.
+    for (const [, attrs, body] of text.matchAll(INLINE_SCRIPT)) {
+      if (/\bsrc\s*=/i.test(attrs!)) continue;
+      for (const m of body!.matchAll(JS_IMPORT)) raw.push(m[1] ?? m[2] ?? "");
     }
   }
   if (/\.m?js$/i.test(file)) {
@@ -72,28 +78,49 @@ export function sceneRefs(source: string, file: string): string[] {
   return [...out];
 }
 
+/** What loadedFiles found. */
+export type Loaded = {
+  /** The library files the pages load, directly or through what they load. */
+  files: string[];
+  /** False when the scan stopped at its limit: there may be more, so the list can't be trusted to be all. */
+  complete: boolean;
+  /** Every file it read (the pages too), with a hash of the text it read, to tell later if any changed. */
+  read: Record<string, string>;
+};
+
+/** A hash of a file's text, for Loaded.read. */
+export const textHash = (text: string) => Bun.hash(text).toString(36);
+
 /**
  * Everything `pages` load, following the pages, stylesheets and scripts they load in turn (a theme's
- * fonts and pictures, a module's imports), at most `limit` files. Files that can't be read are still listed: a missing logo the
- * scene asks for would show the moment an agent created it.
+ * fonts and pictures, a module's imports), at most `limit` files. Files that can't be read are still
+ * listed: a missing logo the scene asks for would show the moment an agent created it.
  */
-export async function loadedFiles(root: string, pages: string[], limit = 200): Promise<string[]> {
+export async function loadedFiles(root: string, pages: string[], limit = 200): Promise<Loaded> {
   const seen = new Set<string>(pages);
   const queue = [...pages];
   const found: string[] = [];
-  while (queue.length && found.length < limit) {
+  const read: Record<string, string> = {};
+  let complete = true;
+  while (queue.length) {
     const file = queue.shift()!;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
     const text = await Promise.resolve()
       .then(() => readFile(inside(root, file), "utf8"))
       .catch(() => null);
     if (text === null) continue;
+    read[file] = textHash(text);
     for (const ref of sceneRefs(text, file)) {
       if (seen.has(ref)) continue;
+      if (found.length >= limit) {
+        complete = false;
+        break;
+      }
       seen.add(ref);
       found.push(ref);
       queue.push(ref);
     }
+    if (!complete) break;
   }
-  return found.slice(0, limit);
+  return { files: found, complete, read };
 }

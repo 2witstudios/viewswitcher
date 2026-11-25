@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { loadedFiles, resolveRef, sceneRefs } from "./scene-refs";
+import { loadedFiles, resolveRef, sceneRefs, textHash } from "./scene-refs";
 
 const scene = "daisy/projects/ld/streams/12-04-x/teaching.html";
 
@@ -90,6 +90,19 @@ describe("sceneRefs", () => {
       "daisy/templates/b.js",
     ]);
   });
+  test("imports in scripts written in the page (modules and import()), not in ones loaded by src", () => {
+    const html = `<script type="module">import "/library/daisy/assets/live.js"; import { x } from "./helper.mjs";</script><script>import("/library/daisy/assets/lazy.js")</script><script src="/library/daisy/assets/ext.js">import "ignored.js"</script>`;
+    expect(sceneRefs(html, scene).sort()).toEqual([
+      "daisy/assets/ext.js",
+      "daisy/assets/lazy.js",
+      "daisy/assets/live.js",
+      "daisy/projects/ld/streams/12-04-x/helper.mjs",
+    ]);
+  });
+  test("textHash tells texts apart", () => {
+    expect(textHash("a")).toBe(textHash("a"));
+    expect(textHash("a")).not.toBe(textHash("b"));
+  });
   test("a page's own tags only in HTML; a stylesheet never self-lists", () => {
     expect(sceneRefs(`<img src="a.png">`, "daisy/notes.md")).toEqual([]);
     expect(sceneRefs(`.x{background:url(theme.css)}`, "daisy/templates/_shared/theme.css")).toEqual([]);
@@ -108,7 +121,10 @@ describe("loadedFiles", () => {
     put("daisy/templates/_shared/theme.css", `@import "more.css"; .a{background:url(brand/mark.svg)}`);
     put("daisy/templates/_shared/more.css", `.b{background:url(theme.css)} .c{background:url(/library/daisy/assets/tex.png)}`);
     put("daisy/assets/logo.svg", `<svg/>`);
-    expect((await loadedFiles(root, [scene])).sort()).toEqual([
+    const all = await loadedFiles(root, [scene]);
+    expect(all.complete).toBe(true);
+    expect(Object.keys(all.read).sort()).toEqual([scene, "daisy/templates/_shared/more.css", "daisy/templates/_shared/theme.css"].sort());
+    expect(all.files.sort()).toEqual([
       "daisy/assets/logo.svg",
       "daisy/assets/missing.png",
       "daisy/assets/tex.png",
@@ -118,8 +134,12 @@ describe("loadedFiles", () => {
     ]);
   });
   test("a scene that can't be read loads nothing; the limit holds", async () => {
-    expect(await loadedFiles(root, ["daisy/nope.html", "../outside.html"])).toEqual([]);
+    expect(await loadedFiles(root, ["daisy/nope.html", "../outside.html"])).toEqual({ files: [], complete: true, read: {} });
     put("daisy/many.html", Array.from({ length: 50 }, (_, i) => `<img src="${i}.png">`).join(""));
-    expect((await loadedFiles(root, ["daisy/many.html"], 10)).length).toBe(10);
+    const capped = await loadedFiles(root, ["daisy/many.html"], 10);
+    expect(capped.files.length).toBe(10);
+    // Stopped at the limit with more to go: the list is marked incomplete (the guard then refuses live writes).
+    expect(capped.complete).toBe(false);
+    expect((await loadedFiles(root, ["daisy/many.html"], 50)).complete).toBe(true);
   });
 });

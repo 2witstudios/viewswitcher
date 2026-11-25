@@ -28,6 +28,7 @@ describe("OBSClient.request", () => {
   test("answers, and with timeoutMs an unanswered request is rejected and forgotten (CodeRabbit)", async () => {
     await obs.ready(2000);
     await Bun.sleep(50); // the status refresh after identify
+    expect(obs.outputsKnown).toBe(true); // it said it isn't streaming or recording
     expect(await obs.request("GetVersion")).toMatchObject({ ok: "GetVersion" });
     const before = obs.pendingCount;
     await expect(obs.request("Hang", {}, { timeoutMs: 30 })).rejects.toThrow("OBS didn't answer Hang within 0.03 s");

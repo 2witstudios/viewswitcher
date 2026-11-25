@@ -25,6 +25,11 @@ type Options = {
 
 export class OBSClient {
   status: ObsStatus = { connected: false, recording: false, streaming: false };
+  /**
+   * Whether OBS has answered, since it connected, whether it's streaming and recording. Until then
+   * status says false for both, which only means "not known yet" (the agents' guard treats it as live).
+   */
+  outputsKnown = false;
   private ws?: WebSocket;
   private pending = new Map<string, { resolve: (v: any) => void; reject: (e: Error) => void; type: string }>();
   private seq = 0;
@@ -91,6 +96,7 @@ export class OBSClient {
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = undefined;
+      this.outputsKnown = false;
       for (const p of this.pending.values()) p.reject(new Error("OBS disconnected"));
       this.pending.clear();
       if (this.status.connected && this.opts.log) console.log("[obs] disconnected");
@@ -116,6 +122,7 @@ export class OBSClient {
       }
       case 2:
         if (this.opts.log) console.log("[obs] connected");
+        this.outputsKnown = false;
         this.update({ connected: true }); // published now, not only once refresh() has answered
         for (const w of this.waiters.splice(0)) w();
         this.refresh();
@@ -141,6 +148,7 @@ export class OBSClient {
   private async refresh() {
     try {
       const [rec, stream] = await Promise.all([this.request("GetRecordStatus"), this.request("GetStreamStatus")]);
+      this.outputsKnown = true;
       this.update({ recording: !!rec.outputActive, streaming: !!stream.outputActive });
     } catch {}
   }

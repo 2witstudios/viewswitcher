@@ -102,9 +102,9 @@ setInterval(async () => {
   publish({ t: "build", build });
 }, 2000);
 
-async function persist() {
+async function persist(onAir: OnAir | null = state.onAir) {
   await mkdir(join(config.library, ".viewswitcher"), { recursive: true });
-  await writeFile(stateFile, JSON.stringify({ onAir: state.onAir }, null, 2));
+  await writeFile(stateFile, JSON.stringify({ onAir }, null, 2));
 }
 
 /** Put a scene on air: for the switcher (POST /api/onair) and for agents (go_on_air). */
@@ -112,9 +112,18 @@ async function goOnAir(b: OnAirRequest, check?: () => void): Promise<LiveState> 
   if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
   const next = await onAirFor(config.library, b);
   check?.(); // an agent's go_on_air: the on-air setting against the state now, after the await
+  // Saved first: if saving fails, the scene on air stays as it was (nothing else can pick up a new
+  // scene that wasn't saved). The agent's check runs again after the save; if it now refuses, the
+  // saved record goes back to the scene on air.
+  await persist(next);
+  try {
+    check?.();
+  } catch (e) {
+    await persist(state.onAir).catch((err) => console.error("[state] couldn't save:", (err as Error).message));
+    throw e;
+  }
   state.onAir = next;
   state.warnings = [];
-  await persist();
   publishState();
   return state;
 }
@@ -215,10 +224,12 @@ watch(config.library, { recursive: true }, (_event, filename) => {
     changed = new Set();
     publish({ t: "library:changed", paths });
     // A transition file appeared or went away: re-pick the one for the scene on air.
-    if (state.onAir && paths.some((p) => p.endsWith("transition.html"))) {
-      const transition = await lib.resolveTransition(config.library, state.onAir.path);
-      if (transition !== state.onAir.transition) {
-        state.onAir.transition = transition;
+    const on = state.onAir;
+    if (on && paths.some((p) => p.endsWith("transition.html"))) {
+      const transition = await lib.resolveTransition(config.library, on.path);
+      // Only for the scene it was worked out for: another may have gone on air meanwhile.
+      if (state.onAir === on && transition !== on.transition) {
+        on.transition = transition;
         publishState();
       }
     }
@@ -510,6 +521,7 @@ const mcp: McpDeps = {
   state: () => state,
   goOnAir,
   renamed,
+  outputsKnown: () => obs.outputsKnown,
   previewer: createPreviewer(obs, { obs: config.obs, port: config.port, library: config.library }),
 };
 function agentSeen(client: string | null) {

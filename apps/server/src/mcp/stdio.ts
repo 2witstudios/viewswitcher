@@ -22,6 +22,19 @@ export function relayPort(argv: string[], env: Record<string, string | undefined
   return valid(flag) ?? valid(env.VIEWSWITCHER_PORT) ?? DEFAULT_PORT;
 }
 
+/**
+ * The relay only ever talks to this Mac (127.0.0.1). An agent may start it with HTTP_PROXY set, and Bun's
+ * fetch sends even 127.0.0.1 through that proxy unless NO_PROXY says otherwise, which would hand the
+ * proxy every tool call (scene text, asset data) and never reach the switcher. So loopback goes on
+ * NO_PROXY (both spellings), keeping whatever was there.
+ */
+export function bypassProxies(env: Record<string, string | undefined>) {
+  for (const key of ["NO_PROXY", "no_proxy"]) {
+    const have = (env[key] ?? "").split(",").map((h) => h.trim()).filter(Boolean);
+    env[key] = [...new Set([...have, "127.0.0.1", "localhost", "::1"])].join(",");
+  }
+}
+
 /** Nothing listening (fetch never connected), so no request reached the server and it's safe to send again. */
 const refused = (e: unknown) => ["ConnectionRefused", "ECONNREFUSED"].includes(String((e as { code?: unknown })?.code));
 
@@ -171,6 +184,7 @@ export async function main() {
   // Nothing but JSON-RPC on stdout, even from a stray log line.
   console.log = console.info = console.debug = console.warn = console.error;
   const port = relayPort(process.argv, process.env);
+  bypassProxies(process.env);
   const out = Bun.stdout.writer();
   await relayStdio({
     port,

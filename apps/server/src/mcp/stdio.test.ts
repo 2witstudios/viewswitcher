@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DROPPED, NOT_RUNNING, relayPort, relayStdio } from "./stdio";
+import { bypassProxies, DROPPED, NOT_RUNNING, relayPort, relayStdio } from "./stdio";
 
 type Stub = { port: number; posts: unknown[]; stop: () => void };
 /** A stand-in for the switcher: /api/state, and /mcp that answers requests in JSON (or `answer`). */
@@ -144,6 +144,17 @@ describe("relayStdio", () => {
   });
 });
 
+describe("bypassProxies", () => {
+  test("loopback is added to NO_PROXY and no_proxy, keeping what's there", () => {
+    const env: Record<string, string | undefined> = { NO_PROXY: "example.com" };
+    bypassProxies(env);
+    expect(env.NO_PROXY).toBe("example.com,127.0.0.1,localhost,::1");
+    expect(env.no_proxy).toBe("127.0.0.1,localhost,::1");
+    bypassProxies(env);
+    expect(env.NO_PROXY).toBe("example.com,127.0.0.1,localhost,::1");
+  });
+});
+
 describe("relayPort", () => {
   test("--port, then VIEWSWITCHER_PORT, then 7420; never PORT", () => {
     expect(relayPort(["bun", "index.ts", "--mcp-stdio", "--port", "7433"], { PORT: "3000", VIEWSWITCHER_PORT: "7440" })).toBe(7433);
@@ -179,6 +190,23 @@ describe("index.ts --mcp-stdio", () => {
     expect(s.posts).toHaveLength(3);
     // The real server would have set up the library (kit, first org) before anything else.
     expect(readdirSync(library)).toEqual([]);
+  });
+
+  test("an agent's HTTP_PROXY is never used: the calls go straight to this Mac's switcher", async () => {
+    const s = stub();
+    let proxied = 0;
+    const proxy = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => (proxied++, new Response("proxy", { status: 502 })) });
+    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio", "--port", String(s.port)], {
+      env: { ...process.env, HTTP_PROXY: `http://127.0.0.1:${proxy.port}`, http_proxy: `http://127.0.0.1:${proxy.port}`, ALL_PROXY: `http://127.0.0.1:${proxy.port}`, VIEWSWITCHER_LIBRARY: library },
+      stdin: new Blob([JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) + "\n"]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    s.stop();
+    proxy.stop(true);
+    expect(proxied).toBe(0);
+    expect(JSON.parse(stdout.trim()).result).toEqual({ echo: "tools/list" });
   });
 
   test("stdin closing while answers are still on their way: every answer is written before it exits", async () => {

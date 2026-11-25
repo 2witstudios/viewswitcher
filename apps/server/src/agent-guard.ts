@@ -13,7 +13,7 @@ export type GuardInput = {
    * The scene on air, the transition that plays for it, and the library files those load (their
    * stylesheets, scripts, pictures, video, fonts: scene-refs.ts loadedFiles).
    */
-  onAir: { path: string; transition?: string | null; loads?: string[] } | null;
+  onAir: { path: string; transition?: string | null; loads?: string[]; loadsComplete?: boolean } | null;
   action: GuardAction;
 };
 
@@ -24,7 +24,7 @@ export type GuardResult = { ok: true } | { ok: false; reason: string };
  * org's shared files, and anything else those load. Compared without case, as the Mac's disk does
  * ("Templates/_Shared" is the same folder).
  */
-function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene" | "transition" | "shared" | "loaded" | null {
+function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene" | "transition" | "shared" | "loaded" | "tooMany" | null {
   const p = path.toLowerCase();
   const scene = onAir.path.toLowerCase();
   if (p === scene) return "scene";
@@ -32,6 +32,8 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
   if (p === onAir.transition?.toLowerCase() || transitionCandidates(scene).includes(p)) return "transition";
   if (p.startsWith(`${orgOf(scene)}/templates/_shared/`)) return "shared";
   if (onAir.loads?.some((l) => l.toLowerCase() === p)) return "loaded";
+  // The scan of what the scene loads stopped at its limit: anything might be on stream.
+  if (onAir.loadsComplete === false) return "tooMany";
   return null;
 }
 
@@ -39,6 +41,7 @@ const REASONS = {
   scene: "That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.",
   transition: "That is the transition for the scene on air, and you're live. Wait until the stream ends to change it.",
   shared: "Files in templates/_shared/ style the scene on air, and you're live. Wait until the stream ends, or put the change in a stream copy of the scene (customize_scene).",
+  tooMany: "The scene on air loads more files than ViewSwitcher checks, so while you're live agents can't change library files. Wait until the stream ends.",
   loaded: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends.",
 };
 
