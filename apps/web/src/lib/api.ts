@@ -1,4 +1,4 @@
-import type { Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
+import type { AgentClients, AgentOnAir, Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
 import { libraryUrl } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
@@ -75,6 +75,19 @@ export const api = {
     navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, session: previewSession, seq: nextPreviewSeq() })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
+  /** What agents connected over MCP may put on air (Edit with AI). */
+  agentSettings: (onAir: AgentOnAir) => post("/api/agent/settings", { onAir }),
+  /** This Mac's library folder and the commands that connect an agent; null anywhere but on this Mac. */
+  info: async (): Promise<AgentInfo | null> => {
+    const res = await fetch("/api/info", { cache: "no-store" }).catch(() => null);
+    return res?.ok ? res.json() : null;
+  },
+  /** Which agent apps this Mac has; null anywhere but on this Mac. */
+  agentClients: async (): Promise<AgentClients | null> => {
+    const res = await fetch("/api/agent/clients", { cache: "no-store" }).catch(() => null);
+    return res?.ok ? res.json() : null;
+  },
+
   /** Create the ViewSwitcher scene and sources in OBS (MAC-3). */
   setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean }>("/api/obs/setup"),
   toggleRecord: () => post("/api/obs/record"),
@@ -89,6 +102,11 @@ export const api = {
     return res.json();
   },
 };
+
+export type AgentInfo = { library: string; port: number; claudeCode: string; stdio: string };
+
+/** The Claude Desktop extension made for this install (this Mac only); the Mac app saves and opens it. */
+export const MCPB_URL = "/api/agent/viewswitcher.mcpb";
 
 /** Copy text; falls back to a prompt where the clipboard API is unavailable (plain http on the iPad). */
 export async function copy(text: string) {

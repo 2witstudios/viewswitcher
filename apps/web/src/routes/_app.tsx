@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
+import { AgentSheet } from "../components/AgentSheet";
 import { Sidebar } from "../components/Sidebar";
 import { Toaster } from "../components/ui";
 
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/_app")({
         <main className={editing ? "main-full" : "main"}>
           <Outlet />
         </main>
+        <AgentSheet />
         <Toaster />
       </div>
     );

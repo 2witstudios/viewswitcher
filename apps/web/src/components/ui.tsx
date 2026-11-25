@@ -84,22 +84,34 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
   );
 }
 
-let toastSet: ((t: string) => void) | null = null;
-export function toast(text: string) {
-  toastSet?.(text);
+export type ToastAction = { label: string; run: () => void };
+type Toast = { text: string; action?: ToastAction };
+
+let toastSet: ((t: Toast | null) => void) | null = null;
+/** A short message; with an action, a button in it (and it stays a little longer, to be pressed). */
+export function toast(text: string, action?: ToastAction) {
+  toastSet?.({ text, action });
 }
 export function Toaster() {
-  const [text, setText] = useState("");
+  const [t, setT] = useState<Toast | null>(null);
   useEffect(() => {
-    toastSet = setText;
+    toastSet = setT;
     return () => void (toastSet = null);
   }, []);
   useEffect(() => {
-    if (!text) return;
-    const t = setTimeout(() => setText(""), 2600);
-    return () => clearTimeout(t);
-  }, [text]);
-  return text ? <div className="toast" role="status">{text}</div> : null;
+    if (!t) return;
+    const timer = setTimeout(() => setT(null), t.action ? 6000 : 2600);
+    return () => clearTimeout(timer);
+  }, [t]);
+  if (!t) return null;
+  return (
+    <div className="toast" role="status">
+      {t.text}
+      {t.action && (
+        <button type="button" className="toast-action" onClick={() => (setT(null), t.action!.run())}>{t.action.label}</button>
+      )}
+    </div>
+  );
 }
 
 /** Run an action, toast its error instead of throwing. */

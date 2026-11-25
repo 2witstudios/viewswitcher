@@ -126,6 +126,9 @@ export type AgentStatus = {
   client: string | null;
 };
 
+/** Which agent apps this Mac has (GET /api/agent/clients, this Mac only), for Edit with AI. */
+export type AgentClients = { claudeCode: boolean; claudeDesktop: boolean; cursor: boolean; codex: boolean; vscode: boolean };
+
 export type LiveState = {
   onAir: OnAir | null;
   obs: ObsStatus;

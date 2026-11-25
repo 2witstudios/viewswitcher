@@ -3,9 +3,8 @@
 // Everything here can contain absolute paths, so main.ts answers with it only to this Mac (local.ts),
 // and /api/agent/clients turns it into booleans.
 import { join } from "node:path";
+import type { AgentClients } from "@viewswitcher/shared";
 import { storedZip } from "./zip";
-
-export type AgentClients = { claudeCode: boolean; claudeDesktop: boolean; cursor: boolean; codex: boolean; vscode: boolean };
 
 export type DetectEnv = {
   home: string;
