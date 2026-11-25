@@ -79,6 +79,8 @@ export type OnAir = {
   /** The transition page played when switching to this scene (see transitionCandidates); null for a plain ground-color wipe. */
   transition?: string | null;
   label: string;
+  /** Set when the scene on air was renamed (EDIT-19): its old path, so the program page swaps without a transition. */
+  renamedFrom?: string;
   projectId?: string;
   streamId?: string;
 };

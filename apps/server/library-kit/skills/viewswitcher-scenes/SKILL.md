@@ -7,7 +7,7 @@ description: Create or edit live-stream scenes for ViewSwitcher (the HTML files 
 
 Every on-air screen is one plain HTML file. The ViewSwitcher app shows these files as covers on the switcher; tapping one puts it on air in OBS. Saving a file updates its cover and OBS within a second. There is no build step.
 
-**People edit these files too.** The switcher has a scene editor ("Edit text and layout"): anyone can retype text in place and drag panels and camera boxes, and each change is saved straight into the file, often while it's on air. It changes only the text between an element's tags and the numbers in its inline `left`/`top`; it never rewrites anything else. So write scenes it can edit (see "Editable by people" below), and **re-read a file right before you change it**: what you read earlier may be out of date.
+**People edit these files too.** The switcher has a scene editor (the pencil on every scene): anyone can retype text in place, drag and resize panels and camera boxes, add text, a title bar, an image or a camera, screen or guest box, delete elements, swap an image and rename a scene, and each change is saved straight into the file, often while it's on air. It patches only what changed: the text between an element's tags, the numbers in its inline `left`/`top`/`width`/`height`, an image's `src`, the `<title>`, or one whole element added or removed. It never rewrites anything else. So write scenes it can edit (see "Editable by people" below), and **re-read a file right before you change it**: what you read earlier may be out of date.
 
 The library holds one folder per **org** (a brand or channel). Orgs never share files: each has its own templates, assets, projects and brand. Work out which org the user means first (ask if it isn't clear).
 
@@ -74,7 +74,25 @@ The editor finds what to offer from the markup itself; there are no special attr
 
 - **Text people may change goes in its own small element** with nothing but text inside: `<h2 class="display">Today's topic</h2>`, `<p>…</p>`, `<span class="kicker">Notes</span>`. Text mixed with other tags (`<p>Read <b>this</b></p>`, a chip with an icon and a word) can't be retyped there; wrap the word in its own `<span>` if people will want to change it.
 - **Anything people may move keeps its position as inline px**: `style="left: 1528px; top: 506px; …"` on the absolutely positioned element (`.abs` panels, `.slot` boxes). Positions in a stylesheet, percentages, `right`/`bottom` or `transform` can't be dragged.
-- Plain text only: the editor doesn't do bold or links inside text, and doesn't resize, add or delete elements. Those stay your job.
+- **Anything people may resize also has its size as inline px**: `width: 360px; height: 450px` in the same `style`. Camera, screen and guest boxes resize at 16:9 unless people hold Shift.
+- Plain text only: the editor doesn't do bold or links inside text. That stays your job.
+- Keep every scene's content inside one `<main class="scene">` (or `<body>`): that's where added elements go.
+- Theme classes are what make added elements look like the org: keep `.abs`, `.panel`, `.display`, `.muted`, `.kicker` and `.slot` defined in `theme.css` when you restyle an org.
+
+### What the editor adds
+
+Each addition is one element, on its own line, just before `</main>`, in the middle of the 1920×1080 scene:
+
+```html
+<p class="abs display" style="left: 600px; top: 492px; width: 720px; height: 96px; margin: 0; font-size: 72px; line-height: 1.15">New text</p>
+<div class="abs panel" style="left: 560px; top: 465px; width: 800px; height: 150px; box-sizing: border-box; padding: 0 40px; display: flex; flex-direction: column; justify-content: center; gap: 12px"><h2 class="display" style="…">Name</h2><p class="muted" style="…">Title or topic</p></div>
+<img class="abs" src="/library/<org>/assets/logo.png" alt="" style="left: 660px; top: 240px; width: 600px; height: 600px; object-fit: contain">
+<div class="slot" data-slot="Camera 2" style="left: 640px; top: 360px; width: 640px; height: 360px"></div>
+```
+
+Device boxes ask for `Camera`, `Screen` or `Guest`, numbered (`Camera 2`) when the scene already has one; OBS needs a source with that name to fill it. Treat these like anything else in the file: tidy them, restyle them or move them into a better place in the markup if the user asks, but don't remove what people added without being asked.
+
+Deleting removes one element and the whitespace before it. Renaming sets `<title>`; for a stream's own scene it also renames the file (a stream's copy of a project scene keeps its file name, which ties it to the project's).
 - Don't put text that scripts overwrite (like `data-countdown`) in the elements people edit.
 - Their edits are real changes to the file: keep them. If a file changed since you last read it, read it again and work from what's there now.
 

@@ -255,3 +255,36 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 /* The Reload bar sits low, clear of a conflict dialog that may be open at the same time. */
 .conflict.stuck { top: auto; bottom: 6%; }
 .conflict.stuck .actions, .conflict.stuck .head p { margin-left: 0; }
+
+/* ---------------------------------------------------------------- scene editor, phase 2 (EDIT-14…19) */
+.more.edit { color: var(--ink-muted); }
+.out-btn.edit-onair { color: var(--cream); }
+.title-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 30px; padding: 0 6px; margin-left: -6px; border: 0; border-radius: 8px; background: transparent; color: var(--cream); text-align: left; cursor: text; }
+.title-btn svg { flex: none; color: var(--quiet); opacity: 0; transition: opacity 120ms; }
+.title-btn:hover, .title-btn:focus-visible { background: var(--hover); }
+.title-btn:hover svg, .title-btn:focus-visible svg { opacity: 1; }
+@media (hover: none) { .title-btn svg { opacity: 1; } }
+.title-input { width: min(340px, 36vw); height: 34px; margin-left: -6px; padding: 0 8px; border: 1px solid var(--cream); border-radius: 8px; background: var(--bg); color: var(--cream); font: 700 20px var(--display); letter-spacing: -0.01em; }
+.add-wrap { position: relative; }
+.editor-top .btn.add-btn { padding: 0 16px 0 12px; }
+.add-menu { right: 0; top: calc(100% + 8px); width: 300px; z-index: 22; }
+.add-menu button { height: 56px; }
+.add-menu button span { display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.add-menu button small { font-weight: 400; }
+.note-banner { flex: none; padding: 10px 20px; background: var(--raised); border-bottom: 1px solid var(--line); font-size: 14px; color: var(--ink-muted); }
+.note-banner b { color: var(--cream); }
+/* Corner handles: a 14 px square to see, a 44 px target for a finger. */
+.ed-handle { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 2; touch-action: none; }
+.ed-handle::after { content: ""; position: absolute; left: 15px; top: 15px; width: 14px; height: 14px; border-radius: 4px; background: var(--cream); box-shadow: 0 0 0 2px var(--on-cream), 0 2px 8px rgba(0, 0, 0, 0.5); }
+.ed-handle.nw, .ed-handle.se { cursor: nwse-resize; }
+.ed-handle.ne, .ed-handle.sw { cursor: nesw-resize; }
+@media (pointer: fine) { .ed-handle { width: 24px; height: 24px; margin: -12px 0 0 -12px; } .ed-handle::after { left: 6px; top: 6px; width: 12px; height: 12px; } }
+.pos-bar { flex-wrap: wrap; height: auto; min-height: 52px; padding: 7px 8px 7px 16px; }
+.pos-bar .btn svg { margin-right: -2px; }
+.modal.picker { width: min(720px, 100%); max-height: calc(100dvh - 48px); }
+.picker-note { margin: -6px 0 0; font-size: 14px; color: var(--sage); }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; overflow-y: auto; min-height: 120px; max-height: 52dvh; padding: 2px; }
+.picker-item { display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: transparent; text-align: left; }
+.picker-item img { width: 100%; aspect-ratio: 16 / 10; object-fit: contain; border-radius: 10px; background: var(--raised); outline: 2px solid transparent; outline-offset: 2px; }
+.picker-item:hover img, .picker-item:focus-visible img { outline-color: var(--cream); }
+.picker-item span { font-size: 12px; color: var(--sage); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

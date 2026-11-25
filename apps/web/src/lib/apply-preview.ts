@@ -1,8 +1,11 @@
 // The program page applying a live edit from the scene editor to the on-air frame's DOM.
-import type { SceneEdit } from "@viewswitcher/shared";
+import { isStructural, type SceneEdit } from "@viewswitcher/shared";
 
 /** The bits of an element and document this needs (so it can be tested without a browser). */
-export type PreviewTarget = { textContent: string | null; childElementCount: number; style: { left: string; top: string }; matches(sel: string): boolean; querySelector(sel: string): unknown };
+export type PreviewTarget = {
+  textContent: string | null; childElementCount: number; style: { left: string; top: string; width?: string; height?: string };
+  matches(sel: string): boolean; querySelector(sel: string): unknown; tagName?: string; setAttribute?(name: string, value: string): void;
+};
 export type PreviewDoc = {
   documentElement: { dataset: Record<string, string | undefined> };
   querySelector(sel: string): (PreviewTarget & { dataset?: Record<string, string | undefined> }) | null;
@@ -28,7 +31,19 @@ export function applyPreview(doc: PreviewDoc, hash: string, edit: SceneEdit): { 
     el.textContent = edit.text;
     return { slotMoved: false };
   }
-  el.style.left = `${edit.left}px`;
-  el.style.top = `${edit.top}px`;
+  if ("src" in edit) {
+    // Only an image, and only a library file (the server checked the path when it took the preview).
+    if (el.tagName?.toLowerCase() !== "img" || !edit.src.startsWith("/library/")) return null;
+    el.setAttribute?.("src", edit.src);
+    return { slotMoved: false };
+  }
+  // Adding and deleting reach the stream as the saved file (it swaps in without a transition).
+  if (isStructural(edit)) return null;
+  if ("width" in edit) {
+    el.style.width = `${edit.width}px`;
+    el.style.height = `${edit.height}px`;
+  }
+  if (edit.left !== undefined) el.style.left = `${edit.left}px`;
+  if (edit.top !== undefined) el.style.top = `${edit.top}px`;
   return { slotMoved: el.matches("[data-slot]") || !!el.querySelector("[data-slot]") };
 }

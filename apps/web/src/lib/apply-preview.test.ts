@@ -42,3 +42,23 @@ describe("applyPreview", () => {
     expect(parent.textContent).toBe("old");
   });
 });
+
+describe("applyPreview for resizing and images (EDIT-17 · EDIT-18)", () => {
+  test("a resize changes the box (and moves it from another corner); a slot reports again", () => {
+    const cam = el(0, true);
+    const d = doc("v1", { 4: cam });
+    expect(applyPreview(d, "v1", { id: 4, width: 480, height: 270, left: 10 })).toEqual({ slotMoved: true });
+    expect(cam.style).toEqual({ left: "10px", top: "2px", width: "480px", height: "270px" });
+  });
+  test("an image's src changes live, only to a library file; adding and deleting wait for the saved file", () => {
+    let src = "a.png";
+    const img = { ...el(), tagName: "IMG", setAttribute: (_n: string, v: string) => { src = v; } };
+    const d = doc("v1", { 5: img, 6: el() });
+    expect(applyPreview(d, "v1", { id: 5, src: "/library/o/assets/b.png" })).toEqual({ slotMoved: false });
+    expect(src).toBe("/library/o/assets/b.png");
+    expect(applyPreview(d, "v1", { id: 5, src: "https://x/y.png" })).toBeNull();
+    expect(applyPreview(d, "v1", { id: 6, src: "/library/o/assets/b.png" })).toBeNull();
+    expect(applyPreview(d, "v1", { id: 6, remove: true })).toBeNull();
+    expect(applyPreview(d, "v1", { id: 6, insert: "<p>x</p>" })).toBeNull();
+  });
+});

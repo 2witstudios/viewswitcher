@@ -228,10 +228,11 @@ export function textOf(html: string, el: ScannedElement): string {
 
 // ---------------------------------------------------------------- position
 
-/** The inline style's `left` and `top` in px, with their number ranges, or null if it has neither as px. */
-export function positionOf(html: string, el: ScannedElement): { left: number; top: number; leftAt: [number, number]; topAt: [number, number] } | null {
+/** The px value of each of `props` in the element's inline style (the declaration that wins), with its number's range. */
+export function pxProps<P extends string>(html: string, el: ScannedElement, props: readonly P[]): Partial<Record<P, { n: number; at: [number, number] }>> {
+  const out: Partial<Record<P, { n: number; at: [number, number] }>> = {};
   const style = el.attrs.find((a) => a.name === "style" && a.valueStart >= 0);
-  if (!style) return null;
+  if (!style) return out;
   // Comments (outside quotes) become spaces of the same length, so offsets hold.
   const raw = html.slice(style.valueStart, style.valueEnd);
   let value = "";
@@ -269,7 +270,7 @@ export function positionOf(html: string, el: ScannedElement): { left: number; to
   }
   decls.push([from, value.length]);
   // The declaration that wins: !important over normal, then the last one. If the winner isn't
-  // plain px (%, calc(), var()), the element can't be dragged.
+  // plain px (%, calc(), var()), the property can't be edited.
   const pick = (prop: string) => {
     let win: { important: boolean; px: { at: [number, number]; n: number } | null } | null = null;
     for (const [a, b] of decls) {
@@ -283,15 +284,51 @@ export function positionOf(html: string, el: ScannedElement): { left: number; to
     }
     return win?.px ?? null;
   };
-  const l = pick("left");
-  const t = pick("top");
+  for (const prop of props) {
+    const v = pick(prop);
+    if (v) out[prop] = v;
+  }
+  return out;
+}
+
+/** The inline style's `left` and `top` in px, with their number ranges, or null if it has neither as px. */
+export function positionOf(html: string, el: ScannedElement): { left: number; top: number; leftAt: [number, number]; topAt: [number, number] } | null {
+  const { left: l, top: t } = pxProps(html, el, ["left", "top"] as const);
   if (!l || !t) return null;
   return { left: l.n, top: t.n, leftAt: l.at, topAt: t.at };
 }
 
+/** The inline style's `width` and `height` in px (both needed), with their number ranges, or null. */
+export function sizeOf(html: string, el: ScannedElement): { width: number; height: number; widthAt: [number, number]; heightAt: [number, number] } | null {
+  const { width: w, height: h } = pxProps(html, el, ["width", "height"] as const);
+  if (!w || !h) return null;
+  return { width: w.n, height: h.n, widthAt: w.at, heightAt: h.at };
+}
+
 // ---------------------------------------------------------------- edits
 
-export type SceneEdit = { id: number; text: string } | { id: number; left: number; top: number };
+export type TextEdit = { id: number; text: string };
+export type MoveEdit = { id: number; left: number; top: number };
+/** New width and height; resizing from a corner other than bottom-right also moves the box (left/top). */
+export type SizeEdit = { id: number; width: number; height: number; left?: number; top?: number };
+/** One new element (`insert` is its markup) inside element `id`: before its child `before`, else as its last child. */
+export type InsertEdit = { id: number; insert: string; before?: number; /** Whitespace before it (default: a new line, indented like its neighbours). */ lead?: string };
+export type RemoveEdit = { id: number; remove: true };
+/** An image's src. */
+export type SrcEdit = { id: number; src: string };
+export type SceneEdit = TextEdit | MoveEdit | SizeEdit | InsertEdit | RemoveEdit | SrcEdit;
+export type EditKind = "text" | "move" | "size" | "insert" | "remove" | "src";
+
+export function editKind(e: SceneEdit): EditKind {
+  if ("text" in e) return "text";
+  if ("insert" in e) return "insert";
+  if ("remove" in e) return "remove";
+  if ("src" in e) return "src";
+  if ("width" in e) return "size";
+  return "move";
+}
+/** Adds or removes elements, so element ids after it change (see idsAfter). */
+export const isStructural = (e: SceneEdit): e is InsertEdit | RemoveEdit => "insert" in e || "remove" in e;
 
 export class EditError extends Error {}
 
@@ -299,29 +336,174 @@ type Patch = { from: number; to: number; text: string };
 
 const formatPx = (n: number) => String(Math.round(n * 100) / 100);
 
+/** Tags and attributes the editor never adds: nothing it inserts can run code or load another page. */
+const UNSAFE_TAGS = new Set(["script", "style", "iframe", "frame", "frameset", "object", "embed", "applet", "link", "meta", "base", "form", "input", "button", "textarea", "select", "title", "noscript", "template", "svg", "math", "xmp", "noembed", "noframes"]);
+
+const URL_ATTRS = new Set(["src", "href", "poster", "data", "action", "xlink:href", "background", "cite", "longdesc", "manifest", "ping"]);
+
+/** A path to a file in the library (`/library/<org>/…`), with nothing a scene attribute or the server would trip over. */
+export function isLibraryUrl(src: string): boolean {
+  if (typeof src !== "string" || !src.startsWith("/library/") || src.length > 600 || !/^[^\s"'<>`\\]+$/.test(src)) return false;
+  let path = "";
+  try {
+    path = decodeURIComponent(src.slice("/library/".length).split(/[?#]/)[0]!);
+  } catch {
+    return false;
+  }
+  return path.split("/").every((part) => part !== "" && part !== ".." && !part.startsWith("."));
+}
+
+/** Why `markup` can't be inserted as one element, or null when it can. */
+export function checkInsert(markup: string): string | null {
+  if (typeof markup !== "string" || !markup) return "Nothing to add";
+  if (markup.length > 20_000) return "That's too big to add";
+  if (markup !== markup.trim() || markup.includes("<!--") || markup.includes("<![")) return "Not one element";
+  const els = scanElements(markup);
+  const top = els[0];
+  if (!top || top.start !== 0 || top.end !== markup.length || !top.closed || els.some((e, i) => i > 0 && e.parent === null)) return "Not one element";
+  for (const e of els) {
+    if (!e.closed) return "Not one element";
+    if (UNSAFE_TAGS.has(e.tag)) return `The editor doesn't add <${e.tag}>`;
+    for (const a of e.attrs) {
+      if (a.name.startsWith("on") || a.name === "srcdoc" || a.name === "formaction" || a.name === "srcset" || !/^[a-z][\w:.-]*$/.test(a.name)) return `The editor doesn't add ${a.name}`;
+      const decoded = a.valueStart >= 0 ? decodeEntities(markup.slice(a.valueStart, a.valueEnd)) : "";
+      // A character reference this decoder doesn't know (&colon;, &Tab;…) could hide anything from the checks below.
+      if (/&(#|[a-z])/i.test(decoded)) return "The editor doesn't add that";
+      const v = decoded.replace(/[\s\u0000-\u001f]+/g, "").toLowerCase();
+      if (v.includes("javascript:") || v.includes("vbscript:")) return "The editor doesn't add links that run code";
+      // Pictures and links come from the library only, never another site.
+      if (URL_ATTRS.has(a.name) && !isLibraryUrl(decoded)) return "Images come from the library";
+      if (a.name === "style" && [...v.matchAll(/url\(\s*['"]?([^'")]*)/g)].some((m) => !isLibraryUrl(m[1]!))) return "Images come from the library";
+    }
+  }
+  return null;
+}
+
+/** Where the content before index `at` ends inside `into`: back over the whitespace before it. */
+function contentEnd(html: string, into: ScannedElement, at: number) {
+  let p = at;
+  while (p > into.innerStart && isSpace(html[p - 1])) p--;
+  return p;
+}
+
+/** The indentation of the line `el` starts on, when nothing but spaces comes before it there. */
+function indentOf(html: string, el: ScannedElement): string | null {
+  let q = el.start;
+  while (q > 0 && (html[q - 1] === " " || html[q - 1] === "\t")) q--;
+  return q === 0 || html[q - 1] === "\n" ? html.slice(q, el.start) : null;
+}
+
+/** Elements inside `el` and itself: ids el.id … el.id + count - 1. */
+const subtreeSize = (els: ScannedElement[], el: ScannedElement) => {
+  let k = el.id + 1;
+  while (k < els.length && els[k]!.start < el.end) k++;
+  return k - el.id;
+};
+
+/**
+ * An element goes in right after the content before its place (the end of `into`'s content, or what
+ * comes before `before`), preceded by `lead`: by default a line break and the indentation of its
+ * neighbours. Removing an element takes it and the whitespace before it, and `restoreFor` gives that
+ * whitespace back as `lead`, so delete then Undo leaves the file byte for byte as it was.
+ */
+function insertPatch(html: string, els: ScannedElement[], edit: InsertEdit, check = true): Patch {
+  const into = els[edit.id];
+  if (!into || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!into.closed || VOID.has(into.tag) || RAW.has(into.tag) || into.tag === "html") throw new EditError(`Nothing can go inside <${into.tag}>`);
+  const why = check ? checkInsert(edit.insert) : null;
+  if (why) throw new EditError(why);
+  if (edit.lead !== undefined && (typeof edit.lead !== "string" || !/^[ \t\r\n]{0,400}$/.test(edit.lead))) throw new EditError("Bad spacing");
+  const nl = html.includes("\r\n") ? "\r\n" : "\n";
+  if (edit.before !== undefined) {
+    const b = els[edit.before];
+    if (!b || !Number.isInteger(edit.before) || b.parent !== into.id) throw new EditError("That isn't a place inside this element");
+    const p = contentEnd(html, into, b.start);
+    const indent = indentOf(html, b);
+    const lead = edit.lead ?? (indent !== null && /\n/.test(html.slice(p, b.start)) ? nl + indent : "");
+    return { from: p, to: p, text: lead + edit.insert };
+  }
+  const p = contentEnd(html, into, into.innerEnd);
+  let lead = edit.lead;
+  if (lead === undefined) {
+    const run = html.slice(p, into.innerEnd);
+    const kids = els.filter((e) => e.parent === into.id);
+    const last = kids[kids.length - 1];
+    const indent = last ? indentOf(html, last) : null;
+    // The indentation of its last child on a line of its own, else the end tag's plus two spaces.
+    lead = !run.includes("\n") ? "" : nl + (indent ?? `${run.slice(run.lastIndexOf("\n") + 1)}  `);
+  }
+  return { from: p, to: p, text: lead + edit.insert };
+}
+
 function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch[] {
   const el = els[edit.id];
   if (!el || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
-  if ("text" in edit) {
-    if (!el.leaf) throw new EditError(`<${el.tag}> isn't plain text`);
-    if (typeof edit.text !== "string") throw new EditError("Text must be a string");
-    const text = edit.text.replace(/[\r\n]+/g, " ");
-    // Empty text would leave nothing to click (or edit) next time.
-    if (!text.trim()) throw new EditError("Text can't be empty"); // JS trim: a lone &nbsp; is empty too
-    if (textOf(html, el) === collapseHtmlSpace(text)) return [];
-    // Keep the source's own leading and trailing whitespace (indentation).
-    const inner = html.slice(el.innerStart, el.innerEnd);
-    const lead = inner.length - inner.replace(/^[ \t\n\r\f]+/, "").length;
-    const trail = inner.length - inner.replace(/[ \t\n\r\f]+$/, "").length;
-    return [{ from: el.innerStart + lead, to: el.innerEnd - trail, text: escapeText(text) }];
+  switch (editKind(edit)) {
+    case "text": {
+      const { text: raw } = edit as TextEdit;
+      if (!el.leaf) throw new EditError(`<${el.tag}> isn't plain text`);
+      if (typeof raw !== "string") throw new EditError("Text must be a string");
+      const text = raw.replace(/[\r\n]+/g, " ");
+      // Empty text would leave nothing to click (or edit) next time.
+      if (!text.trim()) throw new EditError("Text can't be empty"); // JS trim: a lone &nbsp; is empty too
+      if (textOf(html, el) === collapseHtmlSpace(text)) return [];
+      // Keep the source's own leading and trailing whitespace (indentation).
+      const inner = html.slice(el.innerStart, el.innerEnd);
+      const lead = inner.length - inner.replace(/^[ \t\n\r\f]+/, "").length;
+      const trail = inner.length - inner.replace(/[ \t\n\r\f]+$/, "").length;
+      return [{ from: el.innerStart + lead, to: el.innerEnd - trail, text: escapeText(text) }];
+    }
+    case "move": {
+      const { left, top } = edit as MoveEdit;
+      if (!Number.isFinite(left) || !Number.isFinite(top)) throw new EditError("Position must be numbers");
+      const pos = positionOf(html, el);
+      if (!pos) throw new EditError(`<${el.tag}> has no inline left/top in px`);
+      return [
+        { from: pos.leftAt[0], to: pos.leftAt[1], text: formatPx(left) },
+        { from: pos.topAt[0], to: pos.topAt[1], text: formatPx(top) },
+      ].filter((p) => html.slice(p.from, p.to) !== p.text);
+    }
+    case "size": {
+      const { width, height, left, top } = edit as SizeEdit;
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) throw new EditError("Size must be positive numbers");
+      const size = sizeOf(html, el);
+      if (!size) throw new EditError(`<${el.tag}> has no inline width/height in px`);
+      const out = [
+        { from: size.widthAt[0], to: size.widthAt[1], text: formatPx(width) },
+        { from: size.heightAt[0], to: size.heightAt[1], text: formatPx(height) },
+      ];
+      if (left !== undefined || top !== undefined) {
+        const pos = positionOf(html, el);
+        if (!pos) throw new EditError(`<${el.tag}> has no inline left/top in px`);
+        if (left !== undefined) {
+          if (!Number.isFinite(left)) throw new EditError("Position must be numbers");
+          out.push({ from: pos.leftAt[0], to: pos.leftAt[1], text: formatPx(left) });
+        }
+        if (top !== undefined) {
+          if (!Number.isFinite(top)) throw new EditError("Position must be numbers");
+          out.push({ from: pos.topAt[0], to: pos.topAt[1], text: formatPx(top) });
+        }
+      }
+      return out.filter((p) => html.slice(p.from, p.to) !== p.text);
+    }
+    case "src": {
+      const { src } = edit as SrcEdit;
+      if (el.tag !== "img") throw new EditError(`<${el.tag}> isn't an image`);
+      // With srcset the browser picks from that list, so a new src alone wouldn't show.
+      if (el.attrs.some((x) => x.name === "srcset")) throw new EditError("This image has several sizes (srcset): ask your agent to change it");
+      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
+      const a = el.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
+      if (!a) throw new EditError("This image has no src to replace");
+      return html.slice(a.valueStart, a.valueEnd) === src ? [] : [{ from: a.valueStart, to: a.valueEnd, text: src }];
+    }
+    case "insert":
+      return [insertPatch(html, els, edit as InsertEdit)];
+    case "remove": {
+      if (el.parent === null || ["html", "head", "body"].includes(el.tag)) throw new EditError(`<${el.tag}> can't be deleted`);
+      if (!el.closed) throw new EditError(`<${el.tag}> has no end tag, so it can't be deleted here`);
+      return [{ from: contentEnd(html, els[el.parent]!, el.start), to: el.end, text: "" }];
+    }
   }
-  if (!Number.isFinite(edit.left) || !Number.isFinite(edit.top)) throw new EditError("Position must be numbers");
-  const pos = positionOf(html, el);
-  if (!pos) throw new EditError(`<${el.tag}> has no inline left/top in px`);
-  return [
-    { from: pos.leftAt[0], to: pos.leftAt[1], text: formatPx(edit.left) },
-    { from: pos.topAt[0], to: pos.topAt[1], text: formatPx(edit.top) },
-  ].filter((p) => html.slice(p.from, p.to) !== p.text);
 }
 
 /**
@@ -341,6 +523,86 @@ export function applyEdits(html: string, edits: SceneEdit[]): string {
 
 export const setText = (html: string, id: number, text: string) => applyEdits(html, [{ id, text }]);
 export const setPosition = (html: string, id: number, left: number, top: number) => applyEdits(html, [{ id, left, top }]);
+export const setSize = (html: string, id: number, width: number, height: number, at?: { left?: number; top?: number }) =>
+  applyEdits(html, [{ id, width, height, ...at }]);
+/** Insert one element into element `into` (before its child `before`, else last). Its id is `idsAfter(...).added`. */
+export const insertElement = (html: string, into: number, markup: string, before?: number) =>
+  applyEdits(html, [before === undefined ? { id: into, insert: markup } : { id: into, insert: markup, before }]);
+export const removeElement = (html: string, id: number) => applyEdits(html, [{ id, remove: true }]);
+
+/**
+ * Element ids once a structural edit is applied to `html`: `map` takes an id from before to after
+ * (null: removed), and `added` is the inserted element's id.
+ */
+export function idsAfter(html: string, edit: InsertEdit | RemoveEdit): { map: (id: number) => number | null; added: number | null } {
+  const els = scanElements(html);
+  if ("insert" in edit) {
+    const at = insertPatch(html, els, edit, false).from;
+    let n = 0;
+    while (n < els.length && els[n]!.start < at) n++;
+    const count = scanElements(edit.insert).length;
+    return { map: (id) => (id < n ? id : id + count), added: n };
+  }
+  const el = els[edit.id];
+  if (!el) throw new EditError(`No element ${edit.id} in this scene`);
+  const count = subtreeSize(els, el);
+  return { map: (id) => (id < el.id ? id : id < el.id + count ? null : id - count), added: null };
+}
+
+/** The edit that puts element `id` back where it is, after removing it (ids as they are after the removal). */
+export function restoreFor(html: string, id: number): InsertEdit {
+  const els = scanElements(html);
+  const el = els[id];
+  if (!el || el.parent === null) throw new EditError(`No element ${id} to put back`);
+  const count = subtreeSize(els, el);
+  const next = els.find((e) => e.parent === el.parent && e.start >= el.end);
+  const insert = html.slice(el.start, el.end);
+  const lead = html.slice(contentEnd(html, els[el.parent]!, el.start), el.start);
+  return next ? { id: el.parent, insert, before: next.id - count, lead } : { id: el.parent, insert, lead };
+}
+
+/**
+ * Whether the editor can delete element `id` with an Undo that puts back exactly what was there:
+ * nothing it couldn't insert again (scripts, forms…), and a place it can find again.
+ */
+export function canRemove(html: string, id: number): boolean {
+  try {
+    const els = scanElements(html);
+    const el = els[id];
+    if (!el || el.parent === null || ["html", "head", "body"].includes(el.tag) || id === sceneRoot(html)) return false;
+    const back = restoreFor(html, id);
+    return checkInsert(back.insert) === null && applyEdits(removeElement(html, id), [back]) === html;
+  } catch {
+    return false;
+  }
+}
+
+/** The element new things go into: the scene's root (class "scene"), else <body>. */
+export function sceneRoot(html: string): number | null {
+  const els = scanElements(html);
+  const cls = (e: ScannedElement) => {
+    const a = e.attrs.find((x) => x.name === "class" && x.valueStart >= 0);
+    return a ? html.slice(a.valueStart, a.valueEnd).split(/\s+/) : [];
+  };
+  const root = els.find((e) => e.closed && cls(e).includes("scene")) ?? els.find((e) => e.tag === "body" && e.closed);
+  return root?.id ?? null;
+}
+
+/** The scene's <title> set to `name` (added at the top of <head> when there's none). */
+export function setTitle(html: string, name: string): string {
+  const clean = collapseHtmlSpace(String(name ?? "").replace(/[\r\n]+/g, " "));
+  if (!clean.trim()) throw new EditError("A scene needs a name");
+  if (clean.length > 120) throw new EditError("That name is too long");
+  const els = scanElements(html);
+  const title = els.find((e) => e.tag === "title" && e.closed);
+  const text = escapeText(clean);
+  if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
+  const head = els.find((e) => e.tag === "head" && e.closed);
+  if (!head) throw new EditError("This scene has no <head> for a title: ask your agent to rename it");
+  const first = els.find((e) => e.parent === head.id);
+  const p = insertPatch(html, els, first ? { id: head.id, insert: `<title>${text}</title>`, before: first.id } : { id: head.id, insert: `<title>${text}</title>` }, false);
+  return html.slice(0, p.from) + p.text + html.slice(p.to);
+}
 
 /** Where the version stamp goes: the root <html>, else (a bare fragment) the first top-level element. */
 function stampedElement(els: ScannedElement[]): number | null {
@@ -421,6 +683,11 @@ export function changedElements(prev: string, next: string): number[] {
  * editor then says the change can't go there. Never replays onto a guess.
  */
 export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit | null {
+  // Something added to the scene goes into the new version's scene too (at the end: where it was may be gone).
+  if ("insert" in edit) {
+    const from = sceneRoot(prev), to = sceneRoot(next);
+    return from === edit.id && to !== null ? { id: to, insert: edit.insert } : null;
+  }
   const a = scanElements(prev);
   const el = a[edit.id];
   if (!el) return null;
@@ -430,7 +697,9 @@ export function retarget(prev: string, next: string, edit: SceneEdit): SceneEdit
   const text = el.leaf ? textOf(prev, el) : null;
   const b = scanElements(next);
   const sameTag = b.filter((e) => e.tag === el.tag);
-  const fits = (html: string, e: ScannedElement) => ("text" in edit ? e.leaf : positionOf(html, e) !== null);
+  const kind = editKind(edit);
+  const fits = (html: string, e: ScannedElement) =>
+    kind === "text" ? e.leaf : kind === "move" ? positionOf(html, e) !== null : kind === "size" ? sizeOf(html, e) !== null && (("left" in edit && edit.left !== undefined) || ("top" in edit && edit.top !== undefined) ? positionOf(html, e) !== null : true) : kind === "src" ? e.tag === "img" : true;
   const sameOpen = sameTag.filter((e) => next.slice(e.start, e.openEnd) === open && fits(next, e));
   const twin = (html: string, els: ScannedElement[], e: ScannedElement) =>
     html.slice(e.start, e.openEnd) === open && (text === null || (e.leaf && textOf(html, e) === text)) && parentOpen(html, els, e) === parentOpen(prev, a, el);

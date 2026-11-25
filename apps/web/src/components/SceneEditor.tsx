@@ -1,8 +1,12 @@
-// The scene editor: retype text in place and drag panels and camera boxes, live on stream when the
-// scene is on air. Every finished change (Return, letting go) is saved as a source-range patch on the
-// server; the browser DOM is never written back. See packages/shared/src/html-scan.ts.
-import { applyEdits, changedElements, collapseHtmlSpace, positionOf, retarget, scanElements, shortDate, snapMove, textOf, untagForEdit } from "@viewswitcher/shared";
-import type { Box, Library, ScannedElement, SceneEdit } from "@viewswitcher/shared";
+// The scene editor: retype text in place, drag and resize panels and camera boxes, add and delete
+// things and swap images, live on stream when the scene is on air. Every finished change (Return,
+// letting go, choosing from Add) is saved as a source-range patch on the server; the browser DOM is
+// never written back. See packages/shared/src/html-scan.ts.
+import {
+  applyEdits, canRemove, changedElements, collapseHtmlSpace, decodeEntities, DEVICE_SLOTS, freeSlotName, isLibraryUrl, editKind, idsAfter, isStructural, markupFor, positionOf, restoreFor, retarget,
+  scanElements, sceneRoot, setTitle, shortDate, sizeOf, snapMove, textOf, untagForEdit,
+} from "@viewswitcher/shared";
+import type { AddKind, Box, InsertEdit, Library, RemoveEdit, ScannedElement, SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, SceneConflict } from "../lib/api";
@@ -24,8 +28,11 @@ const HEARTBEAT_MS = 2000; // resend an unsaved live change, so the program page
 
 type Base = { source: string; hash: string; els: ScannedElement[] };
 type UndoEntry = { before: SceneEdit; after: SceneEdit };
-type Hit = { leaf: number | null; move: number | null };
+type Hit = { leaf: number | null; move: number | null; image: number | null };
 type Pos = { left: number; top: number };
+type Size = { width: number; height: number };
+type Corner = "nw" | "ne" | "sw" | "se";
+const MIN_SIZE = 24;
 
 const toBase = ({ html, hash }: { html: string; hash: string }): Base => {
   const source = untagForEdit(html);
@@ -33,12 +40,34 @@ const toBase = ({ html, hash }: { html: string; hash: string }): Base => {
 };
 const posIn = (b: Base, id: number) => (b.els[id] ? positionOf(b.source, b.els[id]!) : null);
 const movableIn = (b: Base, id: number) => !["html", "head", "body"].includes(b.els[id]?.tag ?? "html") && posIn(b, id) !== null;
+const sizeIn = (b: Base, id: number) => (b.els[id] ? sizeOf(b.source, b.els[id]!) : null);
+const attrIn = (b: Base, id: number, name: string) => {
+  const a = b.els[id]?.attrs.find((x) => x.name === name);
+  return a && a.valueStart >= 0 ? b.source.slice(a.valueStart, a.valueEnd) : null;
+};
+/** Camera, screen and guest boxes: the OBS sources go in them. */
+const isSlot = (b: Base, id: number) => attrIn(b, id, "data-slot") !== null;
+/** The scene's own <title>, as the browser shows it. */
+const titleIn = (b: Base) => {
+  const t = b.els.find((e) => e.tag === "title" && e.closed);
+  return t ? collapseHtmlSpace(decodeEntities(b.source.slice(t.innerStart, t.innerEnd))) || null : null;
+};
+const slotsIn = (b: Base) => b.els.flatMap((e) => attrIn(b, e.id, "data-slot") ?? []);
 /** The value an edit would put back: the element's text or position in `b`. */
 function valueIn(b: Base, edit: SceneEdit): SceneEdit | null {
   const el = b.els[edit.id];
   if (!el) return null;
   if ("text" in edit) return el.leaf ? { id: edit.id, text: textOf(b.source, el) } : null;
+  if ("src" in edit) {
+    const src = attrIn(b, edit.id, "src");
+    return el.tag === "img" && src !== null ? { id: edit.id, src } : null;
+  }
+  if (isStructural(edit)) return null;
   const p = posIn(b, edit.id);
+  if ("width" in edit) {
+    const z = sizeIn(b, edit.id);
+    return z && (p || (edit.left === undefined && edit.top === undefined)) ? { id: edit.id, width: z.width, height: z.height, ...(p && edit.left !== undefined ? { left: p.left } : {}), ...(p && edit.top !== undefined ? { top: p.top } : {}) } : null;
+  }
   return p ? { id: edit.id, left: p.left, top: p.top } : null;
 }
 
@@ -58,6 +87,7 @@ function nameOf(b: Base, id: number): string {
     const label = b.els.find((c) => c.leaf && c.start > e.start && c.end <= e.end && textOf(b.source, c).length <= 24);
     return label ? `${textOf(b.source, label).replace(/^\w/, (c) => c.toUpperCase())} panel` : "Panel";
   };
+  if (el.tag === "img") return "Image";
   if (!el.leaf) return container(el);
   const word = /^h[1-6]$/.test(el.tag) ? "title" : el.tag === "p" ? "text" : "label";
   let up = el.parent;
@@ -66,7 +96,21 @@ function nameOf(b: Base, id: number): string {
 }
 
 function describe(b: Base, edit: SceneEdit) {
-  return "text" in edit ? { what: nameOf(b, edit.id), value: edit.text } : { what: nameOf(b, edit.id), value: `x ${edit.left} · y ${edit.top}` };
+  const what = nameOf(b, edit.id);
+  switch (editKind(edit)) {
+    case "text": return { what, value: (edit as { text: string }).text };
+    case "insert": return { what: "Scene", value: "something you added" };
+    case "remove": return { what, value: "deleted" };
+    case "src": return { what, value: "a new picture" };
+    case "size": {
+      const e = edit as { width: number; height: number };
+      return { what, value: `${e.width} × ${e.height}` };
+    }
+    default: {
+      const e = edit as { left: number; top: number };
+      return { what, value: `x ${e.left} · y ${e.top}` };
+    }
+  }
 }
 
 async function copyText(text: string) {
@@ -102,10 +146,17 @@ const Icon = {
   copy: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a1 1 0 011-1h9" /></svg>,
   move: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18" /><path d="M3 12h18" /><path d="M9 6l3-3 3 3" /><path d="M9 18l3 3 3-3" /><path d="M6 9l-3 3 3 3" /><path d="M18 9l3 3-3 3" /></svg>,
   text: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V5h16v2" /><path d="M12 5v14" /><path d="M9 19h6" /></svg>,
+  plus: <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14" /><path d="M5 12h14" /></svg>,
+  trash: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12" /><path d="M9 7V4h6v3" /></svg>,
+  image: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-9 9" /></svg>,
+  title: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 16.5h7" /></svg>,
+  camera: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="M16 10l5-3v10l-5-3" /></svg>,
+  screen: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8" /><path d="M12 16v4" /></svg>,
+  guest: <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0116 0" /></svg>,
   changed: <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 11-3-6.7" /><path d="M21 4v5h-5" /></svg>,
 };
 
-export function SceneEditor({ org, path }: { org: string; path: string }) {
+export function SceneEditor({ org, path, rename = false }: { org: string; path: string; /** Open with the name ready to retype (a fresh copy). */ rename?: boolean }) {
   const navigate = useNavigate();
   const router = useRouter();
   const { data: library } = useLibrary(org);
@@ -114,6 +165,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const onAirRef = useRef(onAir);
   onAirRef.current = onAir;
   const place = placeOf(library, path);
+  const isTemplate = path.startsWith(`${org}/templates/`);
 
   const [base, setBaseState] = useState<Base | null>(null);
   const baseRef = useRef<Base | null>(null);
@@ -141,6 +193,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const [drag, setDrag] = useState<{ id: number; left: number; top: number; guides: { x: number[]; y: number[] } } | null>(null);
   const [undo, setUndo] = useState<UndoEntry[]>([]);
   const [conflict, setConflict] = useState<{ edits: SceneEdit[]; changed: number[]; prev: Base; latest: Base } | null>(null);
+  const [resizing, setResizing] = useState<{ id: number; width: number; height: number } | null>(null);
+  /** Adding or deleting: saved before the scene on screen changes, so nothing else happens meanwhile. */
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [addOpen, setAddOpen] = useState(false);
+  /** Choosing a picture from the org's assets: for a new image, or to replace image `id`. */
+  const [picker, setPicker] = useState<{ replace: number | null } | null>(null);
   const [, setTick] = useState(0);
   const redraw = () => setTick((t) => t + 1);
   /** Where each movable element was when the editor opened, for Put it back. */
@@ -227,13 +286,27 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const top = parseFloat(el?.style.top ?? "");
     return { left: Number.isFinite(left) ? left : p.left, top: Number.isFinite(top) ? top : p.top };
   };
+  const sizeNow = (id: number): Size | null => {
+    const el = node(id);
+    const b = baseRef.current;
+    const z = b ? sizeIn(b, id) : null;
+    if (!z) return null;
+    const width = parseFloat(el?.style.width ?? "");
+    const height = parseFloat(el?.style.height ?? "");
+    return { width: Number.isFinite(width) ? width : z.width, height: Number.isFinite(height) ? height : z.height };
+  };
   const applyDom = (edit: SceneEdit) => {
     const el = node(edit.id);
     if (!el) return;
     if ("text" in edit) el.textContent = edit.text;
-    else {
-      el.style.left = `${edit.left}px`;
-      el.style.top = `${edit.top}px`;
+    else if ("src" in edit) el.setAttribute("src", edit.src);
+    else if (!isStructural(edit)) {
+      if ("width" in edit) {
+        el.style.width = `${edit.width}px`;
+        el.style.height = `${edit.height}px`;
+      }
+      if (edit.left !== undefined) el.style.left = `${edit.left}px`;
+      if (edit.top !== undefined) el.style.top = `${edit.top}px`;
     }
     redraw();
   };
@@ -242,7 +315,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const hit = (x: number, y: number): Hit => {
     const b = baseRef.current;
     const d = doc();
-    const out: Hit = { leaf: null, move: null };
+    const out: Hit = { leaf: null, move: null, image: null };
     if (!b || !d) return out;
     let el: Element | null = d.elementFromPoint(x, y);
     while (el) {
@@ -250,6 +323,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       if (Number.isInteger(id) && b.els[id]) {
         if (out.leaf === null && out.move === null && b.els[id]!.leaf) out.leaf = id;
         if (out.move === null && movableIn(b, id)) out.move = id;
+        if (out.image === null && (out.move === null || out.move === id) && b.els[id]!.tag === "img") out.image = id;
       }
       el = el.parentElement;
     }
@@ -258,7 +332,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   // ------------------------------------------------------------ live preview (on air only) and saving
 
-  const pending = useRef(new Map<number, { edit: SceneEdit; gen: number }>());
+  const pending = useRef(new Map<string, { edit: SceneEdit; gen: number }>());
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** The latest live change not saved yet (typing, mid-drag, nudging); resent as a heartbeat. */
   const unsaved = useRef<{ edit: SceneEdit; gen: number } | null>(null);
@@ -271,7 +345,9 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (gen !== generation.current) return;
     unsaved.current = { edit, gen };
     if (!onAirRef.current) return;
-    pending.current.set(edit.id * 2 + ("text" in edit ? 0 : 1), { edit, gen });
+    if (isStructural(edit)) return; // reaches the stream as the saved file
+    const kind = editKind(edit);
+    pending.current.set(`${edit.id}:${kind === "text" ? "t" : kind === "src" ? "s" : "p"}`, { edit, gen });
     if (previewTimer.current) return;
     const flush = () => {
       const items = [...pending.current.values()].filter((p) => p.gen === generation.current);
@@ -351,7 +427,115 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     change(next, { id, ...now });
   };
 
+  const setBoxSize = (id: number, width: number, height: number) => {
+    const now = sizeNow(id);
+    const next = { id, width: Math.max(MIN_SIZE, Math.round(width)), height: Math.max(MIN_SIZE, Math.round(height)) };
+    if (!now || (now.width === next.width && now.height === next.height)) return;
+    change(next, { id, ...now });
+  };
+
+  // ------------------------------------------------------------ adding and deleting (EDIT-16 · EDIT-17)
+
+  /**
+   * Add or delete an element. Unlike other changes, element ids after it change, so it's saved first
+   * (after every change before it), and only then does the scene on screen follow: the frame's DOM
+   * gets the same change and its data-vs ids renumbered to match the saved file. The stream gets the
+   * saved file, which swaps in without a transition. Undo entries below it were made in the ids from
+   * before it, and are only reached once Undo has taken it back out, so they stay right.
+   */
+  /** Resolves to the inserted element's id (null for a delete) once saved and shown; to false if it didn't happen. */
+  const structural = async (edit: InsertEdit | RemoveEdit, record = true): Promise<{ added: number | null } | false> => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      flushNudge();
+      if (editingRef.current) finishRef.current(true);
+      // The edit's ids are from now: if waiting reloads the scene (a failed save before it), they may name something else.
+      const madeIn = generation.current;
+      await saverRef.current!.idle();
+      if (generation.current !== madeIn) return false;
+      const b = baseRef.current;
+      const d = doc();
+      if (!b || !d || conflictOpen.current || pendingConflict.current) return false;
+      let ids: ReturnType<typeof idsAfter>, undoIt: SceneEdit;
+      try {
+        ids = idsAfter(b.source, edit);
+        undoIt = "insert" in edit ? { id: ids.added!, remove: true } : restoreFor(b.source, edit.id);
+      } catch (e) {
+        toast((e as Error).message);
+        return false;
+      }
+      const gen = generation.current;
+      await save([edit], [], gen);
+      // Not saved (a conflict or an error reloaded the scene): nothing to show.
+      if (generation.current !== gen || baseRef.current === b) return false;
+      // The frame follows the saved file.
+      const gone = "remove" in edit ? node(edit.id) : null;
+      gone?.remove();
+      const nodes = [...d.querySelectorAll<HTMLElement>("[data-vs]")];
+      for (const n of nodes) {
+        const m = ids.map(Number(n.dataset.vs));
+        if (m !== null) n.dataset.vs = String(m);
+      }
+      if ("insert" in edit) {
+        const tpl = d.createElement("template");
+        tpl.innerHTML = edit.insert;
+        const fresh = tpl.content.firstElementChild as HTMLElement | null;
+        if (fresh) {
+          [fresh, ...fresh.querySelectorAll<HTMLElement>("*")].forEach((n, i) => (n.dataset.vs = String(ids.added! + i)));
+          const parent = node(edit.id);
+          const before = edit.before !== undefined ? node(ids.map(edit.before) ?? -1) : null;
+          parent?.insertBefore(fresh, before);
+        }
+      }
+      // Everything that names an element by id moves to the new ids.
+      const moved = new Map<number, Pos>();
+      origins.current.forEach((pos, id) => {
+        const m = ids.map(id);
+        if (m !== null) moved.set(m, pos);
+      });
+      origins.current = moved;
+      if (record) setUndo((u) => [...u, { before: undoIt, after: edit }]);
+      setHover(null);
+      setMenu(null);
+      if (ids.added !== null) {
+        const p = posIn(baseRef.current!, ids.added);
+        if (p) origins.current.set(ids.added, p);
+        setSelected(movableIn(baseRef.current!, ids.added) ? ids.added : null);
+      } else setSelected((sel) => (sel === null ? null : ids.map(sel)));
+      redraw();
+      return { added: ids.added };
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const add = (kind: AddKind, image?: { src: string; width: number; height: number }) => {
+    setAddOpen(false);
+    const b = baseRef.current;
+    if (!b) return;
+    const root = sceneRoot(b.source);
+    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.");
+    const slots = slotsIn(b);
+    const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
+    void structural({ id: root, insert: markupFor(kind, { slots, image }) }).then((done) => {
+      if (done && slot && onAirRef.current) toast(`On air: OBS puts its "${slot}" source in the new box`);
+      else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`This box asks OBS for a source named "${slot}"`);
+    });
+  };
+
+  const remove = (id: number) => {
+    const b = baseRef.current;
+    if (!b) return;
+    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.");
+    setMenu(null);
+    void structural({ id, remove: true }).then((done) => done && toast("Deleted. Undo puts it back."));
+  };
+
   const doUndo = () => {
+    if (busyRef.current) return;
     // A nudge still waiting to save is the latest change: Undo cancels it (nothing was saved yet).
     const n = nudge.current;
     if (n) {
@@ -364,6 +548,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const last = undo[undo.length - 1];
     if (!last) return;
     setUndo((u) => u.slice(0, -1));
+    if (isStructural(last.before)) {
+      void structural(last.before, false);
+      return;
+    }
     applyDom(last.before);
     preview(last.before);
     save([last.before]);
@@ -476,9 +664,10 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const b = baseRef.current;
     if (!onAirRef.current || !b) return;
     const g = gesture.current?.drag;
+    const r = gesture.current?.resize;
     const n = nudge.current;
     const e = editingRef.current;
-    const back = e ? { edit: { id: e.id, text: e.original }, gen: e.gen } : g ? { edit: { id: g.id, ...g.start }, gen: g.gen } : n ? { edit: n.before, gen: n.gen } : null;
+    const back = e ? { edit: { id: e.id, text: e.original }, gen: e.gen } : g ? { edit: { id: g.id, ...g.start }, gen: g.gen } : r ? { edit: { id: r.id, ...r.start }, gen: r.gen } : n ? { edit: n.before, gen: n.gen } : null;
     // A change from before a reload was never shown on this version, so there's nothing to put back.
     if (back && back.gen === generation.current) api.previewSceneBeacon(path, b.hash, back.edit);
   };
@@ -489,7 +678,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     const beat = setInterval(() => {
       const u = unsaved.current;
       const b = baseRef.current;
-      if (u && b && u.gen === generation.current && onAirRef.current && (editingRef.current || gesture.current?.drag || nudge.current)) {
+      if (u && b && u.gen === generation.current && onAirRef.current && (editingRef.current || gesture.current?.drag || gesture.current?.resize || nudge.current)) {
         api.previewScene(path, b.hash, u.edit).catch(() => {});
       }
     }, HEARTBEAT_MS);
@@ -508,6 +697,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   type Gesture = {
     pointerId: number; cx: number; cy: number; hit: Hit; moved: boolean; long: boolean; timer?: ReturnType<typeof setTimeout>;
     drag?: { id: number; start: Pos; rect: Box; others: Box[]; x0: number; y0: number; last: Pos; gen: number };
+    resize?: { id: number; corner: Corner; start: Pos & Size; x0: number; y0: number; last: Pos & Size; slot: boolean; gen: number };
   };
   const gesture = useRef<Gesture | null>(null);
   const lastTap = useRef<{ t: number; cx: number; cy: number; leaf: number | null } | null>(null);
@@ -525,9 +715,27 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   };
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (editing || conflict || !ready || e.button > 0) return;
+    if (editing || conflict || !ready || busyRef.current || e.button > 0) return;
     setMenu(null);
     const p = toScene(e);
+    // A corner handle of the selected box: resize it (EDIT-17).
+    const corner = (e.target as HTMLElement).closest?.("[data-corner]")?.getAttribute("data-corner") as Corner | null;
+    const b = baseRef.current;
+    if (corner && selected !== null && b) {
+      const pos = posNow(selected), size = sizeNow(selected);
+      if (pos && size) {
+        e.preventDefault();
+        flushNudge();
+        overlay.current!.setPointerCapture(e.pointerId);
+        const start = { ...pos, ...size };
+        gesture.current = {
+          pointerId: e.pointerId, cx: e.clientX, cy: e.clientY, hit: { leaf: null, move: selected, image: null }, moved: true, long: false,
+          resize: { id: selected, corner, start, x0: p.x, y0: p.y, last: start, slot: isSlot(b, selected), gen: generation.current },
+        };
+        setResizing({ id: selected, ...size });
+        return;
+      }
+    }
     const h = hit(p.x, p.y);
     overlay.current!.setPointerCapture(e.pointerId);
     const g: Gesture = { pointerId: e.pointerId, cx: e.clientX, cy: e.clientY, hit: h, moved: false, long: false };
@@ -542,6 +750,35 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gesture.current;
+    if (g?.resize && g.pointerId === e.pointerId) {
+      const r = g.resize;
+      const p = toScene(e);
+      const dx = p.x - r.x0, dy = p.y - r.y0;
+      const west = r.corner === "nw" || r.corner === "sw", north = r.corner === "nw" || r.corner === "ne";
+      let w = r.start.width + (west ? -dx : dx);
+      let h = r.start.height + (north ? -dy : dy);
+      // Device boxes keep 16:9 (the camera's own shape) unless Shift is held; sizes go on the 8 px grid.
+      if (r.slot && !e.shiftKey) {
+        w = Math.max(MIN_SIZE * 16 / 9, Math.abs(dx) * 9 >= Math.abs(dy) * 16 ? w : h * 16 / 9);
+        w = Math.round(w / 16) * 16;
+        h = (w * 9) / 16;
+      } else {
+        w = Math.max(MIN_SIZE, Math.round(w / 8) * 8);
+        h = Math.max(MIN_SIZE, Math.round(h / 8) * 8);
+      }
+      const next = {
+        width: Math.round(w), height: Math.round(h),
+        left: west ? r.start.left + r.start.width - Math.round(w) : r.start.left,
+        top: north ? r.start.top + r.start.height - Math.round(h) : r.start.top,
+      };
+      if (next.width === r.last.width && next.height === r.last.height && next.left === r.last.left && next.top === r.last.top) return;
+      r.last = next;
+      const edit = { id: r.id, width: next.width, height: next.height, ...(west ? { left: next.left } : {}), ...(north ? { top: next.top } : {}) };
+      applyDom(edit);
+      preview(edit, r.gen);
+      setResizing({ id: r.id, width: next.width, height: next.height });
+      return;
+    }
     if (!g || g.pointerId !== e.pointerId) {
       if (e.pointerType === "mouse" && !editing && ready) {
         const p = toScene(e);
@@ -596,6 +833,14 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!g || g.pointerId !== e.pointerId) return;
     gesture.current = null;
     clearTimeout(g.timer);
+    if (g.resize) {
+      const { id, start, last, gen, corner } = g.resize;
+      setResizing(null);
+      const west = corner === "nw" || corner === "sw", north = corner === "nw" || corner === "ne";
+      const pick = (v: Pos & Size) => ({ id, width: v.width, height: v.height, ...(west ? { left: v.left } : {}), ...(north ? { top: v.top } : {}) });
+      if (last.width !== start.width || last.height !== start.height) save([pick(last)], [{ before: pick(start), after: pick(last) }], gen);
+      return;
+    }
     if (g.drag) {
       const { id, start, last, gen } = g.drag;
       setDrag(null);
@@ -622,6 +867,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (!g || g.pointerId !== e.pointerId) return;
     gesture.current = null;
     clearTimeout(g.timer);
+    if (g.resize) {
+      const { id, start, gen } = g.resize;
+      applyDom({ id, ...start });
+      preview({ id, ...start }, gen);
+      setResizing(null);
+      return;
+    }
     if (g.drag) {
       applyDom({ id: g.drag.id, ...g.drag.start });
       preview({ id: g.drag.id, ...g.drag.start }, g.drag.gen);
@@ -647,6 +899,16 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.defaultPrevented) return; // already handled (e.g. Return/Esc in the text being typed)
+    // An add or delete is saving: element ids are about to change, so nothing may start on the old ones.
+    if (busyRef.current) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Backspace"].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) e.preventDefault();
+      return;
+    }
+    // The picture picker is open: it names an image by id, so the scene stays as it is until it closes.
+    if (picker) {
+      if (e.key === "Escape") setPicker(null);
+      return;
+    }
     if (editing) {
       if (e.key === "Escape") finishEdit(false);
       return;
@@ -659,8 +921,14 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
       return;
     }
     if (e.key === "Escape") {
-      if (menu) setMenu(null);
+      if (addOpen) setAddOpen(false);
+      else if (menu) setMenu(null);
       else setSelected(null);
+      return;
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && selected !== null && !conflict && !picker) {
+      e.preventDefault();
+      remove(selected);
       return;
     }
     const dirs: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -694,31 +962,42 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
 
   // ------------------------------------------------------------ conflict
 
-  const applyAgain = () => {
+  const applyAgain = async () => {
     if (!conflict) return;
     const { edits, prev } = conflict;
     const latest = baseRef.current ?? conflict.latest; // the newest version, if it moved on again
-    const moved = edits.map((e) => retarget(prev.source, latest.source, e));
+    const pairs = edits.map((e) => ({ e, m: retarget(prev.source, latest.source, e) }));
     conflictOpen.current = false;
     setConflict(null);
     // The ones that can be placed go through; the others are said so. (Their earlier live previews
     // were on the old version, which the stream already replaced.)
-    const lost = moved.filter((m) => m === null).length;
-    if (lost) toast(lost === moved.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
-    // Several lost changes to one element (a drag, then a nudge) become its last one.
+    const lost = pairs.filter((p) => p.m === null).length;
+    if (lost) toast(lost === pairs.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
+    // Several lost changes of one kind to one element (a drag, then a nudge) become its last one.
+    // Each goes as its own save: a move and a resize of one box both change its left.
     const last = new Map<string, SceneEdit>();
-    for (const e of moved) if (e) last.set(`${e.id}:${"text" in e ? "t" : "p"}`, e);
-    if (!last.size) return;
-    const again = [...last.values()];
-    const entries = again.flatMap((e) => {
+    for (const { m } of pairs) if (m && !isStructural(m)) last.set(`${m.id}:${editKind(m)}`, m);
+    for (const e of last.values()) {
       const before = valueIn(latest, e);
-      return before ? [{ before, after: e }] : [];
-    });
-    again.forEach((e) => {
       applyDom(e);
       preview(e);
-    });
-    save(again, entries);
+      save([e], before ? [{ before, after: e }] : []);
+    }
+    // Adding and deleting go through the same path as the first time (saved, then the frame follows),
+    // one at a time, each placed in the version as it is by then.
+    for (const { e, m } of pairs) {
+      if (!m || !isStructural(m)) continue;
+      const now = baseRef.current;
+      let again = now ? retarget(prev.source, now.source, e) : null;
+      // A box's slot name was picked against the old version: pick again if the new one already uses it.
+      if (now && again && "insert" in again) {
+        const taken = slotsIn(now);
+        const m = /data-slot="([^"]*)"/.exec(again.insert);
+        const base = m?.[1]?.replace(/ \d+$/, "");
+        if (m && base && taken.includes(m[1]!)) again = { ...again, insert: again.insert.replace(m[0], `data-slot="${freeSlotName(base, taken)}"`) };
+      }
+      if (again && isStructural(again)) await structural(again);
+    }
   };
   const keepNew = () => {
     if (!conflict) return;
@@ -754,6 +1033,49 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
     if (window.history.length > 1) router.history.back();
     else navigate({ to: "/$org", params: { org } });
   };
+  // ------------------------------------------------------------ rename (EDIT-19)
+
+  const [naming, setNaming] = useState(rename);
+  /** The new name until the library catches up. */
+  const [named, setNamed] = useState<string | null>(null);
+  // The file's own <title> first: right after a duplicate, the library hasn't caught up with the copy yet.
+  const shownTitle = named ?? (base && titleIn(base)) ?? place.title;
+  const doRename = (name: string) =>
+    attempt(async () => {
+      setNaming(false);
+      const clean = name.trim();
+      if (!clean || clean === shownTitle || busyRef.current) return;
+      if (editing) finishEdit(true);
+      flushNudge();
+      if (!(await settle())) return;
+      const b = baseRef.current;
+      if (!b) return;
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        const r = await api.renameScene(path, b.hash, clean);
+        setNamed(clean);
+        if (r.path !== path) {
+          toast(onAirRef.current ? `Renamed: ${clean}. It's still on air.` : `Renamed: ${clean}`);
+          navigate({ to: "/$org/edit", params: { org }, search: { path: r.path }, replace: true });
+          return;
+        }
+        // Same file, new <title>: with one already there, every element keeps its id (and Undo still works).
+        const source = setTitle(b.source, clean);
+        const els = scanElements(source);
+        if (els.length === b.els.length) setBase({ source, hash: r.hash, els });
+        else await load();
+        toast(`Renamed: ${clean}`);
+      } catch (e) {
+        if (!(e instanceof SceneConflict)) throw e;
+        toast("The scene changed meanwhile, so it wasn't renamed. Try again.");
+        await load();
+      } finally {
+        busyRef.current = false;
+        setBusy(false);
+      }
+    });
+
   const editCopy = () =>
     attempt(async () => {
       // Nothing unfinished may land on the on-air scene on the way out: drop a pending nudge (and put
@@ -817,19 +1139,46 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
         <button type="button" className="icon-btn" aria-label="Back" onClick={leave}>{Icon.back}</button>
         <div className="editor-titles">
           <span className="crumb">{place.crumb}</span>
-          <span className="title">{place.title}</span>
+          {naming && base ? (
+            <TitleField value={shownTitle} onDone={(v) => (v === null ? setNaming(false) : void doRename(v))} />
+          ) : (
+            <button type="button" className="title title-btn" title="Rename" aria-label={`Rename ${shownTitle}`} disabled={busy} onClick={() => setNaming(true)}>
+              {shownTitle}{Icon.pen}
+            </button>
+          )}
         </div>
         {onAir && <span className="onair-pill"><span className="dot" />ON AIR</span>}
         <div style={{ flex: 1 }} />
-        <button type="button" className="btn ghost" disabled={!undo.length || !!conflict} onClick={doUndo}>{Icon.undo}Undo</button>
+        <div className="add-wrap">
+          <button type="button" className="btn add-btn" aria-haspopup="menu" aria-expanded={addOpen} disabled={!ready || busy || !!conflict || !!editing}
+            onClick={() => setAddOpen((o) => !o)}>{Icon.plus}Add</button>
+          {addOpen && (
+            <>
+              <button type="button" className="backdrop" aria-label="Close menu" onClick={() => setAddOpen(false)} />
+              <div role="menu" aria-label="Add to the scene" className="ed-menu add-menu">
+                {ADD_ITEMS.map((it) => (
+                  <button key={it.kind} type="button" role="menuitem" onClick={() => (it.kind === "image" ? (setAddOpen(false), setPicker({ replace: null })) : add(it.kind))}>
+                    {Icon[it.icon]}<span>{it.label}<small>{it.hint}</small></span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <button type="button" className="btn ghost" disabled={!undo.length || !!conflict || busy} onClick={doUndo}>{Icon.undo}Undo</button>
         <button type="button" className="btn" onClick={() => attempt(() => api.open(path))}>{Icon.code}Open the file</button>
         <button type="button" className="btn primary" disabled={leaving} onClick={leave}>{leaving ? "Saving…" : "Done"}</button>
       </header>
 
+      {isTemplate && !onAir && (
+        <div className="note-banner" role="note">
+          <b>Template.</b> Changes here go into every new copy made from it. Scenes already made from it keep their own.
+        </div>
+      )}
       {onAir && (
         <div className="live-banner" role="status">
           <span className="dot" />
-          <span><b>Live.</b> This scene is on air: what you type and drag shows on stream as you do it.</span>
+          <span><b>Live.</b> This scene is on air: what you type, drag, resize and add shows on stream as you do it.</span>
           <div style={{ flex: 1 }} />
           <button type="button" className="btn" onClick={editCopy}>Edit a copy instead</button>
         </div>
@@ -889,6 +1238,13 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
             >
               {hoverRect && !drag && <div className="ed-hover" style={px(hoverRect)} />}
               {selRect && !editing && <div className={`ed-selected${drag ? " lifted" : ""}`} style={px(selRect)} />}
+              {selRect && !editing && !drag && sel !== null && base && sizeIn(base, sel) && (["nw", "ne", "sw", "se"] as const).map((c) => (
+                <div key={c} data-corner={c} className={`ed-handle ${c}`} aria-hidden="true"
+                  style={{ left: (selRect.x + (c[1] === "e" ? selRect.w : 0)) * s, top: (selRect.y + (c[0] === "s" ? selRect.h : 0)) * s }} />
+              ))}
+              {resizing && selRect && (
+                <div className="ed-readout" style={{ left: (selRect.x + selRect.w) * s + 14, top: (selRect.y + selRect.h) * s - 30 }}>{resizing.width} × {resizing.height}</div>
+              )}
               {drag && drag.guides.x.map((x) => <div key={`x${x}`} className="ed-guide v" style={{ left: x * s }} />)}
               {drag && drag.guides.y.map((y) => <div key={`y${y}`} className="ed-guide h" style={{ top: y * s }} />)}
               {drag && selRect && (
@@ -917,7 +1273,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                 <button type="button" className="backdrop" aria-label="Close menu"
                   onPointerDown={(e) => { e.preventDefault(); setMenu(null); }}
                   onClick={() => performance.now() - menu.at > 400 && setMenu(null)} />
-                <div role="menu" aria-label="Edit options" className="ed-menu" style={{ left: Math.min(menu.x, W * s - 250), top: Math.min(menu.y, H * s - 170) }}
+                <div role="menu" aria-label="Edit options" className="ed-menu" style={{ left: Math.min(menu.x, W * s - 250), top: Math.max(4, Math.min(menu.y, H * s - 230)) }}
                   onClickCapture={(e) => { if (performance.now() - menu.at < 350) e.stopPropagation(); }}>
                   {menu.hit.leaf !== null && (
                     <>
@@ -933,7 +1289,15 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                       </button>
                     </>
                   )}
-                  {menu.hit.leaf !== null && menu.hit.move !== null && <hr />}
+                  {menu.hit.image !== null && isLibraryUrl(attrIn(base, menu.hit.image, "src") ?? "") && attrIn(base, menu.hit.image, "srcset") === null && (
+                    <button type="button" role="menuitem" className={menu.hit.leaf === null ? "first" : ""} onClick={() => {
+                      setPicker({ replace: menu.hit.image });
+                      setMenu(null);
+                    }}>
+                      {Icon.image}<span>Replace image</span>
+                    </button>
+                  )}
+                  {(menu.hit.leaf !== null || menu.hit.image !== null) && menu.hit.move !== null && <hr />}
                   {menu.hit.move !== null && (
                     <button type="button" role="menuitem" className="quiet" onClick={() => {
                       setSelected(menu.hit.move);
@@ -942,6 +1306,14 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                       {Icon.move}<span>Move the {nameOf(base, menu.hit.move).replace(/^\w/, (c) => c.toLowerCase())}</span><small>or drag it</small>
                     </button>
                   )}
+                  {(() => {
+                    const target = menu.hit.move ?? menu.hit.image;
+                    return target !== null && canRemove(base.source, target) ? (
+                      <button type="button" role="menuitem" className="quiet" onClick={() => remove(target)}>
+                        {Icon.trash}<span>Delete the {nameOf(base, target).replace(/^\w/, (c) => c.toLowerCase())}</span><small>Delete</small>
+                      </button>
+                    ) : null;
+                  })()}
                 </div>
               </>
             )}
@@ -975,7 +1347,7 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
                   return <div key={i} className="lost"><span>{d.what} → </span>{d.value}</div>;
                 })}
                 <div className="actions">
-                  <button type="button" className="btn primary" onClick={applyAgain}>Apply my change again</button>
+                  <button type="button" className="btn primary" onClick={() => void applyAgain()}>Apply my change again</button>
                   <button type="button" className="btn" onClick={keepNew}>Keep the new version</button>
                 </div>
               </div>
@@ -990,6 +1362,9 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
             key={sel}
             name={nameOf(base, sel)}
             pos={selPos}
+            size={sizeIn(base, sel) ? sizeNow(sel) : null}
+            onSize={(w, h) => setBoxSize(sel, w, h)}
+            onDelete={canRemove(base.source, sel) ? () => remove(sel) : undefined}
             canPutBack={(() => {
               const o = origins.current.get(sel);
               return !!o && (o.left !== selPos.left || o.top !== selPos.top);
@@ -1004,32 +1379,152 @@ export function SceneEditor({ org, path }: { org: string; path: string }) {
           <>
             <span className="hint">{Icon.text}Right-click, long-press or double-tap text to edit it</span>
             <span className="hint">{Icon.move}Drag panels and camera boxes to move them</span>
+            <span className="hint">{Icon.plus}Add text, a title bar, an image or a camera box</span>
           </>
         )}
         {sel !== null && onAir && <span className="live-note"><span className="dot" />On air: it moves on stream as you drag</span>}
         <div style={{ flex: 1 }} />
-        {sel !== null ? <span className="quiet">Snaps to edges · 8 px grid · arrows nudge</span> : <span className="path">{path}</span>}
+        {sel !== null ? <span className="quiet">Snaps to edges · 8 px grid · arrows nudge{base && isSlot(base, sel) ? " · corners keep 16:9 (Shift: free)" : ""}</span> : <span className="path">{path}</span>}
       </footer>
+      {picker && (
+        <AssetPicker
+          org={org}
+          library={library}
+          replacing={picker.replace !== null}
+          onClose={() => setPicker(null)}
+          onPick={(asset) => {
+            const { replace } = picker;
+            setPicker(null);
+            const src = libraryUrl(asset.path).replace(/'/g, "%27");
+            if (replace !== null) {
+              // Undo puts back what the file has (the menu offers Replace only when that's a library path).
+              const b = baseRef.current;
+              change({ id: replace, src }, b ? valueIn(b, { id: replace, src }) : null);
+              return;
+            }
+            // Its natural size keeps its shape.
+            const img = new Image();
+            img.onload = () => add("image", { src, width: img.naturalWidth, height: img.naturalHeight });
+            img.onerror = () => add("image", { src, width: 1, height: 1 });
+            img.src = src;
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function PositionBar({ name, pos, canPutBack, onSet, onPutBack }: {
+const ADD_ITEMS: { kind: AddKind; label: string; hint: string; icon: "text" | "title" | "image" | "camera" | "screen" | "guest" }[] = [
+  { kind: "text", label: "Text", hint: "A line to retype", icon: "text" },
+  { kind: "title", label: "Title bar", hint: "A name and a line", icon: "title" },
+  { kind: "image", label: "Image", hint: "From your assets, or upload one", icon: "image" },
+  { kind: "camera", label: "Camera box", hint: "OBS puts the camera in it", icon: "camera" },
+  { kind: "screen", label: "Screen box", hint: "OBS puts the screen in it", icon: "screen" },
+  { kind: "guest", label: "Guest box", hint: "For a guest or second camera", icon: "guest" },
+];
+
+/** The scene's name, retyped in place: Return saves, Esc cancels. */
+function TitleField({ value, onDone }: { value: string; onDone: (v: string | null) => void }) {
+  const [v, setV] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+  const finish = (out: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    // Unchanged (or emptied) is a cancel: nothing to save.
+    onDone(out === null || !out.trim() || out.trim() === value.trim() ? null : out);
+  };
+  return (
+    <input ref={ref} className="title-input" aria-label="Scene name" value={v} maxLength={120} enterKeyHint="done"
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") finish(v);
+        if (e.key === "Escape") finish(null);
+      }}
+      onBlur={() => finish(v)} />
+  );
+}
+
+/** The org's images to choose from, and Upload. */
+function AssetPicker({ org, library, replacing, onPick, onClose }: {
+  org: string;
+  library: Library | undefined;
+  replacing: boolean;
+  onPick: (asset: { path: string }) => void;
+  onClose: () => void;
+}) {
+  const images = library?.assets.filter((a) => a.kind === "image") ?? [];
+  const file = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const upload = (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    void attempt(async () => {
+      try {
+        const { saved } = await api.upload(org, [files[0]!]);
+        if (saved[0]) onPick(saved[0]);
+      } finally {
+        setUploading(false);
+      }
+    });
+  };
+  return (
+    <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal picker" role="dialog" aria-label={replacing ? "Replace image" : "Add an image"}>
+        <h2>{replacing ? "Replace image" : "Add an image"}</h2>
+        <p className="picker-note">From {library?.org.name ?? org}'s assets.</p>
+        <div className="picker-grid">
+          {images.map((a) => (
+            <button key={a.path} type="button" className="picker-item" onClick={() => onPick(a)} aria-label={a.name}>
+              <img src={libraryUrl(a.path)} alt="" loading="lazy" />
+              <span>{a.name}</span>
+            </button>
+          ))}
+          {images.length === 0 && <p className="empty">No images yet. Upload one: it goes into the org's assets.</p>}
+        </div>
+        <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files)} />
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn primary" disabled={uploading} onClick={() => file.current?.click()}>{uploading ? "Uploading…" : "Upload an image"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PositionBar({ name, pos, size, canPutBack, onSet, onSize, onPutBack, onDelete }: {
   name: string;
   pos: Pos;
+  size: Size | null;
   canPutBack: boolean;
   onSet: (left: number, top: number) => void;
+  onSize: (width: number, height: number) => void;
   onPutBack: () => void;
+  onDelete?: () => void;
 }) {
   const [x, setX] = useState(String(pos.left));
   const [y, setY] = useState(String(pos.top));
+  const [w, setW] = useState(String(size?.width ?? ""));
+  const [h, setH] = useState(String(size?.height ?? ""));
   const bar = useRef<HTMLDivElement>(null);
-  // Follow drags and nudges, except while someone is typing a number.
+  // Follow drags, resizes and nudges, except while someone is typing a number.
   useEffect(() => {
     if (bar.current?.contains(document.activeElement)) return;
     setX(String(pos.left));
     setY(String(pos.top));
-  }, [pos.left, pos.top]);
+    setW(String(size?.width ?? ""));
+    setH(String(size?.height ?? ""));
+  }, [pos.left, pos.top, size?.width, size?.height]);
+  const reset = () => {
+    setX(String(pos.left));
+    setY(String(pos.top));
+    setW(String(size?.width ?? ""));
+    setH(String(size?.height ?? ""));
+  };
   const cancelled = useRef(false);
   const commit = () => {
     if (cancelled.current) {
@@ -1037,38 +1532,47 @@ function PositionBar({ name, pos, canPutBack, onSet, onPutBack }: {
       return;
     }
     const l = Number(x), t = Number(y);
-    if (!Number.isFinite(l) || !Number.isFinite(t) || x.trim() === "" || y.trim() === "") {
-      setX(String(pos.left));
-      setY(String(pos.top));
-      return;
-    }
+    if (!Number.isFinite(l) || !Number.isFinite(t) || x.trim() === "" || y.trim() === "") return reset();
     if (Math.abs(l) > 100_000 || Math.abs(t) > 100_000) {
       toast("That's far outside the scene (1920 × 1080)");
-      setX(String(pos.left));
-      setY(String(pos.top));
-      return;
+      return reset();
     }
     if (l !== pos.left || t !== pos.top) onSet(l, t);
+    if (size) {
+      const ww = Number(w), hh = Number(h);
+      if (!Number.isFinite(ww) || !Number.isFinite(hh) || w.trim() === "" || h.trim() === "" || ww < MIN_SIZE || hh < MIN_SIZE || ww > 100_000 || hh > 100_000) {
+        if (ww < MIN_SIZE || hh < MIN_SIZE) toast(`At least ${MIN_SIZE} px`);
+        return reset();
+      }
+      if (ww !== size.width || hh !== size.height) onSize(ww, hh);
+    }
   };
   const onKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") commit();
     if (e.key === "Escape") {
-      setX(String(pos.left));
-      setY(String(pos.top));
+      reset();
       cancelled.current = true; // the blur below must not save what was typed
       (e.target as HTMLInputElement).blur();
     }
   };
   return (
     <div className="pos-bar" ref={bar} onBlur={(e) => {
-      // Moving between X and Y isn't done yet; leaving the pair is.
+      // Moving between the fields isn't done yet; leaving them is.
       if (!bar.current?.contains(e.relatedTarget as Node)) commit();
     }}>
       <b>{name}</b>
       <span className="sep" />
       <label>X<input inputMode="numeric" value={x} aria-label="X position" onChange={(e) => setX(e.target.value)} onKeyDown={onKey} /></label>
       <label>Y<input inputMode="numeric" value={y} aria-label="Y position" onChange={(e) => setY(e.target.value)} onKeyDown={onKey} /></label>
+      {size && (
+        <>
+          <span className="sep" />
+          <label>W<input inputMode="numeric" value={w} aria-label="Width" onChange={(e) => setW(e.target.value)} onKeyDown={onKey} /></label>
+          <label>H<input inputMode="numeric" value={h} aria-label="Height" onChange={(e) => setH(e.target.value)} onKeyDown={onKey} /></label>
+        </>
+      )}
       <button type="button" className="btn ghost small" disabled={!canPutBack} onClick={onPutBack}>Put it back</button>
+      {onDelete && <button type="button" className="btn ghost small" aria-label={`Delete the ${name.toLowerCase()}`} onClick={onDelete}>{Icon.trash}Delete</button>}
     </div>
   );
 }
