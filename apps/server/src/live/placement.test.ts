@@ -109,16 +109,25 @@ describe("placement", () => {
   });
 
   test("a report made while an older one is placed resolves only once the newest is placed, with its warnings", async () => {
-    const { placer, placed } = setup();
+    const { obs, placer, placed } = setup();
+    // Hold OBS's first answer, so the first placement is still running when the next reports come.
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const batch = obs.requestBatch;
+    let calls = 0;
+    obs.requestBatch = async (list, opts) => {
+      if (calls++ === 0) await held;
+      return batch(list, opts);
+    };
     const first = placer.report("org/a.html", [camera]);
     await Bun.sleep(0);
     const second = placer.report("org/b.html", [{ ...camera, source: "Phone" }]);
     const third = placer.report("org/c.html", [{ ...camera, source: "Tablet" }]);
-    const order: string[] = [];
-    await Promise.all([first.then(() => order.push("a")), second.then(() => order.push("b")), third.then(() => order.push("c"))]);
-    // Whichever finished, all three saw the newest placement done: its warning was the last one reported.
-    expect(placed.at(-1)?.[0]).toContain('"Tablet" slot');
-    expect(order).toHaveLength(3);
+    // What each caller would answer with (as /api/program/slots does): the warnings when it resolves.
+    const seen = [first, second, third].map((r) => r.then(() => placed.at(-1)?.[0] ?? ""));
+    release();
+    // Each one, the first included, resolved only after the newest report was placed.
+    for (const w of await Promise.all(seen)) expect(w).toContain('"Tablet" slot');
   });
 
   test("a placement that throws doesn't stop the next one", async () => {
