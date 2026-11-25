@@ -43,7 +43,8 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
       const late = new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error(`OBS didn't answer ${type} within ${requestTimeoutMs / 1000} s`)), requestTimeoutMs);
       });
-      return Promise.race([live.request<T>(type, data), late]).finally(() => clearTimeout(timer));
+      // OBSClient forgets a timed-out request itself; the race also covers any other requester.
+      return Promise.race([live.request<T>(type, data, { timeoutMs: requestTimeoutMs }), late]).finally(() => clearTimeout(timer));
     },
   };
   const library = opts.library ?? config.library;
@@ -121,10 +122,16 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
       const without = "The URL shows the scene on air, without the camera or screen.";
       if (!obs.status.connected) return { ok: false, reason: `OBS isn't connected, so there's no picture of the program. ${without}`, url };
       const dims = size(full);
-      // Whatever OBS has on program (someone may have cut to another scene in OBS), else the ViewSwitcher scene.
-      const scene = await obs
-        .request<{ currentProgramSceneName?: string; sceneName?: string }>("GetCurrentProgramScene")
-        .then((r) => r.currentProgramSceneName || r.sceneName || opts.obs.scene, () => opts.obs.scene);
+      // Whatever OBS has on program (someone may have cut to another scene in OBS). If OBS won't say,
+      // there's no picture: a picture of some other scene would be passed off as the program.
+      let scene: string;
+      try {
+        const r = await obs.request<{ currentProgramSceneName?: string; sceneName?: string }>("GetCurrentProgramScene");
+        scene = r.currentProgramSceneName || r.sceneName || "";
+      } catch (e) {
+        return { ok: false, reason: `OBS didn't say which scene is on program (${(e as Error).message}). ${without}`, url };
+      }
+      if (!scene) return { ok: false, reason: `OBS didn't say which scene is on program. ${without}`, url };
       try {
         const { png } = await screenshot(scene, dims);
         if (isBlankPng(png)) return { ok: false, reason: `OBS returned an empty picture of "${scene}". ${without}`, url };

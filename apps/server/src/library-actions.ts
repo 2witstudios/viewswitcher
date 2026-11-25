@@ -1,7 +1,7 @@
 // Library changes that both the switcher's /api routes and the MCP tools make, so the two follow one
 // set of rules and return the same shapes (paths start with the org id).
-import { stat } from "node:fs/promises";
-import { join } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { isAbsolute, join, relative } from "node:path";
 import { orgOf } from "@viewswitcher/shared";
 import type { OnAir } from "@viewswitcher/shared";
 import * as lib from "./library";
@@ -33,8 +33,19 @@ export async function customizeScene(root: string, b: { org: unknown; projectId:
   return { name, path: `${plainName(String(b.org))}/projects/${b.projectId}/streams/${b.streamId}/${name}.html` };
 }
 
-/** A copy of a scene beside it ("<name>-copy"). */
+/**
+ * Refuses a library path that is (or, through links, really is) outside the library. Scenes and packs
+ * come from anyone, so a link inside the library must never pull a file from elsewhere into it.
+ */
+export async function reallyInside(root: string, path: string): Promise<void> {
+  const real = await realpath(inside(root, path));
+  const back = relative(await realpath(root), real);
+  if (back.startsWith("..") || isAbsolute(back)) throw new PathError("That path is a link to somewhere outside the library");
+}
+
+/** A copy of a scene beside it ("<name>-copy"): for the switcher's Duplicate and the agents' duplicate_scene. */
 export async function duplicateScene(root: string, path: string): Promise<SceneRef> {
+  await reallyInside(root, path);
   const { name } = await lib.duplicate(root, path);
   return { name, path: `${path.slice(0, path.lastIndexOf("/"))}/${name}.html` };
 }

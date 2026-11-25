@@ -251,8 +251,18 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ path, text: body, hash }: { path: string; text: string; hash?: string }) => {
     const target = String(path).replace(/\/+$/, "");
     await writes(target);
-    // Checked again just before the write: OBS may have gone live while it waited its turn.
-    const r = await writeText(root, path, body, hash, { beforeWrite: () => writes(target) });
+    // Checked again in turn (OBS may have gone live while it waited), and once more in the same tick
+    // as the rename, against the state at that instant. (If OBS went live only in between, the files
+    // the scene loads weren't read; the scene, its transition and _shared are still covered.)
+    let loads: string[] | undefined;
+    const r = await writeText(root, path, body, hash, {
+      beforeWrite: async () => {
+        await contained(target);
+        loads = await onAirLoads();
+        guardNow({ kind: "write", paths: [target] }, loads);
+      },
+      atCommit: () => guardNow({ kind: "write", paths: [target] }, loads),
+    });
     if (!r.ok) return refusal(r.hash ? `${r.reason} (current hash: ${r.hash})` : r.reason);
     return text({ path: r.path, hash: r.hash, ...(r.created ? { created: true } : {}), ...(r.changed ? {} : { unchanged: true }) });
   }));
@@ -269,6 +279,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const bytes = Buffer.from(base64, "base64");
     if (bytes.length === 0) throw new Refusal("That isn't base64 file data");
     if (bytes.length > MAX_ASSET) throw new Refusal("That file is over 15 MB");
+    // The assets folder must really be in the library, whatever name the file ends up with.
+    await contained(`${org}/assets/${plainName(name)}`);
     // An existing name gets a free one instead (saveAsset), so only a new file at this name could show on air.
     if (!(await exists(inside(dir, `assets/${plainName(name)}`)))) await writes(`${org}/assets/${name}`);
     const saved = await lib.saveAsset(dir, new File([bytes], String(name)));
@@ -282,6 +294,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ org, name, templates }: { org: string; name: string; templates?: string[] }) => {
     const dir = await existingOrg(root, org);
+    // The templates it copies must really be in the library (a linked template would copy a file from elsewhere).
+    for (const t of templates ?? []) if (await exists(inside(dir, `templates/${plainName(t)}.html`))) await contained(`${org}/templates/${plainName(t)}.html`);
     await writes(`${org}/projects/${slugify(name)}/project.json`);
     return text(await lib.createProject(dir, name, templates ?? []));
   }));

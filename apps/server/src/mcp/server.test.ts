@@ -2,7 +2,7 @@
 // the way a new one is (ensureLibrary: the kit and a first org from the starter).
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -420,6 +420,26 @@ describe("structural tools stay inside the library (CodeRabbit)", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toContain("outside the library");
   });
+  test("create_project won't copy a template linked outside; add_asset won't write into an assets folder linked outside", async () => {
+    await writeFile(join(outside, "tpl.html"), "<title>Outside</title>");
+    await symlink(join(outside, "tpl.html"), join(root, ORG, "templates", "linked-tpl.html"));
+    const r = await call("create_project", { org: ORG, name: "From linked", templates: ["linked-tpl"] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+    // An org whose assets/ is a link out of the library (made by hand, or a pack).
+    const { mkdir, cp } = await import("node:fs/promises");
+    await mkdir(join(root, "linked-org"), { recursive: true });
+    await cp(join(root, ORG, "org.json"), join(root, "linked-org", "org.json"));
+    await symlink(outside, join(root, "linked-org", "assets"));
+    const before = (await readdir(outside)).length;
+    const a = await call("add_asset", { org: "linked-org", name: "x.svg", base64: Buffer.from("<svg/>").toString("base64") });
+    expect(a.isError).toBe(true);
+    expect((await readdir(outside)).length).toBe(before);
+  });
+  test("the switcher's own Duplicate (library-actions) won't copy a scene linked outside either", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    await expect(duplicateScene(root, `${ORG}/templates/linked-out.html`)).rejects.toThrow("outside the library");
+  });
   test("two add_asset uploads with the same name at once get two files", async () => {
     const b64 = (t: string) => Buffer.from(t).toString("base64");
     const [a, b] = await Promise.all([data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>a</svg>") }), data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>b</svg>") })]);
@@ -503,6 +523,44 @@ describe("the guard covers what the scene on air loads, and is checked again as 
     // A stale hash is refused before the check runs.
     expect((await writeText(root, p, "x", "stale", { beforeWrite: refuse })).ok).toBe(false);
     expect(order.length).toBe(2);
+  });
+  test("atCommit runs after beforeWrite and the staging, right before the rename: going live in between still refuses", async () => {
+    const p = `${ORG}/templates/race.html`;
+    await writeFile(join(root, p), "<title>A</title>");
+    let live = false;
+    const r = writeText(root, p, "<title>B</title>", sceneHash("<title>A</title>"), {
+      beforeWrite: () => void (live = true), // OBS goes live during the replacement
+      atCommit: () => {
+        if (live) throw new Error("live at commit");
+      },
+    });
+    await expect(r).rejects.toThrow("live at commit");
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>A</title>");
+    // No staged copy is left beside it.
+    expect((await readdir(join(root, ORG, "templates"))).filter((f) => f.startsWith(".race.html"))).toEqual([]);
+  });
+  test("write_file: the scene going on air while live during the write is refused at commit", async () => {
+    const p = `${ORG}/templates/late.html`;
+    await writeFile(join(root, p), "<title>Late</title>");
+    const { hash } = await data("read_file", { path: p });
+    // The scene goes on air and OBS goes live after write_file's first check, before the rename.
+    let flips = 0;
+    const realState = state;
+    const onAir = await onAirFor(root, { path: p, label: "Late" });
+    const proxy = new Proxy(realState, {
+      get(t, k) {
+        if (k === "onAir" && ++flips > 1) {
+          t.onAir = onAir;
+          t.obs = { connected: true, streaming: true, recording: false };
+        }
+        return Reflect.get(t, k);
+      },
+    });
+    state = proxy;
+    const res = await call("write_file", { path: p, text: "<title>Changed</title>", hash });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain("on air and you're live");
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>Late</title>");
   });
 });
 

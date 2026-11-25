@@ -236,8 +236,21 @@ describe("program picture (MCP-1, MCP-6)", () => {
     expect(await createPreviewer(obs, opts()).program()).toEqual({ ok: true, png: png([5, 5, 200, 255]), width: 960, height: 540 });
   });
 
+  test("if OBS won't say which scene is on program, there's no picture (not some other scene's)", async () => {
+    const none = connected(); // nothing on program yet: an empty name
+    expect(await createPreviewer(none, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining("didn't say which scene is on program"), url: `http://127.0.0.1:${PORT}/program` });
+    const failing = connected();
+    const real = failing.request.bind(failing);
+    failing.request = ((t: string, d?: object) => (t === "GetCurrentProgramScene" ? Promise.reject(new OBSRequestError(t, 500, "busy")) : real(t, d))) as never;
+    expect(await createPreviewer(failing, opts()).program()).toMatchObject({ ok: false, reason: expect.stringContaining("(GetCurrentProgramScene: busy)") });
+    expect(failing.requests.some((r) => r.type === "GetSourceScreenshot")).toBe(false);
+  });
+
   test("a missing scene or an empty picture says why", async () => {
     const obs = connected();
+    const real = obs.request.bind(obs);
+    // OBS names the ViewSwitcher scene as on program, but this fake has no such scene to screenshot.
+    obs.request = ((t: string, d?: object) => (t === "GetCurrentProgramScene" ? Promise.resolve({ currentProgramSceneName: names.scene }) : real(t, d))) as never;
     expect(await createPreviewer(obs, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining(`couldn't take a picture of "${names.scene}"`), url: `http://127.0.0.1:${PORT}/program` });
     obs.scenes.set(names.scene, []);
     expect(await createPreviewer(obs, opts()).program()).toMatchObject({ ok: false, reason: expect.stringContaining("empty picture") });

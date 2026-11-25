@@ -56,12 +56,29 @@ export class OBSClient {
     });
   }
 
-  request<T = any>(requestType: string, requestData?: object): Promise<T> {
+  /** Requests waiting for OBS's answer. */
+  get pendingCount() {
+    return this.pending.size;
+  }
+
+  /** With `timeoutMs`, a request OBS hasn't answered by then is rejected and forgotten (a late answer is ignored). */
+  request<T = any>(requestType: string, requestData?: object, { timeoutMs }: { timeoutMs?: number } = {}): Promise<T> {
     const ws = this.ws;
     if (!ws || !this.status.connected) return Promise.reject(new Error("OBS not connected"));
     const requestId = String(++this.seq);
     return new Promise((resolve, reject) => {
-      this.pending.set(requestId, { resolve, reject, type: requestType });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = <A>(f: (a: A) => void) => (a: A) => {
+        clearTimeout(timer);
+        f(a);
+      };
+      this.pending.set(requestId, { resolve: done(resolve), reject: done(reject), type: requestType });
+      if (timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          if (!this.pending.delete(requestId)) return;
+          reject(new Error(`OBS didn't answer ${requestType} within ${timeoutMs / 1000} s`));
+        }, timeoutMs);
+      }
       ws.send(JSON.stringify({ op: 6, d: { requestType, requestId, requestData } }));
     });
   }

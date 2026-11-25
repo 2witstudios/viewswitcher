@@ -95,7 +95,7 @@ let queue: Promise<unknown> = Promise.resolve();
  */
 // `read` is a plain Stats: Awaited<ReturnType<typeof stat>> is the last overload's, which newer
 // @types/node types as possibly undefined (stat with throwIfNoEntry: false), ISSUE-11.
-export async function replaceChecked(real: string, read: Stats, current: string, next: string, hooks: { beforeReplace?: () => Promise<void> }) {
+export async function replaceChecked(real: string, read: Stats, current: string, next: string, hooks: { beforeReplace?: () => Promise<void>; atRename?: () => void }) {
   // A linked scene is written where it really lives (so the link stays a link), never outside the library.
   // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
   // The watcher ignores dot-files.
@@ -116,6 +116,7 @@ export async function replaceChecked(real: string, read: Stats, current: string,
       const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
       return { ok: false as const, hash: sceneHash(latest) };
     }
+    hooks.atRename?.(); // synchronously, in the same tick as the rename: a last refusal (the MCP guard)
     await rename(tmp, real);
     replaced = true;
     return { ok: true as const };
