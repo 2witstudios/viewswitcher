@@ -9,9 +9,9 @@
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
 # --release and --publish need a clean tree and the Bun in .bun-version; --publish also needs HEAD on
-# origin/main, and tags the draft on the commit it built (scripts/release-guard.sh). Both reinstall
-# bun.lock's packages first. ALLOW_DIRTY=1 lets --release build from a dirty tree for a local test
-# (installing what package.json says); never --publish.
+# origin/main, and tags the draft on the commit it built (scripts/release-guard.sh). Both install
+# bun.lock into empty node_modules first. ALLOW_DIRTY=1 lets --release build from a dirty tree for a
+# local test (installing what package.json says); never --publish.
 #
 # Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary),
 # and when that profile doesn't exist, the App Store Connect API key: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
@@ -47,11 +47,17 @@ if [ "$RELEASE" = 1 ]; then
   fi
   # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
   BUILT="$(git -C "$REPO" rev-parse HEAD)"
-  # node_modules is gitignored, so the clean tree says nothing about it: reinstall every locked package
-  # (--force also undoes files patched by hand). A local test build from a dirty tree (ALLOW_DIRTY)
-  # installs what package.json says now instead, since its bun.lock may have changed.
-  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then (cd "$REPO" && bun install)
-  else (cd "$REPO" && bun install --frozen-lockfile --force); fi
+  # node_modules is gitignored, so the clean tree says nothing about it: install bun.lock into empty
+  # node_modules folders, so no stale, patched or extra package reaches the build. A local test build
+  # from a dirty tree (ALLOW_DIRTY) installs what package.json says now instead, since its bun.lock may
+  # have changed.
+  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then
+    (cd "$REPO" && bun install)
+  else
+    # The workspaces' folders only: $REPO can hold other checkouts (.pu/worktrees) with their own.
+    rm -rf "$REPO/node_modules" "$REPO"/apps/*/node_modules "$REPO"/packages/*/node_modules
+    (cd "$REPO" && bun install --frozen-lockfile)
+  fi
 fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 BUILD="$APPLE/build"
