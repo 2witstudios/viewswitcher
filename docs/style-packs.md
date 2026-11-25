@@ -2,7 +2,7 @@
 
 A style pack is one whole look for a show: a set of views (starting soon, the main layouts, be right back, ending…) with their own theme, scripts, transition and pictures, in one folder or `.zip`. People install one by dropping it on the switcher's Templates page (or **Import a style pack**). It goes into the org as its own **template set**, filled in with the org's name and colors, beside the org's own templates.
 
-Packs come from agents, from the site's example styles, from the starter kit (`bun run packs:export`), and later from the overlay studio on viewswitcher.com. They all make this one format. It's plain HTML, CSS and a little JS, so a pack stays the source of truth after it's installed: people and agents keep editing the same files.
+Packs come from agents, from the site's six example styles and the starter kit (`bun run packs:export`), and later from the overlay studio on viewswitcher.com. They all make this one format. It's plain HTML, CSS and a little JS, so a pack stays the source of truth after it's installed: people and agents keep editing the same files.
 
 The validator is `packages/shared/src/style-pack.ts` (`planPack`, `readManifest`, `checkPack`), tested in `style-pack.test.ts`. Installing is `apps/server/src/packs.ts`.
 
@@ -107,6 +107,6 @@ On install the switcher says what the pack runs: ViewSwitcher's standard `scene.
 
 ## Making packs
 
-- `bun run packs:export [out-dir]` writes the starter kit as `starter/` and `starter.zip` (default `dist/packs/`), checked with the same validator, so an export that wouldn't install fails there.
-- The site's example styles (apps/site) are the next to export the same way.
+- `bun run packs:export [out-dir]` writes the starter kit and the site's six example styles (apps/site/scripts/shows: fullcount, nova, grace, remi, riverside, kitchen) as `<id>/` and `<id>.zip` (default `dist/packs/`), each checked with the same validator, so an export that wouldn't install, or that warns, fails there.
+- The site's styles keep their shows' own names and colors (they use only `{{ORG_ID}}`); a version that takes on the installing org's name would use `{{ORG_NAME}}` and friends.
 - An agent can write a pack folder from the library skill's "Template sets and style packs" section and this page.

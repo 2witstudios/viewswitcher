@@ -120,7 +120,7 @@ ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into the i
 post/            YouTube post pipeline (from Daisy Debate's daisy-video); see post/README.md
 ```
 
-`bun run packs:export` writes the starter kit as a style pack (`dist/packs/starter.zip`).
+`bun run packs:export` writes the starter kit and the site's six example styles as style packs (`dist/packs/<id>.zip`).
 
 `bun test` runs the shared logic, usbmux protocol, path-safety, library kit, style pack and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
 

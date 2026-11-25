@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { starterPack, zipPack } from "./export-packs";
+import { sitePacks, starterPack, zipPack } from "./export-packs";
 import { addFromTemplate, createOrg, createProject, scanLibrary } from "./library";
 import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
 import { writeZip } from "./zip";
@@ -97,6 +97,19 @@ describe("the starter kit as a pack (EDIT-27)", () => {
     await expect(installPack(root, other, s.token)).rejects.toThrow(/another org/);
     expect((await scanLibrary(root, other)).sets).toEqual([]);
   });
+});
+
+test("the site's six example styles each install as a set (EDIT-27)", async () => {
+  const packs = await sitePacks(resolve(import.meta.dir, "../../site"));
+  expect(packs.map((p) => p.id)).toEqual(["fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);
+  for (const p of packs) {
+    const s = await stagePack(root, org, { zip: zipPack(p.id, p.files) }, null);
+    expect(s.warnings).toEqual([]);
+    await installPack(root, org, s.token);
+  }
+  const sets = (await scanLibrary(root, org)).sets;
+  expect(sets.map((s) => s.templates.length)).toEqual([5, 5, 5, 5, 5, 5]);
+  expect(await readFile(join(root, org, "templates/nova/main.html"), "utf8")).toContain(`/library/${org}/templates/nova/_shared/theme.css`);
 });
 
 describe("removing a set (EDIT-25)", () => {

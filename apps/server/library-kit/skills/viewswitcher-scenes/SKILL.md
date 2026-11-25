@@ -133,7 +133,7 @@ my-pack/
 - Link the pack's own files as `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg` (on install `{{PACK}}` becomes `/library/<org>/templates/<set>`). Views sit at `{{PACK}}/<view>.html`.
 - `{{ORG_NAME}}`, `{{ORG_INITIAL}}`, `{{ORG_ID}}`, `{{ACCENT}}` and `{{GROUND}}` are filled from the org it's installed into. Use them so the pack takes on any org's name and colors.
 - Same scene contract as above. Scripts go in `_shared/*.js` only; file names use letters, numbers, dots, dashes and spaces; views are lower-case-with-dashes. Up to 400 files, 25 MB each, 100 MB in all.
-- The full format is docs/style-packs.md in the ViewSwitcher repo. `bun run packs:export` there exports the starter kit as an example pack.
+- The full format is docs/style-packs.md in the ViewSwitcher repo. `bun run packs:export` there exports the starter kit and the site's example styles as example packs.
 
 ## Transitions
 
