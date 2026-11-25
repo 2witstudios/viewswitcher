@@ -2,7 +2,8 @@
 // source on top, and the devices in between; then OBS switches to it. Run from the switcher's
 // "Set up OBS" (POST /api/obs/setup) or `bun run obs:setup`. Safe to run again (e.g. after adding
 // devices, to put the browser source back on top). Renames the old Daisy-era scene and sources if
-// it finds them, so devices placed in them carry over.
+// it finds them, so devices placed in them carry over. It also makes the preview scene that renders
+// scenes for agents (preview.ts), which is never switched to.
 import type { ObsSetup } from "@viewswitcher/shared";
 import { OBSRequestError } from "./obs";
 
@@ -14,7 +15,9 @@ export type SetupNames = {
   programSource: string;
   groundSource: string;
   devices: string[];
-};
+} & PreviewNames;
+
+export type PreviewNames = { previewScene: string; previewSource: string };
 
 export type SetupReport = {
   /** One line per thing done, for the CLI and the switcher. */
@@ -95,11 +98,55 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
     log.push(`"${scene}" is ready with "${programSource}" on top. OBS is live, so it stays on its current scene: switch to "${scene}" in OBS when you're ready.`);
   }
 
+  log.push(...(await ensurePreview(obs, names)));
+
   const present = new Set(sceneItems.map((i) => i.sourceName));
   return { log, missing: devices.filter((d) => !present.has(d)), switched: switchProgram };
 }
 
-/** Whether OBS has what the switcher needs: the scene, both sources (the program pointing here), and the devices. */
+// The preview browser source lives in a scene of its own that is never the program, so nothing it
+// shows reaches the stream. shutdown: false keeps the page alive between previews; its audio is
+// routed into OBS (reroute_audio) and muted there, so a scene's video or sound never plays out of
+// the Mac's speakers, where a desktop-audio capture would put it on stream.
+const previewSettings = { width: 1920, height: 1080, fps_custom: false, reroute_audio: true, shutdown: false, restart_when_active: false };
+
+/**
+ * Make sure the preview scene and its browser source exist (creating whichever is missing), with the
+ * preview settings and muted; with `url`, point the source at it. Never touches the program scene.
+ * Returns a line for each thing created.
+ */
+export async function ensurePreview(obs: ObsRequester, { previewScene, previewSource }: PreviewNames, url?: string): Promise<string[]> {
+  const log: string[] = [];
+  const exists = async (create: () => Promise<unknown>) => {
+    try {
+      await create();
+      return false;
+    } catch (e) {
+      if (e instanceof OBSRequestError && e.code === 601) return true; // already exists
+      throw e;
+    }
+  };
+  try {
+    await obs.request("GetSceneItemId", { sceneName: previewScene, sourceName: previewSource });
+  } catch {
+    if (!(await exists(() => obs.request("CreateScene", { sceneName: previewScene })))) log.push(`Created scene "${previewScene}" for previews.`);
+    const input = { sceneName: previewScene, inputName: previewSource, inputKind: "browser_source", inputSettings: { ...previewSettings, url: url ?? "about:blank" }, sceneItemEnabled: true };
+    if (await exists(() => obs.request("CreateInput", input))) {
+      // The source survived its scene (or was moved out of it): put it back in.
+      await obs.request("CreateSceneItem", { sceneName: previewScene, sourceName: previewSource, sceneItemEnabled: true });
+    } else {
+      log.push(`Created browser source "${previewSource}" for previews.`);
+    }
+  }
+  await obs.request("SetInputSettings", { inputName: previewSource, inputSettings: url ? { ...previewSettings, url } : previewSettings });
+  await obs.request("SetInputMute", { inputName: previewSource, inputMuted: true });
+  return log;
+}
+
+/**
+ * Whether OBS has what the switcher needs: the scene, both sources (the program pointing here), and the devices.
+ * The preview scene isn't part of it: previews create it when they need it, so it never holds up setup.
+ */
 export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: number): Promise<ObsSetup> {
   const { scenes } = await obs.request<{ scenes: { sceneName: string }[] }>("GetSceneList");
   if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, missingDevices: names.devices };
