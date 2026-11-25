@@ -11,11 +11,6 @@ final class StatusMenuBuilder: NSObject {
         self.perform = perform
     }
 
-    private final class Box: NSObject {
-        let action: StatusMenu.Action
-        init(_ action: StatusMenu.Action) { self.action = action }
-    }
-
     func fill(_ menu: NSMenu, with items: [StatusMenu.Item]) {
         menu.autoenablesItems = false
         menu.removeAllItems()
@@ -33,14 +28,14 @@ final class StatusMenuBuilder: NSObject {
                 i.isEnabled = enabled
                 i.state = checked ? .on : .off
                 i.toolTip = toolTip
-                i.representedObject = Box(action)
+                i.representedObject = action
                 menu.addItem(i)
             }
         }
     }
 
     @objc private func chosen(_ sender: NSMenuItem) {
-        guard let box = sender.representedObject as? Box else { return }
-        perform(box.action)
+        guard let action = sender.representedObject as? StatusMenu.Action else { return }
+        perform(action)
     }
 }

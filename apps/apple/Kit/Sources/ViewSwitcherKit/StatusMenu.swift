@@ -79,8 +79,8 @@ public enum StatusMenu {
         switch c.server {
         case .starting: items.append(.action("Starting Server…", .restartServer, enabled: false))
         case .restarting: items.append(.action("Restarting Server…", .restartServer, enabled: false))
-        case .crashed, .lost, .failed: items.append(.action("Restart Server", .restartServer))
-        case .owned, .attached, .quitting: break
+        case _ where c.server.stopped: items.append(.action("Restart Server", .restartServer))
+        default: break
         }
         items += [
             .action("Check for Updates…", .checkForUpdates, enabled: c.updater),

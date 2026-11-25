@@ -16,7 +16,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// A banner with `id` replaces the last one with that id (the server stopped, then restarted).
-    func post(_ title: String, _ body: String, id: String = UUID().uuidString) {
+    func post(_ title: String, _ body: String, id: String) {
         let center = center
         center.getNotificationSettings { settings in
             guard [.authorized, .provisional].contains(settings.authorizationStatus) else { return }

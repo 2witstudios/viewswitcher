@@ -109,7 +109,7 @@ type Remotes = { visible: boolean; enabled: boolean; code: string; pairUrl: stri
 type State = {
   wifi: boolean; remotes: Remotes | null;
   menu: string[]; menuEnabled: string[]; statusTitle: string; statusLive: boolean;
-  server: { owned: boolean; pid: number } | null; serverState: string;
+  server: { owned: boolean; pid: number } | null; serverState: string; replacedOrphan: number | null;
   window: { visible: boolean; number: number; fullscreen: boolean; url: string; frame: [number, number]; lights: number[][]; events: string[] } | null;
   opened: string[]; alerts: string[]; notices: string[]; loginItem: boolean; updater: boolean; undoRoute: string; feed: string;
 };
@@ -465,16 +465,23 @@ try {
   check(await until(async () => listeners().length === 0, 8000), "when the app is killed, its server exits too (no orphan on the port)");
 
   // Relaunched straight after a crash, while the orphan may still answer: the app replaces it (or,
-  // if the orphan already went, starts its own); either way it owns its server and never attaches.
-  app = await launch();
-  check(await until(async () => (await state()).server?.owned === true), "relaunched: its own server");
-  const orphan = listeners()[0];
-  process.kill(app.proc.pid, "SIGKILL");
-  app = await launch();
-  check(await until(async () => (await state()).server?.owned === true, 15_000), `relaunched right after a crash: it owns a server instead of attaching to the orphan (${(await state()).serverState})`);
-  check(await until(async () => listeners().length === 1 && listeners()[0] !== orphan, 8000), "…a new one, and the orphan is gone");
-  check(await quit(app), "Quit ends the app");
-  check(await until(async () => listeners().length === 0, 8000), `port ${PORT} free`);
+  // if the orphan already went by itself, starts its own); either way it owns its server and never
+  // attaches. Which of the two happened is a race with the orphan's 2 s parent watch, so this says
+  // which path ran; ServerControllerTests prove the replacement itself.
+  let replaced = 0;
+  for (let attempt = 1; attempt <= 3 && !replaced; attempt++) {
+    app = await launch();
+    check(await until(async () => (await state()).server?.owned === true), "relaunched: its own server");
+    const orphan = listeners()[0];
+    process.kill(app.proc.pid, "SIGKILL");
+    app = await launch();
+    check(await until(async () => (await state()).server?.owned === true, 15_000), `relaunched right after a crash: it owns a server instead of attaching to the orphan (${(await state()).serverState})`);
+    check(await until(async () => listeners().length === 1 && listeners()[0] !== orphan, 8000), "…a new one, and the orphan is gone");
+    replaced = (await state()).replacedOrphan ?? 0;
+    console.log(replaced === orphan ? `  the app replaced the orphan (${orphan})` : `  the orphan (${orphan}) had already gone by itself`);
+    check(await quit(app), "Quit ends the app");
+    check(await until(async () => listeners().length === 0, 8000), `port ${PORT} free`);
+  }
 
   // ------------------------------------------------------------ the port is someone else's
   const squatter = Bun.serve({ hostname: "127.0.0.1", port: Number(PORT), fetch: () => new Response("not us", { status: 404 }) });

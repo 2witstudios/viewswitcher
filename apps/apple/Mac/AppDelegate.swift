@@ -130,8 +130,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if quit { NSApp.terminate(nil) }
     }
 
-    @objc func restartServer() {
+    func restartServer() {
         // A second click while one starts would race it for the port; the supervisor ignores it.
+        // (Starting is the supervisor's to refuse too; this also keeps the reload below from running.)
         guard supervisor.state.stopped else { return }
         Task {
             await supervisor.start()
@@ -158,8 +159,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func showNotice(_ text: String?, for seconds: TimeInterval? = nil) {
-        notice = text.map { ($0, seconds.map { Date().addingTimeInterval($0) }) }
-        switcher?.showNotice(text, for: seconds)
+        let until = seconds.map { Date().addingTimeInterval($0) }
+        notice = text.map { ($0, until) }
+        switcher?.showNotice(text, until: until)
     }
 
     // ------------------------------------------------------------ phones and tablets
@@ -169,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         announcer.set(Env.wifi && supervisor.state == .owned, port: Int(Env.port) ?? 7420)
     }
 
-    @objc func openRemotes() {
+    func openRemotes() {
         if remotes == nil {
             let w = RemotesWindow()
             w.model.onEnabled = { [weak self] on, _ in
@@ -183,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// The menu's checkbox: the server opens or closes its Wi-Fi listener now (closing it disconnects every device).
-    @objc func toggleWifi() {
+    func toggleWifi() {
         let on = !Env.wifi
         Task {
             do {
@@ -206,17 +208,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openWindow() {
         if switcher == nil {
             switcher = SwitcherWindow(base: Env.base)
-            // Only what's still showing: a timed notice keeps its own end, an expired one is gone.
-            if let notice {
-                let left = notice.until.map { $0.timeIntervalSinceNow }
-                if left.map({ $0 > 0 }) ?? true { switcher?.showNotice(notice.text, for: left) }
-            }
+            // A timed notice keeps its own end; one already past shows nothing.
+            if let notice { switcher?.showNotice(notice.text, until: notice.until) }
         }
         switcher?.show()
     }
 
     /// The switcher's Edit with AI sheet: connect an agent, the agent on-air setting.
-    @objc func editWithAI() {
+    func editWithAI() {
         openWindow()
         switcher?.openAgentSheet()
     }
@@ -272,9 +271,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    @objc func openInBrowser() { Outside.openInBrowser(Env.base.appendingPathComponent("")) }
+    func openInBrowser() { Outside.openInBrowser(Env.base.appendingPathComponent("")) }
 
-    @objc func openLibrary() {
+    func openLibrary() {
         Task {
             do {
                 // One of the few answers with an absolute path in it, given only to this Mac itself.
@@ -287,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Setup never switches OBS's scene while it's live (the server checks too), but say so before doing anything.
-    @objc func setUpObs() {
+    func setUpObs() {
         if let live, live.obsLive {
             let answer = Outside.alert(
                 "OBS is \(live.obs.streaming ? "streaming" : "recording")",
@@ -308,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Off by default (Decisions): a server starting at every login surprises someone who streams once a week.
-    @objc func toggleLogin() {
+    func toggleLogin() {
         guard !Env.e2e else { return }
         do {
             if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() } else { try SMAppService.mainApp.register() }
@@ -318,7 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         buildStatusMenu()
     }
 
-    @objc func showLog() {
+    func showLog() {
         capLog(Env.logFile)
         if !FileManager.default.fileExists(atPath: Env.logFile.path) { FileManager.default.createFile(atPath: Env.logFile.path, contents: nil) }
         Outside.openFolder(Env.logFile)

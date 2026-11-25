@@ -229,23 +229,17 @@ public final class UsbTunnel: @unchecked Sendable {
         }
     }
 
-    /// Sends `data` on, then reads again (`next`) once it's sent; at the end of a direction, passes the
-    /// half-close on instead, and closes the pair once both directions have ended.
+    /// Sends `data` on, then reads again (`next`) once it's sent. At the end of a direction the last
+    /// bytes go with a half-close, and the pair closes once both directions have ended.
     private func forward(_ data: Data?, complete: Bool, to dst: NWConnection, link: Link, next: @escaping @Sendable () -> Void) {
-        let end: @Sendable () -> Void = {
-            guard complete else { return next() }
-            dst.send(content: nil, contentContext: .finalMessage, isComplete: true, completion: .contentProcessed { [weak self] error in
-                guard let self, !link.closed else { return }
-                if error != nil { return self.drop(link) }
-                link.open -= 1
-                if link.open == 0 { self.drop(link) }
-            })
-        }
-        guard let data, !data.isEmpty else { return end() }
-        dst.send(content: data, completion: .contentProcessed { [weak self] error in
+        let content = data?.isEmpty == false ? data : nil
+        guard content != nil || complete else { return next() }
+        dst.send(content: content, contentContext: complete ? .finalMessage : .defaultMessage, isComplete: true, completion: .contentProcessed { [weak self] error in
             guard let self, !link.closed else { return }
             if error != nil { return self.drop(link) }
-            end()
+            guard complete else { return next() }
+            link.open -= 1
+            if link.open == 0 { self.drop(link) }
         })
     }
 }

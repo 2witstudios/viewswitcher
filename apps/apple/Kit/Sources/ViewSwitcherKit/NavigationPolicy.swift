@@ -70,6 +70,18 @@ public enum NavigationPolicy {
 
     /// Who may ask the app for the camera scanner and Bonjour (ConnectorBridge, PHONE-4, PHONE-5): only the
     /// bundled connector or demo in the main frame, never a page the Mac serves, a scene, or a subframe.
+    /// A page on the server the Mac window may load again (http(s), allowed in the main frame).
+    public static func onServer(_ url: URL, server: URL) -> Bool {
+        url.scheme?.hasPrefix("http") == true && mac(url, server: server, mainFrame: true) == .allow
+    }
+
+    /// What the Mac window loads when a load failed (the server restarting) or after Restart Server:
+    /// the page that failed to open, else the one that was open, when it's on the server; else the
+    /// switcher's root. Never the root when a page can be kept, so nobody is dropped out of the editor.
+    public static func retryTarget(failed: URL?, current: URL?, server: URL) -> URL {
+        [failed, current].compactMap { $0 }.first { onServer($0, server: server) } ?? server.appendingPathComponent("")
+    }
+
     public static func connectorBridgeAllowed(isMainFrame: Bool, scheme: String) -> Bool {
         isMainFrame && scheme.lowercased() == connectorScheme
     }

@@ -96,32 +96,25 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
     /// After Restart Server, or a load that failed: stay on the page that was open (the editor, a
     /// stream), or the one that failed to open, when it's on the server; else the switcher's root.
     func reloadCurrent(preferring failed: URL? = nil) {
-        if let url = [failed, webView.url].compactMap({ $0 }).first(where: onServer) {
-            webView.load(URLRequest(url: url))
-        } else {
-            load()
-        }
+        webView.load(URLRequest(url: NavigationPolicy.retryTarget(failed: failed, current: webView.url, server: base)))
     }
 
-    private func onServer(_ url: URL) -> Bool {
-        url.scheme?.hasPrefix("http") == true && NavigationPolicy.mac(url, server: base, mainFrame: true) == .allow
-    }
-
-    /// A banner over the page, or none; with `seconds`, it goes by itself.
-    func showNotice(_ text: String?, for seconds: TimeInterval? = nil) {
+    /// A banner over the page, or none; with `until`, it goes by itself then (at once if that's past).
+    func showNotice(_ text: String?, until: Date? = nil) {
         noticeEnds?.cancel()
         noticeEnds = nil
-        notice = text
+        let left = until.map { $0.timeIntervalSinceNow }
+        notice = (left ?? 1) > 0 ? text : nil
         pushShellInfo()
-        guard text != nil, let seconds else { return }
+        guard notice != nil, let left else { return }
         let item = DispatchWorkItem { [weak self] in self?.showNotice(nil) }
         noticeEnds = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+        DispatchQueue.main.asyncAfter(deadline: .now() + left, execute: item)
     }
 
     /// Edit with AI…: the page opens its sheet for #ai, or for /?ai when it loads.
     func openAgentSheet() {
-        if let url = webView.url, !webView.isLoading, onServer(url) {
+        if let url = webView.url, !webView.isLoading, NavigationPolicy.onServer(url, server: base) {
             webView.evaluateJavaScript("location.hash = 'ai'")
         } else if var c = URLComponents(url: base.appendingPathComponent(""), resolvingAgainstBaseURL: false) {
             c.query = "ai"

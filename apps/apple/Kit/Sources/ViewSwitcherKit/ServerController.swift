@@ -113,6 +113,8 @@ public final class Server: @unchecked Sendable {
     }
 
     public var pid: Int32? { process?.processIdentifier }
+    /// The leftover server this one replaced at launch, if any (set before the server is handed out).
+    public internal(set) var replacedOrphan: Int32?
 
     var exited: Int32? { lock.withLock { exitCode } }
     var tail: String { lock.withLock { tailText } }
@@ -191,12 +193,43 @@ public func settledProbe(_ base: URL, slowFor: TimeInterval = 5, timeout: TimeIn
 public func connectOrStart(_ base: URL, launch: @autoclosure @Sendable () throws -> Launch, readyTimeout: TimeInterval = 20, slowFor: TimeInterval = 5) async throws -> Server {
     switch await settledProbe(base, slowFor: slowFor) {
     case .viewswitcher:
-        guard let info = try? await ServerAPI(base: base).info(), info.isOrphan(), let pid = info.pid else { return Server(attachedTo: base) }
+        // The pid comes from whatever answers on the port, so it is only signalled once the system
+        // confirms it's a leftover of this app's own server (isLeftoverSidecar); otherwise attach.
+        guard let info = try? await ServerAPI(base: base).info(), info.isOrphan(), let pid = info.pid,
+              let l = try? launch(), isLeftoverSidecar(pid, executable: l.executable)
+        else { return Server(attachedTo: base) }
         try await stopOrphan(pid, base: base)
-        return try await start(base, launch: launch(), readyTimeout: readyTimeout)
+        let s = try await start(base, launch: l, readyTimeout: readyTimeout)
+        s.replacedOrphan = pid
+        return s
     case .other, .slow: throw ServerError.portTaken(base.port.map(String.init) ?? "")
     case .none: return try await start(base, launch: launch(), readyTimeout: readyTimeout)
     }
+}
+
+/// What the system says about a running process.
+struct ProcessFacts: Equatable {
+    var path: String
+    var uid: uid_t
+    var ppid: UInt32
+}
+
+func processFacts(_ pid: Int32) -> ProcessFacts? {
+    var info = proc_bsdinfo()
+    let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+    guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+    var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+    guard proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 else { return nil }
+    return ProcessFacts(path: String(cString: buf), uid: info.pbi_uid, ppid: info.pbi_ppid)
+}
+
+/// Whether `pid` is a leftover of the server this app launches: that same executable, run by this
+/// user, and handed to launchd (ppid 1) because the app that started it is gone. Anything else that
+/// names a pid in /api/info (another account's or a sandboxed app's listener) gets no signal sent.
+func isLeftoverSidecar(_ pid: Int32, executable: URL) -> Bool {
+    guard let f = processFacts(pid) else { return false }
+    let same = URL(fileURLWithPath: f.path).resolvingSymlinksInPath().path == executable.resolvingSymlinksInPath().path
+    return same && f.uid == getuid() && f.ppid == 1
 }
 
 /// SIGTERM (it saves paired devices on the way out), SIGKILL after 3 s; returns once the port is free.

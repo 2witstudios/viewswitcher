@@ -13,7 +13,10 @@ final class ServerControllerTests: XCTestCase {
 
     var tmp: URL!
     override func setUp() { tmp = TestServers.tempDir() }
-    override func tearDown() { try? FileManager.default.removeItem(at: tmp) }
+    override func tearDown() {
+        for pid in leftovers { kill(pid, SIGKILL) }
+        try? FileManager.default.removeItem(at: tmp)
+    }
 
     func stubLaunch(port: UInt16, script: String) throws -> Launch {
         try TestServers.launch(port: port, script: script, in: tmp)
@@ -101,31 +104,41 @@ final class ServerControllerTests: XCTestCase {
         XCTAssertGreaterThan(Date().timeIntervalSince(t0), 1, "asked again for the whole wait first")
     }
 
-    /// A Bun stub answering /api/info as a sidecar of `parent`, ignoring SIGTERM if told to.
-    func sidecarScript(parent: Int32, ignoreTerm: Bool = false) -> String {
+    /// A Bun stub answering /api/info as a sidecar of `parent`, naming `reportPid` as its own pid (its
+    /// real one unless told otherwise), ignoring SIGTERM if told to.
+    func sidecarScript(parent: Int32, reportPid: Int32? = nil, ignoreTerm: Bool = false) -> String {
         """
         \(ignoreTerm ? "process.on(\"SIGTERM\", () => {});" : "")
         Bun.serve({ hostname: "127.0.0.1", port: Number(process.env.PORT), fetch: (req) =>
           new URL(req.url).pathname === "/api/info"
-            ? Response.json({ library: "/tmp/lib", sidecar: true, parentPid: \(parent), pid: process.pid, claudeCode: "x" })
+            ? Response.json({ library: "/tmp/lib", sidecar: true, parentPid: \(parent), pid: \(reportPid.map(String.init) ?? "process.pid"), claudeCode: "x" })
             : Response.json(\(Self.state)) });
         """
     }
 
-    /// Runs `script` outside the controller, as an earlier run of the app would have left it.
-    func runLeftover(port: UInt16, script: String) async throws -> Process {
+    /// Runs `script` with the same executable the controller would launch, detached the way an
+    /// earlier run of the app leaves it: its parent (a shell here) gone, so launchd (pid 1) holds it.
+    /// Returns its pid once it answers.
+    func runLeftover(port: UInt16, script: String) async throws -> Int32 {
         let l = try TestServers.launch(port: port, script: script, in: tmp, name: "leftover.ts")
-        let p = Process()
-        p.executableURL = l.executable
-        p.arguments = l.arguments
-        p.environment = l.environment
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
-        try p.run()
+        let sh = Process()
+        sh.executableURL = URL(fileURLWithPath: "/bin/sh")
+        sh.arguments = ["-c", "\"$0\" \"$1\" >/dev/null 2>&1 & echo $!", l.executable.path] + l.arguments
+        sh.environment = l.environment
+        let out = Pipe()
+        sh.standardOutput = out
+        try sh.run()
+        sh.waitUntilExit()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let pid = try XCTUnwrap(Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+        leftovers.append(pid)
         let base = URL(string: "http://127.0.0.1:\(port)")!
         for _ in 0..<100 where await probe(base) != .viewswitcher { try await Task.sleep(for: .milliseconds(50)) }
-        return p
+        return pid
     }
+
+    /// Leftovers this test started, killed in tearDown whatever happened.
+    var leftovers: [Int32] = []
 
     func deadPid() throws -> Int32 {
         let p = Process()
@@ -135,16 +148,23 @@ final class ServerControllerTests: XCTestCase {
         return p.processIdentifier
     }
 
+    func until(_ timeout: TimeInterval = 5, _ check: @escaping () -> Bool) async -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end, !check() { try? await Task.sleep(for: .milliseconds(25)) }
+        return check()
+    }
+
     func testAnOrphanFromAnEarlierRunIsReplaced() async throws {
         let port = try freePort()
         let base = URL(string: "http://127.0.0.1:\(port)")!
         let orphan = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid()))
-        defer { if orphan.isRunning { orphan.terminate() } }
         let launch = try stubLaunch(port: port, script: Self.serving)
         let s = try await connectOrStart(base, launch: launch)
         XCTAssertTrue(s.owned, "the app starts its own instead of attaching to a server about to go away")
-        XCTAssertFalse(orphan.isRunning, "the orphan was stopped")
-        XCTAssertNotEqual(s.pid, orphan.processIdentifier)
+        XCTAssertEqual(s.replacedOrphan, orphan)
+        let gone = await until { !processExists(orphan) }
+        XCTAssertTrue(gone, "the orphan was stopped")
+        XCTAssertNotEqual(s.pid, orphan)
         await s.stop()
     }
 
@@ -152,12 +172,46 @@ final class ServerControllerTests: XCTestCase {
         let port = try freePort()
         let base = URL(string: "http://127.0.0.1:\(port)")!
         let orphan = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid(), ignoreTerm: true))
-        defer { if orphan.isRunning { kill(orphan.processIdentifier, SIGKILL) } }
         let launch = try stubLaunch(port: port, script: Self.serving)
         let s = try await connectOrStart(base, launch: launch)
         XCTAssertTrue(s.owned)
-        XCTAssertFalse(orphan.isRunning)
+        XCTAssertEqual(s.replacedOrphan, orphan)
+        let gone = await until { !processExists(orphan) }
+        XCTAssertTrue(gone)
         await s.stop()
+    }
+
+    func testAPidThatIsntALeftoverServerIsNeverSignalled() async throws {
+        // Whatever holds the port names another process of this user (here a sleep, still with its
+        // parent) as its pid: the app must not kill it on that say-so.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let bystander = Process()
+        bystander.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        bystander.arguments = ["30"]
+        try bystander.run()
+        defer { bystander.terminate() }
+        _ = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid(), reportPid: bystander.processIdentifier))
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertFalse(s.owned, "not provably a leftover of ours: attach, as before")
+        XCTAssertNil(s.replacedOrphan)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(bystander.isRunning, "the bystander survives")
+    }
+
+    func testOnlyALeftoverOfThisAppsOwnServerQualifies() throws {
+        let sleep = Process()
+        sleep.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleep.arguments = ["30"]
+        try sleep.run()
+        defer { sleep.terminate() }
+        let facts = try XCTUnwrap(processFacts(sleep.processIdentifier))
+        XCTAssertEqual(facts.uid, getuid())
+        XCTAssertEqual(facts.ppid, UInt32(getpid()))
+        XCTAssertFalse(isLeftoverSidecar(sleep.processIdentifier, executable: URL(fileURLWithPath: "/bin/sleep")), "its parent is alive")
+        XCTAssertFalse(isLeftoverSidecar(getpid(), executable: URL(fileURLWithPath: "/bin/sleep")), "another executable")
+        XCTAssertNil(processFacts(try deadPid()))
     }
 
     func testASidecarWhoseAppIsAliveIsLeftAlone() async throws {
@@ -169,11 +223,10 @@ final class ServerControllerTests: XCTestCase {
         try app.run()
         defer { app.terminate() }
         let other = try await runLeftover(port: port, script: sidecarScript(parent: app.processIdentifier))
-        defer { other.terminate() }
-        let launch = Launch(executable: URL(fileURLWithPath: "/nonexistent"), environment: [:], logFile: tmp.appendingPathComponent("log"))
+        let launch = try stubLaunch(port: port, script: Self.serving)
         let s = try await connectOrStart(base, launch: launch)
         XCTAssertFalse(s.owned, "another running copy's server: attach, never stop it")
-        XCTAssertTrue(other.isRunning)
+        XCTAssertTrue(processExists(other))
     }
 
     func testOrphanRules() {

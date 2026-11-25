@@ -104,8 +104,8 @@ enum Outside {
         return a.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
     }
 
-    static func notify(_ title: String, _ body: String, id: String? = nil) {
+    static func notify(_ title: String, _ body: String, id: String = UUID().uuidString) {
         if Env.e2e { notices.append("\(title): \(body)"); return }
-        if let id { Notifier.shared.post(title, body, id: id) } else { Notifier.shared.post(title, body) }
+        Notifier.shared.post(title, body, id: id)
     }
 }
