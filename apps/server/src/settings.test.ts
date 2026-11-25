@@ -34,7 +34,7 @@ describe("settings.json", () => {
     expect(await readSettings(root)).toEqual({ agentOnAir: "never" });
   });
   test("refuses a value that isn't one of the three", async () => {
-    expect(writeSettings(temp(), { agentOnAir: "sometimes" as never })).rejects.toThrow("onAir is one of never, not-live, always");
-    expect(writeSettings(temp(), { agentOnAir: undefined })).rejects.toThrow("onAir is one of");
+    await expect(writeSettings(temp(), { agentOnAir: "sometimes" as never })).rejects.toThrow("onAir is one of never, not-live, always");
+    await expect(writeSettings(temp(), { agentOnAir: undefined })).rejects.toThrow("onAir is one of");
   });
 });
