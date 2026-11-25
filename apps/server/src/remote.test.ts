@@ -52,6 +52,22 @@ function socket(headers: Record<string, string>) {
   return { ws, first, closed };
 }
 
+async function start() {
+  proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
+    env: {
+      ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "",
+      VIEWSWITCHER_LAN: "1", VIEWSWITCHER_LAN_HOST: ip!, VIEWSWITCHER_ADMIN_TOKEN: ADMIN, VIEWSWITCHER_PAIR_TTL_MS: String(TTL), VIEWSWITCHER_LOCAL_NAME: "test-mac",
+    },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  for (let i = 0; i < 100; i++) {
+    if (await lan("/").then((r) => r.status === 401, () => false)) return;
+    await Bun.sleep(50);
+  }
+  throw new Error("server didn't start");
+}
+
 describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
   beforeAll(async () => {
     port = await new Promise<number>((r) => {
@@ -60,19 +76,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
         s.close(() => r(p));
       });
     });
-    proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-      env: {
-        ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "",
-        VIEWSWITCHER_LAN: "1", VIEWSWITCHER_LAN_HOST: ip!, VIEWSWITCHER_ADMIN_TOKEN: ADMIN, VIEWSWITCHER_PAIR_TTL_MS: String(TTL), VIEWSWITCHER_LOCAL_NAME: "test-mac",
-      },
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    for (let i = 0; i < 100; i++) {
-      if (await lan("/").then((r) => r.status === 401, () => false)) return;
-      await Bun.sleep(50);
-    }
-    throw new Error("server didn't start");
+    await start();
   });
   afterAll(() => {
     proc?.kill();
@@ -114,6 +118,8 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     const { code, pairUrl } = (await admin("/api/remote/code", {})) as { code: { code: string }; pairUrl: string };
     expect(pairUrl).toBe(`http://${ip}:${port}/pair?code=${code.code}`);
     expect((await pairWith("WRONGCOD")).status).toBe(403);
+    // The one POST an unpaired device may make is small.
+    expect((await lan("/api/pair", { method: "POST", headers: { "content-type": "application/json", origin: `http://${ip}:${port}` }, body: JSON.stringify({ code: code.code, name: "x".repeat(4000) }) })).status).toBe(413);
     expect((await pairWith(code.code, { origin: "http://evil.example" })).status).toBe(403); // another site can't pair for you
     const ok = await pairWith(code.code.toLowerCase());
     expect(ok.status).toBe(200);
@@ -178,5 +184,27 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     expect((await mac("/api/state")).status).toBe(200);
     expect((await admin("/api/remote", { enabled: true })).enabled).toBe(true);
     expect((await lan("/api/state", { headers: { cookie: again } })).status).toBe(200); // still paired when it comes back
+  });
+
+  test("a removal survives quitting right after it (SIGTERM, as the Mac app quits)", async () => {
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const lost = cookieOf(await pairWith(code.code));
+    const { devices } = await admin("/api/remote");
+    const id = devices.find((d: { name: string; lastSeen: number }) => d.name === "Test phone" && d.lastSeen === Math.max(...devices.map((x: { lastSeen: number }) => x.lastSeen))).id;
+    await admin("/api/remote/remove", { id });
+    proc.kill("SIGTERM");
+    await proc.exited;
+    await start();
+    expect((await lan("/api/state", { headers: { cookie: lost } })).status).toBe(401);
+  });
+
+  test("a website open on a paired phone can't read the live socket", async () => {
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const cookie = cookieOf(await pairWith(code.code));
+    const evil = socket({ cookie, origin: "https://evil.example" });
+    expect((await evil.first).close).toBeDefined();
+    const own = socket({ cookie, origin: `http://${ip}:${port}` });
+    expect((await own.first).message).toBeDefined();
+    own.ws.close();
   });
 });

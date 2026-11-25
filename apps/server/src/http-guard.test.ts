@@ -73,6 +73,33 @@ describe("DNS rebinding: Host evil.example:7420", () => {
   });
 });
 
+describe("the live socket", () => {
+  const ws = (origin?: string) =>
+    new Promise<string>((resolve) => {
+      const w = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: origin ? { origin } : {} } as any);
+      w.onmessage = () => (resolve("open"), w.close());
+      w.onclose = () => resolve("closed");
+      w.onerror = () => {};
+    });
+  test("a website open in a browser on this Mac can't read it; the switcher's own pages and native clients can", async () => {
+    expect(await ws("https://evil.example")).toBe("closed");
+    expect(await ws(`http://127.0.0.1:${port}`)).toBe("open");
+    expect(await ws()).toBe("open");
+  });
+});
+
+describe("HOST", () => {
+  test("a non-loopback HOST is refused at start (the Wi-Fi setting is the way onto the network)", async () => {
+    const p = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
+      env: { ...process.env, PORT: "1", HOST: "0.0.0.0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    expect(await p.exited).toBe(1);
+    expect(await new Response(p.stderr).text()).toContain("isn't a loopback address");
+  });
+});
+
 describe("the Mac app's own endpoints", () => {
   test("/api/info and /api/remote are not for anything forwarded; /api/remote needs the app's secret", async () => {
     expect((await request("/api/info")).status).toBe(200);

@@ -190,6 +190,8 @@ struct RemotesView: View {
                     }
                     Text(RemoteText.code(code)).font(.system(size: 34, weight: .semibold, design: .monospaced)).textSelection(.enabled)
                     Text(RemoteText.expiry(expires, now: model.now)).foregroundStyle(.secondary).monospacedDigit()
+                } else if model.status?.codeGuessed == true {
+                    Text(RemoteText.guessed).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("The code was used or has expired.").foregroundStyle(.secondary)
                 }

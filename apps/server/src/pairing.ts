@@ -22,8 +22,10 @@ export const MAX_PEER_FAILURES = 5;
 export const PEER_WINDOW_MS = 5 * 60_000;
 /** Cookie that carries the device token. */
 export const COOKIE = "vs_device";
-/** Browsers keep a cookie at most 400 days; a device seen within that time stays paired. */
+/** Browsers keep a cookie at most 400 days. The cookie is sent again at most once a day while a device is
+ *  in use (`renew`), so a device used within that time stays paired. */
 export const COOKIE_MAX_AGE_S = 400 * 24 * 3600;
+const RENEW_MS = 24 * 3600_000;
 
 /** SHA3-256 of a secret, hex. Every comparison of secrets goes through this (see above). */
 export const sha3 = (s: string) => new Bun.CryptoHasher("sha3-256").update(s).digest("hex");
@@ -80,10 +82,13 @@ type Options = {
 export class Pairing {
   private devices = new Map<string, Device>(); // by tokenHash
   private code: { hash: string; expiresAt: number; failures: number } | null = null;
-  private peers = new Map<string, number[]>(); // failure times per address
+  /** The last code was cancelled by wrong guesses (someone on the network is guessing); the Mac says so. */
+  codeGuessed = false;
+  private peers = new Map<string, number[]>(); // wrong-guess times per address (only addresses that guessed wrong)
+  private renewed = new Map<string, number>(); // when each device's cookie was last sent
   private readonly now: () => number;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
-  private saving = Promise.resolve();
+  private saving: Promise<void> = Promise.resolve();
   /** Called after a device is removed (to close its sockets). */
   onRemoved: (id: string) => void = () => {};
 
@@ -112,6 +117,10 @@ export class Pairing {
     const code = randomCode();
     const expiresAt = this.now() + Math.min(this.opts.ttlMs ?? CODE_TTL_MS, CODE_TTL_MS);
     this.code = { hash: sha3(code), expiresAt, failures: 0 };
+    this.codeGuessed = false;
+    // Forget addresses whose wrong guesses are all older than the window.
+    const t = this.now();
+    for (const [peer, times] of this.peers) if (!times.some((x) => t - x < PEER_WINDOW_MS)) this.peers.delete(peer);
     return { code, expiresAt };
   }
 
@@ -120,30 +129,36 @@ export class Pairing {
     return this.code && this.code.expiresAt > this.now() ? this.code.expiresAt : null;
   }
 
-  /** Exchange a code for a device token. `peer` is the socket's address, for the rate limit. */
+  /** Exchange a code for a device token. `peer` keys the rate limit: the socket's address, or the
+   *  forwarded client's for a proxied request (a bucket key only, never trusted for anything else). */
   pair(candidate: unknown, name: string, peer: string): PairResult {
     const t = this.now();
     const recent = (this.peers.get(peer) ?? []).filter((x) => t - x < PEER_WINDOW_MS);
-    this.peers.set(peer, recent);
+    if (recent.length) this.peers.set(peer, recent);
+    else this.peers.delete(peer);
     if (recent.length >= MAX_PEER_FAILURES) {
       return { ok: false, reason: "limited", error: "Too many tries. Wait a few minutes, then ask the Mac for a new code." };
     }
-    const fail = (reason: "wrong" | "expired", error: string): PairResult => {
-      recent.push(t);
-      if (this.code && ++this.code.failures >= MAX_CODE_FAILURES) this.code = null;
-      return { ok: false, reason, error };
-    };
     const code = this.code;
+    // An old code (a QR code scanned again) isn't a guess: it doesn't count against anyone.
     if (!code || code.expiresAt <= t) {
       this.code = null;
-      return fail("expired", "That code has expired. Ask the Mac for a new one (Phones and Tablets in its menu).");
+      return { ok: false, reason: "expired", error: "That code has expired. Ask the Mac for a new one (Phones and Tablets in its menu)." };
     }
     // Hash both sides, compare digests (see the top of this file).
-    if (sha3(normalizeCode(candidate)) !== code.hash) return fail("wrong", "That code isn't right. Check it on the Mac and try again.");
+    if (sha3(normalizeCode(candidate)) !== code.hash) {
+      this.peers.set(peer, [...recent, t]);
+      if (++code.failures >= MAX_CODE_FAILURES) {
+        this.code = null;
+        this.codeGuessed = true;
+      }
+      return { ok: false, reason: "wrong", error: "That code isn't right. Check it on the Mac and try again." };
+    }
     this.code = null; // single use
     const token = randomToken();
     const device: Device = { id: randomId(), name, tokenHash: sha3(token), pairedAt: t, lastSeen: t };
     this.devices.set(device.tokenHash, device);
+    this.renewed.set(device.id, t);
     this.save();
     return { ok: true, token, device: info(device) };
   }
@@ -163,16 +178,32 @@ export class Pairing {
     return info(d);
   }
 
+  /** Whether to send this device's cookie again (at most once a day), so it lasts 400 days from last use, not from pairing. */
+  renew(id: string): boolean {
+    const t = this.now();
+    if (t - (this.renewed.get(id) ?? 0) < RENEW_MS) return false;
+    this.renewed.set(id, t);
+    return true;
+  }
+
+  /** How many addresses are being rate-limited or watched (for tests). */
+  get trackedPeers() {
+    return this.peers.size;
+  }
+
   list(): DeviceInfo[] {
     return [...this.devices.values()].map(info).sort((a, b) => b.lastSeen - a.lastSeen);
   }
 
-  remove(id: string): boolean {
+  /** Remove a device: its token stops now, and devices.json is written before this returns, so a quit or a
+   *  crash right after can't bring it back. Resolves false if there's no such device; throws if the write failed. */
+  async remove(id: string): Promise<boolean> {
     for (const [hash, d] of this.devices) {
       if (d.id !== id) continue;
       this.devices.delete(hash);
-      this.save();
+      this.renewed.delete(id);
       this.onRemoved(id);
+      if (!(await this.flush())) throw new Error("The device is disconnected, but ViewSwitcher couldn't save the change; it may come back after a restart.");
       return true;
     }
     return false;
@@ -185,11 +216,13 @@ export class Pairing {
     this.saveTimer = setTimeout(() => void this.flush(), 200);
   }
 
-  async flush() {
+  /** Writes devices.json now; false if that failed. */
+  async flush(): Promise<boolean> {
     const file = this.opts.file;
-    if (!file) return;
+    if (!file) return true;
     clearTimeout(this.saveTimer);
     const body = JSON.stringify({ devices: [...this.devices.values()] }, null, 2);
+    let ok = true;
     this.saving = this.saving.then(async () => {
       try {
         await mkdir(dirname(file), { recursive: true });
@@ -198,10 +231,12 @@ export class Pairing {
         await chmod(tmp, 0o600);
         await rename(tmp, file);
       } catch (e) {
+        ok = false;
         console.error("[pairing] couldn't save devices:", (e as Error).message);
       }
     });
     await this.saving;
+    return ok;
   }
 }
 

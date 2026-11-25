@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fromThisMac, gate, loopbackAddress } from "./gate";
+import { fromThisMac, gate, loopbackAddress, rateKey } from "./gate";
 
 const h = (o: Record<string, string>) => new Headers(o);
 
@@ -17,7 +17,7 @@ describe("fromThisMac: the socket is loopback, the Host a loopback name, and no 
     expect(fromThisMac("192.168.1.20", h({ host: "studio.local:7420", "x-forwarded-for": "127.0.0.1" }))).toBe(false);
   });
   test("proxy headers make loopback untrusted (tailscale serve forwards from 127.0.0.1)", () => {
-    for (const p of ["x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip", "forwarded"]) {
+    for (const p of ["x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-forwarded-port", "x-forwarded-server", "x-real-ip", "forwarded", "via", "x-client-ip", "cf-connecting-ip", "true-client-ip", "x-original-forwarded-for"]) {
       expect(fromThisMac("127.0.0.1", h({ host: "127.0.0.1:7420", [p]: "127.0.0.1" }))).toBe(false);
     }
     expect(fromThisMac("127.0.0.1", h({ host: "mac.tail1234.ts.net" }))).toBe(false);
@@ -46,5 +46,17 @@ describe("gate", () => {
   test("an unpaired device may POST /api/pair, and nothing else", () => {
     expect(g(false, false, "/api/pair", "POST")).toBe("pair");
     expect(g(false, false, "/api/pair", "GET")).toBe("deny");
+  });
+});
+
+describe("rateKey: the pairing rate limit's bucket", () => {
+  test("a device's own address, whatever headers it sends", () => {
+    expect(rateKey("192.168.1.20", new Headers({ "x-forwarded-for": "1.2.3.4" }))).toBe("192.168.1.20");
+    expect(rateKey("127.0.0.1", new Headers({ host: "127.0.0.1" }))).toBe("127.0.0.1");
+  });
+  test("behind a local proxy, the client the proxy added (the last X-Forwarded-For entry), so tailnet devices don't share one bucket", () => {
+    expect(rateKey("127.0.0.1", new Headers({ "x-forwarded-for": "6.6.6.6, 100.64.0.9" }))).toBe("fwd:100.64.0.9");
+    expect(rateKey("127.0.0.1", new Headers({ "x-forwarded-for": "100.64.0.10" }))).toBe("fwd:100.64.0.10");
+    expect(rateKey("::1", new Headers({ via: "1.1 proxy" }))).toBe("::1");
   });
 });

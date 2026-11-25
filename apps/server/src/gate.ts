@@ -10,7 +10,13 @@
 // is treated like any other device (and the host guard refuses it first).
 import { loopbackHost } from "./origin";
 
-const PROXY_HEADERS = ["x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip", "forwarded"];
+/** Headers a proxy or forwarder adds to say who the real client is. Any x-forwarded-* counts too. */
+const PROXY_HEADERS = ["forwarded", "via", "x-real-ip", "x-client-ip", "x-cluster-client-ip", "x-original-forwarded-for", "cf-connecting-ip", "true-client-ip", "fastly-client-ip"];
+export const proxied = (headers: Headers) => {
+  if (PROXY_HEADERS.some((h) => headers.has(h))) return true;
+  for (const k of headers.keys()) if (k.startsWith("x-forwarded-")) return true;
+  return false;
+};
 
 /** 127.0.0.0/8 and ::1, also as IPv4-mapped IPv6. */
 export function loopbackAddress(addr: string | null | undefined): boolean {
@@ -21,7 +27,7 @@ export function loopbackAddress(addr: string | null | undefined): boolean {
 
 /** Whether a request comes from this Mac itself (see above). */
 export function fromThisMac(peer: string | null | undefined, headers: Headers): boolean {
-  return loopbackAddress(peer) && loopbackHost(headers.get("host")) && !PROXY_HEADERS.some((h) => headers.has(h));
+  return loopbackAddress(peer) && loopbackHost(headers.get("host")) && !proxied(headers);
 }
 
 export type Gate =
@@ -40,4 +46,15 @@ export function gate({ local, paired, method, path }: { local: boolean; paired: 
   if (path === "/api/pair" && method === "POST") return { kind: "pair" };
   const page = (method === "GET" || method === "HEAD") && path !== "/ws" && !path.startsWith("/api/") && !path.startsWith("/library/") && !path.startsWith("/assets/") && !/\.[a-z0-9]+$/i.test(path);
   return page ? { kind: "pair-page" } : { kind: "deny" };
+}
+
+/** The pairing rate limit's bucket for a request: the socket's address, or for a proxied request from
+ *  loopback (tailscale serve), the client the proxy names (the last X-Forwarded-For entry, the one the
+ *  proxy itself added), so its devices don't share one bucket. A bucket key only, never used to decide
+ *  trust; the per-code cap on wrong guesses bounds guessing whatever the key. */
+export function rateKey(peer: string | null | undefined, headers: Headers): string {
+  const p = peer ?? "?";
+  if (!loopbackAddress(p) || !proxied(headers)) return p;
+  const fwd = headers.get("x-forwarded-for")?.split(",").pop()?.trim() || headers.get("x-real-ip") || headers.get("forwarded")?.match(/for="?\[?([^\]";,]+)/i)?.[1];
+  return fwd ? `fwd:${fwd.slice(0, 64)}` : p;
 }

@@ -40,6 +40,8 @@ public struct RemoteStatus: Decodable, Equatable, Sendable {
     public var urls: [String]
     /// The open code, if there is one.
     public var code: PairingCode?
+    /// The last code was cancelled after too many wrong tries: someone on the network may be guessing.
+    public var codeGuessed: Bool?
     public var devices: [RemoteDevice]
     /// The link the QR code holds (with the code), from POST /api/remote/code.
     public var pairUrl: String?
@@ -53,6 +55,8 @@ public enum RemoteText {
     /// The setting's help text: plain HTTP on the Wi-Fi is the known limit (Decisions, MAC-23). Users
     /// never see a VPN named (Decisions): the caveat is the kind of network, not a product.
     public static let help = "Phones and tablets you pair can switch scenes from a browser. Wi-Fi traffic isn't encrypted, so use this on networks you trust, like home or church Wi-Fi."
+
+    public static let guessed = "That code was cancelled after too many wrong tries. Someone on this network may be guessing; make a new code when your device is ready."
 
     /// "K7PQ2MXA" → "K7PQ-2MXA", easier to read out and type.
     public static func code(_ c: String) -> String {

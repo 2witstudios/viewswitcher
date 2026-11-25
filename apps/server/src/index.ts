@@ -10,7 +10,7 @@ import * as lib from "./library";
 import { ensureLibrary } from "./library-kit";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
-import { fromThisMac, gate } from "./gate";
+import { fromThisMac, gate, loopbackAddress, rateKey } from "./gate";
 import { thisMac } from "./lan";
 import { hostTrusted, originAllowed } from "./origin";
 import { PAIR_PAGE_CSP, pairPage } from "./pair-page";
@@ -33,6 +33,13 @@ if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
   console.log(`[library] ${did.join("; ")}`);
 }
 const stateFile = join(config.library, ".viewswitcher", "state.json");
+
+// The network is reached only through the Wi-Fi setting (its own listener, which it can close); HOST may
+// only move the main listener between loopback addresses.
+if (!loopbackAddress(config.host) && config.host !== "localhost") {
+  console.error(`[viewswitcher] HOST=${config.host} isn't a loopback address. To let phones and tablets connect, use the Wi-Fi setting (VIEWSWITCHER_LAN=1).`);
+  process.exit(1);
+}
 
 // Phones and tablets (MAC-23 … MAC-26); before anything else awaits, so publish() can always reach them.
 /** Paired devices and the open pairing code (pairing.ts); devices.json sits with state.json, outside git (.viewswitcher/ is ignored). */
@@ -190,7 +197,7 @@ const body = async (req: Request) => (await req.json().catch(() => ({}))) as Rec
 // ---------------------------------------------------------------- phones and tablets (MAC-23 … MAC-26)
 
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
-const lanNames = () => (lanServer || config.host !== "127.0.0.1" ? thisMac() : null);
+const lanNames = () => (lanServer ? thisMac() : null);
 
 // Private ranges first (the Wi-Fi), so the QR code points at the address a phone can reach.
 const rank = (ip: string) => (/^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 0 : 1);
@@ -205,6 +212,8 @@ function remoteStatus() {
     localName: mac.localName,
     urls: lanServer ? [...(mac.localName ? [mac.localName] : []), ...addresses].map((h) => `http://${h}:${config.port}/`) : [],
     code: pairing.codeExpiresAt() ? { expiresAt: pairing.codeExpiresAt() } : null,
+    /** The last code was cancelled by wrong guesses: someone on the network is guessing. */
+    codeGuessed: pairing.codeGuessed,
     devices: pairing.list().map((d) => ({ ...d, connected: connected.get(d.id) ?? 0 })),
   };
 }
@@ -250,7 +259,11 @@ async function remoteApi(req: Request, path: string): Promise<Response> {
     return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}` : null });
   }
   if (path === "/api/remote/remove") {
-    pairing.remove(String(b.id ?? ""));
+    try {
+      await pairing.remove(String(b.id ?? ""));
+    } catch (e) {
+      return json({ error: (e as Error).message, ...remoteStatus() }, 500);
+    }
     return json(remoteStatus());
   }
   return json({ error: "Not found" }, 404);
@@ -454,8 +467,11 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
         }
       }
       if (g.kind === "pair") {
+        // The one POST an unpaired device may make: small, and its size known before it's read.
+        const size = Number(req.headers.get("content-length"));
+        if (!(size > 0 && size <= 2048)) return json({ error: "Too large" }, 413);
         const b = await body(req);
-        const r = pairing.pair(b.code, deviceName(b.name, req.headers.get("user-agent") ?? ""), srv.requestIP(req)?.address ?? "?");
+        const r = pairing.pair(b.code, deviceName(b.name, req.headers.get("user-agent") ?? ""), rateKey(srv.requestIP(req)?.address, req.headers));
         if (!r.ok) {
           console.log(`[pairing] refused a code from ${srv.requestIP(req)?.address} (${r.reason})`);
           return json({ error: r.error }, r.reason === "limited" ? 429 : 403);
@@ -467,8 +483,23 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       // A paired device (or this Mac) that opens the QR code's link again goes straight to the switcher.
       if (path === "/pair") return new Response(null, { status: 303, headers: { location: "/" } });
       if (path === "/ws") {
+        // A WebSocket isn't covered by CORS: a website open in a browser on this Mac could otherwise read
+        // the live state. Native clients send no Origin and are let through.
+        if (!originAllowed(req.headers.get("origin"), { host, forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins, lan: lanNames() })) {
+          return json({ error: "Not allowed from this page" }, 403);
+        }
         return srv.upgrade(req, { data: { device: device?.id ?? null, lan: srv === lanServer } }) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
+      const res = await route();
+      // A device in use gets its cookie again once a day, so it stays paired 400 days from its last use.
+      if (device && res && pairing.renew(device.id)) {
+        const token = tokenFromCookie(req.headers.get("cookie"));
+        if (token) res.headers.append("set-cookie", tokenCookie(token, url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https"));
+      }
+      return res;
+
+
+    async function route(): Promise<Response> {
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
         if (path === "/api/log" && req.method === "POST") {
@@ -501,6 +532,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       if (asset) return asset;
       const index = await fileResponse(join(config.webDist, "index.html"));
       return index ?? new Response("The switcher isn't built yet. Run `bun run build`, or use the dev server (`bun run dev`, then http://localhost:5173).", { status: 503 });
+    }
     } catch (e) {
       if (e instanceof PathError || e instanceof EditError) return json({ error: e.message }, 400);
       console.error(e);
@@ -528,6 +560,11 @@ if (config.lan) setLan(true);
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
+// Quit (the Mac app sends SIGTERM) or Ctrl-C: write paired devices first, so nothing changed in the last moment is lost.
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
+}
+
 // Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
 // so the port is never left held by an orphan.
 const parent = Number(process.env.VIEWSWITCHER_PARENT_PID);
@@ -537,7 +574,7 @@ if (parent > 1) {
       process.kill(parent, 0);
     } catch {
       console.log("[viewswitcher] the Mac app is gone; stopping");
-      process.exit(0);
+      void pairing.flush().finally(() => process.exit(0));
     }
   }, 2000).unref();
 }

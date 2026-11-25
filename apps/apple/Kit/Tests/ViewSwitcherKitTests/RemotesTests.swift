@@ -18,6 +18,9 @@ final class RemotesTests: XCTestCase {
         let off = try RemoteStatus.decode(Data(#"{"enabled":false,"port":7420,"localName":null,"urls":[],"code":null,"devices":[]}"#.utf8))
         XCTAssertFalse(off.enabled)
         XCTAssertNil(off.code)
+        XCTAssertNil(off.codeGuessed)
+        let guessed = try RemoteStatus.decode(Data(#"{"enabled":true,"port":7420,"localName":null,"urls":[],"code":null,"codeGuessed":true,"devices":[]}"#.utf8))
+        XCTAssertEqual(guessed.codeGuessed, true)
     }
 
     func testCodeAndTimes() {

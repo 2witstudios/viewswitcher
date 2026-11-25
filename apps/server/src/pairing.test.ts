@@ -72,12 +72,34 @@ describe("rate limits", () => {
     c.tick(PEER_WINDOW_MS);
     expect(p.pair(p.newCode().code, "a", "192.168.1.66").ok).toBe(true);
   });
-  test(`a code is used up after ${MAX_CODE_FAILURES} wrong guesses from anywhere`, () => {
+  test(`a code is used up after ${MAX_CODE_FAILURES} wrong guesses from anywhere, and the Mac is told`, () => {
     const p = new Pairing({ file: null });
     const { code } = p.newCode();
     for (let i = 0; i < MAX_CODE_FAILURES; i++) p.pair("WRONGXYZ", "a", `192.168.1.${i}`);
     expect(p.codeExpiresAt()).toBeNull();
+    expect(p.codeGuessed).toBe(true);
     expect(p.pair(code, "a", "192.168.1.200")).toMatchObject({ ok: false, reason: "expired" });
+    p.newCode();
+    expect(p.codeGuessed).toBe(false);
+  });
+  test("an old code (a QR code scanned again) doesn't lock the device out", () => {
+    const c = clock();
+    const p = new Pairing({ file: null, now: c.now });
+    const { code: old } = p.newCode();
+    c.tick(CODE_TTL_MS);
+    for (let i = 0; i < MAX_PEER_FAILURES + 2; i++) expect(p.pair(old, "a", "192.168.1.66")).toMatchObject({ ok: false, reason: "expired" });
+    expect(p.pair(p.newCode().code, "a", "192.168.1.66").ok).toBe(true);
+  });
+  test("addresses are forgotten once their wrong guesses are old; ones that never guessed wrong aren't kept", () => {
+    const c = clock();
+    const p = new Pairing({ file: null, now: c.now });
+    p.newCode();
+    p.pair("WRONGXYZ", "a", "192.168.1.66");
+    p.pair(p.newCode().code, "b", "192.168.1.67");
+    expect(p.trackedPeers).toBe(1);
+    c.tick(PEER_WINDOW_MS);
+    p.newCode();
+    expect(p.trackedPeers).toBe(0);
   });
 });
 
@@ -97,18 +119,28 @@ describe("device tokens", () => {
     if (!r.ok) throw new Error("pairing failed");
     for (const t of [null, undefined, "", "nope", r.token.slice(0, -1), r.token + "A", sha3(r.token)]) expect(p.check(t)).toBeNull();
   });
-  test("removing a device stops its token at once, and says so", () => {
+  test("removing a device stops its token at once, and says so", async () => {
     const p = new Pairing({ file: null });
     const removed: string[] = [];
     p.onRemoved = (id) => removed.push(id);
     const a = p.pair(p.newCode().code, "a", "192.168.1.20");
     const b = p.pair(p.newCode().code, "b", "192.168.1.21");
     if (!a.ok || !b.ok) throw new Error("pairing failed");
-    expect(p.remove(a.device.id)).toBe(true);
+    expect(await p.remove(a.device.id)).toBe(true);
     expect(p.check(a.token)).toBeNull();
     expect(p.check(b.token)).not.toBeNull();
     expect(removed).toEqual([a.device.id]);
-    expect(p.remove("no-such-id")).toBe(false);
+    expect(await p.remove("no-such-id")).toBe(false);
+  });
+  test("the cookie is sent again at most once a day while the device is used", () => {
+    const c = clock();
+    const p = new Pairing({ file: null, now: c.now });
+    const r = p.pair(p.newCode().code, "a", "192.168.1.20");
+    if (!r.ok) throw new Error("pairing failed");
+    expect(p.renew(r.device.id)).toBe(false); // just set by pairing
+    c.tick(24 * 3600_000);
+    expect(p.renew(r.device.id)).toBe(true);
+    expect(p.renew(r.device.id)).toBe(false);
   });
   test("last seen follows the device", () => {
     const c = clock();
@@ -130,8 +162,7 @@ describe("device tokens", () => {
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const again = await new Pairing({ file }).load();
     expect(again.check(r.token)?.name).toBe("iPad");
-    again.remove(r.device.id);
-    await again.flush();
+    await again.remove(r.device.id); // written before it returns: no flush needed
     expect((await new Pairing({ file }).load()).check(r.token)).toBeNull();
   });
 });
