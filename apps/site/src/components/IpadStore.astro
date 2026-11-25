@@ -1,0 +1,15 @@
+---
+// The iPad app's place on the App Store: Apple's "Download on the App Store" badge once IPAD_APP_URL is set
+// (site.config.ts), "Coming to the App Store" until then. The badge is Apple's own artwork, unmodified.
+import badge from "../assets/app-store-badge.svg";
+import { site } from "../site.config";
+const app = site.ipadApp;
+---
+{app.state === "store"
+  ? <a class="store" href={app.href}><img src={badge.src} width="132" height="44" alt="Download ViewSwitcher for iPad on the App Store" /></a>
+  : <p class="soon">Coming to the App Store</p>}
+<style>
+  .store { display: inline-block; border-radius: 8px; }
+  .store img { height: 44px; width: auto; }
+  .soon { font-weight: 600; color: var(--ink); }
+</style>

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ctas, macAppFlag } from "./cta";
+import { ctas, ipadApp, macAppFlag } from "./cta";
 
 const repo = "2witstudios/viewswitcher";
 const dmg = "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg";
@@ -31,5 +31,21 @@ describe("macAppFlag", () => {
   });
   test("rejects anything else rather than guessing", () => {
     expect(() => macAppFlag(false, "yes")).toThrow();
+  });
+});
+
+describe("ipadApp", () => {
+  test("with no App Store link yet, the iPad app is coming", () => {
+    expect(ipadApp(null)).toEqual({ state: "soon" });
+    expect(ipadApp(undefined)).toEqual({ state: "soon" });
+    expect(ipadApp("  ")).toEqual({ state: "soon" });
+  });
+  test("an App Store link turns it into the store badge's link", () => {
+    const href = "https://apps.apple.com/app/viewswitcher/id1234567890";
+    expect(ipadApp(` ${href} `)).toEqual({ state: "store", href });
+  });
+  test("rejects a link that isn't the App Store rather than sending people elsewhere", () => {
+    expect(() => ipadApp("https://example.com/app")).toThrow();
+    expect(() => ipadApp("http://apps.apple.com/app/id1")).toThrow();
   });
 });

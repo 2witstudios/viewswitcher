@@ -1,6 +1,8 @@
 ---
 import Cta from "./Cta.astro";
+import IpadStore from "./IpadStore.astro";
 import { site, github } from "../site.config";
+import { IPAD_PRICE } from "../lib/cta";
 ---
 <section class="section dark on-dark" id="download" aria-labelledby="download-title">
   <div class="wrap grid">
@@ -10,7 +12,11 @@ import { site, github } from "../site.config";
         ? <p class="lede">Open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It keeps itself up to date.</p>
         : <p class="lede">The Mac app is in testing now. Follow it on GitHub and you'll get an email when it's ready to download.</p>}
       <Cta />
-      <p class="small">Free and open source. Mac only for now.</p>
+      <p class="small">The Mac app is free and open source.</p>
+      <div class="ipad">
+        <p>Want to switch from an iPad? <b>ViewSwitcher for iPad</b> is {IPAD_PRICE}, once.</p>
+        <IpadStore />
+      </div>
     </div>
     <div class="needs">
       <h3>What you need</h3>
@@ -40,6 +46,8 @@ bun run start</code></pre>
   @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem 4rem; } .dev { grid-column: 1 / -1; } }
   .copy { display: grid; gap: 1.5rem; }
   .small { font-size: 0.9375rem; color: var(--ink-2); }
+  .ipad { display: grid; gap: 0.75rem; justify-items: start; border-top: 1px solid var(--rule); padding-top: 1.25rem; color: var(--ink-2); }
+  .ipad b { color: var(--ink); font-weight: 600; }
   .needs { display: grid; gap: 1rem; background: var(--raised); border: 1px solid var(--rule); border-radius: 12px; padding: 1.5rem 1.75rem; }
   .needs ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; color: var(--ink-2); }
   .needs b { color: var(--ink); font-weight: 600; }

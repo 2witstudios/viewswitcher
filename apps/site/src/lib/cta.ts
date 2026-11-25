@@ -20,3 +20,15 @@ export function macAppFlag(configured: boolean, override: string | undefined): b
   if (override === "0" || override === "false") return false;
   throw new Error(`SITE_MAC_APP must be 1, 0, true or false, not "${override}"`);
 }
+
+/** The iPad app: optional, a one-time price on the App Store. Before its listing is live it's "coming". */
+export const IPAD_PRICE = "$9.99";
+export type IpadApp = { state: "soon" } | { state: "store"; href: string };
+
+/** IPAD_APP_URL (or a SITE_IPAD_APP_URL override) turns "Coming to the App Store" into the store badge. */
+export function ipadApp(url: string | null | undefined): IpadApp {
+  const u = url?.trim();
+  if (!u) return { state: "soon" };
+  if (!/^https:\/\/apps\.apple\.com\//.test(u)) throw new Error(`IPAD_APP_URL must be an https://apps.apple.com/ link, not "${u}"`);
+  return { state: "store", href: u };
+}

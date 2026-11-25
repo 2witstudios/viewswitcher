@@ -1,5 +1,6 @@
 ---
-import { github } from "../site.config";
+import { github, site } from "../site.config";
+import { IPAD_PRICE } from "../lib/cta";
 const faqs = [
   { q: "Do I need OBS?", a: "Yes. OBS is the free app that does the streaming, and ViewSwitcher sets it up for you the first time. After that, ViewSwitcher tells OBS what to show and where your camera goes; you keep streaming to YouTube, Facebook or wherever you go live today." },
   { q: "Do I need to know how to code?", a: "No. You pick views, type in your show's name and titles, and drag boxes where you want them." },
@@ -7,7 +8,7 @@ const faqs = [
   { q: "Does it work on Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
   { q: "Can my church use it?", a: "Yes. Set up views once for your service (a welcome, worship, the sermon with slides beside the pastor, giving, the ending) and each Sunday is just new titles. There's no yearly seat fee." },
   { q: "Does it work with my camera?", a: "If OBS can see it, ViewSwitcher can place it: the Mac's built-in camera, a USB webcam, or a camera through a capture card. Your screen share and an iPad's screen work the same way." },
-  { q: "What does it cost?", a: "Nothing. ViewSwitcher is free and open source. The iPad app is coming to the App Store." },
+  { q: "What does it cost?", a: `The Mac app is free and open source, with no subscription. The iPad app is optional: ${IPAD_PRICE}, once, ${site.ipadApp.state === "store" ? "on the App Store" : "when it arrives on the App Store"}.` },
 ];
 ---
 <section class="section mist" id="faq" aria-labelledby="faq-title">
