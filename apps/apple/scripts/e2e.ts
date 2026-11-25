@@ -6,8 +6,8 @@
 // Runs the app on E2E_PORT (default 7435, never 7420) with OBS offline (ws://127.0.0.1:1), the USB
 // bridge off, updates off and a fresh temp library. It drives the app through VIEWSWITCHER_E2E_DIR
 // (apps/apple/Mac/E2E.swift) and checks: first run, the bundled server, the window and its user
-// agent, the menu-bar status, navigation and permissions, Undo forwarding, the traffic lights and
-// drag regions (MAC-13a), close-keeps-serving, Quit stopping the server, attach mode (Quit leaves a
+// agent, the menu-bar status, agents (the sidecar's /mcp and --mcp-stdio, Edit with AI), navigation
+// and permissions, Undo forwarding, the traffic lights and drag regions (MAC-13a), close-keeps-serving, Quit stopping the server, attach mode (Quit leaves a
 // server it didn't start), Restart Server, a port held by something else, and that the server exits
 // if the app is killed. SCREENSHOTS=<dir> also saves the window, windowed and full screen.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -171,6 +171,54 @@ try {
   const evil = await fetch(`${BASE}/api/obs/stream`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "text/plain" }, body: "{}" });
   check(evil.status === 403, "a cross-site POST (Origin: https://evil.example) is refused with 403");
 
+  // ------------------------------------------------------------ agents: MCP and Edit with AI (MCP-10)
+  const rpc = (id: number, method: string, params: Record<string, unknown> = {}) => ({ jsonrpc: "2.0", id, method, params });
+  const init = rpc(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "vs-e2e", version: "1" } });
+  const mcpInit = await fetch(`${BASE}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify(init) }).then((r) => r.json(), () => null);
+  check(mcpInit?.result?.serverInfo && /get_guide/.test(mcpInit.result.instructions ?? ""), `the bundled server answers /mcp initialize (${JSON.stringify(mcpInit?.result?.serverInfo)})`);
+  const relay = Bun.spawn([sidecar, "--mcp-stdio"], { env: { ...env, VIEWSWITCHER_E2E_DIR: "" }, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  relay.stdin.write(`${JSON.stringify(init)}\n${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n${JSON.stringify(rpc(2, "tools/list"))}\n`);
+  relay.stdin.flush();
+  let relayed = "";
+  const reader = relay.stdout.getReader();
+  const listed = await Promise.race([
+    (async () => {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) return null;
+        relayed += new TextDecoder().decode(value);
+        const line = relayed.split("\n").find((l) => l.includes('"id":2'));
+        if (line) return JSON.parse(line);
+      }
+    })(),
+    sleep(10_000).then(() => null),
+  ]);
+  relay.kill();
+  const tools = listed?.result?.tools?.length;
+  check(tools === 20 && relayed.split("\n").filter(Boolean).every((l) => JSON.parse(l).jsonrpc === "2.0"), `<sidecar> --mcp-stdio relays tools/list: ${tools} tools, only JSON-RPC on stdout`);
+
+  check((await state()).menu.includes("Edit with AI…"), 'menu bar: "Edit with AI…"');
+  await cmd("menu", { item: "Edit with AI…" });
+  check(await until(() => evalJs("return !!document.querySelector('.agent-sheet') && !location.search.includes('ai') && location.hash !== '#ai'"), 8000), "Edit with AI… opens the window on the sheet");
+  const rows = await evalJs<string[]>("return [...document.querySelectorAll('.agent-way h3')].map((h) => h.firstChild.textContent)");
+  check(["Claude Code", "Claude Desktop", "Cursor", "Codex, VS Code and other agents"].every((r) => rows.includes(r)) && (await evalJs("return !!document.querySelector('.agent-builtin')")), `the sheet in the Mac window: every way in and the built-in AI row (${JSON.stringify(rows)})`);
+  const before = (await state()).opened.length;
+  await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Claude Desktop").click(); return true`);
+  check(await until(async () => (await state()).opened.slice(before).some((p) => p.endsWith("/ViewSwitcher.mcpb")), 8000), "Add to Claude Desktop saves the extension and opens it");
+  const mcpb = (await state()).opened.slice(before).find((p) => p.endsWith("/ViewSwitcher.mcpb"));
+  if (mcpb) {
+    const out = mkdtempSync(join(tmpdir(), "vs-e2e-mcpb-"));
+    Bun.spawnSync(["unzip", "-q", mcpb, "-d", out]);
+    const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+    check(manifest.server.mcp_config.command === sidecar && manifest.server.mcp_config.args.join(" ") === "--mcp-stdio" && manifest.server.mcp_config.env.PORT === PORT, `its command is this app's sidecar with --mcp-stdio on port ${PORT}`);
+    rmSync(out, { recursive: true, force: true });
+  }
+  await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Cursor").click(); return true`);
+  check(await until(async () => (await state()).opened.some((u) => u.startsWith("cursor://anysphere.cursor-deeplink/mcp/install?")), 5000), "Add to Cursor opens Cursor's install link (the one app URL the window opens)");
+  await evalJs(`document.querySelector(".agent-builtin").click(); return true`);
+  check(await until(async () => (await state()).opened.includes("https://viewswitcher.com/ai"), 5000), "Built-in AI opens viewswitcher.com/ai in the browser");
+  await evalJs(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); return true`);
+
   // ------------------------------------------------------------ permissions and navigation (MAC-13)
   const perms = await evalJs<Record<string, string>>(`
     const out = {};
@@ -179,6 +227,7 @@ try {
     out.camera = await navigator.mediaDevices?.getUserMedia({ video: true }).then(() => "granted", (e) => e.name) ?? "unavailable";
     return out;`);
   check(perms.notifications !== "granted" && !/granted/.test(perms.geolocation) && perms.camera !== "granted", `browser permissions are refused (${JSON.stringify(perms)})`);
+  const openedBefore = (await state()).opened.length;
   await evalJs(`
     const a = document.createElement("a");
     a.href = "file:///System/Applications/Calculator.app";
@@ -190,7 +239,7 @@ try {
     return true;`);
   await sleep(800);
   const s3 = await state();
-  const opened = s3.opened.filter((u) => /^https?:\/\/example\./.test(u) || !u.startsWith("/") && !u.startsWith(BASE));
+  const opened = s3.opened.slice(openedBefore).filter((u) => /^https?:\/\/example\./.test(u) || !u.startsWith("/") && !u.startsWith(BASE));
   check(s3.window!.url.startsWith(BASE) && JSON.stringify(opened) === JSON.stringify(["https://example.com/", "https://example.org/"]), `only http(s) leaves the window, in the browser (opened: ${JSON.stringify(opened)}; events: ${JSON.stringify(s3.window!.events.filter((e) => e.startsWith("denied")))})`);
 
   // ------------------------------------------------------------ Undo forwards to the page (MAC-13)

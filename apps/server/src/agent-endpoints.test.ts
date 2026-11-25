@@ -14,11 +14,11 @@ const scratch = mkdtempSync(join(tmpdir(), "vs-agent-mcpb-"));
 
 /** node:http, because it sends the Host header we give it (fetch derives it from the URL). */
 function request(path: string, headers: Record<string, string> = {}) {
-  return new Promise<{ status: number; body: Buffer; type: string; disposition: string }>((resolve, reject) => {
+  return new Promise<{ status: number; body: Uint8Array; type: string; disposition: string }>((resolve, reject) => {
     const req = http.request({ host: "127.0.0.1", port, path, headers: { host: `127.0.0.1:${port}`, ...headers } }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks), type: String(res.headers["content-type"] ?? ""), disposition: String(res.headers["content-disposition"] ?? "") }));
+      const chunks: Uint8Array[] = [];
+      res.on("data", (c: Uint8Array) => chunks.push(c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: new Uint8Array(Buffer.concat(chunks)), type: String(res.headers["content-type"] ?? ""), disposition: String(res.headers["content-disposition"] ?? "") }));
     });
     req.on("error", reject);
     req.end();
@@ -53,7 +53,7 @@ const PATHS = ["/api/info", "/api/agent/clients", "/api/agent/viewswitcher.mcpb"
 
 describe("from this Mac", () => {
   test("/api/info has the Claude Code and stdio commands for this install", async () => {
-    const info = JSON.parse((await request("/api/info")).body.toString());
+    const info = JSON.parse(new TextDecoder().decode((await request("/api/info")).body));
     expect(info.library).toBe(library);
     expect(info.claudeCode).toEndWith(" && claude");
     expect(info.claudeCode).toContain(library.split("/").pop()!);
@@ -64,7 +64,7 @@ describe("from this Mac", () => {
   test("/api/agent/clients is the five booleans", async () => {
     const r = await request("/api/agent/clients");
     expect(r.status).toBe(200);
-    const clients = JSON.parse(r.body.toString());
+    const clients = JSON.parse(new TextDecoder().decode(r.body));
     expect(Object.keys(clients).sort()).toEqual(["claudeCode", "claudeDesktop", "codex", "cursor", "vscode"]);
     for (const v of Object.values(clients)) expect(typeof v).toBe("boolean");
   });
@@ -85,7 +85,7 @@ describe("refused (404) to anything but this Mac", () => {
     for (const path of PATHS) {
       const r = await request(path, { host: `studio.local:${port}` });
       expect({ path, status: r.status }).toEqual({ path, status: 404 });
-      expect(r.body.toString()).not.toContain(library);
+      expect(new TextDecoder().decode(r.body)).not.toContain(library);
     }
   });
   test("proxied (tailscale serve)", async () => {
