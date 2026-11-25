@@ -48,20 +48,19 @@ if [ "$RELEASE" = 1 ]; then
   # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
   BUILT="$(git -C "$REPO" rev-parse HEAD)"
   # node_modules is gitignored, so the clean tree says nothing about it: install bun.lock into empty
-  # node_modules folders, so no stale, patched or extra package reaches the build. A local test build
-  # from a dirty tree (ALLOW_DIRTY) installs what package.json says now instead, since its bun.lock may
-  # have changed.
+  # node_modules folders, so no stale or extra package, and no file patched in node_modules, reaches the
+  # build. A local test build from a dirty tree (ALLOW_DIRTY) installs what package.json says now
+  # instead, since its bun.lock may have changed.
   if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then
     (cd "$REPO" && bun install)
   else
-    # The root's and each workspace's folder (package.json's "workspaces"), never a wider search: $REPO
-    # can hold other checkouts (.pu/worktrees) with their own.
-    rm -rf "${REPO:?}/node_modules"
-    for ws in $(cd "$REPO" && bun -e 'console.log(require("./package.json").workspaces.join("\n"))'); do
-      # shellcheck disable=SC2086 # $ws is a glob such as apps/*, expanded on purpose
-      rm -rf "${REPO:?}"/${ws:?}/node_modules
-    done
-    # clonefile (copy-on-write) copies, never hardlinks into Bun's cache that an edit could have changed.
+    # The root's and each workspace's folder, found as Bun finds workspaces (scripts/node-modules-dirs.ts),
+    # never a wider search: $REPO can hold other checkouts (.pu/worktrees) with their own. An assignment,
+    # so a failed lookup stops the build instead of skipping the cleanup.
+    NM_DIRS="$(bun "$APPLE/scripts/node-modules-dirs.ts" "$REPO")"
+    while IFS= read -r dir; do rm -rf "${REPO:?}/${dir:?}"; done <<<"$NM_DIRS"
+    # clonefile: this install adds no hardlinks into Bun's cache. It doesn't re-check the cache, which a hand
+    # edit reaches only through a hardlink backend configured elsewhere (bunfig, BUN_INSTALL_BACKEND).
     (cd "$REPO" && bun install --frozen-lockfile --backend=clonefile) || {
       echo "✗ bun install --frozen-lockfile failed, and node_modules was emptied for it: run bun install." >&2; exit 1; }
   fi
