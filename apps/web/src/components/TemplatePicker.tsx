@@ -12,13 +12,12 @@ type Card = { pack: BuiltinPack; staged: StagedPack | null; error: string | null
 /** The view that shows a set best on a card: its main layout, else its first. */
 export const coverView = (s: StagedPack) => s.views.find((v) => v.name === "main") ?? s.views[0];
 
-export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, onClose, onAdded }: {
+export function TemplatePicker({ org, have, title, intro, skipLabel, onClose, onAdded }: {
   org: string;
-  orgName: string;
   /** Set ids the org has already (marked; adding one again makes a second copy). */
   have: string[];
   title: string;
-  intro: string;
+  intro?: string;
   skipLabel: string;
   onClose: () => void;
   onAdded: (names: string[]) => Promise<void> | void;
@@ -117,8 +116,8 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="modal pack" role="dialog" aria-label={title}>
         <h2>{title}</h2>
-        <p className="picker-note">{intro}</p>
-        {!cards && !error && <p className="empty">Getting the template sets ready…</p>}
+        {intro && <p className="picker-note">{intro}</p>}
+        {!cards && !error && <p className="empty">Loading…</p>}
         <div className="builtin-grid">
           {cards?.map(({ pack, staged, error: why }) => {
             const on = picked.includes(pack.id);
@@ -128,21 +127,20 @@ export function TemplatePicker({ org, orgName, have, title, intro, skipLabel, on
                 onClick={() => setPicked(on ? picked.filter((x) => x !== pack.id) : [...picked, pack.id])}>
                 <div className="cover">
                   {v && <iframe title={`${pack.name}: ${v.label}`} src={`/library/${v.path.split("/").map(encodeURIComponent).join("/")}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} />}
-                  {on && <span className="badge">ADDING</span>}
-                  {!on && have.includes(pack.id) && <span className="badge quiet">YOU HAVE IT</span>}
+                  {on && <span className="badge">SELECTED</span>}
+                  {!on && have.includes(pack.id) && <span className="badge quiet">ADDED</span>}
                 </div>
                 <span className="builtin-name">{pack.name}</span>
-                <span className="builtin-note">{why ?? (staged ? staged.views.map((x) => x.label).join(" · ") : "Getting it ready…")}</span>
+                <span className="builtin-note">{why ?? (staged ? staged.views.map((x) => x.label).join(" · ") : "Loading…")}</span>
               </button>
             );
           })}
         </div>
-        <p className="picker-note quiet">Shown in {orgName}'s name and colors. Each one goes in as its own set of templates; nothing else changes. Edit them like any template afterwards.</p>
         {error && <p className="error">{error}</p>}
         <div className="actions">
           <button type="button" className="btn" disabled={busy} onClick={onClose}>{skipLabel}</button>
           <button type="button" className="btn primary" disabled={busy || !picked.length} onClick={add}>
-            {busy ? "Adding…" : picked.length > 1 ? `Add ${picked.length} template sets` : "Add template set"}
+            {busy ? "Adding…" : picked.length > 1 ? `Add ${picked.length}` : "Add"}
           </button>
         </div>
       </div>

@@ -18,6 +18,7 @@
     "mac:build": "bash apps/apple/scripts/build.sh",
     "mac:release": "bash apps/apple/scripts/build.sh --release",
     "mac:e2e": "bun apps/apple/scripts/e2e.ts",
+    "brand:icons": "bun scripts/brand/icons.ts",
     "packs:export": "bun apps/server/src/export-packs.ts"
   },
   "devDependencies": {

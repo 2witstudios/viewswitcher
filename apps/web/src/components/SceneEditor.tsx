@@ -14,7 +14,7 @@ import { useLibrary } from "../lib/library";
 import { inApp, libraryUrl, useLive } from "../lib/live";
 import { EDITOR_SANDBOX } from "../lib/scene-frame";
 import { createSceneSaver } from "../lib/scene-saver";
-import { AskAgent, openAgentSheet } from "./AgentSheet";
+import { openAgentSheet } from "./AgentSheet";
 import { attempt, toast } from "./ui";
 import { modalOpen } from "../lib/modal";
 
@@ -538,19 +538,19 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     const b = baseRef.current;
     if (!b) return;
     const root = sceneRoot(b.source);
-    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.", { label: "Edit with AI", run: openAgentSheet });
+    if (root === null) return toast("This scene can't take new items", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
     const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {
-      if (done && slot && onAirRef.current) toast(`On air: OBS puts its "${slot}" source in the new box`);
-      else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`This box asks OBS for a source named "${slot}"`);
+      if (done && slot && onAirRef.current) toast(`On air · OBS source "${slot}"`);
+      else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`OBS source "${slot}"`);
     });
   };
 
   const remove = (id: number) => {
     const b = baseRef.current;
     if (!b) return;
-    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.", { label: "Edit with AI", run: openAgentSheet });
+    if (!canRemove(b.source, id)) return toast("Can't delete this here", { label: "Edit with AI", run: openAgentSheet });
     setMenu(null);
     void structural({ id, remove: true }).then((done) => done && toast("Deleted. Undo puts it back."));
   };
@@ -1006,7 +1006,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       if (replace !== null) {
         const b = baseRef.current;
         change({ id: replace, src }, b ? valueIn(b, { id: replace, src }) : null);
-        toast("Replaced. Undo puts the old picture back.");
+        toast("Replaced");
       } else add("image", { src, width: size.width || 1, height: size.height || 1 }, at);
     } catch (e) {
       toast(`Couldn't add the picture: ${(e as Error).message}`);
@@ -1188,7 +1188,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       if (!(await settle())) return;
       const { name } = await api.duplicate(path);
       const copyPath = `${path.slice(0, path.lastIndexOf("/"))}/${name}.html`;
-      toast("Editing a copy: it isn't on air");
+      toast("Editing a copy, not on air");
       navigate({ to: "/$org/edit", params: { org }, search: { path: copyPath }, replace: true });
     });
 
@@ -1254,7 +1254,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
               <div role="menu" aria-label="Add to the scene" className="ed-menu add-menu">
                 {ADD_ITEMS.map((it) => (
                   <button key={it.kind} type="button" role="menuitem" onClick={() => (it.kind === "image" ? (setAddOpen(false), setPicker({ replace: null })) : add(it.kind))}>
-                    {Icon[it.icon]}<span>{it.label}<small>{it.hint}</small></span>
+                    {Icon[it.icon]}<span>{it.label}{it.hint && <small>{it.hint}</small>}</span>
                   </button>
                 ))}
               </div>
@@ -1268,13 +1268,13 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
 
       {isTemplate && !onAir && (
         <div className="note-banner" role="note">
-          <b>Template.</b> Changes here go into every new copy made from it. Scenes already made from it keep their own.
+          <b>Template.</b> Existing scenes made from it won't change.
         </div>
       )}
       {onAir && (
         <div className="live-banner" role="status">
           <span className="dot" />
-          <span><b>Live.</b> This scene is on air: what you type, drag, resize and add shows on stream as you do it.</span>
+          <span><b>Live.</b> Changes show on stream as you make them.</span>
           <div style={{ flex: 1 }} />
           <button type="button" className="btn" onClick={editCopy}>Edit a copy instead</button>
         </div>
@@ -1378,7 +1378,6 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
             )}
             {editing && editRect && editBox && (
               <div className="typing-bar" style={{ left: Math.max(8, Math.min(editRect.x * s, W * s - 330)), top: editBox.y * s > 60 ? editBox.y * s - 56 : Math.min((editBox.y + editBox.h) * s + 12, H * s - 52) }}>
-                <span className="what">Typing in the scene</span>
                 <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => finishEdit(false)}>Cancel <small>Esc</small></button>
                 <button type="button" className="save" onPointerDown={(e) => e.preventDefault()} onClick={() => finishEdit(true)}>Save <small>Return</small></button>
               </div>
@@ -1443,7 +1442,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                       setSelected(menu.hit.move);
                       setMenu(null);
                     }}>
-                      {Icon.move}<span>Move the {nameOf(base, menu.hit.move).replace(/^\w/, (c) => c.toLowerCase())}</span><small>or drag it</small>
+                      {Icon.move}<span>Move the {nameOf(base, menu.hit.move).replace(/^\w/, (c) => c.toLowerCase())}</span>
                     </button>
                   )}
                   {(() => {
@@ -1479,7 +1478,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                   {Icon.changed}
                   <div>
                     <b>This scene changed while you were editing</b>
-                    <p><AskAgent>Your agent</AskAgent> (or someone with the file open) saved a new version, so you're now looking at the latest. Your last change didn't save:</p>
+                    <p>A newer version was saved. This change didn't make it:</p>
                   </div>
                 </div>
                 {conflict.edits.map((e, i) => {
@@ -1516,15 +1515,10 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
             }}
           />
         ) : (
-          <>
-            <span className="hint">{Icon.text}Right-click, long-press or double-tap text to edit it</span>
-            <span className="hint">{Icon.move}Drag panels and camera boxes to move them</span>
-            <span className="hint">{Icon.plus}Add text, a title bar or a camera box, or drop a picture in</span>
-          </>
+          null
         )}
-        {sel !== null && onAir && <span className="live-note"><span className="dot" />On air: it moves on stream as you drag</span>}
         <div style={{ flex: 1 }} />
-        {sel !== null ? <span className="quiet">Snaps to edges · 8 px grid · arrows nudge{base && isSlot(base, sel) ? " · corners keep 16:9 (Shift: free)" : ""}</span> : <span className="path">{path}</span>}
+        {sel !== null ? base && isSlot(base, sel) && <span className="quiet">Shift: free aspect</span> : <span className="path">{path}</span>}
       </footer>
       {picker && (
         <AssetPicker
@@ -1554,13 +1548,13 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   );
 }
 
-const ADD_ITEMS: { kind: AddKind; label: string; hint: string; icon: "text" | "title" | "image" | "camera" | "screen" | "guest" }[] = [
-  { kind: "text", label: "Text", hint: "A line to retype", icon: "text" },
-  { kind: "title", label: "Title bar", hint: "A name and a line", icon: "title" },
-  { kind: "image", label: "Image", hint: "From your assets, or upload one", icon: "image" },
-  { kind: "camera", label: "Camera box", hint: "OBS puts the camera in it", icon: "camera" },
-  { kind: "screen", label: "Screen box", hint: "OBS puts the screen in it", icon: "screen" },
-  { kind: "guest", label: "Guest box", hint: "For a guest or second camera", icon: "guest" },
+const ADD_ITEMS: { kind: AddKind; label: string; hint?: string; icon: "text" | "title" | "image" | "camera" | "screen" | "guest" }[] = [
+  { kind: "text", label: "Text", icon: "text" },
+  { kind: "title", label: "Title bar", icon: "title" },
+  { kind: "image", label: "Image", icon: "image" },
+  { kind: "camera", label: "Camera box", hint: "Camera source", icon: "camera" },
+  { kind: "screen", label: "Screen box", hint: "Screen source", icon: "screen" },
+  { kind: "guest", label: "Guest box", hint: "Guest or 2nd camera", icon: "guest" },
 ];
 
 /** The scene's name, retyped in place: Return saves, Esc cancels. */
@@ -1616,7 +1610,6 @@ function AssetPicker({ org, library, replacing, onPick, onClose }: {
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal picker" role="dialog" aria-label={replacing ? "Replace image" : "Add an image"}>
         <h2>{replacing ? "Replace image" : "Add an image"}</h2>
-        <p className="picker-note">From {library?.org.name ?? org}'s assets, or upload one{inApp ? " from Photos or Files" : ""}. You can also drop a picture straight onto the scene.</p>
         <div className="picker-grid">
           {images.map((a) => (
             <button key={a.path} type="button" className="picker-item" onClick={() => onPick(a)} aria-label={a.name}>
@@ -1624,7 +1617,7 @@ function AssetPicker({ org, library, replacing, onPick, onClose }: {
               <span>{a.name}</span>
             </button>
           ))}
-          {images.length === 0 && <p className="empty">No images yet. Upload one: it goes into the org's assets.</p>}
+          {images.length === 0 && <p className="empty">No images yet.</p>}
         </div>
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files)} />
         <div className="actions">

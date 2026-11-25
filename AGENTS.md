@@ -1,6 +1,6 @@
 # ViewSwitcher: agent map
 
-Rules for the code are in CLAUDE.md; what the product is, in README.md. Planning lives in PageSpace.
+Rules for the code are below; what the product is, in README.md. Planning lives in PageSpace.
 
 ## PageSpace
 
@@ -39,3 +39,18 @@ Tasks read `<CODE> — Given X, should Y`. Never renumber; inserted work takes a
 3. One PR per slice; its body names every code it delivers. Move tasks to In Progress while building and In Review when the PR opens; Done after merge.
 4. Record decisions on the Decisions page. File anything outside the slice as the next `ISSUE-n`.
 5. Never put secrets or .env material in PageSpace. Verify page ids with `pagespace pages read-details <id>`.
+
+## Code rules
+
+Bun workspaces monorepo: a live-stream scene switcher that drives OBS (`apps/`, `packages/`), plus a post pipeline (`post/`). Start with README.md.
+
+- Scene **content** lives in a separate repo, `~/ViewSwitcher Library` (env `VIEWSWITCHER_LIBRARY`), one folder per org. To create or edit scenes, work there with its `viewswitcher-scenes` skill. Don't add an org's scenes to this repo; the only scene HTML here is the neutral starter kit in `apps/server/starter/` (placeholders like `{{ORG_NAME}}` are filled in when an org is created).
+- Library paths sent to and from clients start with the org id (`daisy/projects/...`). Every server path from a client goes through `inside()` / `plainName()` in `apps/server/src/paths.ts`.
+- `packages/shared` holds the pure logic both sides use (`resolveStream`, `coverTransform`, `obsColor`). Keep it dependency-free and tested (`bun test`).
+- `apps/web` must stay a static SPA (no SSR or server functions). The iPad app (`apps/apple`, target ViewSwitcher iPad) loads it from the server over its USB-C tunnel; deploy with `bun run ipad:deploy`. Safe areas come from the shells: `env(safe-area-inset-*)` on the iPad, `--shell-*` variables and `data-shell` from the Mac app (MAC-13a).
+- `apps/apple` is one Xcode project generated from `project.yml` (XcodeGen; the .xcodeproj is gitignored): ViewSwitcher.app for macOS around the server compiled with `bun build --compile` (Contents/Helpers), the iPad app, and the shared ViewSwitcherKit package. The server must keep running as that binary (no repo-relative paths without an env override, see `apps/server/src/config.ts`). Build with `bun run mac:build`, check with `bun run mac:e2e` (never on port 7420), test with `xcodebuild test` (apps/apple/README.md).
+- Scenes are untrusted code (agents, template packs from anyone): `/library/` pages are served with a CSP sandbox (`apps/server/src/scene-sandbox.ts`) and every scene frame is sandboxed (`apps/web/src/lib/scene-frame.ts`). Never give a scene frame `allow-same-origin` together with `allow-scripts`, except the editor's, which only ever loads `?inert` (served with `script-src 'none'`); never reach into a scene frame with contentDocument except that one; the program page talks to scenes through the bridge (`scene-bridge.ts`). Template packs: docs/template-packs.md.
+- No absolute filesystem paths in API responses, except `GET /api/info` (the library folder and Edit with AI's commands, for the Mac app's Open Library Folder and the sheet) and `GET /api/agent/viewswitcher.mcpb` (the Claude Desktop extension, whose command is this install's server), which answer only this Mac itself: `fromThisMacOnly` in `apps/server/src/gate.ts` (the gate's `fromThisMac`: loopback peer and Host, no proxy headers; and not the USB-C iPad, whose bridge sockets are marked). Phones paired over Wi-Fi pass the gate but never these, nor `/mcp`.
+- `/mcp` (agents, `apps/server/src/mcp/`) is loopback-only the same way, refuses any `Origin` that `originAllowed` rejects, and sits under `hostTrusted`. The agent on-air guard (`agent-guard.ts`) limits MCP tools only, never the switcher's own routes.
+- The agent skill and library CLAUDE.md that new libraries get live in `apps/server/library-kit/`; change the skill there.
+- Typecheck: `cd apps/web && bunx tsc --noEmit && bunx tsc -p tsconfig.test.json`, `cd apps/server && bunx tsc -p .`.

@@ -41,7 +41,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
         <section className={`section${own.length ? "" : " own-empty"}`}>
           <div className="section-head">
             <h2>THIS STREAM</h2>
-            <span>{own.length ? "only in this stream" : "nothing yet: everything below comes from the project"}</span>
           </div>
           <div className="grid">
             {own.map((s) => (
@@ -55,14 +54,13 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 menu={[
                   {
                     label: "Duplicate and edit",
-                    hint: "A copy in this stream, open to change",
                     run: () => attempt(async () => openEditor((await api.duplicate(s.path)).path, { rename: true })),
                   },
                   "divider",
-                  ...fileItems(s.path, "Changes this stream only"),
+                  ...fileItems(s.path, "This stream only"),
                   ...(s.overrides
                     ? [{
-                        label: "Go back to the project version",
+                        label: "Revert to project version",
                         hint: "Deletes this stream's copy",
                         run: async () => {
                           if (!confirm(`Delete this stream's ${s.label} and use the project's?`)) return;
@@ -78,7 +76,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 <PlusIcon size={26} />
                 New scene
               </button>
-              <span className="empty" style={{ fontSize: 13 }}>From a template</span>
               {adding && (
                 <Menu
                   label="New scene from a template"
@@ -88,7 +85,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                     ...(all.length > 1 ? [{ heading: g.name }] : []),
                     ...g.templates.map((t) => ({
                       label: t.label,
-                      hint: "A copy in this stream, open to change",
                       run: () => attempt(async () => openEditor((await api.addFromTemplate(org, templateId(t), projectId, streamId)).path)),
                     })),
                   ])}
@@ -99,9 +95,9 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
         </section>
 
         <section className="section">
-          <div className="section-head"><h2>FROM THE PROJECT</h2><span>shared by every stream in {project.name}</span></div>
+          <div className="section-head"><h2>FROM THE PROJECT</h2></div>
           <div className="grid">
-            {shared.length === 0 && <p className="empty">This project has no shared scenes. Add some from Templates.</p>}
+            {shared.length === 0 && <p className="empty">No shared scenes. Add from Templates.</p>}
             {shared.map((s) => (
               <SceneTile
                 key={s.path}
@@ -112,19 +108,17 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 editChoices={[
                   {
                     label: "Edit for this stream",
-                    hint: "Makes this stream's own copy, then opens it",
                     run: () => attempt(async () => openEditor((await api.customize(org, projectId, streamId, s.name)).path)),
                   },
-                  { label: "Edit for every stream", hint: `Changes ${project.name}'s scene`, run: () => openEditor(s.path) },
+                  { label: "Edit for every stream", run: () => openEditor(s.path) },
                 ]}
                 menu={[
                   {
                     label: "Customize for this stream",
-                    hint: "Copies it into this stream first",
                     run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
-                  ...fileItems(s.path, "Changes it for every stream"),
+                  ...fileItems(s.path, "Every stream"),
                 ]}
               />
             ))}
@@ -134,7 +128,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
         <section className="section transition-section">
           <div className="section-head">
             <h2>TRANSITION</h2>
-            <span>{project.transition ? `${project.name}'s own` : transition ? "the org's, shared by projects without their own" : "blank: scenes fade through the ground color"}</span>
+            {project.transition && <span>custom</span>}
           </div>
           <div className="grid">
             {transition ? (
@@ -154,15 +148,14 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                       }]
                     : [{
                         label: "Customize for this project",
-                        hint: "Copies the org's transition into the project first",
                         run: () => attempt(() => api.customizeTransition(org, projectId), `${project.name} now has its own transition`),
                       }]),
                   "divider",
-                  ...fileItems(transition, project.transition ? "Changes it for this project" : "Changes it for every project that doesn't have its own"),
+                  ...fileItems(transition, project.transition ? "This project" : "All projects without their own"),
                 ]}
               />
             ) : (
-              <p className="empty">For a designed one, <AskAgent /> for {org}/projects/{projectId}/transition.html (this project) or {org}/templates/_shared/transition.html (every project).</p>
+              <p className="empty">None. Scenes fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
             )}
           </div>
         </section>

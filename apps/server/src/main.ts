@@ -680,7 +680,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
     } catch (e) {
       if (e instanceof PathError || e instanceof EditError || e instanceof PackError || e instanceof SettingsError) return json({ error: e.message }, 400);
       console.error(e);
-      // The full message only for this Mac, with no absolute paths (CLAUDE.md: a filesystem error names the
+      // The full message only for this Mac, with no absolute paths (AGENTS.md: a filesystem error names the
       // file it failed on); a paired device gets a plain one.
       const local = fromThisMac(srv.requestIP(req)?.address, req.headers);
       return json({ error: local ? String((e as Error).message).replaceAll(config.library, "<library>") : "Something went wrong on the Mac. Its server log has the details." }, 500);

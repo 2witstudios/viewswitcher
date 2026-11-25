@@ -17,3 +17,6 @@ apps/apple/Mac/Info.plist
 apps/apple/iPad/Info.plist
 apps/apple/.release.env
 apps/apple/AppStore/screenshots/
+
+# Local agent instructions (kept on this machine; the shared rules are in AGENTS.md)
+/CLAUDE.md
