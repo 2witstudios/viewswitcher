@@ -668,6 +668,27 @@ describe("destination folders linked outside, with a name that links back in (Co
     expect((await readdir(join(away, "assets"))).sort()).toEqual(["back.svg"]);
     expect((await readdir(join(away, "scenes"))).sort()).toEqual(["brb.html"]);
   });
+  test("create_project and create_stream: a projects/ or streams/ folder linked outside, with the new name linking back in, is refused", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const away = join(outside, "away-projects");
+    await mkdir(away, { recursive: true });
+    // An org whose projects/ links outside, holding "show" that links back to a folder in the library.
+    await mkdir(join(root, "proj-org"), { recursive: true });
+    await writeFile(join(root, "proj-org/org.json"), await readFile(join(root, ORG, "org.json"), "utf8"));
+    await mkdir(join(root, "proj-org/templates"), { recursive: true });
+    await symlink(away, join(root, "proj-org/projects"));
+    await symlink(join(root, ORG, "templates"), join(away, "show"));
+    expect((await call("create_project", { org: "proj-org", name: "Show", templates: [] })).isError).toBe(true);
+    expect((await readdir(away)).sort()).toEqual(["show"]);
+    // A project whose streams/ links outside.
+    const { projectId } = await data("create_project", { org: ORG, name: "Streams away", templates: [] });
+    const awayStreams = join(outside, "away-streams");
+    await mkdir(awayStreams, { recursive: true });
+    await rm(join(root, ORG, "projects", projectId, "streams"), { recursive: true, force: true });
+    await symlink(awayStreams, join(root, ORG, "projects", projectId, "streams"));
+    expect((await call("create_stream", { org: ORG, projectId, name: "Out", date: "2026-12-10" })).isError).toBe(true);
+    expect(await readdir(awayStreams)).toEqual([]);
+  });
   test("a template set's template linked outside the library isn't copied", async () => {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(root, ORG, "templates", "far"), { recursive: true });

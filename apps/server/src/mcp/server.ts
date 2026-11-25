@@ -136,13 +136,14 @@ export function createMcpServer(deps: McpDeps): McpServer {
   };
   /**
    * Files a tool reads or writes: each really inside the library, through links too (library-files.ts
-   * checked), and so is the folder it's in. A new file may get another name in that folder (a free
-   * name), so the folder must be inside on its own, not only through a name that links back in.
+   * checked), and so is every folder on the way to it from the org. A new file or folder may get
+   * another name in one of them (a free name: "teaching-2", "show-2"), so each folder must be inside
+   * on its own, not only through a name further down that links back in.
    */
   const contained = async (...paths: string[]) => {
     for (const p of paths) {
-      await checked(root, p);
-      if (p.includes("/")) await checked(root, p.slice(0, p.lastIndexOf("/")));
+      const parts = p.split("/");
+      for (let i = parts.length; i >= 2; i--) await checked(root, parts.slice(0, i).join("/"));
     }
   };
   /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
