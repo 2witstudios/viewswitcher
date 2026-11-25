@@ -55,6 +55,15 @@ async function answer(type: string, d: any): Promise<object> {
   return obs.request(type, d);
 }
 
+async function result(type: string, data: any) {
+  try {
+    return { requestStatus: { result: true, code: 100 }, responseData: await answer(type, data ?? {}) };
+  } catch (e) {
+    const code = e instanceof OBSRequestError ? e.code : 205;
+    return { requestStatus: { result: false, code, comment: (e as Error).message } };
+  }
+}
+
 Bun.serve({
   hostname: "127.0.0.1",
   port,
@@ -72,14 +81,15 @@ Bun.serve({
         ws.send(JSON.stringify({ op: 2, d: { negotiatedRpcVersion: 1 } }));
         return;
       }
-      if (msg.op !== 6) return;
-      const { requestType, requestId, requestData } = msg.d;
-      try {
-        const responseData = await answer(requestType, requestData ?? {});
-        ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, requestStatus: { result: true, code: 100 }, responseData } }));
-      } catch (e) {
-        const code = e instanceof OBSRequestError ? e.code : 205;
-        ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, requestStatus: { result: false, code, comment: (e as Error).message } } }));
+      if (msg.op === 6) {
+        const { requestType, requestId, requestData } = msg.d;
+        ws.send(JSON.stringify({ op: 7, d: { requestType, requestId, ...(await result(requestType, requestData)) } }));
+      }
+      // A batch (placement sends one per report): each request in turn, each with its own result.
+      if (msg.op === 8) {
+        const results = [];
+        for (const r of msg.d.requests ?? []) results.push({ requestType: r.requestType, ...(await result(r.requestType, r.requestData)) });
+        ws.send(JSON.stringify({ op: 9, d: { requestId: msg.d.requestId, results } }));
       }
     },
     close(ws) {

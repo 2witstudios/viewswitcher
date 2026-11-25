@@ -112,7 +112,7 @@ export const Route = createFileRoute("/program")({
         setTimeout(done, LOAD_TIMEOUT);
         put(src);
       });
-    const setFrame = (i: FrameIndex, src: string | null) => setFrames((f) => (i === 0 ? [src, f[1]] : [f[0], src]));
+    const setFrame = (i: FrameIndex, src: string | null) => setFrames((f) => (f[i] === src ? f : i === 0 ? [src, f[1]] : [f[0], src]));
 
     /** Make sure the transition frame holds the wanted transition (null: no transition page, just the ground color). */
     const loadTransition = async () => {
