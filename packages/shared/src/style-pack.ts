@@ -198,8 +198,13 @@ export function readManifest(text: string): { ok: true; manifest: PackManifest }
   };
 }
 
-/** Does this page run anything of its own (beyond <script src> of a file, which `scripts.files` and `remote` cover)? */
-function inlineCode(html: string): boolean {
+/**
+ * Does this page run anything of its own (beyond <script src> of a file, which `scripts.files` and
+ * `remote` cover)? In an SVG every <script> counts, whatever it loads: SVG scripts take href or
+ * xlink:href, and a view that frames the SVG runs them.
+ */
+function inlineCode(html: string, svg = false): boolean {
+  if (svg && /<script[\s/>]/i.test(html)) return true;
   for (const e of scanElements(html)) {
     if (e.tag === "script" && e.innerEnd > e.innerStart && html.slice(e.innerStart, e.innerEnd).trim()) return true;
     for (const a of e.attrs) {
@@ -216,7 +221,7 @@ function remoteScripts(html: string): string[] {
   const out: string[] = [];
   for (const e of scanElements(html)) {
     if (e.tag !== "script") continue;
-    const a = e.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
+    const a = e.attrs.find((x) => (x.name === "src" || x.name === "href" || x.name === "xlink:href") && x.valueStart >= 0);
     const src = a ? html.slice(a.valueStart, a.valueEnd).trim() : "";
     if (src && !src.startsWith("{{PACK}}/") && !src.startsWith("/library/")) out.push(src);
   }
@@ -275,11 +280,12 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   if (missing.size) warnings.push(`Links to files that aren't in the pack: ${[...missing].slice(0, 5).join("; ")}${missing.size > 5 ? "…" : ""}`);
 
   const pages = [...views.map((v) => v.file), ...(have.has("_shared/transition.html") ? ["_shared/transition.html"] : [])];
+  const svgs = files.filter((f) => ext(f.path) === "svg").map((f) => f.path);
   const scripts: PackScripts = {
     files: files.filter((f) => ext(f.path) === "js").map((f) => f.path),
     // An SVG runs its own scripts when a view frames it.
-    inline: [...pages, ...files.filter((f) => ext(f.path) === "svg").map((f) => f.path)].filter((p) => inlineCode(texts[p] ?? "")),
-    remote: [...new Set(pages.flatMap((p) => remoteScripts(texts[p] ?? "")))],
+    inline: [...pages.filter((p) => inlineCode(texts[p] ?? "")), ...svgs.filter((p) => inlineCode(texts[p] ?? "", true))],
+    remote: [...new Set([...pages, ...svgs].flatMap((p) => remoteScripts(texts[p] ?? "")))],
   };
   return { ok: true, manifest, files, views, transition: have.has("_shared/transition.html") ? "_shared/transition.html" : null, scripts, warnings };
 }

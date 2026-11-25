@@ -107,6 +107,8 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     expect((await request("/library/my-channel/templates/_shared/scene.js")).headers["access-control-allow-origin"]).toBe("*");
     expect((await request("/library/my-channel/org.json")).headers["access-control-allow-origin"]).toBeUndefined();
     expect((await request("/library/my-channel/templates/brb.html")).headers["access-control-allow-origin"]).toBeUndefined();
+    // An org's pictures aren't readable by other websites open on this Mac.
+    expect((await request("/library/my-channel/templates/_shared/brand/mark.svg")).headers["access-control-allow-origin"]).toBeUndefined();
   });
   test("?bridge adds the bridge; ?edit tags; neither touches the file", async () => {
     const r = await request("/library/my-channel/templates/brb.html?edit&bridge");
@@ -121,6 +123,14 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     const r = await request("/library/my-channel/templates/brb.html?edit&inert&bridge");
     expect(r.headers["content-security-policy"]).toStartWith("sandbox allow-same-origin allow-scripts; script-src 'none'; object-src 'none'; frame-src 'none'");
     expect(r.body).not.toContain("frame:state");
+  });
+  test("?inert is same-origin only on the editor's defused copy; every other ?inert request is sandboxed as usual", async () => {
+    for (const p of ["templates/brb.html?inert", "templates/brb.HTML?edit&inert", "templates/_shared/brand/mark.svg?inert", "templates/brb.html%2F.?edit&inert", "org.json?inert"]) {
+      const r = await request(`/library/my-channel/${p}`);
+      if (r.status === 200) expect(r.headers["content-security-policy"]).toStartWith("sandbox allow-scripts;");
+      else expect(r.headers["content-security-policy"] ?? "sandbox allow-scripts;").toStartWith("sandbox allow-scripts;");
+    }
+    expect((await request("/library/my-channel/templates/brb.html?edit&inert")).headers["content-security-policy"]).toStartWith("sandbox allow-same-origin");
   });
   test("the live socket refuses a sandboxed scene and other sites, and takes the switcher's pages", async () => {
     expect((await request("/ws", { headers: { ...ws, origin: "null" } })).status).toBe(403);

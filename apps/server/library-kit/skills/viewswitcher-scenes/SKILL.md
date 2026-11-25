@@ -105,7 +105,7 @@ Deleting removes one element and the whitespace before it. Renaming sets `<title
 The switcher shows every scene in a sandboxed frame with no origin of its own, so a scene's scripts can't reach the switcher (its API, its live socket, the page around it). For scenes that means:
 
 - Scripts run (countdowns, clocks, animations, `scene.js`), but `localStorage`, `sessionStorage`, cookies and `parent`/`top` are off limits and throw.
-- `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` work only to `https:`/`wss:` addresses (a public feed, say), never `http:`, `ws:` or the switcher itself, so a scene can't `fetch` its own library JSON: put data in the HTML. Library scripts (also `type="module"`), styles, pictures, media and fonts load fine.
+- `fetch`, `XMLHttpRequest`, `WebSocket` and `EventSource` work only to `https:`/`wss:` addresses (a public feed, say), never `http:`, `ws:` or the switcher itself, so a scene can't `fetch` its own library JSON: put data in the HTML. Library scripts (also `type="module"`), styles, pictures, media and fonts load fine; leave `crossorigin` off library pictures and media (they aren't sent with CORS, so a canvas can't read them back).
 - No forms, pop-ups or navigating the page. Links and buttons do nothing on air anyway.
 - Fonts load from Google Fonts (or any https host with CORS) and from the library.
 - The scene editor shows the file **without running its scripts**, so text a script writes isn't editable there: keep text people should retype in the HTML itself.

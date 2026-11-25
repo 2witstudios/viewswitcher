@@ -189,8 +189,9 @@ export async function installPack(root: string, orgId: string, token: unknown): 
     const target = inside(orgDir, `templates/${set}`);
     try {
       await mkdir(target);
-    } catch {
-      throw new PackError("A set with that name just appeared. Drop the pack again.");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PackError("A set with that name just appeared. Drop the pack again.");
+      throw plainFsError(e, "Installing it");
     }
     // The one step that fills the org: atomic, onto the empty folder just claimed.
     await rename(final, target).catch(async (e) => {

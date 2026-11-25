@@ -122,16 +122,21 @@ test("withBridge adds the script once, at the end", () => {
   expect(out.endsWith("})();</script>\n")).toBe(true);
 });
 
-test("the editor's copy drops every <meta http-equiv>, however it's written (it could navigate the same-origin frame away)", async () => {
+test("the editor's copy defuses every <meta>, however it's written or hidden (it could navigate the same-origin frame away)", async () => {
   const { defuseMeta } = await import("./scene-sandbox");
-  for (const meta of [
-    `<meta http-equiv="refresh" content="0; url=/daisy/templates">`,
-    `<META HTTP-EQUIV=Refresh content=1>`,
-    `<meta http-equiv="&#114;efresh" content="0;url=x.html/">`,
-    `<meta content="0;url=/a?>" http-equiv="refresh">`,
-  ]) {
-    const out = defuseMeta(`<html><head>${meta}<title>t</title></head><body><p>x</p></body></html>`);
-    expect(out).toBe(`<html><head><meta data-vs-defused><title>t</title></head><body><p>x</p></body></html>`);
-  }
-  expect(defuseMeta(`<meta charset="utf-8"><!-- <meta http-equiv="refresh"> -->`)).toBe(`<meta charset="utf-8"><!-- <meta http-equiv="refresh"> -->`);
+  const cases: [string, string][] = [
+    [`<meta http-equiv="refresh" content="0; url=/daisy/templates">`, `<link data-vs-meta http-equiv="refresh" content="0; url=/daisy/templates">`],
+    [`<META HTTP-EQUIV=Refresh content=1>`, `<link data-vs-meta HTTP-EQUIV=Refresh content=1>`],
+    [`<meta http-equiv="&#114;efresh" content="0;url=x.html/">`, `<link data-vs-meta http-equiv="&#114;efresh" content="0;url=x.html/">`],
+    [`<meta content="0;url=/a?>" http-equiv="refresh">`, `<link data-vs-meta content="0;url=/a?>" http-equiv="refresh">`],
+    // Where an editor's scanner sees less markup than a browser does:
+    [`<!--><meta http-equiv=refresh content="0;url=/"><!-- -->`, `<!--><link data-vs-meta http-equiv=refresh content="0;url=/"><!-- -->`],
+    [`<![CDATA[><meta http-equiv=refresh content=0;url=/>]]>`, `<![CDATA[><link data-vs-meta http-equiv=refresh content=0;url=/>]]>`],
+    [`<svg><title><meta http-equiv=refresh content=0;url=/></title></svg>`, `<svg><title><link data-vs-meta http-equiv=refresh content=0;url=/></title></svg>`],
+    [`<meta a/http-equiv=refresh content=0;url=/>`, `<link data-vs-meta a/http-equiv=refresh content=0;url=/>`],
+    [`<meta/http-equiv=refresh>`, `<link data-vs-meta/http-equiv=refresh>`],
+    [`<meta\nhttp-equiv=refresh>`, `<link data-vs-meta\nhttp-equiv=refresh>`],
+  ];
+  for (const [meta, out] of cases) expect(defuseMeta(`<head>${meta}<title>t</title></head>`)).toBe(`<head>${out}<title>t</title></head>`);
+  expect(defuseMeta(`<metadata><p>metal</p><meter>`)).toBe(`<metadata><p>metal</p><meter>`);
 });

@@ -124,6 +124,12 @@ describe("checkPack", () => {
     expect(r.ok && r.scripts.inline).toEqual(["_shared/brand/mark.svg", "assets/x.svg"]);
   });
 
+  test("an SVG that only loads a script (href or xlink:href) is code, and the script is listed", () => {
+    const r = checkPack(planned([...basic, file("assets/x.svg")]), texts({ "assets/x.svg": `<svg><script href="https://cdn.example/a.js"/><script xlink:href="https://cdn.example/b.js"></script></svg>` }));
+    expect(r.ok && r.scripts.inline).toEqual(["assets/x.svg"]);
+    expect(r.ok && r.scripts.remote).toEqual(["https://cdn.example/a.js", "https://cdn.example/b.js"]);
+  });
+
   test("javascript: links count as code", () => {
     const r = checkPack(planned(basic), texts({ "templates/main.html": `<a href=" JavaScript:alert(1)">x</a>` }));
     expect(r.ok && r.scripts.inline).toEqual(["templates/main.html"]);

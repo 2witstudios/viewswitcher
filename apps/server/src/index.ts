@@ -407,7 +407,8 @@ const server = Bun.serve({
         // "x.html/" would resolve to the file: library URLs never end in a slash.
         if (rel.endsWith("/")) return new Response("Not found", { status: 404, headers: libraryHeaders(rel) });
         const inert = url.searchParams.has("inert");
-        const headers = libraryHeaders(rel, inert);
+        // INERT_CSP (same-origin) only on a body that went through defuseMeta below; anything else is sandboxed as usual.
+        const headers = libraryHeaders(rel);
         if (path.endsWith(".html") && (url.searchParams.has("edit") || url.searchParams.has("bridge"))) {
           // ?edit: the scene with data-vs element ids, for the editor and the program page; the file is only read.
           // If it can't be tagged for any reason, serve the plain file: the program shows the scene and
@@ -422,7 +423,7 @@ const server = Bun.serve({
           if (html !== null) {
             return new Response(inert ? defuseMeta(html) : url.searchParams.has("bridge") ? withBridge(html) : html, {
               headers: {
-                ...headers, "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+                ...(inert ? libraryHeaders(rel, true) : headers), "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
                 ...(scene ? { "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" } : {}),
               },
             });

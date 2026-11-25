@@ -100,8 +100,9 @@ export const Route = createFileRoute("/program")({
     /** The file version each scene frame shows (its data-vs-hash), from its bridge. */
     const frameVersion = useRef<[string | null, string | null]>([null, null]);
     const transitionHold = useRef<number>(WIPE_HOLD);
-    /** The slots each scene last reported, for a scene that doesn't answer next time. */
-    const knownSlots = useRef(new Map<string, Slot[]>());
+    /** The slots each scene last reported, by path, with the version they're for (the url's v=). */
+    const knownSlots = useRef(new Map<string, { v: string | null; slots: Slot[] }>());
+    const versionOf = (url: string) => new URL(url, location.href).searchParams.get("v");
 
     useEffect(() => {
       const fit = () => setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
@@ -157,11 +158,30 @@ export const Route = createFileRoute("/program")({
           const st = (await ask(refs[back].current)) ?? (desired.current === job ? await ask(refs[back].current) : null);
           if (desired.current !== job) continue;
           frameVersion.current[back] = st?.version ?? null;
-          if (st) knownSlots.current.set(job.path, st.slots);
-          else report({ warning: "scene didn't answer the bridge: keeping its last known slots", path: job.path });
-          // No answer (a scene's own CSP blocking the bridge, markup that swallows it): the slots it
-          // last reported, else leave OBS as it is rather than hide every device.
-          const slots: Slot[] | null = st?.slots ?? knownSlots.current.get(job.path) ?? null;
+          const v = versionOf(job.url);
+          if (st) knownSlots.current.set(job.path, { v, slots: st.slots });
+          // No answer (a scene's own CSP blocking the bridge, markup that swallows it, a busy cold
+          // start): the slots this version last reported. Otherwise no devices, on purpose: a camera
+          // left over a BRB or a full-screen scene is worse on air than a missing one. Ask again
+          // later, so a scene that was only slow still gets its devices.
+          const known = knownSlots.current.get(job.path);
+          const slots: Slot[] = st?.slots ?? (known && known.v === v ? known.slots : []);
+          if (!st) {
+            report({ warning: `scene didn't answer the bridge: ${known && known.v === v ? "keeping its last known slots" : "showing no devices until it does"}`, path: job.path });
+            const frame = refs[back];
+            let answered = false;
+            for (const ms of [2000, 6000]) {
+              setTimeout(async () => {
+                if (answered || shown.current !== job) return;
+                const late = await ask(frame.current);
+                if (!late || answered || shown.current !== job) return;
+                answered = true;
+                knownSlots.current.set(job.path, { v, slots: late.slots });
+                frameVersion.current[frontRef.current] = late.version;
+                api.reportSlots({ path: job.path, slots: late.slots, ...slotOrder() }).catch(() => {});
+              }, ms);
+            }
+          }
           const firstShow = shown.current === null;
           // Same scene, new version (an edit was saved): swap frames with no transition.
           // Renamed on air (EDIT-19): the same scene under a new path, also no transition.
@@ -172,7 +192,7 @@ export const Route = createFileRoute("/program")({
             setWipe(true);
             await sleep(WIPE_IN);
           }
-          if (slots) await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
+          await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
           frontRef.current = back;
           setFront(back);
           shown.current = job;
