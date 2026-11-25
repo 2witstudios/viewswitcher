@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # The Bun workspaces (apps/*, packages/*), one lockfile at the root.
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # @types/bun describes the runtime, so it moves with .bun-version (by hand), never ahead of it.
+    ignore:
+      - dependency-name: "@types/bun"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
