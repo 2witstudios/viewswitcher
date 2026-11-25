@@ -35,6 +35,33 @@ final class MenuStatusTests: XCTestCase {
         XCTAssertEqual(MenuStatus(live).obs, "OBS: connected · live, recording")
     }
 
+    func testObsPasswordAndOrder() {
+        var missing = base
+        missing.obs = .init(connected: false, auth: "missing")
+        XCTAssertEqual(MenuStatus(missing).obs, "OBS: needs a password")
+        var wrong = base
+        wrong.obs = .init(connected: false, auth: "wrong")
+        XCTAssertEqual(MenuStatus(wrong).obs, "OBS: refused the password")
+        // A source added above the program page covers every scene: setup is needed again.
+        var covered = base
+        covered.obsSetup?.ordered = false
+        XCTAssertEqual(MenuStatus(covered).obs, "OBS: needs setup")
+        XCTAssertFalse(MenuStatus(covered).obsReady)
+    }
+
+    func testDecodesWhatTheServerSendsNow() throws {
+        let json = #"{"t":"state","state":{"onAir":{"path":"o/x.html","org":"o","label":"BRB","missing":true},"obs":{"connected":false,"recording":false,"streaming":false,"auth":"wrong"},"obsSetup":{"scene":true,"program":true,"ground":true,"ordered":false,"missingDevices":[]},"usb":{"enabled":false,"attached":false,"connected":false},"warnings":[],"agent":{"onAir":"never","lastSeen":null,"client":null}}}"#
+        let state = try XCTUnwrap(ServerMessage.state(from: Data(json.utf8)))
+        XCTAssertEqual(state.obs.auth, "wrong")
+        XCTAssertEqual(state.obsSetup?.ordered, false)
+        XCTAssertEqual(state.onAir?.label, "BRB")
+        // And from a server from before these fields: still in order, no auth problem.
+        let old = #"{"t":"state","state":{"onAir":null,"obs":{"connected":true,"recording":false,"streaming":false},"obsSetup":{"scene":true,"program":true,"ground":true,"missingDevices":[]}}}"#
+        let before = try XCTUnwrap(ServerMessage.state(from: Data(old.utf8)))
+        XCTAssertNil(before.obs.auth)
+        XCTAssertTrue(before.obsSetup?.ready ?? false)
+    }
+
     func testIPadStates() {
         var s = base
         s.usb = .init(enabled: true, attached: true, connected: true)

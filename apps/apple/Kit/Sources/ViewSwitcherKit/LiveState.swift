@@ -12,25 +12,31 @@ public struct LiveState: Decodable, Equatable, Sendable {
         public var connected: Bool
         public var recording: Bool
         public var streaming: Bool
-        public init(connected: Bool, recording: Bool = false, streaming: Bool = false) {
+        /// While OBS won't let the server in: "missing" (it asks for a password the server doesn't have) or "wrong".
+        public var auth: String?
+        public init(connected: Bool, recording: Bool = false, streaming: Bool = false, auth: String? = nil) {
             self.connected = connected
             self.recording = recording
             self.streaming = streaming
+            self.auth = auth
         }
     }
     public struct ObsSetup: Decodable, Equatable, Sendable {
         public var scene: Bool
         public var program: Bool
         public var ground: Bool
+        /// The program on top and the ground at the bottom (absent from an older server: taken as in order).
+        public var ordered: Bool?
         public var missingDevices: [String]
-        public init(scene: Bool, program: Bool, ground: Bool, missingDevices: [String] = []) {
+        public init(scene: Bool, program: Bool, ground: Bool, ordered: Bool? = true, missingDevices: [String] = []) {
             self.scene = scene
             self.program = program
             self.ground = ground
+            self.ordered = ordered
             self.missingDevices = missingDevices
         }
-        /// packages/shared obsReady: the scene and both of the switcher's own sources exist.
-        public var ready: Bool { scene && program && ground }
+        /// packages/shared obsReady: the scene and both of the switcher's own sources exist, in order.
+        public var ready: Bool { scene && program && ground && ordered != false }
     }
     public struct Usb: Decodable, Equatable, Sendable {
         public var enabled: Bool

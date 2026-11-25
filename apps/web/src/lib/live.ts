@@ -40,13 +40,29 @@ let downTimer: ReturnType<typeof setTimeout> | undefined;
 /** The built entry script this page runs (undefined under the Vite dev server, which never reloads this way). */
 const ownBuild = typeof document !== "undefined" ? document.querySelector<HTMLScriptElement>('script[src*="/assets/index-"]')?.getAttribute("src") ?? undefined : undefined;
 
+/** Whether a socket has been open before: the next one opening is a reconnect. */
+let wasOpen = false;
+
+/**
+ * After a gap in the live socket (Wi-Fi dropped, the server restarted), the library changes sent
+ * meanwhile were never heard: every file may have changed. Bumps every version (the shared `*`, in
+ * every scene url) and refetches the library.
+ */
+export function caughtUp(versions: Record<string, number>): Record<string, number> {
+  return { ...versions, "*": (versions["*"] ?? 0) + 1 };
+}
+
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.onopen = () => {
     clearTimeout(downTimer);
     downTimer = undefined;
-    set({ connected: true });
+    if (wasOpen) {
+      set({ connected: true, versions: caughtUp(live.versions) });
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+    } else set({ connected: true });
+    wasOpen = true;
   };
   ws.onclose = () => {
     set({ connected: false });
@@ -83,7 +99,7 @@ export function useLive(): Live {
  * URL for a library file that changes whenever the file (or the shared theme) changes.
  * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
  */
-/** `bridge`: with the bridge the program page talks to the sandboxed scene through (EDIT-26). */
+/** `bridge`: with the bridge the program page talks to the sandboxed scene through. */
 export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;

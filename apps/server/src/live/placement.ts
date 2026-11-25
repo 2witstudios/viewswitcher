@@ -120,7 +120,9 @@ export function createPlacer({ obs, names, ground, onPlaced, timeoutMs = PLACEME
   async function placeOnce(path: string, slots: Slot[]): Promise<string[]> {
     const { canvas, items } = await sceneItems();
     const ids = [...slotted(items, slots).keys()];
-    const read = await obs.requestBatch(ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })), { timeoutMs });
+    const read = ids.length
+      ? await obs.requestBatch(ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })), { timeoutMs })
+      : [];
     const sizes = new Map<number, Canvas>();
     read.forEach((r, i) => {
       const t = r.responseData?.sceneItemTransform;

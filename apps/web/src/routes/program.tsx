@@ -1,20 +1,20 @@
-// The OBS browser source (1920×1080). Shows the on-air scene and tells the server where its device slots are.
+// The OBS browser source (1920×1080). Shows the on-air scene and tells the server where its source slots are.
 //
-// Switching is a single serialized loop, so it's deterministic however fast scenes are tapped:
-// only one transition runs at a time, and when it finishes it checks for a newer request and runs again.
-// Requests that are superseded while loading are dropped; the screen always ends on the latest one.
-// A new version of the scene already on air (a saved edit) swaps in without the transition, and the
-// scene editor's live previews apply to the on-air frame in place.
+// The switching itself is lib/program-loop.ts: one serialized loop that always ends on the latest
+// request and drops superseded ones mid-load. This page gives it the frames: two scene frames it swaps
+// between, and the transition frame over the org's ground color. The scene editor's live previews
+// apply to the on-air frame in place.
 //
-// Scenes run in sandboxed frames with an opaque origin (EDIT-26): this page can't reach into them, and
-// their scripts can't reach the switcher. Where the slots are, the transition's hold and live previews
-// go through the bridge the server adds to each scene (apps/server/src/scene-bridge.ts).
+// Scenes run in sandboxed frames with an opaque origin: this page can't reach into them, and their
+// scripts can't reach the switcher. Where the slots are, the transition's hold and live previews go
+// through the bridge the server adds to each scene (apps/server/src/scene-bridge.ts).
 import { editKind } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { freshUrl, shouldBackstop } from "../lib/backstop";
+import { createProgramLoop, type FrameIndex } from "../lib/program-loop";
 import { cleanSlots, type FrameState, frameState, SCENE_SANDBOX } from "../lib/scene-frame";
 import { onScenePreview, sceneUrl, useLive } from "../lib/live";
 
@@ -25,7 +25,6 @@ if (typeof window !== "undefined") {
   addEventListener("unhandledrejection", (e) => report({ error: String(e.reason) }));
 }
 
-const WIPE_IN = 170;
 const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
 /** A live preview that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
@@ -36,10 +35,7 @@ const PREVIEW_BACKSTOP_MS = 5000;
 const slotPage = Math.random().toString(36).slice(2);
 let slotSeq = 0;
 const slotOrder = () => ({ page: slotPage, seq: ++slotSeq });
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** `from`: the path this scene had before it was renamed on air (EDIT-19): no transition for that. */
-type Job = { url: string; path: string; from?: string };
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** How long to wait for a scene's bridge to answer (a scene without one reports no slots). */
 const ASK_MS = 1000;
@@ -76,7 +72,9 @@ export const Route = createFileRoute("/program")({
     const { state, versions } = useLive();
     const onAir = state?.onAir ?? null;
     // Scenes load with data-vs element ids (?edit) so the editor's live previews can find their element.
-    const target = onAir ? sceneUrl(onAir.path, versions, false, true, true) : null;
+    // A scene whose file was deleted on air isn't loaded again: the frame keeps the version it has,
+    // where a reload would put the server's 404 on stream.
+    const target = onAir && !onAir.missing ? sceneUrl(onAir.path, versions, false, true, true) : null;
 
     const [frames, setFrames] = useState<[string | null, string | null]>([null, null]);
     const [front, setFront] = useState(0);
@@ -90,19 +88,10 @@ export const Route = createFileRoute("/program")({
     const [scale, setScale] = useState(1);
     const refs = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
 
-    const desired = useRef<Job | null>(null); // latest request
-    const shown = useRef<Job | null>(null); // what's on screen
-    const frontRef = useRef(0);
-    const running = useRef(false);
     const seq = useRef(0);
     const waiters = useRef<Map<string, () => void>>(new Map()); // frame src → resolve on load
     const backstop = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    /** The file version each scene frame shows (its data-vs-hash), from its bridge. */
-    const frameVersion = useRef<[string | null, string | null]>([null, null]);
     const transitionHold = useRef<number>(WIPE_HOLD);
-    /** The slots each scene last reported, by path, with the version they're for (the url's v=). */
-    const knownSlots = useRef(new Map<string, { v: string | null; slots: Slot[] }>());
-    const versionOf = (url: string) => new URL(url, location.href).searchParams.get("v");
 
     useEffect(() => {
       const fit = () => setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
@@ -123,10 +112,11 @@ export const Route = createFileRoute("/program")({
         setTimeout(done, LOAD_TIMEOUT);
         put(src);
       });
-    const loadInto = (i: number, url: string) => load(url, (src) => setFrames((f) => (i === 0 ? [src, f[1]] : [f[0], src])));
+    const setFrame = (i: FrameIndex, src: string | null) => setFrames((f) => (i === 0 ? [src, f[1]] : [f[0], src]));
 
-    /** Make sure the transition frame holds `url` (null: no transition page, just the ground color). */
-    const loadTransition = async (url: string | null) => {
+    /** Make sure the transition frame holds the wanted transition (null: no transition page, just the ground color). */
+    const loadTransition = async () => {
+      const url = wantedTransition.current;
       if (url === transitionLoaded.current) return;
       transitionLoaded.current = url;
       transitionHold.current = WIPE_HOLD;
@@ -142,74 +132,25 @@ export const Route = createFileRoute("/program")({
       if (src) waiters.current.get(src)?.();
     };
 
-    /** How long the transition page wants to stay fully on screen (its <meta name="viewswitcher:hold">). */
-    const holdFor = () => transitionHold.current;
-
-    const run = async () => {
-      if (running.current) return;
-      running.current = true;
-      try {
-        while (desired.current && desired.current.url !== shown.current?.url) {
-          const job = desired.current;
-          const back = 1 - frontRef.current;
-          await Promise.all([loadInto(back, job.url), loadTransition(wantedTransition.current)]);
-          if (desired.current !== job) continue; // superseded while loading: go straight to the newer one
-          // A scene busy right after loading (OBS's browser on a cold start) gets a second chance.
-          const st = (await ask(refs[back].current)) ?? (desired.current === job ? await ask(refs[back].current) : null);
-          if (desired.current !== job) continue;
-          frameVersion.current[back] = st?.version ?? null;
-          const v = versionOf(job.url);
-          if (st) knownSlots.current.set(job.path, { v, slots: st.slots });
-          // No answer (a scene's own CSP blocking the bridge, markup that swallows it, a busy cold
-          // start): the slots this version last reported. Otherwise no devices, on purpose: a camera
-          // left over a BRB or a full-screen scene is worse on air than a missing one. Ask again
-          // later, so a scene that was only slow still gets its devices.
-          const known = knownSlots.current.get(job.path);
-          const slots: Slot[] = st?.slots ?? (known && known.v === v ? known.slots : []);
-          if (!st) {
-            report({ warning: `scene didn't answer the bridge: ${known && known.v === v ? "keeping its last known slots" : "showing no devices until it does"}`, path: job.path });
-            const frame = refs[back];
-            let answered = false;
-            for (const ms of [2000, 6000]) {
-              setTimeout(async () => {
-                if (answered || shown.current !== job) return;
-                const late = await ask(frame.current);
-                if (!late || answered || shown.current !== job) return;
-                answered = true;
-                knownSlots.current.set(job.path, { v, slots: late.slots });
-                frameVersion.current[frontRef.current] = late.version;
-                api.reportSlots({ path: job.path, slots: late.slots, ...slotOrder() }).catch(() => {});
-              }, ms);
-            }
-          }
-          const firstShow = shown.current === null;
-          // Same scene, new version (an edit was saved): swap frames with no transition.
-          // Renamed on air (EDIT-19): the same scene under a new path, also no transition.
-          const wipeIt = !firstShow && shown.current?.path !== job.path && !(job.from && job.from === shown.current?.path);
-          if (wipeIt) {
-            // Tell the transition page to play (it can animate on the "play" class; see scene.js).
-            transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
-            setWipe(true);
-            await sleep(WIPE_IN);
-          }
-          await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
-          frontRef.current = back;
-          setFront(back);
-          shown.current = job;
-          if (wipeIt) {
-            await sleep(holdFor());
-            setWipe(false);
-          }
-        }
-      } catch (e) {
-        report({ error: String(e) });
-      } finally {
-        running.current = false;
-        setWipe(false);
-        // A request may have arrived after the loop's last check.
-        if (desired.current && desired.current.url !== shown.current?.url) run();
-      }
-    };
+    const loop = useRef<ReturnType<typeof createProgramLoop> | null>(null);
+    loop.current ??= createProgramLoop({
+      load: (i, url) => load(url, (src) => setFrame(i, src)),
+      loadTransition,
+      ask: (i) => ask(refs[i]!.current),
+      reportSlots: (path, slots) => api.reportSlots({ path, slots, ...slotOrder() }),
+      show: (i) => setFront(i),
+      unload: (i) => setFrame(i, null),
+      wipe: (on) => {
+        // Tell the transition page to play (it can animate on the "play" class; see scene.js).
+        if (on) transitionRef.current?.contentWindow?.postMessage({ viewswitcher: "transition" }, "*");
+        setWipe(on);
+      },
+      hold: () => transitionHold.current,
+      sleep,
+      later: (ms, fn) => void setTimeout(fn, ms),
+      log: report,
+    });
+    const program = loop.current;
 
     // Live edits from the scene editor: change the on-air frame's DOM (never the file), only when the
     // edit was made against the version this frame shows. When a moved element is or holds a device
@@ -223,11 +164,11 @@ export const Route = createFileRoute("/program")({
       let latestFor = "";
       let sent = 0;
       const off = onScenePreview((path, hash, edit, order) => {
-        const job = shown.current;
+        const job = program.shown();
         if (!job || path !== job.path) return;
-        const win = refs[frontRef.current].current?.contentWindow;
+        const win = refs[program.front()]!.current?.contentWindow;
         if (!win) return;
-        const version = frameVersion.current[frontRef.current];
+        const version = program.frontVersion();
         if (version !== latestFor) {
           latest.clear();
           latestFor = version ?? "";
@@ -243,9 +184,8 @@ export const Route = createFileRoute("/program")({
         clearTimeout(backstop.current);
         backstop.current = setTimeout(() => {
           // Not if a saved version replaced it, or the operator asked for another scene meanwhile.
-          if (!shouldBackstop(shown.current, desired.current, job)) return;
-          desired.current = { url: freshUrl(job.url, ++seq.current), path: job.path };
-          run();
+          if (!shouldBackstop(program.shown(), program.desired(), job)) return;
+          program.request({ url: freshUrl(job.url, ++seq.current), path: job.path, force: true });
         }, PREVIEW_BACKSTOP_MS);
       });
       // The bridge answers each preview; when it moved a device slot, report the slots again (at most
@@ -253,8 +193,8 @@ export const Route = createFileRoute("/program")({
       const onApplied = (e: MessageEvent) => {
         const d = e.data as { viewswitcher?: string; slotMoved?: boolean; slots?: unknown } | null;
         if (d?.viewswitcher !== "frame:applied" || !d.slotMoved) return;
-        const front = refs[frontRef.current].current;
-        const path = shown.current?.path;
+        const front = refs[program.front()]!.current;
+        const path = program.shown()?.path;
         if (!front || e.source !== front.contentWindow || !path) return;
         slotsToReport = { path, slots: cleanSlots(d.slots) };
         if (timer) return;
@@ -263,7 +203,7 @@ export const Route = createFileRoute("/program")({
           const r = slotsToReport;
           slotsToReport = null;
           // Still the scene on screen: a saved version may have swapped in during these 33 ms.
-          if (r && shown.current?.path === r.path) api.reportSlots({ path: r.path, slots: r.slots, ...slotOrder() }).catch(() => {});
+          if (r && program.shown()?.path === r.path) api.reportSlots({ path: r.path, slots: r.slots, ...slotOrder() }).catch(() => {});
         }, 33);
       };
       addEventListener("message", onApplied);
@@ -276,9 +216,8 @@ export const Route = createFileRoute("/program")({
 
     useEffect(() => {
       if (!target || !onAir) return;
-      if (desired.current?.url === target) return;
-      desired.current = { url: target, path: onAir.path, from: onAir.renamedFrom };
-      run();
+      if (program.desired()?.url === target) return;
+      program.request({ url: target, path: onAir.path, from: onAir.renamedFrom });
     }, [target]);
 
     return (
