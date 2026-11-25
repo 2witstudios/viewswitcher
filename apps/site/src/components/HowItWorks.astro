@@ -3,7 +3,7 @@ import ViewFrame from "./ViewFrame.astro";
 const covers = ["starting-soon", "teaching", "talking-head", "brb"];
 const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
 ---
-<section class="section mist" id="how" aria-labelledby="how-title">
+<section class="section" id="how" aria-labelledby="how-title">
   <div class="wrap">
     <div class="section-head">
       <h2 id="how-title">How it works</h2>
@@ -46,15 +46,15 @@ const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
   .steps p { color: var(--ink-2); max-width: 30rem; }
   h3 { display: flex; align-items: baseline; gap: 0.6rem; margin-top: 0.75rem; }
   .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
-  .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px var(--rule); }
+  .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
   .vis > :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
-  .setup { background: var(--raised); padding: 1rem 1.1rem; display: grid; align-content: center; gap: 0.55rem; }
+  .setup { background: var(--paper); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; gap: 0.55rem; }
   .field { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.75rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
   .field span { color: var(--ink-3); }
   .field b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sw { display: flex; gap: 0.4rem; }
-  .sw i { width: 1.1rem; height: 1.1rem; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff2e; }
-  .tiles { background: var(--raised); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
+  .sw i { width: 1.1rem; height: 1.1rem; border-radius: 50%; box-shadow: inset 0 0 0 1px #0000001f; }
+  .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
   .tile { position: relative; }
   .tile :global(.frame) { border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }
   .tile.live :global(.frame) { outline-color: var(--live); }

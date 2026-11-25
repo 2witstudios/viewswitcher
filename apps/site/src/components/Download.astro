@@ -4,7 +4,7 @@ import IpadStore from "./IpadStore.astro";
 import { site, github } from "../site.config";
 import { IPAD_PRICE } from "../lib/cta";
 ---
-<section class="section dark on-dark" id="download" aria-labelledby="download-title">
+<section class="section" id="download" aria-labelledby="download-title">
   <div class="wrap grid">
     <div class="copy">
       <h2 id="download-title">Download for Mac</h2>
@@ -41,7 +41,6 @@ bun run start</code></pre>
   </div>
 </section>
 <style>
-  .dark { background: var(--monitor); border-block: 1px solid var(--rule); }
   .grid { display: grid; gap: 2.5rem; align-items: center; }
   @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem 4rem; } .dev { grid-column: 1 / -1; } }
   .copy { display: grid; gap: 1.5rem; }
@@ -54,8 +53,8 @@ bun run start</code></pre>
   .dev { border-top: 1px solid var(--rule); padding-top: 1.25rem; color: var(--ink-2); font-size: 0.9375rem; }
   .dev summary { cursor: pointer; color: var(--ink); font-weight: 600; }
   .dev-body { display: grid; gap: 1rem; padding-top: 1rem; max-width: 44rem; }
-  pre { margin: 0; background: var(--monitor); border: 1px solid var(--rule); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre { margin: 0; background: var(--monitor); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
   .dev, .dev-body { min-width: 0; }
   .dev code { overflow-wrap: anywhere; }
-  .dev code { color: var(--on-monitor); }
+  .dev pre code { color: var(--on-monitor); }
 </style>
