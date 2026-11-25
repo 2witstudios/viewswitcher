@@ -4,6 +4,7 @@
   "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
     {
@@ -12,6 +13,17 @@
         {
           "type": "host",
           "value": "www.viewswitcher.com"
+        }
+      ],
+      "destination": "https://viewswitcher.com/:path",
+      "permanent": true
+    },
+    {
+      "source": "/:path(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "viewswitcher-site(-2witstudios-projects|-git-main-2witstudios-projects)?\\.vercel\\.app"
         }
       ],
       "destination": "https://viewswitcher.com/:path",
@@ -50,6 +62,21 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "missing": [
+        {
+          "type": "host",
+          "value": "viewswitcher.com"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
         }
       ]
     }
