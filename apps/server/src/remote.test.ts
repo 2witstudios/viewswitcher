@@ -207,4 +207,17 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     expect((await own.first).message).toBeDefined();
     own.ws.close();
   });
+
+  test("a scene on a paired phone stays sandboxed: no socket, and /library pages carry the sandbox CSP", async () => {
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const cookie = cookieOf(await pairWith(code.code));
+    // A sandboxed scene frame sends Origin "null"; the phone's cookie rides along, and it still gets no socket.
+    const scene = socket({ cookie, origin: "null" });
+    expect((await scene.first).close).toBeDefined();
+    for (const q of ["", "?bridge", "?edit"]) {
+      const r = await lan(`/library/my-channel/templates/brb.html${q}`, { headers: { cookie } });
+      expect(r.status).toBe(200);
+      expect(String(r.headers["content-security-policy"])).toContain("sandbox");
+    }
+  });
 });
