@@ -24,7 +24,7 @@ const shows = SHOWS;
             ))}
           </div>
           <h3>{s.name} <span class="kind">{s.kind}</span></h3>
-          <p class="get">{downloads ? <a href={downloads}>Built in, or download this style free</a> : <a href="/download">Free style · download coming soon</a>}</p>
+          <p class="get">{downloads ? <a href={downloads}>Built in, or download this style free</a> : <a href="/download">Download coming soon</a>}</p>
           <p>{s.blurb}{s.id === "grace" && <> <a href="/church-livestream">Church livestreaming with ViewSwitcher</a></>}</p>
         </li>
       ))}

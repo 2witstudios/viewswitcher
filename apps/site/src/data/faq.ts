@@ -6,11 +6,8 @@ import { IPAD_PRICE } from "../lib/cta";
 export type Faq = { q: string; a: string; more?: { href: string; label: string } };
 
 export const FAQS: Faq[] = [
-  { q: "Where do the overlays come from?", a: "You start from a style: ViewSwitcher comes with a designed set of views, and your show's name, colors and titles fill in. Then you make it yours right on screen: retype titles, move boxes, add your logo. If you want a view that isn't there, you can describe it to an AI assistant like Claude and it makes one, but that's optional." },
   { q: "Do I need OBS?", a: "Yes. OBS is the free app that does the streaming, and ViewSwitcher sets it up for you the first time. After that, ViewSwitcher tells OBS what to show and where your camera goes; you keep streaming to YouTube, Facebook or wherever you go live today.", more: { href: "/setup", label: "How to set up OBS with ViewSwitcher" } },
   { q: "Do I need to know how to code?", a: "No. You pick views, type in your show's name and titles, and drag boxes where you want them." },
-  { q: "Do I need AI?", a: "No. Start from a style and edit it on screen; that's all most shows need. AI is one more way to make a view, if you want it: ViewSwitcher works with AI assistants like Claude." },
-  { q: "Do templates cost anything?", a: `No. The styles that come with ViewSwitcher and the ones ${site.styleDownloads ? "you can download" : "coming to download"} are free, and they stay free. There are no premium designs to buy.` },
   { q: "Does it work on Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
   { q: "Can my church use it?", a: "Yes. Set up views once for your service (a welcome, worship, the sermon with the scripture beside the pastor, giving, the goodbye) and each Sunday is just new titles. There's no yearly seat fee.", more: { href: "/church-livestream", label: "Church livestreaming with ViewSwitcher" } },
   { q: "Does it work with my camera?", a: "If OBS can see it, ViewSwitcher can place it: the Mac's built-in camera, a USB webcam, or a camera through a capture card. Your screen share and an iPad's screen work the same way." },

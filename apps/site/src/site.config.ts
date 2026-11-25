@@ -35,8 +35,6 @@ export const github = `https://github.com/${site.repo}`;
 export const releases = `${github}/releases`;
 /** The persistent descriptor (SITE-19): what ViewSwitcher is, in the words people search for. */
 export const descriptor = "The free, one-click OBS scene switcher for Mac.";
-/** The hero's line under the headline (SITE-27): the descriptor, and where the overlays come from. */
-export const heroLine = "The free OBS scene switcher for Mac, with ready-made overlays you edit right on screen or create with AI.";
 
 /** The Mac app as schema.org sees it, for the homepage and /download (free, macOS 14+). */
 export const macAppSchema = (path: string) => softwareApp({
