@@ -185,6 +185,7 @@ describe("POST /api/agent/settings", () => {
   });
   test("refuses a value that isn't one of the three, and other sites", async () => {
     expect((await set({ onAir: "sometimes" })).status).toBe(400);
+    expect((await set({})).status).toBe(400);
     expect((await set({ onAir: "always" }, { origin: "https://evil.example" })).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("not-live");
   });

@@ -26,7 +26,7 @@ export async function readSettings(root: string): Promise<Settings> {
 
 /** Change some settings; keeps any other keys already in the file. */
 export async function writeSettings(root: string, patch: Partial<Settings>): Promise<Settings> {
-  if (patch.agentOnAir !== undefined && !isAgentOnAir(patch.agentOnAir)) throw new SettingsError(`onAir is one of ${AGENT_ON_AIR.join(", ")}`);
+  if ("agentOnAir" in patch && !isAgentOnAir(patch.agentOnAir)) throw new SettingsError(`onAir is one of ${AGENT_ON_AIR.join(", ")}`);
   const next = { ...(await readRaw(root)), ...patch };
   await mkdir(join(root, ".viewswitcher"), { recursive: true });
   await writeFile(file(root), JSON.stringify(next, null, 2) + "\n");

@@ -35,5 +35,6 @@ describe("settings.json", () => {
   });
   test("refuses a value that isn't one of the three", async () => {
     expect(writeSettings(temp(), { agentOnAir: "sometimes" as never })).rejects.toThrow("onAir is one of never, not-live, always");
+    expect(writeSettings(temp(), { agentOnAir: undefined })).rejects.toThrow("onAir is one of");
   });
 });
