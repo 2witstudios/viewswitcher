@@ -1,10 +1,10 @@
 // startServer's failures name their cause, so a slow or broken start on a CI runner explains itself.
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { freePort, SERVER_START_MS, startServer } from "./test-server";
+import { freePort, READY_MS, SERVER_START_MS, startServer } from "./test-server";
 
 const library = mkdtempSync(join(tmpdir(), "vs-start-"));
 const env = (port: number) => ({ PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_LAN: "" });
@@ -30,7 +30,7 @@ describe("startServer", () => {
     const taken = await listening(port);
     try {
       // Roomy: the server only has to fail its listen before the deadline, even on a slow runner.
-      const err = await startServer(env(port), () => new Promise<boolean>(() => {}), 5_000).then(() => null, (e: Error) => e);
+      const err = await startServer(env(port), () => new Promise<boolean>(() => {}), { readyMs: 5_000 }).then(() => null, (e: Error) => e);
       expect(err?.message).toStartWith("server exited with code");
     } finally {
       taken.close();
@@ -39,8 +39,22 @@ describe("startServer", () => {
 
   test("a check that never answers still ends at the deadline", async () => {
     const t0 = Date.now();
-    const err = await startServer(env(await freePort()), () => new Promise<boolean>(() => {}), 1_500).then(() => null, (e: Error) => e);
+    const err = await startServer(env(await freePort()), () => new Promise<boolean>(() => {}), { readyMs: 1_500 }).then(() => null, (e: Error) => e);
     expect(err?.message).toStartWith("server wasn't ready within 1.5 s");
     expect(Date.now() - t0).toBeLessThan(5_000);
+  }, SERVER_START_MS);
+
+  test("a server that ignores SIGTERM is killed, not left running, and the error still wins the hook", async () => {
+    // A stand-in server: it writes its pid, never gets ready and shrugs off SIGTERM.
+    const entry = join(library, "stubborn.ts");
+    const pidFile = join(library, "stubborn.pid");
+    writeFileSync(entry, `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
+    const t0 = Date.now();
+    const err = await startServer({}, async () => existsSync(pidFile) && false, { readyMs: 1_000, entry }).then(() => null, (e: Error) => e);
+    expect(err?.message).toStartWith("server wasn't ready within 1 s");
+    // SIGTERM grace, SIGKILL and the stderr drain fit inside the margin READY_MS leaves before the hook.
+    expect(Date.now() - t0).toBeLessThan(1_000 + (SERVER_START_MS - READY_MS));
+    const pid = Number(readFileSync(pidFile, "utf8"));
+    expect(() => process.kill(pid, 0)).toThrow(); // ESRCH: it's gone
   }, SERVER_START_MS);
 });

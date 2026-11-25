@@ -9,8 +9,14 @@ import type { Subprocess } from "bun";
  */
 export const SERVER_START_MS = 30_000;
 
-/** startServer gives up this long before SERVER_START_MS, so its own error wins over the hook timeout. */
-export const READY_MS = SERVER_START_MS - 2_000;
+/**
+ * startServer gives up this long before SERVER_START_MS, so its own error wins over the hook timeout:
+ * the margin covers stopping the server (KILL_GRACE_MS, SIGKILL, the stderr drain) with room to spare.
+ */
+export const READY_MS = SERVER_START_MS - 5_000;
+
+/** How long a failed start waits for SIGTERM before SIGKILL. */
+const KILL_GRACE_MS = 1_000;
 
 /** How much of the server's stderr a startup error quotes. */
 const STDERR_TAIL = 2_000;
@@ -26,12 +32,17 @@ export function freePort(): Promise<number> {
 }
 
 /**
- * Runs apps/server/src/index.ts with `env` on top of this process's environment and resolves once
- * `ready()` is true. Throws if the server exits first, or isn't ready within `readyMs` (even when a
- * check hangs), with the tail of its stderr, so the error names the cause instead of the hook timing out.
+ * Runs apps/server/src/index.ts (or `entry`, for this helper's own tests) with `env` on top of this
+ * process's environment and resolves once `ready()` is true. Throws if the server exits first, or isn't
+ * ready within `readyMs` (even when a check hangs), with the tail of its stderr, so the error names the
+ * cause instead of the hook timing out.
  */
-export async function startServer(env: Record<string, string>, ready: () => Promise<boolean>, readyMs = READY_MS): Promise<Subprocess> {
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
+export async function startServer(
+  env: Record<string, string>,
+  ready: () => Promise<boolean>,
+  { readyMs = READY_MS, entry = join(import.meta.dir, "index.ts") }: { readyMs?: number; entry?: string } = {},
+): Promise<Subprocess> {
+  const proc = Bun.spawn([process.execPath, entry], {
     env: { ...process.env, ...env },
     stdout: "ignore",
     stderr: "pipe",
@@ -46,12 +57,12 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
     // Let it exit (and flush its stderr) before the caller's afterAll removes its library. The caller
     // never gets proc on a failure, so a server that ignores SIGTERM is killed outright, never orphaned.
     proc.kill();
-    const gone = await Promise.race([proc.exited.then(() => true), Bun.sleep(2_000).then(() => false)]);
+    const gone = await Promise.race([proc.exited.then(() => true), Bun.sleep(KILL_GRACE_MS).then(() => false)]);
     if (!gone) {
       proc.kill("SIGKILL");
       await proc.exited;
     }
-    await Promise.race([drained, Bun.sleep(500)]);
+    await Promise.race([drained, Bun.sleep(300)]);
     const tail = stderr.trim();
     return new Error(tail ? `${why}; its stderr ended:\n${tail}` : why);
   };

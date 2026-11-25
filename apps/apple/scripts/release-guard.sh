@@ -40,7 +40,13 @@ require_clean_tree() {
 }
 
 # HEAD is on origin/main, so what ships (the tagged Mac release, the iPad upload) is a reviewed commit.
+# origin must be the repository releases go to, not a fork or a mirror, or "main" means someone else's.
+RELEASE_REPO="2witstudios/viewswitcher"
 require_head_on_main() {
+  local url
+  url="$(git -C "$1" remote get-url origin)"
+  [[ "$url" =~ github\.com[:/]${RELEASE_REPO}(\.git)?$ ]] || {
+    echo "✗ origin is $url, not github.com/$RELEASE_REPO: release from a clone of $RELEASE_REPO." >&2; return 1; }
   git -C "$1" fetch -q origin main || { echo "✗ Couldn't fetch origin/main to check HEAD against it." >&2; return 1; }
   git -C "$1" merge-base --is-ancestor HEAD origin/main && return 0
   echo "✗ HEAD ($(git -C "$1" rev-parse --short HEAD)) isn't on origin/main: publish only what main has." >&2
