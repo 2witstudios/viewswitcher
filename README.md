@@ -225,7 +225,6 @@ apps/site              viewswitcher.com (Astro); see apps/site/README.md
 packages/shared        types and pure, dependency-free logic (resolveStream, coverTransform, obsColor, the scene scanner, the template pack validator)
 docs                   template-packs.md, screenshots
 .github                CI (tests, typechecks, swift test), Dependabot, the PR template
-post/                  YouTube post pipeline; see post/README.md
 ```
 
 ### Tests and typechecks
@@ -241,7 +240,6 @@ CI (`.github/workflows/ci.yml`) runs all of these, plus the switcher build and V
 ### What's next
 
 - An ink layer: Pencil drawing from the iPad as a layer in `/program`.
-- The post pipeline per org.
 
 ### Contributing
 
