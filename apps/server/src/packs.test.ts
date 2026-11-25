@@ -42,7 +42,8 @@ describe("the starter kit as a pack (EDIT-27)", () => {
     expect(s.scripts).toEqual({ files: ["_shared/scene.js"], inline: [], remote: [], standard: true });
     expect(s.warnings).toEqual([]);
     const cover = await readFile(join(root, s.views[1]!.path), "utf8");
-    expect(cover).toContain(`href="/library/.viewswitcher/staging/${s.token}/preview/_shared/theme.css"`);
+    expect(s.views[1]!.path.startsWith(`${org}/.viewswitcher/staging/`)).toBe(true); // library paths start with the org id
+    expect(cover).toContain(`href="/library/${org}/.viewswitcher/staging/${s.token}/preview/_shared/theme.css"`);
     expect(cover).toContain("Daisy Debate");
     // Staged, not installed: the org has no set yet.
     expect((await scanLibrary(root, org)).sets).toEqual([]);
@@ -61,7 +62,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
     expect(html).toContain("Daisy Debate");
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent: #ff5a36;");
     // Staging is gone.
-    expect(await readdir(join(root, ".viewswitcher/staging"))).toEqual([]);
+    expect(await readdir(join(root, org, ".viewswitcher/staging"))).toEqual([]);
 
     const { projectId } = await createProject(join(root, org), "Season 1", ["starter/teaching", "teaching"]);
     expect((await readdir(join(root, org, "projects", projectId, "scenes"))).sort()).toEqual(["teaching-2.html", "teaching.html"]);
@@ -85,8 +86,8 @@ describe("the starter kit as a pack (EDIT-27)", () => {
 
   test("cancel clears staging; a used or made-up token installs nothing", async () => {
     const s = await stagePack(root, org, { zip: starterZip }, null);
-    await cancelPack(root, s.token);
-    expect(await readdir(join(root, ".viewswitcher/staging"))).toEqual([]);
+    await cancelPack(root, org, s.token);
+    expect(await readdir(join(root, org, ".viewswitcher/staging"))).toEqual([]);
     await expect(installPack(root, org, s.token)).rejects.toThrow(/isn't ready/);
     await expect(installPack(root, org, "../../etc")).rejects.toThrow(/isn't ready/);
   });
@@ -94,7 +95,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
   test("a pack staged for one org can't be installed into another", async () => {
     const other = (await createOrg(root, starter, "Personal")).orgId;
     const s = await stagePack(root, org, { zip: starterZip }, null);
-    await expect(installPack(root, other, s.token)).rejects.toThrow(/another org/);
+    await expect(installPack(root, other, s.token)).rejects.toThrow(/isn't ready|another org/);
     expect((await scanLibrary(root, other)).sets).toEqual([]);
   });
 });
@@ -162,9 +163,9 @@ describe("hostile and broken packs change nothing (EDIT-24 · EDIT-26)", () => {
       expect(err).toBeInstanceOf(PackError);
       expect(String(err.message)).toMatch(why);
       // Nothing written: not in the org, not left in staging, not outside the library.
-      const after = (await listing()).filter((p) => p !== ".viewswitcher" && p !== ".viewswitcher/staging");
+      const after = (await listing()).filter((p) => !/^[^/]+\/\.viewswitcher(\/staging)?$/.test(p));
       expect(after).toEqual(before);
-      expect(await readdir(join(root, ".viewswitcher/staging")).catch(() => [])).toEqual([]);
+      expect(await readdir(join(root, org, ".viewswitcher/staging")).catch(() => [])).toEqual([]);
     });
   }
 
@@ -182,10 +183,13 @@ describe("hostile and broken packs change nothing (EDIT-24 · EDIT-26)", () => {
     expect(await readdir(join(root, org, "templates/starter"))).toEqual(["keep.txt"]);
     // And when the staged copy is gone mid-way, nothing appears.
     const t = await stagePack(root, org, { zip: starterZip }, null);
-    await rm(join(root, ".viewswitcher/staging", t.token, "raw"), { recursive: true });
+    await rm(join(root, org, ".viewswitcher/staging", t.token, "raw"), { recursive: true });
     const before = await listing(join(root, org));
-    await expect(installPack(root, org, t.token)).rejects.toThrow();
-    expect(await listing(join(root, org))).toEqual(before);
+    const err = await installPack(root, org, t.token).then(() => null, (e) => e);
+    expect(err).toBeInstanceOf(PackError);
+    expect(err.message).not.toContain(root); // no absolute paths in what the client sees
+    expect((await listing(join(root, org))).filter((p) => !p.startsWith(".viewswitcher"))).toEqual(before.filter((p) => !p.startsWith(".viewswitcher")));
+    expect(await readdir(join(root, org, "templates"))).not.toContain("starter-3");
   });
 });
 

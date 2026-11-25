@@ -47,6 +47,7 @@ describe("planPack", () => {
     ["html in _shared other than the transition", [...basic, file("_shared/other.html")], /_shared\/ holds/],
     ["a folder under templates", [...basic, file("templates/more/x.html")], /only the views/],
     ["css in templates", [...basic, file("templates/x.css")], /only the views/],
+    ["a view with an upper-case .HTML", [...basic, file("templates/extra.HTML")], /lower-case \.html/],
     ["an unknown top folder", [...basic, file("scripts/x.js")], /doesn't belong/],
     ["a stray file at the top", [...basic, file("install.command")], /doesn't belong/],
     ["the same file twice in different case", [...basic, file("assets/BG.jpg")], /twice/],
@@ -116,6 +117,11 @@ describe("checkPack", () => {
       "templates/brb.html": `<html><body><script>fetch('/api/onair', {method:'POST'})</script><script src="https://cdn.example/x.js"></script></body></html>`,
     }));
     expect(r.ok && r.scripts).toEqual({ files: ["_shared/scene.js"], inline: ["templates/main.html", "templates/brb.html"], remote: ["https://cdn.example/x.js"] });
+  });
+
+  test("an SVG with a script or handler counts as code (a view can frame it)", () => {
+    const r = checkPack(planned([...basic, file("assets/x.svg")]), texts({ "assets/x.svg": `<svg onload="fetch('/api')"/>`, "_shared/brand/mark.svg": "<svg><script>x()</script></svg>" }));
+    expect(r.ok && r.scripts.inline).toEqual(["_shared/brand/mark.svg", "assets/x.svg"]);
   });
 
   test("javascript: links count as code", () => {

@@ -122,8 +122,16 @@ test("withBridge adds the script once, at the end", () => {
   expect(out.endsWith("})();</script>\n")).toBe(true);
 });
 
-test("the editor's copy defuses a meta refresh (it would navigate the same-origin frame away)", async () => {
-  const { defuseRefresh } = await import("./scene-sandbox");
-  expect(defuseRefresh(`<meta http-equiv="refresh" content="0; url=/daisy/templates"><META HTTP-EQUIV=Refresh content=1>`)).toBe(`<meta http-equiv="x-refresh-off" content="0; url=/daisy/templates"><META HTTP-EQUIV=x-refresh-off content=1>`);
-  expect(defuseRefresh(`<meta charset="utf-8">`)).toBe(`<meta charset="utf-8">`);
+test("the editor's copy drops every <meta http-equiv>, however it's written (it could navigate the same-origin frame away)", async () => {
+  const { defuseMeta } = await import("./scene-sandbox");
+  for (const meta of [
+    `<meta http-equiv="refresh" content="0; url=/daisy/templates">`,
+    `<META HTTP-EQUIV=Refresh content=1>`,
+    `<meta http-equiv="&#114;efresh" content="0;url=x.html/">`,
+    `<meta content="0;url=/a?>" http-equiv="refresh">`,
+  ]) {
+    const out = defuseMeta(`<html><head>${meta}<title>t</title></head><body><p>x</p></body></html>`);
+    expect(out).toBe(`<html><head><meta data-vs-defused><title>t</title></head><body><p>x</p></body></html>`);
+  }
+  expect(defuseMeta(`<meta charset="utf-8"><!-- <meta http-equiv="refresh"> -->`)).toBe(`<meta charset="utf-8"><!-- <meta http-equiv="refresh"> -->`);
 });

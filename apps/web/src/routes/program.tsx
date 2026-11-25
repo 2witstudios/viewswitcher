@@ -42,7 +42,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 type Job = { url: string; path: string; from?: string };
 
 /** How long to wait for a scene's bridge to answer (a scene without one reports no slots). */
-const ASK_MS = 1500;
+const ASK_MS = 1000;
 let asked = 0;
 const waiting = new Map<number, { win: Window; done: (s: FrameState | null) => void }>();
 if (typeof window !== "undefined") {
@@ -100,6 +100,8 @@ export const Route = createFileRoute("/program")({
     /** The file version each scene frame shows (its data-vs-hash), from its bridge. */
     const frameVersion = useRef<[string | null, string | null]>([null, null]);
     const transitionHold = useRef<number>(WIPE_HOLD);
+    /** The slots each scene last reported, for a scene that doesn't answer next time. */
+    const knownSlots = useRef(new Map<string, Slot[]>());
 
     useEffect(() => {
       const fit = () => setScale(Math.min(innerWidth / 1920, innerHeight / 1080));
@@ -151,10 +153,15 @@ export const Route = createFileRoute("/program")({
           const back = 1 - frontRef.current;
           await Promise.all([loadInto(back, job.url), loadTransition(wantedTransition.current)]);
           if (desired.current !== job) continue; // superseded while loading: go straight to the newer one
-          const st = await ask(refs[back].current);
+          // A scene busy right after loading (OBS's browser on a cold start) gets a second chance.
+          const st = (await ask(refs[back].current)) ?? (desired.current === job ? await ask(refs[back].current) : null);
           if (desired.current !== job) continue;
-          const slots: Slot[] = st?.slots ?? [];
           frameVersion.current[back] = st?.version ?? null;
+          if (st) knownSlots.current.set(job.path, st.slots);
+          else report({ warning: "scene didn't answer the bridge: keeping its last known slots", path: job.path });
+          // No answer (a scene's own CSP blocking the bridge, markup that swallows it): the slots it
+          // last reported, else leave OBS as it is rather than hide every device.
+          const slots: Slot[] | null = st?.slots ?? knownSlots.current.get(job.path) ?? null;
           const firstShow = shown.current === null;
           // Same scene, new version (an edit was saved): swap frames with no transition.
           // Renamed on air (EDIT-19): the same scene under a new path, also no transition.
@@ -165,7 +172,7 @@ export const Route = createFileRoute("/program")({
             setWipe(true);
             await sleep(WIPE_IN);
           }
-          await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
+          if (slots) await api.reportSlots({ path: job.path, slots, ...slotOrder() }).catch(() => {});
           frontRef.current = back;
           setFront(back);
           shown.current = job;

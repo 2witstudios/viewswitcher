@@ -64,7 +64,7 @@ export type PackPlan = { ok: true; files: PackFile[]; skipped: number } | { ok: 
 export type PackScripts = {
   /** Script files the pack ships (_shared/*.js). */
   files: string[];
-  /** Views and the transition with scripts of their own written into the page (inline <script>, on… handlers, javascript: links). */
+  /** Views, the transition and SVGs with scripts of their own written in (inline <script>, on… handlers, javascript: links). */
   inline: string[];
   /** Scripts loaded from another site. */
   remote: string[];
@@ -139,7 +139,8 @@ export function planPack(entries: PackEntry[]): PackPlan {
     if (parts.length === 1) {
       if (!ROOT_FILES.has(name)) return fail(`"${path}" doesn't belong in a pack (only pack.json, README.md and LICENSE go next to templates/)`);
     } else if (top === "templates") {
-      if (parts.length !== 2 || ext(name) !== "html") return fail(`"${path}": templates/ holds only the views, as .html files`);
+      // Exactly ".html": the switcher lists views by that suffix, so "main.HTML" would install unseen.
+      if (parts.length !== 2 || !name.endsWith(".html")) return fail(`"${path}": templates/ holds only the views, as .html files (lower-case .html)`);
     } else if (top === "_shared") {
       const isTransition = path === "_shared/transition.html";
       if (!isTransition && !ALLOWED._shared.has(ext(name))) return fail(`"${path}": _shared/ holds the theme (.css), scripts (.js), the transition, pictures and fonts, not .${ext(name) || "files without a type"}`);
@@ -276,7 +277,8 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   const pages = [...views.map((v) => v.file), ...(have.has("_shared/transition.html") ? ["_shared/transition.html"] : [])];
   const scripts: PackScripts = {
     files: files.filter((f) => ext(f.path) === "js").map((f) => f.path),
-    inline: pages.filter((p) => inlineCode(texts[p] ?? "")),
+    // An SVG runs its own scripts when a view frames it.
+    inline: [...pages, ...files.filter((f) => ext(f.path) === "svg").map((f) => f.path)].filter((p) => inlineCode(texts[p] ?? "")),
     remote: [...new Set(pages.flatMap((p) => remoteScripts(texts[p] ?? "")))],
   };
   return { ok: true, manifest, files, views, transition: have.has("_shared/transition.html") ? "_shared/transition.html" : null, scripts, warnings };

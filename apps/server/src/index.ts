@@ -16,7 +16,7 @@ import { createSlotOrder } from "./slot-order";
 import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { withBridge } from "./scene-bridge";
 import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
-import { defuseRefresh, libraryHeaders } from "./scene-sandbox";
+import { defuseMeta, libraryHeaders } from "./scene-sandbox";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
@@ -295,7 +295,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/packs/cancel" && post) {
     const b = await body(req);
-    await cancelPack(root, b.token);
+    await cancelPack(root, plainName(String(b.org ?? "")), b.token);
     return json({ ok: true });
   }
   if (path === "/api/sets/remove" && post) {
@@ -404,6 +404,8 @@ const server = Bun.serve({
       if (path.startsWith("/library/")) {
         // Every library page is served sandboxed (scene-sandbox.ts): a scene's scripts never run as the switcher.
         const rel = path.slice("/library/".length);
+        // "x.html/" would resolve to the file: library URLs never end in a slash.
+        if (rel.endsWith("/")) return new Response("Not found", { status: 404, headers: libraryHeaders(rel) });
         const inert = url.searchParams.has("inert");
         const headers = libraryHeaders(rel, inert);
         if (path.endsWith(".html") && (url.searchParams.has("edit") || url.searchParams.has("bridge"))) {
@@ -418,7 +420,7 @@ const server = Bun.serve({
             : null;
           const html = scene?.html ?? (await readFile(inside(config.library, rel), "utf8").catch(() => null));
           if (html !== null) {
-            return new Response(inert ? defuseRefresh(html) : url.searchParams.has("bridge") ? withBridge(html) : html, {
+            return new Response(inert ? defuseMeta(html) : url.searchParams.has("bridge") ? withBridge(html) : html, {
               headers: {
                 ...headers, "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
                 ...(scene ? { "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" } : {}),
@@ -437,7 +439,8 @@ const server = Bun.serve({
     } catch (e) {
       if (e instanceof PathError || e instanceof EditError || e instanceof PackError) return json({ error: e.message }, 400);
       console.error(e);
-      return json({ error: (e as Error).message }, 500);
+      // No absolute paths in responses (CLAUDE.md): a filesystem error names the file it failed on.
+      return json({ error: String((e as Error).message).replaceAll(config.library, "<library>") }, 500);
     }
   },
   websocket: {

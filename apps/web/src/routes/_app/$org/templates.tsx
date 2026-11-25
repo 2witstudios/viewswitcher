@@ -146,7 +146,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
             pack={staged}
             orgName={data.org.name}
             onCancel={() => {
-              void packs.cancel(staged.token).catch(() => {});
+              void packs.cancel(org, staged.token).catch(() => {});
               setStaged(null);
             }}
             onInstall={async () => {

@@ -122,7 +122,7 @@ export const packs = {
     return form<StagedPack>("/api/packs/stage", body);
   },
   install: (org: string, token: string) => post<{ set: string }>("/api/packs/install", { org, token }),
-  cancel: (token: string) => post("/api/packs/cancel", { token }),
+  cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
   removeSet: (org: string, set: string) => post<{ kept: number }>("/api/sets/remove", { org, set }),
 };
 

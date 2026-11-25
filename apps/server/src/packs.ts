@@ -1,7 +1,7 @@
 // Installing style packs (EDIT-24 · EDIT-25). A pack arrives as a .zip or a dropped folder's files.
 //
 // 1. stage: list it, check every path and size before anything is written (planPack), unpack it into
-//    <library>/.viewswitcher/staging/<token>/raw, check what it is (checkPack), and write a preview
+//    <org>/.viewswitcher/staging/<token>/raw (inside the org, so preview paths start with its id), check what it is (checkPack), and write a preview
 //    copy, filled in for the org, that the switcher shows as covers before anyone says Install.
 // 2. install: fill the raw copy in for the org into staging/<token>/final, then rename that folder to
 //    <org>/templates/<set>. Nothing reaches the org until that one rename, so a failed install (or a
@@ -9,7 +9,7 @@
 // 3. remove a set: delete its folder, unless scenes made from it still use its theme and pictures:
 //    then only its views and pack.json go, so those scenes keep their look.
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, PACK_TEXT, planPack } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, PackPlaceholder, PackScripts } from "@viewswitcher/shared";
@@ -43,7 +43,14 @@ export type StagedPack = {
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
 const tokenOk = (t: unknown): t is string => typeof t === "string" && /^[a-f0-9]{24}$/.test(t);
-const stageDir = (root: string, token: string) => inside(root, `${STAGING}/${token}`);
+const stageDir = (root: string, orgId: string, token: string) => inside(root, `${plainName(orgId)}/${STAGING}/${token}`);
+
+/** A filesystem error, without the absolute path Node puts in its message (CLAUDE.md: none in responses). */
+function plainFsError(e: unknown, doing: string): Error {
+  if (e instanceof PackError || e instanceof PathError) return e;
+  const code = (e as { code?: string })?.code;
+  return new PackError(`${doing} failed${code ? ` (${code})` : ""}. Nothing was installed; try again.`);
+}
 
 /** The placeholders for `org`, with {{PACK}} pointing at `packUrl`. */
 async function varsFor(root: string, orgId: string, packUrl: string): Promise<Record<PackPlaceholder, string>> {
@@ -71,11 +78,14 @@ async function fillCopy(raw: string, dest: string, files: string[], vars: Record
 
 /** Clear staged packs older than an hour (a closed tab never cancels its own). */
 export async function sweepStaging(root: string) {
-  const dir = join(root, STAGING);
   const now = Date.now();
-  for (const name of await readdir(dir).catch(() => [] as string[])) {
-    const s = await stat(join(dir, name)).catch(() => null);
-    if (s && now - s.mtimeMs > STAGE_TTL_MS) await rm(join(dir, name), { recursive: true, force: true });
+  for (const org of await readdir(root).catch(() => [] as string[])) {
+    if (org.startsWith(".")) continue;
+    const dir = join(root, org, STAGING);
+    for (const name of await readdir(dir).catch(() => [] as string[])) {
+      const s = await stat(join(dir, name)).catch(() => null);
+      if (s && now - s.mtimeMs > STAGE_TTL_MS) await rm(join(dir, name), { recursive: true, force: true });
+    }
   }
 }
 
@@ -114,7 +124,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
   // 2. Unpack into staging (only the planned files, each checked to land inside it once more).
   const token = randomBytes(12).toString("hex");
-  const dir = stageDir(root, token);
+  const dir = stageDir(root, orgId, token);
   const raw = join(dir, "raw");
   try {
     const texts: Record<string, string> = {};
@@ -136,7 +146,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
     const files = plan.files.map((f: PackFile) => f.path);
 
     // 4. A preview copy for the covers, filled in for this org.
-    const previewRel = `${STAGING}/${token}/preview`;
+    const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
     await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, `/library/${previewRel}`));
     const label = (html: string, name: string) => /<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() || name.replace(/-/g, " ");
     const views = report.views.map((v) => ({ name: v.name, label: label(texts[v.file] ?? "", v.name), path: `${previewRel}/${installedPath(v.file)}` }));
@@ -154,7 +164,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
     };
   } catch (e) {
     await rm(dir, { recursive: true, force: true });
-    throw e;
+    throw plainFsError(e, "Unpacking it");
   }
 }
 
@@ -163,7 +173,7 @@ const hash = (s: string) => createHash("sha256").update(s.replace(/\r\n/g, "\n")
 /** Install a staged pack into its org as templates/<set>/. Returns the set's folder name. */
 export async function installPack(root: string, orgId: string, token: unknown): Promise<{ set: string }> {
   if (!tokenOk(token)) throw new PackError("That pack isn't ready to install any more. Drop it again.");
-  const dir = stageDir(root, token);
+  const dir = stageDir(root, orgId, token);
   const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   if (meta.org !== orgId) throw new PackError("That pack was checked for another org. Drop it again here.");
@@ -174,16 +184,29 @@ export async function installPack(root: string, orgId: string, token: unknown): 
     await rm(final, { recursive: true, force: true });
     await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, `/library/${orgId}/templates/${set}`));
     await mkdir(join(orgDir, "templates"), { recursive: true });
-    // The one step that reaches the org: atomic, and it fails if the folder appeared meanwhile.
-    await rename(final, inside(orgDir, `templates/${set}`));
+    // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
+    // installs at once, an agent), where rename alone would quietly replace an empty one.
+    const target = inside(orgDir, `templates/${set}`);
+    try {
+      await mkdir(target);
+    } catch {
+      throw new PackError("A set with that name just appeared. Drop the pack again.");
+    }
+    // The one step that fills the org: atomic, onto the empty folder just claimed.
+    await rename(final, target).catch(async (e) => {
+      await rmdir(target).catch(() => {}); // only if still empty: never someone else's files
+      throw e;
+    });
     return { set };
+  } catch (e) {
+    throw plainFsError(e, "Installing it");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 }
 
-export async function cancelPack(root: string, token: unknown) {
-  if (tokenOk(token)) await rm(stageDir(root, token), { recursive: true, force: true });
+export async function cancelPack(root: string, orgId: string, token: unknown) {
+  if (tokenOk(token)) await rm(stageDir(root, orgId, token), { recursive: true, force: true });
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */

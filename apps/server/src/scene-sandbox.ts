@@ -1,3 +1,4 @@
+import { scanElements } from "@viewswitcher/shared";
 // How library files are served (EDIT-26). Scenes are HTML that anyone may have written: an agent, a
 // style pack from a stranger. Served plainly from /library/, a scene would be same-origin with the
 // switcher, so its scripts could call /api (go on air, edit files, upload), open the live socket,
@@ -18,23 +19,35 @@
 //   inline handlers and javascript: links, and it may hold no frames, objects or workers. (The
 //   sandbox keeps allow-scripts here only because WebKit, on the iPad and in the Mac app, won't run
 //   even the editor's own listeners inside a frame without it; the CSP is what keeps the scene's
-//   code from running.) A <meta http-equiv="refresh"> is defused too, so the frame stays the scene.
+//   code from running.) Every <meta http-equiv> is removed too, so a refresh can't take the frame elsewhere.
 //
 // The switcher's own frames carry the same sandbox attribute, so this holds twice. Fonts are sent
-// with CORS (an opaque-origin page's @font-face needs it); they're not private.
-const DOCUMENT = /\.(html?|xhtml|svg|xml)$/i;
-const FONT = /\.(woff2?|ttf|otf)$/i;
+// and other non-document files with CORS (an opaque-origin page's @font-face, module scripts and
+// crossorigin media need it); documents and JSON never are.
+// The CSP goes on every /library/ response, whatever its name: what a browser renders comes from the
+// file's type, not the request path ("x.html/", ".shtml", ".xsl" are documents too), and a CSP on an
+// image or a stylesheet does nothing.
+/** Library files a scene may load in CORS mode (module scripts, crossorigin media, canvas): public to scenes anyway. Never documents or JSON. */
+const CORS_OK = /\.(woff2?|ttf|otf|js|mjs|css|png|jpe?g|gif|webp|avif|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
 
 export const SCENE_CSP = "sandbox allow-scripts; connect-src https: wss:; object-src 'none'; base-uri 'none'; form-action 'none'";
 export const INERT_CSP = "sandbox allow-same-origin allow-scripts; script-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'";
 
 /** Headers for a /library/ response: `rel` is its library path. */
 export function libraryHeaders(rel: string, inert = false): Record<string, string> {
-  const h: Record<string, string> = { "x-content-type-options": "nosniff" };
-  if (DOCUMENT.test(rel)) h["content-security-policy"] = inert ? INERT_CSP : SCENE_CSP;
-  if (FONT.test(rel)) h["access-control-allow-origin"] = "*";
+  const h: Record<string, string> = { "x-content-type-options": "nosniff", "content-security-policy": inert ? INERT_CSP : SCENE_CSP };
+  if (CORS_OK.test(rel)) h["access-control-allow-origin"] = "*";
   return h;
 }
 
-/** The editor's copy of a scene: a meta refresh would navigate its same-origin frame elsewhere. */
-export const defuseRefresh = (html: string) => html.replace(/(<meta\b[^>]*\bhttp-equiv\s*=\s*["']?)refresh/gi, "$1x-refresh-off");
+/**
+ * The editor's copy of a scene: every <meta http-equiv> goes (a refresh would navigate the same-origin
+ * frame; a CSP meta could only tighten, but nothing in the editor needs one). Found with the same
+ * tokenizer as the editor's element ids, so character references and ">" in quoted values don't hide one.
+ */
+export function defuseMeta(html: string): string {
+  const metas = scanElements(html).filter((e) => e.tag === "meta" && e.attrs.some((a) => a.name === "http-equiv"));
+  let out = html;
+  for (const m of metas.reverse()) out = `${out.slice(0, m.start)}<meta data-vs-defused>${out.slice(m.openEnd)}`;
+  return out;
+}
