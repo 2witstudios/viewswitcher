@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHead } from "../../../components/PageHead";
-import { SceneTile, useEditItem } from "../../../components/SceneTile";
+import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, type MenuItem } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
 import { useLibrary } from "../../../lib/library";
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
   component: function Templates() {
     const { org } = Route.useParams();
     const { data } = useLibrary(org);
-    const editItem = useEditItem();
+    const openEditor = useOpenEditor();
     return (
       <>
         <PageHead crumb="Starting points. Templates never go on air." title="Templates" />
@@ -18,19 +18,17 @@ export const Route = createFileRoute("/_app/$org/templates")({
           <div className="grid">
             {data?.templates.map((t) => {
               const menu: MenuItem[] = [
-                editItem(t.path),
-                "divider",
-                ...(data.projects.map((p) => ({
+                ...data.projects.flatMap((p): MenuItem[] => [{
                   label: `Add to ${p.name}`,
                   hint: "Copies it into the project's shared scenes",
                   run: () => attempt(() => api.addFromTemplate(org, t.name, p.id), `Added ${t.label} to ${p.name}`),
-                }))),
-                "divider",
+                }]),
+                ...(data.projects.length ? ["divider" as const] : []),
                 { label: "Open the file", hint: "In your editor on the Mac", run: () => attempt(() => api.open(t.path)) },
                 { label: "Copy path", hint: t.path, run: () => void copy(t.path) },
-                { label: "Duplicate", hint: "A new template to change", run: () => attempt(() => api.duplicate(t.path), "Duplicated") },
+                { label: "Duplicate and edit", hint: "A new template, open to change", run: () => attempt(async () => openEditor((await api.duplicate(t.path)).path, { rename: true })) },
               ];
-              return <SceneTile key={t.path} label={t.label} path={t.path} badge="TEMPLATE" menu={menu} />;
+              return <SceneTile key={t.path} label={t.label} path={t.path} badge="TEMPLATE" onEdit={() => openEditor(t.path)} menu={menu} />;
             })}
           </div>
         </section>

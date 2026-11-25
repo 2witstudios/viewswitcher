@@ -37,12 +37,12 @@ export const api = {
   createStream: (org: string, projectId: string, name: string, date: string) =>
     post<{ projectId: string; streamId: string }>("/api/streams", { org, projectId, name, date }),
   addFromTemplate: (org: string, template: string, projectId: string, streamId?: string) =>
-    post<{ name: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
-  customize: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/customize", { org, projectId, streamId, name }),
+    post<{ name: string; path: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
+  customize: (org: string, projectId: string, streamId: string, name: string) => post<{ name: string; path: string }>("/api/scenes/customize", { org, projectId, streamId, name }),
   revert: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { org, projectId, streamId, name }),
   customizeTransition: (org: string, projectId: string) => post("/api/transition/customize", { org, projectId }),
   revertTransition: (org: string, projectId: string) => post("/api/transition/revert", { org, projectId }),
-  duplicate: (path: string) => post<{ name: string }>("/api/scenes/duplicate", { path }),
+  duplicate: (path: string) => post<{ name: string; path: string }>("/api/scenes/duplicate", { path }),
 
   /** The scene tagged with data-vs ids, and the hash of the file it came from. */
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
@@ -60,6 +60,14 @@ export const api = {
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data;
   },
+  /** Rename a scene (its title, and a stream scene's file). Throws SceneConflict if the file changed since `hash`. */
+  renameScene: async (path: string, hash: string, name: string): Promise<{ hash: string; path: string }> => {
+    const res = await fetch("/api/scene/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, name }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+    if (!res.ok) throw new Error(data.error ?? res.statusText);
+    return data;
+  },
   /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
   previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, session: previewSession, seq: nextPreviewSeq() }),
   /** The same, from a page that's going away (survives pagehide). */
@@ -72,7 +80,7 @@ export const api = {
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
 
-  upload: async (org: string, files: FileList | File[]) => {
+  upload: async (org: string, files: FileList | File[]): Promise<{ saved: { path: string }[] }> => {
     const form = new FormData();
     form.append("org", org);
     for (const f of Array.from(files)) form.append("file", f);

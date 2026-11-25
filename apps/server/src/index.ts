@@ -292,9 +292,10 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     const b = await body(req);
     const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
-    if (state.onAir?.path === b.path) {
-      const rest = state.onAir.label.includes(" · ") ? state.onAir.label.slice(state.onAir.label.indexOf(" · ")) : "";
-      state.onAir = { ...state.onAir, path: r.path, label: `${String(b.name).trim()}${rest}`, renamedFrom: r.path !== b.path ? b.path : state.onAir.renamedFrom };
+    const on = state.onAir;
+    if (on && on.path === b.path) {
+      const rest = on.label.includes(" · ") ? on.label.slice(on.label.indexOf(" · ")) : "";
+      state.onAir = { ...on, path: r.path, label: `${String(b.name).trim()}${rest}`, renamedFrom: r.path !== b.path ? b.path : on.renamedFrom };
       await persist();
       publishState();
     }

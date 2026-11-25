@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { api } from "../lib/api";
 import { appLink, useLive } from "../lib/live";
+import { PencilIcon, useOpenEditor } from "./SceneTile";
 import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
 
@@ -8,6 +9,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
   const { state, connected } = useLive();
   const obs = state?.obs;
   const onAir = state?.onAir;
+  const openEditor = useOpenEditor();
   return (
     <>
       <header className="page-head">
@@ -20,6 +22,11 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
             <span className="dot" />
             {connected ? (onAir ? `On air: ${onAir.label}` : "Nothing on air") : "Reconnecting…"}
           </span>
+          {onAir && connected && (
+            <button type="button" className="out-btn edit-onair" aria-label={`Edit ${onAir.label}, on air`} onClick={() => openEditor(onAir.path)}>
+              <PencilIcon />EDIT
+            </button>
+          )}
           <button type="button" className={`out-btn${obs?.recording ? " on" : ""}`} disabled={!obs?.connected} aria-pressed={!!obs?.recording}
             onClick={() => attempt(api.toggleRecord)}>
             <span className="dot" />REC

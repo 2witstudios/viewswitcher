@@ -3,7 +3,7 @@ import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { PageHead } from "../../../components/PageHead";
-import { SceneTile, useEditItem } from "../../../components/SceneTile";
+import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
 import { useLibrary } from "../../../lib/library";
@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     const { data } = useLibrary(org);
     const { state } = useLive();
     const [adding, setAdding] = useState(false);
-    const editItem = useEditItem();
+    const openEditor = useOpenEditor();
 
     const project = data?.projects.find((p) => p.id === projectId);
     const stream = project?.streams.find((s) => s.id === streamId);
@@ -49,11 +49,15 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 path={s.path}
                 live={s.path === onAirPath}
                 onActivate={goLive(s)}
+                onEdit={() => openEditor(s.path)}
                 menu={[
-                  editItem(s.path, "Changes this stream only"),
+                  {
+                    label: "Duplicate and edit",
+                    hint: "A copy in this stream, open to change",
+                    run: () => attempt(async () => openEditor((await api.duplicate(s.path)).path, { rename: true })),
+                  },
                   "divider",
                   ...fileItems(s.path, "Changes this stream only"),
-                  { label: "Duplicate", hint: "Copy inside this stream", run: () => attempt(() => api.duplicate(s.path), "Duplicated") },
                   ...(s.overrides
                     ? [{
                         label: "Go back to the project version",
@@ -79,8 +83,8 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                   onClose={() => setAdding(false)}
                   items={data.templates.map((t) => ({
                     label: t.label,
-                    hint: `Copy ${t.path} into this stream`,
-                    run: () => attempt(() => api.addFromTemplate(org, t.name, projectId, streamId), `Added ${t.label}`),
+                    hint: "A copy in this stream, open to change",
+                    run: () => attempt(async () => openEditor((await api.addFromTemplate(org, t.name, projectId, streamId)).path)),
                   }))}
                 />
               )}
@@ -99,6 +103,14 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 path={s.path}
                 live={s.path === onAirPath}
                 onActivate={goLive(s)}
+                editChoices={[
+                  {
+                    label: "Edit for this stream",
+                    hint: "Makes this stream's own copy, then opens it",
+                    run: () => attempt(async () => openEditor((await api.customize(org, projectId, streamId, s.name)).path)),
+                  },
+                  { label: "Edit for every stream", hint: `Changes ${project.name}'s scene`, run: () => openEditor(s.path) },
+                ]}
                 menu={[
                   {
                     label: "Customize for this stream",
@@ -106,7 +118,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                     run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
-                  editItem(s.path, "Changes it for every stream"),
                   ...fileItems(s.path, "Changes it for every stream"),
                 ]}
               />
