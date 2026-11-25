@@ -38,7 +38,7 @@ require_clean_tree() {
   return 1
 }
 
-# HEAD is on origin/main, so the release tag (created on HEAD) names a commit that's been reviewed.
+# HEAD is on origin/main, so what ships (the tagged Mac release, the iPad upload) is a reviewed commit.
 require_head_on_main() {
   git -C "$1" fetch -q origin main || { echo "✗ Couldn't fetch origin/main to check HEAD against it." >&2; return 1; }
   git -C "$1" merge-base --is-ancestor HEAD origin/main && return 0

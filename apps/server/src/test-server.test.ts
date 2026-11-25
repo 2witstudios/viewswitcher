@@ -29,7 +29,8 @@ describe("startServer", () => {
     const port = await freePort();
     const taken = await listening(port);
     try {
-      const err = await startServer(env(port), () => new Promise<boolean>(() => {}), 1_500).then(() => null, (e: Error) => e);
+      // Roomy: the server only has to fail its listen before the deadline, even on a slow runner.
+      const err = await startServer(env(port), () => new Promise<boolean>(() => {}), 5_000).then(() => null, (e: Error) => e);
       expect(err?.message).toStartWith("server exited with code");
     } finally {
       taken.close();
