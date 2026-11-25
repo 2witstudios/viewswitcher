@@ -149,7 +149,7 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
     }
 
     /// The connector, which opens the demo by itself on a first launch with no Mac (MAC-18). In a Debug
-    /// build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7437) opens that server directly instead, for
+    /// build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7445) opens that server directly instead, for
     /// the simulator, which shares the Mac's ports and would otherwise find whatever switcher runs on the
     /// Mac's 7420; VIEWSWITCHER_START=demo opens the demo.
     static var start: URL {

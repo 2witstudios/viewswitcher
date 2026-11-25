@@ -8,7 +8,7 @@ Apple's; `bun apps/apple/AppStore/check.ts` checks them. The app record itself (
 
 | field | value |
 |---|---|
-| Name (30) | `ViewSwitcher` |
+| Name (30) | `ViewSwitcher Remote` ("ViewSwitcher" is taken on the store; the home-screen name stays ViewSwitcher) |
 | Subtitle (30) | `One-tap scene switcher for OBS` |
 | Bundle ID | `com.twowitstudios.viewswitcher` |
 | SKU | `viewswitcher-ipad` |
@@ -52,27 +52,32 @@ Result: **4+**.
 
 ## Screenshots
 
-### 13-inch iPad
+Made by `bash apps/apple/scripts/ipad-shots.sh` (iPad) and `IPHONE=1 bash apps/apple/scripts/ipad-shots.sh`
+(iPhone) into `AppStore/screenshots/`, `screenshots/iphone/` and `screenshots/iphone-6.3/` (gitignored):
+the real app in the simulator, connected to a scratch switcher with a stand-in OBS that's live, on two
+shows only, the sports podcast (Full Count) and the church (Grace Community), with photos in their camera
+boxes. `raw/<name>.png` is the capture; `<name>.png` the App Store version: a portrait canvas on
+ViewSwitcher's dark ground, the logo, a two-line headline and a subtitle over the device (sideways for a
+landscape capture). Upload the framed ones, in these orders.
 
-2064 × 2752 portrait or 2752 × 2064 landscape, made by
-`bash apps/apple/scripts/ipad-shots.sh` (into `AppStore/screenshots/`, gitignored). Upload in this order:
+### 13-inch iPad (2064 × 2752)
 
-1. `demo-landscape.png`: the program and the views, a view on air
-2. `ipad-landscape.png`: the switcher on a show's views
-3. `demo-portrait.png`
-4. `ipad-portrait.png`
+1. `1-stream-landscape.png`: "Look professional / when you go live." Full Count's Ep. 112, Both hosts on air, OBS live
+2. `2-editor-landscape.png`: "Change titles / while you're live." The episode title retyped on the view that's on air
+3. `3-templates-landscape.png`: "Your show's look, / ready to go." Grace Community's templates
+4. `4-sermon-portrait.png`: "Tap a view. / OBS switches." Grace Community upright, the sermon on air
+5. `5-pastor-landscape.png`: "Run the service / without a crew." Grace Community, Pastor on air
 
-### 6.9-inch iPhone (PHONE-9)
+### iPhone: 6.9-inch (1320 × 2868, `iphone/`) and 6.3-inch "medium display" (1206 × 2622, `iphone-6.3/`)
 
-1320 × 2868 portrait or 2868 × 1320 landscape (iPhone 17 Pro Max), made by
-`IPHONE=1 bash apps/apple/scripts/ipad-shots.sh`. Sideways first: most people hold the phone like a deck.
+The same four, from the iPhone 17 Pro Max simulator. Sideways first: most people hold the phone like a deck.
 
-1. `iphone-landscape.png`: the deck, a stream's views four across, one on air
-2. `iphone-demo-landscape.png`: the demo, program and views side by side
-3. `iphone-portrait.png`: what's on air on top
-4. `iphone-demo-portrait.png`
+1. `1-deck-landscape.png`: "Tap a view. / OBS switches." Full Count's deck, Both hosts on air
+2. `2-sermon-portrait.png`: "Always know / what's on air." Grace Community upright, the sermon on top
+3. `3-pair-portrait.png`: "Scan the code. / You're connected." The app's own connector: Scan the code, Enter code, or USB-C
+4. `4-pastor-landscape.png`: "Your whole show, / in your pocket." Grace Community's deck, Pastor on air
 
-## Version 1.0: text
+## First version (1.2.1): text
 
 ### Promotional text (170)
 
@@ -90,12 +95,12 @@ ViewSwitcher is a one-click scene switcher for OBS. Set up your views once: a "s
 Made for anyone running a recurring live show without a crew: a cooking show, a weekly class, a church service, a podcast.
 
 ON YOUR IPHONE AND IPAD
-• Every view as a big cover you can hit without looking twice
+• One tap switches the scene: every view is a big cover you can hit without looking twice
 • On iPhone, turn it sideways and your views fill the screen like a deck
 • The view on air marked in red, so you always know what people see
 • Go live, record, and see that OBS is connected
-• Plug into the Mac with a USB-C cable: no Wi-Fi needed
-• Or pair over Wi-Fi: scan the QR code the Mac shows, and only devices you pair can switch scenes
+• Plug into the Mac with a USB-C cable: no Wi-Fi, no setup
+• Or pair over Wi-Fi in seconds: scan the code your Mac shows with the app's own camera, or type it in. Only devices you pair can switch scenes
 • Portrait or landscape; on iPad, Split View and Stage Manager too
 • One purchase for iPhone and iPad
 • The screen stays awake while you run the show
@@ -127,7 +132,7 @@ stream,live,streaming,scene,scenes,switcher,church,podcast,teacher,remote,contro
 
 ### Version and copyright
 
-- Version: `MARKETING_VERSION` in `apps/apple/project.yml` (0.1.0 today; set it to 1.0.0 for the first App Store release). The build number is set by `bun run ipad:release` (UTC time, always increasing).
+- Version: `MARKETING_VERSION` in `apps/apple/project.yml` (1.2.1 for the first App Store release, the same as the Mac app). The build number is set by `bun run ipad:release` (UTC time, always increasing).
 - Copyright: `2026 2wit Studios`
 
 ## App Review Information
@@ -148,7 +153,7 @@ Nothing in the demo is streamed or sent anywhere; it is all inside the app and w
 
 WITH A MAC (OPTIONAL)
 1. On a Mac, install ViewSwitcher (free: https://github.com/2witstudios/viewswitcher/releases) and OBS (https://obsproject.com). ViewSwitcher sets up OBS from its first window.
-2. Plug the iPhone or iPad into the Mac with a USB-C cable and open the app. It connects by itself and shows the same views as the Mac. Tapping a view switches what OBS streams.
+2. Plug the iPhone or iPad (a USB-C model) into the Mac with a USB-C cable and open the app. It connects by itself and shows the same views as the Mac. Tapping a view switches what OBS streams.
 3. Without the cable, pair over Wi-Fi (the device and the Mac on the same Wi-Fi network):
    a. On the Mac, click ViewSwitcher in the menu bar and turn on "Let Phones and Tablets on This Wi-Fi Connect", then choose "Phones and Tablets…". The window shows a QR code and a one-time code (like K7PQ-2MXA, valid for 5 minutes).
    b. In the app, tap "Connect your Mac" if the demo is showing, then "Scan the code" and point the camera at the QR code. The app asks for the camera only for this, and for Local Network access to reach the Mac.

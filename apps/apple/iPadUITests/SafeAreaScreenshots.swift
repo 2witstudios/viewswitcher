@@ -1,9 +1,9 @@
 import XCTest
 
 /// MAC-13a, MAC-19 and PHONE-9 screenshots of the app on iPad or iPhone in each orientation. Not part of
-/// the regular test run: scripts/ipad-shots.sh runs it with a scratch server on 7437 (never the Mac's 7420).
+/// the regular test run: scripts/ipad-shots.sh runs it with a scratch server on 7445 (never the Mac's 7420).
 /// VIEWSWITCHER_SHOTS_PATH opens a page of that server (the iPhone shots use a stream: the deck).
-///   TEST_RUNNER_VIEWSWITCHER_SERVER=http://127.0.0.1:7437 TEST_RUNNER_VIEWSWITCHER_SHOTS=<dir> xcodebuild test …
+///   TEST_RUNNER_VIEWSWITCHER_SERVER=http://127.0.0.1:7445 TEST_RUNNER_VIEWSWITCHER_SHOTS=<dir> xcodebuild test …
 final class SafeAreaScreenshots: XCTestCase {
     private let orientations: [(String, UIDeviceOrientation)] = [("landscape", .landscapeLeft), ("portrait", .portrait)]
 
