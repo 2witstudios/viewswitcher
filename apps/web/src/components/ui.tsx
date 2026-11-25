@@ -1,8 +1,9 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+// The V of screens (scripts/brand/icons.ts writes mark.svg from the logo), white for the dark UI.
 export function Mark({ size = 22 }: { size?: number }) {
-  return <img src="/icon.svg" width={size} height={size} alt="" />;
+  return <img src="/mark.svg" width={size} height={size} alt="" />;
 }
 
 export const MoreIcon = () => (
