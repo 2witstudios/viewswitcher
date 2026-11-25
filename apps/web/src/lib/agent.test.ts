@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentClients, AgentStatus } from "@viewswitcher/shared";
-import { agentStatusText, codexToml, cursorDeeplink, mcpUrl, ON_AIR_CHOICES, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
+import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
 
 const NOW = 1_800_000_000_000;
 const agent = (lastSeen: number | null, client: string | null = "claude-code"): AgentStatus => ({ onAir: "not-live", lastSeen, client });
@@ -37,6 +37,19 @@ describe("ways in", () => {
       { way: "claude-desktop", installed: true }, { way: "others", installed: true },
       { way: "claude-code", installed: false }, { way: "cursor", installed: false },
     ]);
+  });
+});
+
+describe("ports (the kit's configs name 7420)", () => {
+  test("no note on 7420; on another port, the address to add instead", () => {
+    expect(otherPortNote(7420)).toBeNull();
+    expect(otherPortNote("7420")).toBeNull();
+    const note = otherPortNote(7433)!;
+    expect(note).toContain("point at 7420");
+    expect(note).toContain("claude mcp add --transport http viewswitcher http://127.0.0.1:7433/mcp");
+  });
+  test("the stdio command carries the port", () => {
+    expect(defaultStdio(7433)).toBe("/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7433");
   });
 });
 

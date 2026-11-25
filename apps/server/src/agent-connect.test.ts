@@ -30,11 +30,11 @@ describe("detectClients", () => {
 });
 
 describe("commands", () => {
-  test("stdio: the compiled sidecar, or bun with index.ts from source", () => {
+  test("stdio: the compiled sidecar, or bun with index.ts from source, with the server's port", () => {
     const app = "/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server";
-    expect(stdioLaunch(app, null)).toEqual({ command: app, args: ["--mcp-stdio"] });
-    expect(stdioLaunch("/opt/homebrew/bin/bun", "/src/vs/apps/server/src/index.ts")).toEqual({ command: "/opt/homebrew/bin/bun", args: ["/src/vs/apps/server/src/index.ts", "--mcp-stdio"] });
-    expect(commandLine(stdioLaunch("/Volumes/My Disk/ViewSwitcher.app/Contents/Helpers/viewswitcher-server", null))).toBe("'/Volumes/My Disk/ViewSwitcher.app/Contents/Helpers/viewswitcher-server' --mcp-stdio");
+    expect(stdioLaunch(app, null, 7420)).toEqual({ command: app, args: ["--mcp-stdio", "--port", "7420"] });
+    expect(stdioLaunch("/opt/homebrew/bin/bun", "/src/vs/apps/server/src/index.ts", 7433)).toEqual({ command: "/opt/homebrew/bin/bun", args: ["/src/vs/apps/server/src/index.ts", "--mcp-stdio", "--port", "7433"] });
+    expect(commandLine(stdioLaunch("/Volumes/My Disk/ViewSwitcher.app/Contents/Helpers/viewswitcher-server", null, 7420))).toBe("'/Volumes/My Disk/ViewSwitcher.app/Contents/Helpers/viewswitcher-server' --mcp-stdio --port 7420");
   });
   test("Claude Code in the library folder, from ~ with spaces escaped", () => {
     expect(claudeCodeCommand(`${HOME}/ViewSwitcher Library`, HOME)).toBe("cd ~/ViewSwitcher\\ Library && claude");
@@ -45,8 +45,8 @@ describe("commands", () => {
 });
 
 describe("the Claude Desktop extension (.mcpb)", () => {
-  const launch = stdioLaunch("/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server", null);
-  const manifest = mcpbManifest({ launch, port: 7421, version: "1.0.0" });
+  const launch = stdioLaunch("/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server", null, 7421);
+  const manifest = mcpbManifest({ launch, version: "1.0.0" });
 
   test("an MCPB 0.3 manifest with the fields the spec requires", () => {
     expect(manifest.manifest_version).toBe("0.3");
@@ -57,7 +57,7 @@ describe("the Claude Desktop extension (.mcpb)", () => {
     expect(manifest.server).toEqual({
       type: "binary",
       entry_point: MCPB_LAUNCHER,
-      mcp_config: { command: launch.command, args: ["--mcp-stdio"], env: { PORT: "7421" } },
+      mcp_config: { command: launch.command, args: ["--mcp-stdio", "--port", "7421"] },
     });
     expect(manifest.compatibility.platforms).toEqual(["darwin"]);
   });
@@ -70,7 +70,7 @@ describe("the Claude Desktop extension (.mcpb)", () => {
       expect(JSON.parse(readFileSync(join(dir, "out/manifest.json"), "utf8"))).toEqual(manifest);
       const launcher = join(dir, "out", MCPB_LAUNCHER);
       expect(statSync(launcher).mode & 0o111).toBe(0o111);
-      expect(readFileSync(launcher, "utf8")).toContain("PORT=7421 exec /Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio");
+      expect(readFileSync(launcher, "utf8")).toContain("\nexec /Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7421\n");
       expect(Bun.spawnSync(["sh", "-n", launcher]).exitCode).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });

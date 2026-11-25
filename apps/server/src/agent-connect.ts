@@ -34,11 +34,12 @@ export function detectClients(env: DetectEnv): AgentClients {
 }
 
 /**
- * What an agent runs for the stdio connection: this server's own executable with --mcp-stdio. In the
- * Mac app that's the compiled sidecar (`entry` null); from source it's bun with index.ts.
+ * What an agent runs for the stdio connection: this server's own executable with --mcp-stdio and the
+ * port it listens on (never PORT, which the agent's own environment may have for something else). In
+ * the Mac app that's the compiled sidecar (`entry` null); from source it's bun with index.ts.
  */
-export function stdioLaunch(execPath: string, entry: string | null): { command: string; args: string[] } {
-  return entry ? { command: execPath, args: [entry, "--mcp-stdio"] } : { command: execPath, args: ["--mcp-stdio"] };
+export function stdioLaunch(execPath: string, entry: string | null, port: number): { command: string; args: string[] } {
+  return { command: execPath, args: [...(entry ? [entry] : []), "--mcp-stdio", "--port", String(port)] };
 }
 
 /** One word for a shell: as it is when that's safe, else in single quotes. */
@@ -69,9 +70,9 @@ export const MCPB_LAUNCHER = "server/viewswitcher";
 /**
  * The Claude Desktop extension's manifest (MCPB 0.3, github.com/modelcontextprotocol/mcpb, MANIFEST.md).
  * A "binary" server whose command is this install's own executable, so the bundle carries no code of
- * ours, only a launcher script for the required entry point. The stdio relay finds the switcher on PORT.
+ * ours, only a launcher script for the required entry point. The command carries the port (stdioLaunch).
  */
-export function mcpbManifest(o: { launch: { command: string; args: string[] }; port: number; version: string }) {
+export function mcpbManifest(o: { launch: { command: string; args: string[] }; version: string }) {
   return {
     manifest_version: "0.3",
     name: "viewswitcher",
@@ -86,7 +87,7 @@ export function mcpbManifest(o: { launch: { command: string; args: string[] }; p
     server: {
       type: "binary",
       entry_point: MCPB_LAUNCHER,
-      mcp_config: { command: o.launch.command, args: o.launch.args, env: { PORT: String(o.port) } },
+      mcp_config: { command: o.launch.command, args: o.launch.args },
     },
     compatibility: { platforms: ["darwin"] },
   };
@@ -94,8 +95,8 @@ export function mcpbManifest(o: { launch: { command: string; args: string[] }; p
 
 /** The .mcpb file: a zip with the manifest and the launcher. */
 export function mcpbFile(manifest: ReturnType<typeof mcpbManifest>): Uint8Array {
-  const { command, args, env } = manifest.server.mcp_config;
-  const launcher = `#!/bin/sh\n# ViewSwitcher's MCP connection on this Mac (the same command as manifest.json).\nPORT=${shellWord(env.PORT)} exec ${commandLine({ command, args })}\n`;
+  const { command, args } = manifest.server.mcp_config;
+  const launcher = `#!/bin/sh\n# ViewSwitcher's MCP connection on this Mac (the same command as manifest.json).\nexec ${commandLine({ command, args })}\n`;
   return storedZip([
     { name: "manifest.json", data: `${JSON.stringify(manifest, null, 2)}\n` },
     { name: MCPB_LAUNCHER, data: launcher, executable: true },

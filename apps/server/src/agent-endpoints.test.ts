@@ -58,7 +58,7 @@ describe("from this Mac", () => {
     expect(info.claudeCode).toEndWith(" && claude");
     expect(info.claudeCode).toContain(library.split("/").pop()!);
     // From source: bun with index.ts.
-    expect(info.stdio).toBe(`${process.execPath} ${join(import.meta.dir, "index.ts")} --mcp-stdio`);
+    expect(info.stdio).toBe(`${process.execPath} ${join(import.meta.dir, "index.ts")} --mcp-stdio --port ${port}`);
   });
 
   test("/api/agent/clients is the five booleans", async () => {
@@ -76,7 +76,7 @@ describe("from this Mac", () => {
     writeFileSync(join(scratch, "v.mcpb"), r.body);
     expect(Bun.spawnSync(["unzip", "-q", join(scratch, "v.mcpb"), "-d", join(scratch, "out")]).exitCode).toBe(0);
     const manifest = JSON.parse(readFileSync(join(scratch, "out/manifest.json"), "utf8"));
-    expect(manifest.server.mcp_config).toEqual({ command: process.execPath, args: [join(import.meta.dir, "index.ts"), "--mcp-stdio"], env: { PORT: String(port) } });
+    expect(manifest.server.mcp_config).toEqual({ command: process.execPath, args: [join(import.meta.dir, "index.ts"), "--mcp-stdio", "--port", String(port)] });
   });
 });
 

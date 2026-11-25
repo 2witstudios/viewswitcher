@@ -5,7 +5,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NOT_RUNNING, relayStdio } from "./stdio";
+import { DROPPED, NOT_RUNNING, relayPort, relayStdio } from "./stdio";
 
 type Stub = { port: number; posts: unknown[]; stop: () => void };
 /** A stand-in for the switcher: /api/state, and /mcp that answers requests in JSON (or `answer`). */
@@ -125,16 +125,43 @@ describe("relayStdio", () => {
     ]);
     expect(NOT_RUNNING).toContain("Open ViewSwitcher on this Mac");
   });
+  test("a call that reached the server is never sent twice: a dropped connection is answered, not retried", async () => {
+    // A switcher that reads the request, then drops the connection before answering (Restart Server mid-call).
+    let received = 0;
+    const s = createServer((sock) => {
+      sock.on("data", () => {
+        received++;
+        sock.destroy();
+      });
+    });
+    const port = await new Promise<number>((r) => s.listen(0, "127.0.0.1", () => r((s.address() as { port: number }).port)));
+    let opened = 0;
+    const out = await relay(port, lines(JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "duplicate_scene" } })), { openApp: async () => void opened++, waitMs: 100, pollMs: 25 });
+    s.close();
+    expect(received).toBe(1);
+    expect(opened).toBe(0);
+    expect(out).toEqual([{ jsonrpc: "2.0", id: 7, error: { code: -32000, message: DROPPED } }]);
+  });
+});
+
+describe("relayPort", () => {
+  test("--port, then VIEWSWITCHER_PORT, then 7420; never PORT", () => {
+    expect(relayPort(["bun", "index.ts", "--mcp-stdio", "--port", "7433"], { PORT: "3000", VIEWSWITCHER_PORT: "7440" })).toBe(7433);
+    expect(relayPort(["x", "--mcp-stdio", "--port=7434"], {})).toBe(7434);
+    expect(relayPort(["x", "--mcp-stdio"], { PORT: "3000", VIEWSWITCHER_PORT: "7440" })).toBe(7440);
+    expect(relayPort(["x", "--mcp-stdio"], { PORT: "3000" })).toBe(7420);
+    for (const bad of ["", "abc", "0", "70000", "-1"]) expect(relayPort(["x", "--port", bad], {})).toBe(7420);
+  });
 });
 
 describe("index.ts --mcp-stdio", () => {
   const library = mkdtempSync(join(tmpdir(), "vs-stdio-"));
   afterAll(() => rmSync(library, { recursive: true, force: true }));
 
-  test("relays to the switcher on PORT, prints only JSON-RPC, and never starts a server or touches the library", async () => {
+  test("relays to the switcher on --port (not the agent's PORT), prints only JSON-RPC, and never starts a server or touches the library", async () => {
     const s = stub();
-    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio"], {
-      env: { ...process.env, PORT: String(s.port), VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_USB: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_LOG: "1" },
+    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio", "--port", String(s.port)], {
+      env: { ...process.env, PORT: "1", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_USB: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_LOG: "1" },
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
@@ -168,7 +195,7 @@ describe("index.ts --mcp-stdio", () => {
       { jsonrpc: "2.0", id: 2, method: "tools/list" },
     ].map((m) => JSON.stringify(m) + "\n").join("");
     const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio"], {
-      env: { ...process.env, PORT: String(s.port), VIEWSWITCHER_LIBRARY: library },
+      env: { ...process.env, VIEWSWITCHER_PORT: String(s.port), VIEWSWITCHER_LIBRARY: library },
       stdin: new Blob([input]),
       stdout: "pipe",
       stderr: "pipe",

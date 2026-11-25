@@ -222,7 +222,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   const local = () => isLocalRequest(req, server.requestIP(req));
   if (path === "/api/info" && req.method === "GET") {
     if (!local()) return json({ error: "Not found" }, 404);
-    return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio) });
+    return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(server.port ?? config.port)) });
   }
   // Which agent apps this Mac has, so Edit with AI lists them first. Booleans only.
   if (path === "/api/agent/clients" && req.method === "GET") {
@@ -232,7 +232,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   // Add to Claude Desktop: an extension made for this install, whose command is this server's own executable.
   if (path === "/api/agent/viewswitcher.mcpb" && req.method === "GET") {
     if (!local()) return json({ error: "Not found" }, 404);
-    const file = mcpbFile(mcpbManifest({ launch: ownStdio, port: server.port ?? config.port, version: extensionVersion }));
+    const file = mcpbFile(mcpbManifest({ launch: ownStdio(server.port ?? config.port), version: extensionVersion }));
     return new Response(file, { headers: { "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="ViewSwitcher.mcpb"', "cache-control": "no-store" } });
   }
 
@@ -394,7 +394,7 @@ async function fileResponse(abs: string, cache = "no-store", extra: Record<strin
 // sidecar, import.meta.dir is inside the binary (/$bunfs/…); from source, bun runs index.ts.
 /** The Mac app passes its version (MCPB wants semver; a source checkout has none). */
 const extensionVersion = /^\d+\.\d+\.\d+$/.test(process.env.VIEWSWITCHER_VERSION ?? "") ? process.env.VIEWSWITCHER_VERSION! : "1.0.0";
-const ownStdio = stdioLaunch(process.execPath, import.meta.dir.startsWith("/$bunfs") ? null : join(import.meta.dir, "index.ts"));
+const ownStdio = (port: number) => stdioLaunch(process.execPath, import.meta.dir.startsWith("/$bunfs") ? null : join(import.meta.dir, "index.ts"), port);
 
 // The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
 const mcp: McpDeps = {

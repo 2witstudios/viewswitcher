@@ -176,7 +176,8 @@ try {
   const init = rpc(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "vs-e2e", version: "1" } });
   const mcpInit = await fetch(`${BASE}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify(init) }).then((r) => r.json(), () => null);
   check(mcpInit?.result?.serverInfo && /get_guide/.test(mcpInit.result.instructions ?? ""), `the bundled server answers /mcp initialize (${JSON.stringify(mcpInit?.result?.serverInfo)})`);
-  const relay = Bun.spawn([sidecar, "--mcp-stdio"], { env: { ...env, VIEWSWITCHER_E2E_DIR: "" }, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
+  // As Edit with AI's command runs it: the port on the command line, and a PORT in the agent's own environment that it ignores.
+  const relay = Bun.spawn([sidecar, "--mcp-stdio", "--port", PORT], { env: { ...env, PORT: "1", VIEWSWITCHER_E2E_DIR: "" }, stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   relay.stdin.write(`${JSON.stringify(init)}\n${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n${JSON.stringify(rpc(2, "tools/list"))}\n`);
   relay.stdin.flush();
   let relayed = "";
@@ -187,7 +188,8 @@ try {
         const { value, done } = await reader.read();
         if (done) return null;
         relayed += new TextDecoder().decode(value);
-        const line = relayed.split("\n").find((l) => l.includes('"id":2'));
+        // Only whole lines: a read can end partway through one.
+        const line = relayed.slice(0, relayed.lastIndexOf("\n") + 1).split("\n").find((l) => l.includes('"id":2'));
         if (line) return JSON.parse(line);
       }
     })(),
@@ -195,7 +197,7 @@ try {
   ]);
   relay.kill();
   const tools = listed?.result?.tools?.length;
-  check(tools === 20 && relayed.split("\n").filter(Boolean).every((l) => JSON.parse(l).jsonrpc === "2.0"), `<sidecar> --mcp-stdio relays tools/list: ${tools} tools, only JSON-RPC on stdout`);
+  check(tools === 20 && relayed.slice(0, relayed.lastIndexOf("\n")).split("\n").filter(Boolean).every((l) => JSON.parse(l).jsonrpc === "2.0"), `<sidecar> --mcp-stdio relays tools/list: ${tools} tools, only JSON-RPC on stdout`);
 
   check((await state()).menu.includes("Edit with AI…"), 'menu bar: "Edit with AI…"');
   await cmd("menu", { item: "Edit with AI…" });
@@ -210,7 +212,7 @@ try {
     const out = mkdtempSync(join(tmpdir(), "vs-e2e-mcpb-"));
     Bun.spawnSync(["unzip", "-q", mcpb, "-d", out]);
     const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
-    check(manifest.server.mcp_config.command === sidecar && manifest.server.mcp_config.args.join(" ") === "--mcp-stdio" && manifest.server.mcp_config.env.PORT === PORT, `its command is this app's sidecar with --mcp-stdio on port ${PORT}`);
+    check(manifest.server.mcp_config.command === sidecar && manifest.server.mcp_config.args.join(" ") === `--mcp-stdio --port ${PORT}`, `its command is this app's sidecar with --mcp-stdio on port ${PORT}`);
     rmSync(out, { recursive: true, force: true });
   }
   await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Cursor").click(); return true`);

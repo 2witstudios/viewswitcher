@@ -5,7 +5,7 @@ import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
-  agentStatusText, BUILT_IN_URL, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, mcpUrl, ON_AIR_CHOICES, sheetParts, type Way, waysIn,
+  agentStatusText, BUILT_IN_URL, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, sheetParts, type Way, waysIn,
   wantsAgentSheet, withoutAgentSheet,
 } from "../lib/agent";
 import { clientKind } from "../lib/client-kind";
@@ -135,7 +135,8 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
   const port = info?.port ?? (location.port || 7420);
   const url = mcpUrl(port);
   const elsewhere = info === null;
-  const stdio = info?.stdio ?? "/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio";
+  const stdio = info?.stdio ?? defaultStdio(port);
+  const portNote = otherPortNote(port);
 
   const body = (way: Way) => {
     switch (way) {
@@ -144,6 +145,7 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
           <>
             <p>In Terminal, start Claude Code in your library folder. The library's <code>.mcp.json</code> connects it to ViewSwitcher; the first time, Claude Code asks you once to allow the <b>viewswitcher</b> server.</p>
             <Copyable label="Claude Code command" text={info?.claudeCode ?? DEFAULT_CLAUDE_CODE} />
+            {portNote && <p className="agent-note">{portNote}</p>}
           </>
         );
       case "claude-desktop":

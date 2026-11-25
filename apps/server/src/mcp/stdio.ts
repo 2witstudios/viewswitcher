@@ -8,6 +8,22 @@
 
 export const MAC_APP_ID = "com.twowitstudios.viewswitcher.mac";
 export const NOT_RUNNING = "ViewSwitcher isn't running. Open ViewSwitcher on this Mac, then try again.";
+export const DROPPED = "The connection to ViewSwitcher dropped before it answered, so this may or may not have happened. Check with get_state or read_file before you try it again.";
+export const DEFAULT_PORT = 7420;
+
+/**
+ * The switcher's port: `--port <n>` (what Edit with AI and the Claude Desktop extension pass), else
+ * VIEWSWITCHER_PORT, else 7420. Never PORT: it comes from whatever agent started the relay.
+ */
+export function relayPort(argv: string[], env: Record<string, string | undefined>): number {
+  const valid = (v: string | undefined) => (v && /^\d+$/.test(v) && Number(v) > 0 && Number(v) < 65536 ? Number(v) : null);
+  const i = argv.indexOf("--port");
+  const flag = i >= 0 ? argv[i + 1] : argv.find((a) => a.startsWith("--port="))?.slice("--port=".length);
+  return valid(flag) ?? valid(env.VIEWSWITCHER_PORT) ?? DEFAULT_PORT;
+}
+
+/** Nothing listening (fetch never connected), so no request reached the server and it's safe to send again. */
+const refused = (e: unknown) => ["ConnectionRefused", "ECONNREFUSED"].includes(String((e as { code?: unknown })?.code));
 
 export type RelayOptions = {
   port: number;
@@ -74,12 +90,22 @@ export async function relayStdio(opts: RelayOptions): Promise<void> {
     const ids = requestIds(body);
     let res: Response;
     try {
+      // Sent again only when it never reached the server: a call that may have run (the connection
+      // dropped mid-answer, Restart Server) must not run twice (a second copy, a second stream).
+      const unlessRefused = (e: unknown) => {
+        if (!refused(e)) throw Object.assign(new Error(DROPPED), { dropped: true });
+      };
       res = await post(raw).catch(async (e) => {
+        unlessRefused(e);
         if (!(await wake())) throw e;
-        return post(raw);
+        return post(raw).catch((again) => {
+          unlessRefused(again);
+          throw again;
+        });
       });
-    } catch {
-      for (const id of ids) opts.write(errorFor(id, NOT_RUNNING));
+    } catch (e) {
+      const why = (e as { dropped?: boolean }).dropped ? DROPPED : NOT_RUNNING;
+      for (const id of ids) opts.write(errorFor(id, why));
       return;
     }
     const text = await res.text().catch(() => "");
@@ -144,7 +170,7 @@ export async function relayStdio(opts: RelayOptions): Promise<void> {
 export async function main() {
   // Nothing but JSON-RPC on stdout, even from a stray log line.
   console.log = console.info = console.debug = console.warn = console.error;
-  const port = Number(process.env.PORT ?? 7420);
+  const port = relayPort(process.argv, process.env);
   const out = Bun.stdout.writer();
   await relayStdio({
     port,

@@ -25,6 +25,21 @@ export function agentStatusText(agent: AgentStatus | undefined, now: number): st
 
 export const mcpUrl = (port: number | string) => `http://127.0.0.1:${port}/mcp`;
 
+/** The port the Mac app always uses, and the one the library's .mcp.json and .cursor/mcp.json name. */
+export const KIT_PORT = 7420;
+
+/**
+ * When the switcher runs on another port (a second copy, a test), the library's MCP configs, which
+ * name 7420, don't reach it: what to tell people instead. Null on 7420.
+ */
+export function otherPortNote(port: number | string): string | null {
+  if (Number(port) === KIT_PORT) return null;
+  return `ViewSwitcher is on port ${port} here, but your library's .mcp.json and .cursor/mcp.json point at ${KIT_PORT}. Add the server by its address instead: in the library folder, claude mcp add --transport http viewswitcher ${mcpUrl(port)}`;
+}
+
+/** The stdio command where /api/info doesn't answer: the Mac app's sidecar on this port. */
+export const defaultStdio = (port: number | string) => `/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port ${port}`;
+
 /** Cursor's install link (cursor.com/docs/mcp/install-links): the server's config, as JSON in base64. */
 export function cursorDeeplink(url: string): string {
   return `cursor://anysphere.cursor-deeplink/mcp/install?name=viewswitcher&config=${encodeURIComponent(btoa(JSON.stringify({ url })))}`;
