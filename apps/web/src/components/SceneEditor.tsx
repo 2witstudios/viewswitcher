@@ -451,7 +451,10 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     try {
       flushNudge();
       if (editingRef.current) finishRef.current(true);
+      // The edit's ids are from now: if waiting reloads the scene (a failed save before it), they may name something else.
+      const madeIn = generation.current;
       await saverRef.current!.idle();
+      if (generation.current !== madeIn) return false;
       const b = baseRef.current;
       const d = doc();
       if (!b || !d || conflictOpen.current || pendingConflict.current) return false;
@@ -985,7 +988,14 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     for (const { e, m } of pairs) {
       if (!m || !isStructural(m)) continue;
       const now = baseRef.current;
-      const again = now ? retarget(prev.source, now.source, e) : null;
+      let again = now ? retarget(prev.source, now.source, e) : null;
+      // A box's slot name was picked against the old version: pick again if the new one already uses it.
+      if (now && again && "insert" in again) {
+        const taken = slotsIn(now);
+        const m = /data-slot="([^"]*)"/.exec(again.insert);
+        const base = m?.[1]?.replace(/ \d+$/, "");
+        if (m && base && taken.includes(m[1]!)) again = { ...again, insert: again.insert.replace(m[0], `data-slot="${freeSlotName(base, taken)}"`) };
+      }
       if (again && isStructural(again)) await structural(again);
     }
   };
@@ -1279,7 +1289,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                       </button>
                     </>
                   )}
-                  {menu.hit.image !== null && isLibraryUrl(attrIn(base, menu.hit.image, "src") ?? "") && (
+                  {menu.hit.image !== null && isLibraryUrl(attrIn(base, menu.hit.image, "src") ?? "") && attrIn(base, menu.hit.image, "srcset") === null && (
                     <button type="button" role="menuitem" className={menu.hit.leaf === null ? "first" : ""} onClick={() => {
                       setPicker({ replace: menu.hit.image });
                       setMenu(null);

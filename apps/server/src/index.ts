@@ -294,10 +294,13 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
     const on = state.onAir;
     if (on && on.path === b.path) {
-      const rest = on.label.includes(" · ") ? on.label.slice(on.label.indexOf(" · ")) : "";
-      state.onAir = { ...on, path: r.path, label: `${String(b.name).trim()}${rest}`, renamedFrom: r.path !== b.path ? b.path : on.renamedFrom };
-      await persist();
+      // The label is "<scene> · <stream>": swap the scene's old name for the new one, keep the rest.
+      const name = String(b.name).replace(/\s+/g, " ").trim();
+      const label = r.was && on.label.startsWith(r.was) ? name + on.label.slice(r.was.length) : on.label.includes(" · ") ? name + on.label.slice(on.label.lastIndexOf(" · ")) : name;
+      state.onAir = { ...on, path: r.path, label, renamedFrom: r.path !== b.path ? b.path : on.renamedFrom };
+      // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
       publishState();
+      await persist().catch((e) => console.error("[state] couldn't save:", (e as Error).message));
     }
     return json(r);
   }

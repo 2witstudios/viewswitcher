@@ -76,14 +76,19 @@ describe("structural edits (EDIT-16 · EDIT-17 · EDIT-18)", () => {
 });
 
 describe("renameScene (EDIT-19)", () => {
+  /** A stream scene of its own for each test, so each runs alone too. */
+  const seed = async (file: string, title = "Teaching copy") => {
+    const text = (await read("acme/templates/teaching.html")).replace("<title>Teaching</title>", `<title>${title}</title>`);
+    await writeFile(join(root, STREAM, file), text);
+    return { P: `${STREAM}/${file}`, text };
+  };
   test("a stream's own scene gets a new title and file name", async () => {
-    const P = `${STREAM}/teaching-copy.html`;
-    const text = await read(P);
+    const { P, text } = await seed("rename-a.html");
     const r = await renameScene(root, P, sceneHash(text), "Opening hook");
-    expect(r).toMatchObject({ ok: true, path: `${STREAM}/opening-hook.html` });
+    expect(r).toMatchObject({ ok: true, path: `${STREAM}/opening-hook.html`, was: "Teaching copy" });
     const renamed = await read(`${STREAM}/opening-hook.html`);
     expect(renamed).toBe(text.replace(/<title>[^<]*<\/title>/, "<title>Opening hook</title>"));
-    expect(await readdir(join(root, STREAM))).not.toContain("teaching-copy.html");
+    expect(await readdir(join(root, STREAM))).not.toContain("rename-a.html");
   });
   test("a stream's copy of a project scene keeps its file name (it's what ties it to the project's)", async () => {
     const P = `${STREAM}/teaching.html`;
@@ -92,19 +97,31 @@ describe("renameScene (EDIT-19)", () => {
     expect(await read(P)).toContain("<title>My teaching</title>");
   });
   test("never takes another scene's name, nor a project scene's", async () => {
-    const P = `${STREAM}/opening-hook.html`;
-    const text = await read(P);
-    const r = await renameScene(root, P, sceneHash(text), "Teaching");
-    expect(r).toMatchObject({ ok: true, path: `${STREAM}/teaching-2.html` });
+    const { P, text } = await seed("rename-b.html");
+    expect(await renameScene(root, P, sceneHash(text), "Teaching")).toMatchObject({ ok: true, path: `${STREAM}/teaching-2.html` });
   });
   test("a name that comes back to its own file name keeps the file (review nit)", async () => {
-    const P = `${STREAM}/teaching-2.html`;
-    const text = await read(P);
+    const { P, text } = await seed("teaching-3.html");
+    await writeFile(join(root, STREAM, "teaching-2.html"), text);
     expect(await renameScene(root, P, sceneHash(text), "Teaching")).toMatchObject({ ok: true, path: P });
   });
   test("a stale hash renames nothing", async () => {
-    const P = `${STREAM}/teaching-2.html`;
+    const { P } = await seed("rename-c.html");
     expect(await renameScene(root, P, "stale", "Other")).toMatchObject({ ok: false, conflict: true });
-    expect(await read(P)).toContain("<title>Teaching</title>");
+    expect(await read(P)).toContain("<title>Teaching copy</title>");
+  });
+  test("a scene with no <head> can't be renamed, and nothing moves", async () => {
+    await writeFile(join(root, STREAM, "bare.html"), `<main class="scene"><p>x</p></main>`);
+    await expect(renameScene(root, `${STREAM}/bare.html`, sceneHash(`<main class="scene"><p>x</p></main>`), "Bare")).rejects.toThrow();
+    expect(await readdir(join(root, STREAM))).toContain("bare.html");
+  });
+});
+
+describe("the server keeps a delete undoable (CodeRabbit on PR #5)", () => {
+  test("refuses to delete what Undo couldn't put back", async () => {
+    const html = `<main class="scene">\n  <div class="abs"><script>x()</script></div>\n</main>`;
+    await writeFile(join(root, STREAM, "script.html"), html);
+    await expect(editScene(root, `${STREAM}/script.html`, sceneHash(html), [{ id: 1, remove: true }])).rejects.toThrow();
+    expect(await read(`${STREAM}/script.html`)).toBe(html);
   });
 });

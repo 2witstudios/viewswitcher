@@ -489,6 +489,8 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
     case "src": {
       const { src } = edit as SrcEdit;
       if (el.tag !== "img") throw new EditError(`<${el.tag}> isn't an image`);
+      // With srcset the browser picks from that list, so a new src alone wouldn't show.
+      if (el.attrs.some((x) => x.name === "srcset")) throw new EditError("This image has several sizes (srcset): ask your agent to change it");
       if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
       const a = el.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
       if (!a) throw new EditError("This image has no src to replace");
@@ -596,7 +598,7 @@ export function setTitle(html: string, name: string): string {
   const text = escapeText(clean);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);
-  if (!head) return html;
+  if (!head) throw new EditError("This scene has no <head> for a title: ask your agent to rename it");
   const first = els.find((e) => e.parent === head.id);
   const p = insertPatch(html, els, first ? { id: head.id, insert: `<title>${text}</title>`, before: first.id } : { id: head.id, insert: `<title>${text}</title>` }, false);
   return html.slice(0, p.from) + p.text + html.slice(p.to);

@@ -1,8 +1,8 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
-import { chmod, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
-import { applyEdits, EditError, isLibraryUrl, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
@@ -147,6 +147,8 @@ export function editScene(
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
+    // A delete only of what the editor could put back exactly (its Undo is an insert, which refuses scripts).
+    for (const e of parsed) if ("remove" in e && !canRemove(text, e.id)) throw new EditError("This can't be deleted here. Ask your agent, or open the file.");
     const next = applyEdits(text, parsed);
     if (next === text) return { ok: true, hash: current, changed: false };
     const r = await replaceChecked(real, read, current, next, hooks);
@@ -155,7 +157,8 @@ export function editScene(
   });
 }
 
-export type RenameResult = { ok: true; hash: string; path: string } | { ok: false; conflict: true; hash: string };
+/** `was`: the title before (null when it had none), so an on-air label can swap just the name. */
+export type RenameResult = { ok: true; hash: string; path: string; was: string | null } | { ok: false; conflict: true; hash: string };
 
 /**
  * Give a scene a new name: its <title>, and for a stream's own scene (not a stream's copy of a
@@ -169,6 +172,8 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
+    const titleEl = scanElements(text).find((e) => e.tag === "title" && e.closed);
+    const was = titleEl ? decodeEntities(text.slice(titleEl.innerStart, titleEl.innerEnd)).replace(/\s+/g, " ").trim() || null : null;
     const next = setTitle(text, String(name ?? ""));
     if (next !== text) {
       const r = await replaceChecked(real, read, current, next, {});
@@ -180,21 +185,22 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
     const inStream = parts.length === 6 && parts[1] === "projects" && parts[3] === "streams";
     const override = inStream && (await stat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${file}.html`)).then(() => true, () => false));
     const base = slugify(String(name));
-    if (!inStream || override || !base || base === file) return { ok: true, hash: sceneHash(next), path };
+    if (!inStream || override || !base || base === file) return { ok: true, hash: sceneHash(next), path, was };
     // Never over another scene in the folder, nor onto a name the project uses (that would make it an override).
     // The scene's own entry in the folder (a link is renamed as a link).
     const own = scenePath(root, path);
     const dir = dirname(own);
     let free = base;
     for (let n = 2; ; n++) {
-      if (free === file) return { ok: true, hash: sceneHash(next), path }; // its own name already
-      const taken = await stat(join(dir, `${free}.html`)).then(() => true, () => false);
-      const shadows = await stat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${free}.html`)).then(() => true, () => false);
+      if (free === file) return { ok: true, hash: sceneHash(next), path, was }; // its own name already
+      // lstat: a link (even a broken one) takes the name too.
+      const taken = await lstat(join(dir, `${free}.html`)).then(() => true, () => false);
+      const shadows = await lstat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${free}.html`)).then(() => true, () => false);
       if (!taken && !shadows) break;
       free = `${base}-${n}`;
     }
     plainName(`${free}.html`);
     await rename(own, join(dir, `${free}.html`));
-    return { ok: true, hash: sceneHash(next), path: [...parts.slice(0, -1), `${free}.html`].join("/") };
+    return { ok: true, hash: sceneHash(next), path: [...parts.slice(0, -1), `${free}.html`].join("/"), was };
   });
 }

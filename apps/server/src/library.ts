@@ -38,7 +38,7 @@ async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: s
     files.map(async (f) => {
       const name = f.slice(0, -5);
       const html = await readFile(join(root, rel, f), "utf8").catch(() => "");
-      const title = decodeEntities(/<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").trim();
+      const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
       return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin } satisfies Scene;
     }),
   );
