@@ -4,7 +4,7 @@
 import ViewFrame from "./ViewFrame.astro";
 import { SHOWS } from "../data/shows";
 import { site } from "../site.config";
-const downloads = site.styleDownloads;
+const downloads = site.templateDownloads;
 const lead = "main";
 const shows = SHOWS;
 ---
@@ -12,7 +12,7 @@ const shows = SHOWS;
   <div class="wrap">
     <div class="section-head">
       <h2 id="shows-title">Don't be the only one live without a professional look.</h2>
-      <p class="lede">Every show gets a full set of views with its own look, from the countdown to the goodbye. Here are six made-up shows to show the range. Every style is free.</p>
+      <p class="lede">Every show gets a full set of views with its own look, from the countdown to the goodbye. Here are six made-up shows to show the range. Every template set is free.</p>
     </div>
     <ul class="shows">
       {shows.map((s) => (
@@ -24,7 +24,7 @@ const shows = SHOWS;
             ))}
           </div>
           <h3>{s.name} <span class="kind">{s.kind}</span></h3>
-          <p class="get">{downloads ? <a href={downloads}>Built in, or download this style free</a> : <a href="/download">Download coming soon</a>}</p>
+          <p class="get">{downloads ? <a href={downloads}>Download these templates</a> : <a href="/download">Download coming soon</a>}</p>
           <p>{s.blurb}{s.id === "grace" && <> <a href="/church-livestream">Church livestreaming with ViewSwitcher</a></>}</p>
         </li>
       ))}

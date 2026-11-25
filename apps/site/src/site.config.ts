@@ -11,9 +11,9 @@ const MAC_APP_RELEASED = true;
 // A build can override it with SITE_IPAD_APP_URL.
 const IPAD_APP_URL: string | null = null;
 
-// THE STYLES SWITCH (SITE-26): the page where the example shows' styles download free, once it's live.
-// Before: the show cards say the style is free to download soon and link /download. After: they link here.
-const STYLE_DOWNLOADS_URL: string | null = null;
+// THE TEMPLATES SWITCH (SITE-26): the page where the example shows' template sets download free, once it's live.
+// Before: the show cards say "Download coming soon" and link /download. After: "Download these templates", linking here.
+const TEMPLATE_DOWNLOADS_URL: string | null = null;
 
 export const site = {
   url: "https://viewswitcher.com",
@@ -27,7 +27,7 @@ export const site = {
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),
   ipadApp: ipadApp(process.env.SITE_IPAD_APP_URL || IPAD_APP_URL),
-  styleDownloads: process.env.SITE_STYLE_DOWNLOADS_URL || STYLE_DOWNLOADS_URL,
+  templateDownloads: process.env.SITE_TEMPLATE_DOWNLOADS_URL || TEMPLATE_DOWNLOADS_URL,
 };
 
 export const cta = ctas(site);

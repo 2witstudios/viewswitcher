@@ -1,5 +1,5 @@
 // The six made-up shows on the site, each with its own look, and the views the site shows.
-// Their view HTML lives in scripts/shows/<id>/ (one style per show); scripts/library.ts copies it into a
+// Their view HTML lives in scripts/shows/<id>/ (one template set per show); scripts/library.ts copies it into a
 // scratch library outside the repo and scripts/shots.ts renders every view to src/assets/views/<id>-<view>.webp.
 // `media` says what fills each device box: a photo in src/assets/media (credited in CREDITS.md).
 
@@ -63,7 +63,7 @@ export const SHOWS: Show[] = [
   {
     id: "riverside", name: "Riverside Live", initial: "R", kind: "Live event coverage", episode: "Music Festival · Day 2",
     ground: "#101114", accent: "#d62828",
-    blurb: "News-style coverage: a red live block, a location bar, the reporter's name strip and a clock.",
+    blurb: "Coverage like the evening news: a red live block, a location bar, the reporter's name strip and a clock.",
     views: [
       { file: "starting-soon", name: "Coming up", media: { Screen: "festival" } },
       { file: "live", name: "Reporter", media: { Camera: "kofi" } },
