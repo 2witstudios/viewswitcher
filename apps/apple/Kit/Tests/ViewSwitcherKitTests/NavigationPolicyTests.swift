@@ -85,11 +85,13 @@ final class NavigationPolicyTests: XCTestCase {
     }
 
     func testIPadAllowedHosts() {
-        for s in ["viewswitcher://connector/", "http://127.0.0.1:7420/", "https://mac.tail1.ts.net/", "http://studio-mac.local:7420/"] {
+        // A private LAN address too: the Mac's pairing QR code carries one (PHONE-4), and once paired that's the switcher's address.
+        for s in ["viewswitcher://connector/", "http://127.0.0.1:7420/", "https://mac.tail1.ts.net/", "http://studio-mac.local:7420/", "http://192.168.1.20:7420/pair?code=AB"] {
             XCTAssertEqual(NavigationPolicy.iPad(u(s), mainFrame: true), .allow, s)
         }
         XCTAssertEqual(NavigationPolicy.iPad(u("https://example.com/"), mainFrame: true), .openInBrowser(u("https://example.com/")))
         XCTAssertEqual(NavigationPolicy.iPad(u("https://ts.net.example.com/"), mainFrame: true), .openInBrowser(u("https://ts.net.example.com/")))
+        XCTAssertEqual(NavigationPolicy.iPad(u("http://8.8.8.8/"), mainFrame: true), .openInBrowser(u("http://8.8.8.8/")))
         XCTAssertEqual(NavigationPolicy.iPad(u("viewswitcher://elsewhere/"), mainFrame: true), .deny)
         XCTAssertEqual(NavigationPolicy.iPad(u("file:///"), mainFrame: true), .deny)
         XCTAssertEqual(NavigationPolicy.iPad(u("tel:123"), mainFrame: true), .deny)

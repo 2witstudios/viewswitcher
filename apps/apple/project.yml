@@ -141,9 +141,13 @@ targets:
         # The switcher is plain http from 127.0.0.1 (the USB-C tunnel) or the LAN.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # The only permission the app asks for (MAC-20): camera, microphone, motion and location are refused
-        # in the web view without asking, so they have no usage strings.
+        # Permissions (MAC-20, PHONE-4): local network, and the camera for the app's own pairing scanner.
+        # Web pages never get the camera: the web view refuses camera, microphone, motion and location.
         NSLocalNetworkUsageDescription: ViewSwitcher connects to the ViewSwitcher server on your Mac when the USB-C cable isn't plugged in.
+        # PHONE-5: Enter code finds the Mac's Bonjour announcement (RemotesWindow.swift) on the Wi-Fi.
+        NSBonjourServices: ["_http._tcp"]
+        # PHONE-4: the app's own scanner reads the Mac's pairing QR code, so the app itself is paired.
+        NSCameraUsageDescription: ViewSwitcher uses the camera only to scan the pairing code your Mac shows.
         # Only the OS's own TLS (https to a Tailscale address): exempt, no export compliance documents (MAC-20).
         ITSAppUsesNonExemptEncryption: false
     settings:

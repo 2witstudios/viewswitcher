@@ -64,7 +64,8 @@ else bad "no valid PrivacyInfo.xcprivacy"; fi
 
 # Usage strings: exactly the permissions the app asks for, each with a reason
 usage="$(plutil -convert json -o - "$PLIST" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(sorted(k for k in d if k.endswith("UsageDescription") and str(d[k]).strip())))')"
-[ "$usage" = "NSLocalNetworkUsageDescription" ] && ok "usage strings: local network only" || bad "usage strings are \"$usage\", expected NSLocalNetworkUsageDescription only"
+[ "$usage" = "NSCameraUsageDescription NSLocalNetworkUsageDescription" ] && ok "usage strings: camera (pairing scanner) and local network" || bad "usage strings are \"$usage\", expected NSCameraUsageDescription and NSLocalNetworkUsageDescription"
+[ "$(json NSBonjourServices)" = '["_http._tcp"]' ] && ok "NSBonjourServices _http._tcp (finding the Mac)" || bad "NSBonjourServices is $(json NSBonjourServices), expected [\"_http._tcp\"]"
 
 # Signing: distribution, not a debug build
 gta="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null | plutil -extract get-task-allow raw -o - - 2>/dev/null || true)"
