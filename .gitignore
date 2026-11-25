@@ -4,7 +4,6 @@ dist/
 *.log
 .env
 xcuserdata/
-__pycache__/
 .pu/
 .scratch/
 apps/apple/*.xcodeproj/
