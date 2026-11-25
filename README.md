@@ -1,66 +1,81 @@
-# ViewSwitcher
+<p align="center">
+  <a href="https://viewswitcher.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="apps/site/public/brand/viewswitcher-logo-white.svg">
+      <img src="apps/site/public/brand/viewswitcher-logo.svg" alt="ViewSwitcher" height="40">
+    </picture>
+  </a>
+</p>
 
-A scene switcher for live streams on macOS. Every on-air screen is a plain HTML file; tap a cover on the iPad (or in a browser) and it goes on air in OBS, with your camera, screen and iPad moved into place.
+<h1 align="center">Look professional when you go live.</h1>
 
-## Install
+<p align="center">The free, custom scene manager and one-click switcher for OBS on Mac.</p>
 
-1. Download **[ViewSwitcher.dmg](https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg)** (one download for Apple silicon and Intel Macs).
-2. Open it and drag ViewSwitcher to Applications. Open ViewSwitcher.
-3. The first time, it creates your library in `~/ViewSwitcher Library`, with the agent skill and a first org, "My channel".
-4. In OBS, turn on Tools → WebSocket Server Settings → **Enable WebSocket server**. The switcher then shows a **Set up OBS** card: press it, and add your Camera, Screen and iPad sources when it asks.
+<p align="center">
+  <a href="https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg"><b>Download for Mac</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://viewswitcher.com">viewswitcher.com</a>
+</p>
 
-The menu bar shows what's on air and whether OBS and the iPad are connected. Closing the window keeps ViewSwitcher running for OBS and the iPad; Quit (in the menu bar or ⌘Q) stops it. The app updates itself from GitHub Releases.
-
-- **Orgs**: one library holds any number of orgs (brands or channels). Each has its own templates, assets, projects and brand.
-- **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
-- **Scenes are files you edit by talking to an agent** (Claude Code, Claude Desktop, Cursor, Codex or any other), connected over MCP (below) and using the library's `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
-- **Template packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own template set in the org's name and colors. Seven come built in (the starter and the site's six example shows): pick them for a new org, or with **Add templates** ([docs/template-packs.md](docs/template-packs.md)).
-- **iPad app over USB-C**: the ViewSwitcher iPad app talks to the Mac over the cable, for low latency and no dependence on Wi-Fi.
+<p align="center">
+  <img src="docs/screenshots/hero.gif" alt="The ViewSwitcher window on a Mac: clicking a view puts it on air, and the hosts' cameras and the titles move into place." width="720">
+</p>
 
 ## How it works
 
-```
-~/ViewSwitcher Library/            (its own git repo; VIEWSWITCHER_LIBRARY)
-├─ daisy/  personal/  bible-study/  pagespace/  …   one folder per org
-│  ├─ org.json                     { name, accent, ground }
-│  ├─ BRAND.md                     the org's brand rules, for agents
-│  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, transition.html, brand/mark.svg}
-│  ├─ templates/<set>/              a template set installed from a template pack: pack.json, views, _shared/, assets/
-│  ├─ assets/
-│  └─ projects/<project>/{project.json, transition.html?, scenes/*.html, streams/<MM-DD-slug>/*.html}
-└─ .claude/skills/viewswitcher-scenes/SKILL.md     from apps/server/library-kit (changes ship there)
-```
+Set up your views once. Then every show is a click away, and OBS keeps streaming the way it always does.
 
-Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's template pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/template-packs.md](docs/template-packs.md#scripts-and-the-sandbox)).
+### 1. Set up once
 
-OBS has one scene with one browser source showing `/program`. Each scene file marks device boxes with `data-slot="Camera"` and similar; the server moves and crops those OBS sources into the boxes over obs-websocket, and paints the ground color of the org that's on air.
+Download ViewSwitcher, open OBS beside it and click **Set Up OBS**. It adds what OBS needs; then you pick your camera and screen once. [Setup guide](https://viewswitcher.com/setup)
 
-```
-OBS scene "ViewSwitcher"
-├─ ViewSwitcher Program   browser source → http://127.0.0.1:7420/program   (top)
-├─ Camera · Screen · iPad                                                 (moved per scene)
-└─ ViewSwitcher Ground    color source, set to the on-air org's ground     (bottom)
-```
+<img src="docs/screenshots/how-1.png" alt="OBS with the ViewSwitcher scene and its Camera and Screen sources, beside the Set up OBS card" width="560">
 
-**Transitions** are pages too. Switching scenes briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else (the default) a blank fade through the ground color. The switcher shows the transition on the Templates page and on each stream page, where "Customize for this project" gives a project its own.
+### 2. Create a custom template
 
-New orgs are created from the org menu in the sidebar. They start from `apps/server/starter/`: neutral templates using the org's name and accent color, ready to be branded.
+Connect your favorite AI (Claude, Cursor, any app with MCP) in one click and describe the look you want. Or start from a [free template](https://viewswitcher.com/templates). Templates are small web pages, so you can also code your own with the [ViewSwitcher skill](apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md).
 
-## Agents (MCP)
+<img src="docs/screenshots/how-2.png" alt="Just a webcam, beside the same shot with the Full Count template: the host's name and a scoreboard title bar" width="560">
 
-ViewSwitcher is an MCP server for the AI agent you already use. **Edit with AI** (in the switcher's header, and in the Mac menu bar) connects one in a step and shows whether one is connected; the [setup guide](https://viewswitcher.com/ai) walks through each agent.
+### 3. Add it to your stream
 
-- **Endpoint:** Streamable HTTP at `http://127.0.0.1:7420/mcp` (stateless, JSON responses). Only this Mac itself may use it (`fromThisMacOnly` in `apps/server/src/gate.ts`): a loopback connection to a loopback host, with no proxy headers and no other site's `Origin`, and not the USB-C iPad. A phone or tablet paired over Wi-Fi passes the gate (below) but still gets 404 here, as do `/api/info`, `/api/agent/clients` and the Claude Desktop extension; unpaired devices and forwarded requests are stopped by the gate first.
-- **stdio**, for clients that only launch commands: `/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7420` (from source, `bun apps/server/src/index.ts --mcp-stdio --port <port>`; `VIEWSWITCHER_PORT` works too, `PORT` is ignored). It relays to the running switcher and never starts a second one; it opens the app if nothing answers, and never sends a call twice.
-- **Port 7420:** the library's `.mcp.json`, `.cursor/mcp.json` and `AGENTS.md` name it, as the Mac app always uses it. On another port, Edit with AI gives the address to add instead.
-- **Connecting:** the library has `.mcp.json` (Claude Code, which asks once to allow it), `.cursor/mcp.json` and `AGENTS.md` (with the Codex snippet). Edit with AI adds a per-install Claude Desktop extension (`.mcpb`), a Cursor install link, and the URL, stdio command and Codex TOML for the rest.
-- **Tools:** `get_state`, `list_orgs`, `scan_library`, `list_files`, `read_file`, `get_guide` to read; `preview_scene`, `see_program` to look; `write_file`, `add_asset`, `list_template_sets` / `add_template_set` (the built-in template sets, as Add templates), `create_project`, `create_stream`, `scene_from_template`, `customize_scene`, `revert_scene`, `duplicate_scene`, `rename_scene`, `customize_transition`, `revert_transition` to change; `go_on_air`. Paths start with the org id; writes to an existing file need the hash from `read_file`, as in the switcher's editor.
-- **Previews:** `preview_scene` renders a library scene in OBS, in a muted "ViewSwitcher Preview" scene that's never switched to, and returns the picture; `see_program` returns what OBS is putting out, camera and screen included. Without OBS, they return the scene's preview URL instead.
-- **On air:** the agent setting (Edit with AI on the Mac; `.viewswitcher/settings.json`) says what agents may put on air: **Never**, **When not live** (the default: not while OBS is streaming or recording, and no changes then to the scene on air, its transition, the org's shared files or anything the scene loads) or **Always**. It limits agents' MCP tools only, never people in the switcher. It steers agents that use the tools; it isn't a security boundary: an agent with plain file access to the library is outside it. Scenes can't get around it: they run sandboxed (opaque origin), so their requests to the switcher's API are refused.
+Make a stream for this week's show and add the views you need. Retype this episode's titles right on the view; the template stays the same for next week.
 
-## Development
+<img src="docs/screenshots/how-3.png" alt="Full Count, episode 112: Pregame, Both hosts and Break added to the stream" width="560">
 
-Running from source needs [Bun](https://bun.sh):
+### 4. Click to switch and control your live
+
+Click a view on your Mac, or tap it on an iPad or a paired phone. OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.
+
+<img src="docs/screenshots/how-4.png" alt="OBS on the Mac and an iPad running ViewSwitcher: tapping a view on the iPad puts it on air in OBS" width="560">
+
+## Free templates
+
+Built in, or download more. Your show's name and colors fill in.
+
+<a href="https://viewswitcher.com/templates"><img src="docs/screenshots/templates.png" alt="Three template sets: Full Count, Grace Community and NOVA_PLAYS" width="720"></a>
+
+[Full Count](https://viewswitcher.com/templates/full-count) (sports podcast) · [NOVA_PLAYS](https://viewswitcher.com/templates/nova-plays) (gaming) · [Grace Community](https://viewswitcher.com/templates/grace-community) (church) · [Roam with Remi](https://viewswitcher.com/templates/roam-with-remi) (travel vlog) · [Riverside Live](https://viewswitcher.com/templates/riverside-live) (live events) · [Saltwater Kitchen](https://viewswitcher.com/templates/saltwater-kitchen) (cooking). [All templates](https://viewswitcher.com/templates)
+
+## Connect your AI
+
+In ViewSwitcher, **Edit with AI** connects Claude Desktop, Claude Code or Cursor in one click; any other app that supports MCP gets a setup line to paste. Then just ask: "Make a halftime screen with a 4-minute countdown." Your AI makes the view in your colors, checks a preview and fixes what's off, and everything it makes is a normal view you can edit on screen. You choose whether it can put views on air: never, only when you're not live (the default), or always. AI apps connect only on this Mac, and only to your show's folder. [More on viewswitcher.com/ai](https://viewswitcher.com/ai)
+
+## Free on the Mac
+
+No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later (Apple silicon or Intel), [OBS](https://obsproject.com) (free) and a camera. ViewSwitcher for iPad is $9.99 once, if you want one: coming to the App Store.
+
+**[Download ViewSwitcher for Mac](https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg)**: open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It's notarized, and it keeps itself up to date. [Install steps and what's new](https://viewswitcher.com/download) · [Support](https://viewswitcher.com/support) · [Privacy](https://viewswitcher.com/privacy)
+
+---
+
+## For developers and self-builders
+
+ViewSwitcher is open source under the [MIT license](LICENSE). Everything below is for running it from source, building on it, or making views by hand.
+
+### Run from source
+
+You need [Bun](https://bun.sh) and OBS.
 
 ```sh
 bun install
@@ -70,13 +85,16 @@ bun run dev              # server on :7420 (watch) + Vite on http://localhost:51
 bun run mac:dev          # builds the Mac app (Debug) and runs it, attached to the server above (or starting one from source)
 ```
 
-Environment (all optional; the Mac app passes them through to its server):
+The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRARY` says otherwise. The first run creates it with the agent skill and a first org, "My channel". Closing the Mac app's window keeps the server running for OBS and the iPad; Quit (in the menu bar or ⌘Q) stops it.
+
+<details>
+<summary>Environment variables (all optional; the Mac app passes them through to its server)</summary>
 
 | var | default |
 |---|---|
 | `VIEWSWITCHER_LIBRARY` | `~/ViewSwitcher Library` |
 | `PORT` | `7420` |
-| `HOST` | `127.0.0.1` (Tailscale serve proxies to it). Loopback only: the server refuses to start with another address; the Wi-Fi setting is the way onto the network (below) |
+| `HOST` | `127.0.0.1`. Loopback only: the server refuses to start with another address; the Wi-Fi setting is the way onto the network (below) |
 | `VIEWSWITCHER_LAN` | `1` also listens on the Wi-Fi from the start (the Mac app passes its "Let Phones and Tablets on This Wi-Fi Connect" setting) |
 | `VIEWSWITCHER_LAN_HOST` | `0.0.0.0`: the address the Wi-Fi listener binds (tests bind this Mac's LAN IP) |
 | `VIEWSWITCHER_ADMIN_TOKEN` | set by the Mac app at each launch: the secret for the pairing endpoints (`/api/remote…`); unset, they answer 404 |
@@ -92,86 +110,144 @@ Environment (all optional; the Mac app passes them through to its server):
 | `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |
 | `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net`, and (while Wi-Fi is on) this Mac's own `<name>.local` and LAN addresses, and refuses changes sent by other websites |
 
-## OBS setup (once)
+</details>
+
+### OBS setup
 
 1. OBS → Tools → WebSocket Server Settings: enable it.
-2. In the switcher, press **Set up OBS** on the card at the top (or, from source, `bun run obs:setup`). This creates the scene, the program browser source and the ground color, and switches OBS to the scene. (It also renames the older "Daisy Live" scene and sources if it finds them.)
+2. In the switcher, press **Set up OBS** on the card at the top (or, from source, `bun run obs:setup`). This creates the scene, the program browser source and the ground color, and switches OBS to the scene.
 3. Add your devices to the "ViewSwitcher" scene with these exact names: **Camera** (video capture), **Screen** (macOS Screen Capture), **iPad** (the iPad over USB as a video capture device). The card lists the ones still missing.
 4. Press **Set up OBS again** to put the browser source back on top. The card goes away once everything is there.
 
-If a scene asks for a slot whose OBS source doesn't exist, the switcher shows a warning.
-
-**If scenes don't show in OBS** (the program source stays blank, even for a normal web page), turn off OBS → Settings → Advanced → Sources → "Enable Browser Source Hardware Acceleration" and restart OBS. On macOS 26 with OBS 32.1, OBS's embedded browser never starts with it on.
-
-## iPad app (USB-C)
-
-The ViewSwitcher iPad app is the `ViewSwitcher iPad` target in `apps/apple` (native Swift, WKWebView).
-
-```sh
-bun run ipad:deploy   # build, sign, install and launch on the plugged-in iPad (replaces the app on it)
+```
+OBS scene "ViewSwitcher"
+├─ ViewSwitcher Program   browser source → http://127.0.0.1:7420/program   (top)
+├─ Camera · Screen · iPad                                                 (moved per scene)
+└─ ViewSwitcher Ground    color source, set to the on-air org's ground     (bottom)
 ```
 
-The app's web view adds `ViewSwitcher-iPad/<version>` to its user agent; that's how the switcher knows it's in the app (and the Mac app's window, which says `ViewSwitcher-Mac/<version>`, knows it isn't). Older builds added `ViewSwitcher-iPad` or plain `ViewSwitcher`, which still work until the next deploy. Its bundled connector page lives at `viewswitcher://connector/`. The web view runs edge to edge and the switcher keeps clear of the safe area itself (`env(safe-area-inset-*)`) in every orientation, Split View and Stage Manager.
+If a scene asks for a slot whose OBS source doesn't exist, the switcher shows a warning. **If scenes don't show in OBS** (the program source stays blank, even for a normal web page), turn off OBS → Settings → Advanced → Sources → "Enable Browser Source Hardware Acceleration" and restart OBS. On macOS 26 with OBS 32.1, OBS's embedded browser never starts with it on.
 
-One-time requirements: your Apple ID is signed into Xcode (Settings → Accounts; the team defaults to `M96WTV3CKX`, set `TEAM=` to override), Developer Mode is on, on the iPad, and the iPad trusts this Mac.
+### How a view works
 
-How the link works: iOS gives apps no network over the cable. The only path is usbmuxd, and it only connects Mac → iPad.
-- The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421.
-- The app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each WebView connection through one of those tunnels to the server.
-- So the app simply loads `http://127.0.0.1:7420/`, the real switcher, served over the cable. A "USB" pill in the header confirms it, the Mac's switcher and menu bar show "iPad · USB", and the server log shows `[usb] … tunnels ready`.
+A view (a scene) is a 1920 × 1080 HTML page with a transparent background. Boxes marked `data-slot` are where OBS sources go:
 
-**Without the cable:** the app's connector page falls back to a network address you save on it: the Mac's `http://<name>.local:7420` once Wi-Fi pairing is on (below), or a Tailscale address (`tailscale serve --bg 7420`, then `https://<this-mac>.<tailnet>.ts.net`). Either way the iPad pairs once with a code from the Mac. The same address also works in Safari. If the link drops for 4 s, the app returns to the connector, which picks whichever link works. (User-facing copy never names Tailscale; it's a developer path.)
-
-## Phones and tablets over Wi-Fi (MAC-23 … MAC-27)
-
-Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Connect** opens a second listener on the network (and announces it over Bonjour); **Phones and Tablets…** shows a one-time code, its QR code and the paired devices.
-
-- **Who gets in** (`apps/server/src/gate.ts`): a request is "this Mac" only if the socket's remote address is loopback, the Host is a loopback name, and it carries no proxy headers. That's the Mac app, browsers on the Mac, OBS's program page and the USB-C iPad (its tunnel ends on 127.0.0.1): unchanged. Everything else (the Wi-Fi, and anything forwarded, such as tailscale serve) needs a paired device token; without one it gets the pairing page and 401 for everything else (API, `/library`, `/ws`, assets).
-- **Codes** (`pairing.ts`): 8 characters, 5 minutes, single use, one open at a time; 5 wrong guesses per address per 5 minutes (behind a local proxy, per forwarded client), and a code is cancelled after 10 wrong guesses, which the Mac window points out. An expired code isn't counted as a guess. The pairing POST is at most 2 KB. **Device tokens**: 32 random bytes in an `HttpOnly; SameSite=Strict` cookie (`vs_device`), sent again once a day while the device is used, so it lasts 400 days from last use; only their SHA3-256 hash is kept, in `<library>/.viewswitcher/devices.json` (0600, gitignored). Secrets are compared by hashing both sides with SHA3-256.
-- **Remove** a device in the window: its token stops at once, its live socket closes, and devices.json is written before the window hears back (and again on quit), so a quit or crash can't bring it back.
-- **The live socket** (`/ws`) refuses a cross-site Origin, so a website open in a browser on the Mac can't read it. **Turning Wi-Fi off** closes the listener and drops every Wi-Fi socket; devices stay paired for next time.
-- **Pairing endpoints** (`/api/remote`, `/api/remote/code`, `/api/remote/remove`) answer only this Mac with the secret the app started the server with (`VIEWSWITCHER_ADMIN_TOKEN`), so a paired phone can't mint codes or remove devices. `/api/info` stays loopback only.
-- **Known limit**: Wi-Fi traffic is plain HTTP (no self-signed TLS). The setting says to use it on networks you trust, like home or church Wi-Fi.
-- On a phone (≤ 600 px) the switcher is a remote: the library folds into a button, scenes come in two columns, and what's on air with EDIT, REC and GO LIVE stays at the bottom, above the home indicator.
-
-## Repo layout
-
-```
-apps/server      Bun server: API, library + watcher, orgs, live state, OBS placement and setup, USB bridge
-apps/server/starter   the starter kit copied into each new org
-apps/server/library-kit   what a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, MCP configs, .gitignore
-apps/server/src/mcp   the MCP server for agents (/mcp and --mcp-stdio)
-apps/web         Vite + React + TanStack Router/Query SPA: switcher + /program
-apps/apple       one Xcode project (XcodeGen): ViewSwitcher.app for macOS, ViewSwitcher for iPad, the shared ViewSwitcherKit
-apps/site        viewswitcher.com (Astro)
-packages/shared  types and pure logic: resolveStream (override rule), coverTransform (slot → OBS), obsColor
-ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into the iPad app later
-post/            YouTube post pipeline (from Daisy Debate's daisy-video); see post/README.md
+```html
+<main class="scene">
+  <div class="slot" data-slot="Screen" style="left: 32px; top: 32px; width: 1472px; height: 828px"></div>
+  <div class="slot" data-slot="Camera" style="left: 1528px; top: 32px; width: 360px; height: 450px"></div>
+  <footer class="abs panel" style="left: 32px; top: 884px; width: 1856px; height: 164px">
+    <span class="kicker">{{ORG_NAME}}</span>
+    <h2 class="display">Today's topic</h2>
+  </footer>
+</main>
 ```
 
-`bun run packs:export` writes the starter kit and the site's six example shows as template packs, the same ones the app has built in (`dist/packs/<id>.zip`).
+OBS shows one browser source, `/program`, which displays the view on air. When you switch, the server moves and crops the OBS sources named in the view's slots (`Camera`, `Screen`, `Guest`, `iPad`…) into their boxes over obs-websocket, and paints the org's ground color behind everything. Text lives in its own small elements, so people can retype it in the switcher's editor; the format, the transition contract and the rules for agents are in the [viewswitcher-scenes skill](apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md).
 
-`bun test` runs the shared logic, usbmux protocol, path-safety, library kit, template pack and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
+**Transitions** are pages too. Switching briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else (the default) a blank fade through the ground color.
 
-## Mac app
+Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's template pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/template-packs.md](docs/template-packs.md#scripts-and-the-sandbox)).
 
-ViewSwitcher.app is the `ViewSwitcher` target in `apps/apple`: a native window (WKWebView) and menu-bar item around the server, compiled by `bun build --compile` into `Contents/Helpers/viewswitcher-server` next to the built switcher, the starter kit, the library kit and the built-in template packs in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
+### The library
+
+```
+~/ViewSwitcher Library/            (its own git repo; VIEWSWITCHER_LIBRARY)
+├─ my-channel/  church/  podcast/  …   one folder per org (a brand or channel)
+│  ├─ org.json                     { name, accent, ground }
+│  ├─ BRAND.md                     the org's brand rules, for agents
+│  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, transition.html, brand/mark.svg}
+│  ├─ templates/<set>/              a template set installed from a template pack: pack.json, views, _shared/, assets/
+│  ├─ assets/
+│  └─ projects/<project>/{project.json, transition.html?, scenes/*.html, streams/<MM-DD-slug>/*.html}
+└─ .claude/skills/viewswitcher-scenes/SKILL.md     from apps/server/library-kit (changes ship there)
+```
+
+- **Orgs**: one library holds any number of orgs, each with its own templates, assets, projects and brand. New orgs come from the org menu in the sidebar, starting from a built-in template set or `apps/server/starter/` (neutral templates in the org's name and accent color).
+- **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
+- **Templates** are starting points that never go on air; scenes are made from them.
+
+### Template packs
+
+A template pack is a whole look in one folder or `.zip`: `pack.json`, `templates/*.html`, `_shared/` and `assets/`. Drop one on the Templates page and it installs as its own template set, filled with the org's name and colors. Seven come built in (the starter and the site's six example shows): pick them for a new org, or with **Add templates**. The format, its limits and the validator: [docs/template-packs.md](docs/template-packs.md).
+
+`bun run packs:export` writes the starter kit and the site's six example shows as template packs, the same ones the app has built in (`dist/packs/<id>.zip`). The site builds and validates the downloadable ones at [viewswitcher.com/templates](https://viewswitcher.com/templates) the same way.
+
+### MCP for developers
+
+ViewSwitcher is an MCP server for the AI agent you already use. **Edit with AI** (in the switcher's header, and in the Mac menu bar) connects one and shows whether one is connected.
+
+- **Endpoint:** Streamable HTTP at `http://127.0.0.1:7420/mcp` (stateless, JSON responses). Only this Mac itself may use it (`fromThisMacOnly` in `apps/server/src/gate.ts`): a loopback connection to a loopback host, with no proxy headers and no other site's `Origin`, and not the USB-C iPad. A phone or tablet paired over Wi-Fi passes the gate (below) but still gets 404 here, as do `/api/info`, `/api/agent/clients` and the Claude Desktop extension.
+- **stdio**, for clients that only launch commands: `/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7420` (from source, `bun apps/server/src/index.ts --mcp-stdio --port <port>`; `VIEWSWITCHER_PORT` works too, `PORT` is ignored). It relays to the running switcher and never starts a second one; it opens the app if nothing answers, and never sends a call twice.
+- **Port 7420:** the library's `.mcp.json`, `.cursor/mcp.json` and `AGENTS.md` name it, as the Mac app always uses it. On another port, Edit with AI gives the address to add instead.
+- **Connecting:** the library has `.mcp.json` (Claude Code, which asks once to allow it), `.cursor/mcp.json` and `AGENTS.md` (with the Codex snippet). Edit with AI adds a per-install Claude Desktop extension (`.mcpb`), a Cursor install link, and the URL, stdio command and Codex TOML for the rest.
+- **Tools:** `get_state`, `list_orgs`, `scan_library`, `list_files`, `read_file`, `get_guide` to read; `preview_scene`, `see_program` to look; `write_file`, `add_asset`, `list_template_sets` / `add_template_set`, `create_project`, `create_stream`, `scene_from_template`, `customize_scene`, `revert_scene`, `duplicate_scene`, `rename_scene`, `customize_transition`, `revert_transition` to change; `go_on_air`. Paths start with the org id; writes to an existing file need the hash from `read_file`, as in the switcher's editor.
+- **Previews:** `preview_scene` renders a library scene in OBS, in a muted "ViewSwitcher Preview" scene that's never switched to, and returns the picture; `see_program` returns what OBS is putting out, camera and screen included. Without OBS, they return the scene's preview URL instead.
+- **On air:** the agent setting (Edit with AI on the Mac; `.viewswitcher/settings.json`) says what agents may put on air: **Never**, **When not live** (the default: not while OBS is streaming or recording, and no changes then to the scene on air, its transition, the org's shared files or anything the scene loads) or **Always**. It limits agents' MCP tools only, never people in the switcher. It steers agents that use the tools; it isn't a security boundary: an agent with plain file access to the library is outside it. Scenes can't get around it: they run sandboxed, so their requests to the switcher's API are refused.
+
+### Phones and tablets over Wi-Fi
+
+Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Connect** opens a second listener on the network (announced over Bonjour); **Phones and Tablets…** shows a one-time code, its QR code and the paired devices.
+
+The security model in short: a request counts as "this Mac" only if its socket is loopback, its Host is a loopback name and it carries no proxy headers (the Mac app, browsers on the Mac, OBS's program page and the USB-C iPad, whose tunnel ends on 127.0.0.1). Everything else needs a paired device token, or it gets the pairing page and 401 for everything else. Pairing codes are 8 characters, single use and last 5 minutes, with guesses rate-limited per address and a code cancelled after 10 wrong tries. Device tokens are 32 random bytes in an `HttpOnly; SameSite=Strict` cookie, refreshed with use and valid for 400 days from last use; only their SHA3-256 hash is kept (`<library>/.viewswitcher/devices.json`, 0600). Removing a device stops its token and closes its socket at once. The pairing endpoints answer only this Mac with the secret the app started the server with, so a paired phone can't mint codes or remove devices. Known limit: Wi-Fi traffic is plain HTTP, so the setting says to use it on networks you trust, like home or church Wi-Fi. Details are in `apps/server/src/gate.ts` and `pairing.ts`.
+
+On a phone (≤ 600 px) the switcher is a remote: the library folds into a button, scenes come in two columns, and what's on air with EDIT, REC and GO LIVE stays at the bottom.
+
+### The Mac and iPad apps
+
+`apps/apple` is one Xcode project, generated from `project.yml` with XcodeGen: ViewSwitcher.app for macOS, ViewSwitcher for iPad, and the shared ViewSwitcherKit. Building, signing, entitlements and tests are in [apps/apple/README.md](apps/apple/README.md).
+
+The Mac app is a native window (WKWebView) and menu-bar item around the server, which is compiled with `bun build --compile` into `Contents/Helpers/viewswitcher-server`, next to the built switcher, the starter kit, the library kit and the built-in template packs in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
 
 ```sh
 bun run mac:build              # apps/apple/build/ViewSwitcher.dmg (universal) + appcast.xml, signed with the Developer ID in your keychain
 bun run mac:build --app        # just apps/apple/build/export/ViewSwitcher.app, then:
 bun run mac:e2e                # drives the built app on port 7435 with OBS offline and USB off
-bun run mac:release            # signed, notarized and stapled (needs the notarytool profile below)
+bun run mac:release            # signed, notarized and stapled (needs a notarytool keychain profile)
 bun run mac:release --publish  # ...and uploads it to a draft GitHub release for a person to publish
+bun run ipad:deploy            # build, sign, install and launch the iPad app on the plugged-in iPad
 ```
 
-Signing uses the "Developer ID Application" certificate for team M96WTV3CKX (`TEAM=` to override); what each binary is entitled to is in `apps/apple/README.md`. Notarizing needs a notarytool keychain profile, made once with `xcrun notarytool store-credentials viewswitcher-notary --apple-id <email> --team-id M96WTV3CKX` (`APPLE_KEYCHAIN_PROFILE=` to use another). Updates: Sparkle reads `appcast.xml` from the latest GitHub release, signed with an EdDSA key in the login keychain; the dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
+Updates use Sparkle: the app reads `appcast.xml` from the latest GitHub release, signed with an EdDSA key. The dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
 
-## Roadmap
+**The iPad over USB-C:** iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects Mac → iPad. The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421, and the app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each web view connection through one of them. So the app simply loads the real switcher, served over the cable; a "USB" pill confirms it. Without the cable, the app's connector falls back to an address you save on it, normally the Mac's `http://<name>.local:7420` once Wi-Fi pairing is on. (Developer-only: a `tailscale serve` address works the same way; the user-facing copy doesn't mention it.)
 
-1. ~~Switcher, library, program page, OBS placement, skill~~
-2. ~~iPad app over USB-C~~
-3. ~~Orgs~~
-4. ~~Mac app: a signed dmg with the server inside, first-run library and OBS setup, menu-bar status~~
-5. Ink layer: Pencil drawing from the iPad as a layer in `/program`
-6. Post pipeline per org (it's Daisy-styled today)
+### Repo layout
+
+```
+apps/server            Bun server: API, library + watcher, orgs, live state, OBS placement and setup, USB bridge, Wi-Fi pairing
+apps/server/src/mcp    the MCP server for agents (/mcp and --mcp-stdio)
+apps/server/starter    the starter kit copied into each new org
+apps/server/library-kit  what a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, MCP configs, .gitignore
+apps/web               Vite + React + TanStack Router/Query SPA: the switcher, the editor and /program
+apps/apple             one Xcode project (XcodeGen): the Mac app, the iPad app, ViewSwitcherKit
+apps/site              viewswitcher.com (Astro); see apps/site/README.md
+packages/shared        types and pure logic both sides use: resolveStream, coverTransform, obsColor, the template pack validator
+docs                   template-packs.md, screenshots
+ios/inkcast            parked Swift Pencil app (InkCast); its drawing moves into the iPad app later
+post/                  YouTube post pipeline; see post/README.md
+```
+
+### Tests and typechecks
+
+```sh
+bun test                                                         # shared logic, server, usbmux, path safety, library kit, template packs, OBS setup, the site
+cd apps/web && bunx tsc --noEmit && bunx tsc -p tsconfig.test.json
+cd apps/server && bunx tsc -p .
+cd apps/site && bun run check                                    # astro check
+```
+
+The Apple apps have XCTest (`xcodebuild test`, see [apps/apple/README.md](apps/apple/README.md)); `bun run mac:e2e` drives the built Mac app.
+
+### What's next
+
+- An ink layer: Pencil drawing from the iPad as a layer in `/program`.
+- The post pipeline per org.
+
+### Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Agents working in this repo: [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+
+### License
+
+[MIT](LICENSE) © 2026 2witstudios
