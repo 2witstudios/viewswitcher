@@ -1,6 +1,6 @@
 import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { slugify, transitionCandidates } from "@viewswitcher/shared";
+import { decodeEntities, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
@@ -38,7 +38,7 @@ async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: s
     files.map(async (f) => {
       const name = f.slice(0, -5);
       const html = await readFile(join(root, rel, f), "utf8").catch(() => "");
-      const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1]?.trim();
+      const title = decodeEntities(/<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").trim();
       return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin } satisfies Scene;
     }),
   );

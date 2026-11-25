@@ -13,7 +13,7 @@ import { hostTrusted, originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
-import { editScene, parseEdit, readForEdit, scenePath } from "./scene-edit";
+import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
@@ -232,11 +232,15 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/scenes/from-template" && post) {
     const b = await body(req);
-    return json(await lib.addFromTemplate(org(b.org), b.template, b.projectId, b.streamId));
+    const { name } = await lib.addFromTemplate(org(b.org), b.template, b.projectId, b.streamId);
+    // Where the copy is, so the switcher can open it in the editor.
+    const dir = b.streamId ? `projects/${b.projectId}/streams/${b.streamId}` : `projects/${b.projectId}/scenes`;
+    return json({ name, path: `${plainName(String(b.org))}/${dir}/${name}.html` });
   }
   if (path === "/api/scenes/customize" && post) {
     const b = await body(req);
-    return json(await lib.customize(org(b.org), b.projectId, b.streamId, b.name));
+    const { name } = await lib.customize(org(b.org), b.projectId, b.streamId, b.name);
+    return json({ name, path: `${plainName(String(b.org))}/projects/${b.projectId}/streams/${b.streamId}/${name}.html` });
   }
   if (path === "/api/transition/customize" && post) {
     const b = await body(req);
@@ -255,7 +259,8 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   }
   if (path === "/api/scenes/duplicate" && post) {
     const b = await body(req);
-    return json(await lib.duplicate(root, b.path));
+    const { name } = await lib.duplicate(root, b.path);
+    return json({ name, path: `${String(b.path).slice(0, String(b.path).lastIndexOf("/"))}/${name}.html` });
   }
   if (path === "/api/assets" && post) {
     const form = await req.formData();
@@ -280,6 +285,19 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     const r = await editScene(root, b.path, String(b.hash ?? ""), b.edits);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
     if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
+    return json(r);
+  }
+  // Rename a scene (EDIT-19): its title, and a stream scene's file. The scene stays on air if it is.
+  if (path === "/api/scene/rename" && post) {
+    const b = await body(req);
+    const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
+    if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
+    if (state.onAir?.path === b.path) {
+      const rest = state.onAir.label.includes(" · ") ? state.onAir.label.slice(state.onAir.label.indexOf(" · ")) : "";
+      state.onAir = { ...state.onAir, path: r.path, label: `${String(b.name).trim()}${rest}`, renamedFrom: r.path !== b.path ? b.path : state.onAir.renamedFrom };
+      await persist();
+      publishState();
+    }
     return json(r);
   }
   if (path === "/api/scene/preview" && post) {
