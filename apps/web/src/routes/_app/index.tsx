@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/")({
     }
     const last = lastOrg.get();
     const org = orgs.find((o) => o.id === last) ?? orgs[0];
-    if (!org) return <p className="empty">No orgs yet. Create one from the org menu at the top of the sidebar.</p>;
+    if (!org) return <p className="empty">No orgs yet.</p>;
     return <Navigate to="/$org" params={{ org: org.id }} replace />;
   },
 });

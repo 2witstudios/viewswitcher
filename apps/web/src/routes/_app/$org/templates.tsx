@@ -53,8 +53,8 @@ export const Route = createFileRoute("/_app/$org/templates")({
     const removeSet = async (set: TemplateSet) => {
       if (!confirm(`Remove ${set.name} from Templates? Scenes already made from it stay as they are.`)) return;
       await attempt(async () => {
-        const { kept } = await packs.removeSet(org, set.id);
-        toast(kept ? `Removed ${set.name}. Its theme and pictures stay for the ${kept} scene${kept === 1 ? "" : "s"} made from it.` : `Removed ${set.name}`);
+        await packs.removeSet(org, set.id);
+        toast(`Removed ${set.name}`);
       });
     };
 
@@ -62,13 +62,12 @@ export const Route = createFileRoute("/_app/$org/templates")({
       const menu: MenuItem[] = [
         ...lib.projects.flatMap((p): MenuItem[] => [{
           label: `Add to ${p.name}`,
-          hint: "Copies it into the project's shared scenes",
           run: () => attempt(() => api.addFromTemplate(org, templateId(t), p.id), `Added ${t.label} to ${p.name}`),
         }]),
         ...(lib.projects.length ? ["divider" as const] : []),
-        { label: "Open the file", hint: "In your editor on the Mac", run: () => attempt(() => api.open(t.path)) },
+        { label: "Open the file", run: () => attempt(() => api.open(t.path)) },
         { label: "Copy path", hint: t.path, run: () => void copy(t.path) },
-        { label: "Duplicate and edit", hint: "A new template, open to change", run: () => attempt(async () => openEditor((await api.duplicate(t.path)).path, { rename: true })) },
+        { label: "Duplicate and edit", run: () => attempt(async () => openEditor((await api.duplicate(t.path)).path, { rename: true })) },
       ];
       return <SceneTile key={t.path} label={t.label} path={t.path} badge="TEMPLATE" onEdit={() => openEditor(t.path)} menu={menu} />;
     };
@@ -91,11 +90,10 @@ export const Route = createFileRoute("/_app/$org/templates")({
           void readDrop(e.dataTransfer).then(stage, () => toast("Couldn't read that folder"));
         }}
       >
-        <PageHead crumb="Starting points. Templates never go on air." title="Templates" />
+        <PageHead crumb={data?.org.name ?? org} title="Templates" />
         <div className="pack-bar">
           <button type="button" className="btn primary" onClick={() => setAdding(true)}><PlusIcon />Add templates</button>
-          <button type="button" className="btn" disabled={checking} onClick={() => picker.current?.click()}>{checking ? "Checking the pack…" : "Import a template pack"}</button>
-          <span className="empty">or drop a template pack's .zip or folder anywhere on this page. Each becomes its own template set.</span>
+          <button type="button" className="btn" disabled={checking} onClick={() => picker.current?.click()}>{checking ? "Checking…" : "Import pack…"}</button>
           <input ref={picker} type="file" accept=".zip,application/zip" hidden onChange={(e) => {
             const pack = fromPicker(e.target.files);
             e.target.value = "";
@@ -113,7 +111,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
           <section key={g.set?.id ?? ""} className="section">
             <div className="section-head">
               <h2>{g.set ? g.name.toUpperCase() : "YOUR TEMPLATES"}</h2>
-              <span>{g.set ? `template set${g.set.version ? ` · ${g.set.version}` : ""}${g.set.author ? ` · ${g.set.author}` : ""} · ${org}/templates/${g.set.id}/` : `${org}/templates/`}</span>
+              {g.set && (g.set.version || g.set.author) && <span>{[g.set.version, g.set.author].filter(Boolean).join(" · ")}</span>}
               {g.set && <button type="button" className="btn ghost small" onClick={() => removeSet(g.set!)}>Remove set</button>}
             </div>
             {g.set?.description && <p className="set-note">{g.set.description}</p>}
@@ -121,7 +119,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
               {g.templates.map((t) => tile(data, t))}
               {g.set?.transition && (
                 <SceneTile label="Transition" path={g.set.transition} badge="TRANSITION" menu={[
-                  { label: "Open the file", hint: "The pack's transition", run: () => attempt(() => api.open(g.set!.transition!)) },
+                  { label: "Open the file", run: () => attempt(() => api.open(g.set!.transition!)) },
                   { label: "Copy path", hint: g.set.transition, run: () => void copy(g.set!.transition!) },
                 ]} />
               )}
@@ -131,27 +129,25 @@ export const Route = createFileRoute("/_app/$org/templates")({
         ))}
 
         <section className="section">
-          <div className="section-head"><h2>TRANSITION</h2><span>plays between scenes · projects can have their own</span></div>
+          <div className="section-head"><h2>TRANSITION</h2></div>
           <div className="grid">
             {data?.transition ? (
               <SceneTile label="Transition" path={data.transition} badge="TRANSITION" menu={[
-                { label: "Open the file", hint: "Changes it for every project that doesn't have its own", run: () => attempt(() => api.open(data.transition!)) },
+                { label: "Open the file", hint: "All projects without their own", run: () => attempt(() => api.open(data.transition!)) },
                 { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
               ]} />
             ) : (
-              <p className="empty">Blank: scenes fade through the ground color. For a designed one, <AskAgent /> for {org}/templates/_shared/transition.html.</p>
+              <p className="empty">None. Scenes fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
             )}
           </div>
         </section>
 
-        {over && <div className="drop-hint" aria-hidden="true"><span>Drop the template pack to see what's in it</span></div>}
+        {over && <div className="drop-hint" aria-hidden="true"><span>Drop to preview pack</span></div>}
         {adding && data && (
           <TemplatePicker
             org={org}
-            orgName={data.org.name}
             have={data.sets.map((s) => s.id)}
             title="Add templates"
-            intro="Built-in template sets, ready to use. Pick one or more."
             skipLabel="Cancel"
             onClose={() => setAdding(false)}
             onAdded={async (names) => {
@@ -163,16 +159,15 @@ export const Route = createFileRoute("/_app/$org/templates")({
         {staged && data && (
           <PackPreview
             pack={staged}
-            orgName={data.org.name}
             onCancel={() => {
               void packs.cancel(org, staged.token).catch(() => {});
               setStaged(null);
             }}
             onInstall={async () => {
-              const { set } = await packs.install(org, staged.token);
+              await packs.install(org, staged.token);
               setStaged(null);
               await queryClient.invalidateQueries({ queryKey: ["library", org] });
-              toast(`Installed ${staged.manifest.name} as its own set${set !== staged.manifest.id ? ` (${set})` : ""}`);
+              toast(`Installed ${staged.manifest.name}`);
             }}
           />
         )}
@@ -181,7 +176,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
   },
 });
 
-function PackPreview({ pack, orgName, onCancel, onInstall }: { pack: StagedPack; orgName: string; onCancel: () => void; onInstall: () => Promise<void> }) {
+function PackPreview({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel: () => void; onInstall: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const m = pack.manifest;
@@ -194,7 +189,6 @@ function PackPreview({ pack, orgName, onCancel, onInstall }: { pack: StagedPack;
           <span className="pack-meta">{[m.version && `version ${m.version}`, m.author && `by ${m.author}`, `${pack.views.length} view${pack.views.length === 1 ? "" : "s"}`, `${(pack.bytes / 1024 / 1024).toFixed(pack.bytes < 1024 * 1024 ? 2 : 1)} MB`].filter(Boolean).join(" · ")}</span>
         </div>
         {m.description && <p className="picker-note">{m.description}</p>}
-        <p className="picker-note">Shown here in {orgName}'s name and colors. It installs as its own set of templates ({pack.set}); your own templates stay as they are.</p>
         <div className="pack-covers">
           {pack.views.map((v) => (
             <figure key={v.name}>
@@ -212,11 +206,11 @@ function PackPreview({ pack, orgName, onCancel, onInstall }: { pack: StagedPack;
         <div className="pack-runs">
           <b>What it runs</b>
           {runs.map((r) => <span key={r}>{r}</span>)}
-          <span className="quiet">Scenes run sandboxed: their scripts can't reach the switcher, change what's on air, or edit your files.</span>
+          <span className="quiet">Runs sandboxed.</span>
         </div>
         {!!pack.warnings.length && (
           <div className="pack-warnings">
-            <b>Worth knowing</b>
+            <b>Warnings</b>
             {pack.warnings.map((w) => <span key={w}>{w}</span>)}
           </div>
         )}

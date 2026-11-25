@@ -29,7 +29,7 @@ export const Route = createFileRoute("/_app/$org/assets")({
     return (
       <div className={dragging ? "dropzone" : undefined} style={{ display: "contents" }}
         onDragOver={(e) => (e.preventDefault(), setDragging(true))} onDragLeave={() => setDragging(false)} onDrop={onDrop}>
-        <PageHead crumb={`Uploads for ${data?.org.name ?? org}. Use them in any of its templates, projects or streams.`} title="Assets" />
+        <PageHead crumb={data?.org.name ?? org} title="Assets" />
         <div className="filters">
           {FILTERS.map(([k, label]) => (
             <button key={k} type="button" className={`filter${filter === k ? " on" : ""}`} aria-pressed={filter === k} onClick={() => setFilter(k)}>
@@ -43,7 +43,6 @@ export const Route = createFileRoute("/_app/$org/assets")({
               <PlusIcon size={26} />
               Upload
             </button>
-            <span className="empty" style={{ fontSize: 13 }}>Or drop files here</span>
             <input ref={input} type="file" multiple accept="image/*,video/*,audio/*" hidden onChange={(e) => (upload(e.target.files), (e.target.value = ""))} />
           </div>
           {assets.filter((a) => filter === "all" || a.kind === filter).map((a) => {
@@ -63,8 +62,8 @@ export const Route = createFileRoute("/_app/$org/assets")({
                 </div>
                 {menu === a.path && (
                   <Menu label={a.name} onClose={() => setMenu(null)} items={[
-                    { label: "Copy path", hint: `Use as ${url} in a scene`, run: () => void copy(url) },
-                    { label: "Open the file", hint: "On the Mac", run: () => attempt(() => api.open(a.path)) },
+                    { label: "Copy path", hint: url, run: () => void copy(url) },
+                    { label: "Open the file", run: () => attempt(() => api.open(a.path)) },
                   ]} />
                 )}
               </div>

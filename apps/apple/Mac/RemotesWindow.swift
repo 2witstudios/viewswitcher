@@ -192,9 +192,9 @@ struct RemotesView: View {
             VStack(alignment: .leading, spacing: 8) {
                 if model.codeOpen, let code = model.code, let expires = model.status?.code?.expiresAt {
                     if model.status?.enabled == true {
-                        Text("Scan with the phone's camera, or open the address below and enter the code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("Scan with the phone's camera, or open the address and enter the code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("Turn on Wi-Fi connections above for a QR code. On a device that already reaches this Mac, open ViewSwitcher and enter this code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("Turn on Wi-Fi connections for a QR code, or enter this code on a device already connected.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Text(RemoteText.code(code)).font(.system(size: 34, weight: .semibold, design: .monospaced)).textSelection(.enabled)
                     Text(RemoteText.expiry(expires, now: model.now)).foregroundStyle(.secondary).monospacedDigit()
