@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AskAgent } from "../../../components/AgentSheet";
 import { PageHead } from "../../../components/PageHead";
-import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
+import { OnAirHero, SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
 import { templateGroups, templateId, useLibrary } from "../../../lib/library";
@@ -36,8 +36,9 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
     return (
       <>
         <PageHead crumb={`${project.name} · ${stream.date ? shortDate(stream.date) : ""}`} title={stream.name} />
+        <OnAirHero />
 
-        <section className="section">
+        <section className={`section${own.length ? "" : " own-empty"}`}>
           <div className="section-head">
             <h2>THIS STREAM</h2>
             <span>{own.length ? "only in this stream" : "nothing yet: everything below comes from the project"}</span>
@@ -72,7 +73,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 ]}
               />
             ))}
-            <div className="tile">
+            <div className="tile new-scene">
               <button type="button" className="add-tile" aria-haspopup="menu" aria-expanded={adding} onClick={() => setAdding(true)}>
                 <PlusIcon size={26} />
                 New scene
@@ -130,7 +131,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
           </div>
         </section>
 
-        <section className="section">
+        <section className="section transition-section">
           <div className="section-head">
             <h2>TRANSITION</h2>
             <span>{project.transition ? `${project.name}'s own` : transition ? "the org's, shared by projects without their own" : "blank: scenes fade through the ground color"}</span>

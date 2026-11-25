@@ -4,6 +4,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { queryClient, useLive } from "../lib/live";
 import { AskAgent } from "./AgentSheet";
 import { TemplatePicker } from "./TemplatePicker";
@@ -27,9 +28,10 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
-  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first.
+  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first;
+  // sideways (PHONE-12) it slides in over the deck. The page title opens it too (lib/library-sheet).
   // Wider screens never see the button and always show the library.
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryOpen = useLibraryOpen();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => setLibraryOpen(false), [pathname]);
 
@@ -43,6 +45,7 @@ export function Sidebar() {
   };
 
   return (
+    <>
     <nav className={`side${libraryOpen ? " open" : ""}`} aria-label="Library">
       <div className="brand" data-drag-region>
         <Mark /><span>ViewSwitcher</span>
@@ -114,6 +117,8 @@ export function Sidebar() {
         />
       )}
     </nav>
+    {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" onClick={() => setLibraryOpen(false)} />}
+    </>
   );
 }
 

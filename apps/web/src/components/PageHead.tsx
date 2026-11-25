@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { api } from "../lib/api";
+import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { appLink, useLive } from "../lib/live";
 import { openAgentSheet, SparkleIcon } from "./AgentSheet";
 import { PencilIcon, useOpenEditor } from "./SceneTile";
@@ -11,12 +12,18 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
   const obs = state?.obs;
   const onAir = state?.onAir;
   const openEditor = useOpenEditor();
+  const libraryOpen = useLibraryOpen();
   return (
     <>
       <header className="page-head">
         <div className="titles">
           <span className="crumb">{crumb}</span>
           <h1 className="title">{title}</h1>
+          {/* On a phone the title is the stream picker: it opens the library (PHONE-3, PHONE-12). */}
+          <button type="button" className="stream-pick" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
+            <span className="crumb">{crumb}</span>
+            <span className="title">{title}<ChevronIcon /></span>
+          </button>
         </div>
         <div className="livebar">
           <span className={`pill${onAir ? "" : " off"}`}>
@@ -57,3 +64,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
     </>
   );
 }
+
+const ChevronIcon = () => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+);
