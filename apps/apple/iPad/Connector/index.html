@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ViewSwitcher</title>
-<!-- Connector: finds the ViewSwitcher server (USB-C first, then the network) and opens the switcher it serves. -->
+<!-- Connector: finds the ViewSwitcher server (USB-C first, then the network) and opens the switcher it serves.
+     With no Mac it offers the demo (demo/, MAC-18), and opens it by itself until a Mac has been connected once. -->
 <style>
   :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --quiet: #7d8290; --text: #f4f5f7; }
   * { box-sizing: border-box; }
@@ -17,6 +18,8 @@
   label { font-size: 13px; color: var(--quiet); width: min(560px, 100%); text-align: left; }
   input { flex: 1; min-width: 0; height: 48px; padding: 0 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--text); font-size: 16px; }
   button { height: 48px; padding: 0 20px; border: 0; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 16px; font-weight: 700; }
+  .demo { background: transparent; color: var(--text); border: 2px solid var(--line); }
+  .demo[hidden] { display: none; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--text); margin-right: 10px; animation: pulse 1.2s infinite ease-in-out; }
   @keyframes pulse { 50% { opacity: 0.25; } }
 </style>
@@ -31,66 +34,56 @@
     <input id="net" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://your-mac.tailnet.ts.net">
     <button type="submit">Save</button>
   </form>
+  <button type="button" class="demo" id="demo" hidden>Try the demo</button>
 </main>
+<script src="probe.js"></script>
 <script>
-  const USB = "http://127.0.0.1:7420"; // the app's USB-C tunnel to the Mac
-  const KEY = "viewswitcher.network";
   const status = document.getElementById("status");
   const net = document.getElementById("net");
-  const read = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
-  // Hosts the app shows (ViewSwitcherKit NavigationPolicy.iPadHostAllowed); anything else would open Safari.
-  const usable = (v) => {
-    try {
-      const u = new URL(v);
-      const h = u.hostname.toLowerCase();
-      return /^https?:$/.test(u.protocol) && (h === "127.0.0.1" || h === "localhost" || h.endsWith(".ts.net") || h.endsWith(".local"));
-    } catch { return false; }
-  };
+  const demo = document.getElementById("demo");
   // The address saved by the Capacitor build, handed over once by the app (#network=…).
   const handed = new URLSearchParams(location.hash.slice(1)).get("network");
   if (handed !== null) {
-    if (!read() && handed) { try { localStorage.setItem(KEY, handed); } catch {} }
+    if (!VS.network() && handed) VS.saveNetwork(handed);
     history.replaceState(null, "", location.pathname);
   }
-  net.value = read();
+  net.value = VS.network();
   document.getElementById("form").addEventListener("submit", (e) => {
     e.preventDefault();
     const v = net.value.trim().replace(/\/+$/, "");
-    if (v && !usable(v)) {
+    if (v && !VS.usable(v)) {
       status.textContent = "Use your Mac's Tailscale (…ts.net) or .local address.";
       return;
     }
-    try { localStorage.setItem(KEY, v); } catch {}
+    VS.saveNetwork(v);
     net.blur();
     check();
   });
+  demo.addEventListener("click", () => { leaving = true; location.href = "demo/"; });
 
-  // Reachable = the request completed (no-cors: the response is opaque, which is all we need).
-  async function reachable(base) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 1200);
-    try {
-      await fetch(`${base}/api/state?probe=${Date.now()}`, { mode: "no-cors", cache: "no-store", signal: ctl.signal });
-      return true;
-    } catch { return false; } finally { clearTimeout(t); }
-  }
-
-  let busy = false, leaving = false;
+  let busy = false, leaving = false, first = true;
   async function check() {
     if (busy || leaving) return;
     busy = true;
     try {
-      const network = usable(read()) ? read() : "";
-      for (const [base, how] of [[USB, "USB-C"], ...(network ? [[network, "the network"]] : [])]) {
-        if (await reachable(base)) {
-          status.textContent = `Connected over ${how}…`;
-          leaving = true;
-          location.replace(`${base}/`);
-          return;
-        }
+      const found = await VS.find();
+      if (leaving) return;
+      if (found) {
+        status.textContent = `Connected over ${found.how}…`;
+        leaving = true;
+        VS.open(found.base);
+        return;
+      }
+      // No Mac. Until one has been connected, the app opens on the demo (App Review and new buyers
+      // try it there); after leaving it, or once a Mac has been used, the connector stays and offers it.
+      if (first && !VS.connectedBefore() && !VS.leftDemo()) {
+        leaving = true;
+        location.replace("demo/");
+        return;
       }
       status.innerHTML = `<span class="dot"></span>Plug in the USB-C cable and open ViewSwitcher on the Mac.`;
-    } finally { busy = false; }
+      demo.hidden = false;
+    } finally { busy = false; first = false; }
   }
   check();
   setInterval(check, 1000);

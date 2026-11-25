@@ -2,8 +2,9 @@ import UIKit
 import WebKit
 import ViewSwitcherKit
 
-/// Serves the bundled connector (Connector/index.html) at viewswitcher://connector/. The switcher
-/// sends the app back there when the server has been gone a while (apps/web/src/lib/live.ts).
+/// Serves the bundled connector (Connector/index.html) at viewswitcher://connector/, and the offline
+/// demo (Connector/demo/, MAC-18) at viewswitcher://connector/demo/. The switcher sends the app back
+/// to the connector when the server has been gone a while (apps/web/src/lib/live.ts).
 final class ConnectorScheme: NSObject, WKURLSchemeHandler {
     let root = Bundle.main.resourceURL!.appendingPathComponent("Connector")
 
@@ -11,17 +12,26 @@ final class ConnectorScheme: NSObject, WKURLSchemeHandler {
         guard let url = task.request.url, url.host?.lowercased() == "connector" else {
             return task.didFailWithError(URLError(.unsupportedURL))
         }
-        let name = url.path.isEmpty || url.path == "/" ? "index.html" : String(url.path.dropFirst())
-        let file = root.appendingPathComponent(name).standardizedFileURL
+        // (URL.path drops a trailing slash, so a folder is recognised on disk: demo/ → demo/index.html.)
+        var file = root.appendingPathComponent(String(url.path.drop(while: { $0 == "/" }))).standardizedFileURL
+        var isFolder: ObjCBool = false
+        if FileManager.default.fileExists(atPath: file.path, isDirectory: &isFolder), isFolder.boolValue {
+            file = file.appendingPathComponent("index.html")
+        }
         guard file.path.hasPrefix(root.standardizedFileURL.path + "/"), let data = try? Data(contentsOf: file) else {
             return task.didFailWithError(URLError(.fileDoesNotExist))
         }
         let type = switch file.pathExtension {
         case "html": "text/html"
         case "svg": "image/svg+xml"
+        case "js": "text/javascript"
+        case "css": "text/css"
+        case "webp": "image/webp"
+        case "jpg", "jpeg": "image/jpeg"
+        case "png": "image/png"
         default: "application/octet-stream"
         }
-        task.didReceive(URLResponse(url: url, mimeType: type, expectedContentLength: data.count, textEncodingName: type == "text/html" ? "utf-8" : nil))
+        task.didReceive(URLResponse(url: url, mimeType: type, expectedContentLength: data.count, textEncodingName: type.hasPrefix("text/") ? "utf-8" : nil))
         task.didReceive(data)
         task.didFinish()
     }
@@ -57,6 +67,7 @@ final class CapacitorMigration: NSObject, WKURLSchemeHandler {
 /// so its own background reaches every edge in each orientation, Split View and Stage Manager.
 final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     static let connector = URL(string: "\(NavigationPolicy.connectorScheme)://connector/")!
+    static let demo = URL(string: "\(NavigationPolicy.connectorScheme)://connector/demo/")!
     private var webView: WKWebView!
 
     override var prefersStatusBarHidden: Bool { true }
@@ -71,6 +82,14 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.addUserScript(WKUserScript(source: ShellBridge.userScript(ShellInfo(kind: .ipad)), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        #if DEBUG
+        // The simulator shares the Mac's ports, so the connector's USB-C probe (127.0.0.1:7420) would
+        // find the Mac's own switcher. VIEWSWITCHER_PROBE points it somewhere else (tests, screenshots).
+        if let probe = ProcessInfo.processInfo.environment["VIEWSWITCHER_PROBE"],
+           let json = try? JSONEncoder().encode(probe), let literal = String(data: json, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: "window.VIEWSWITCHER_USB = \(literal);", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        #endif
         let web = WKWebView(frame: .zero, configuration: config)
         let bg = Theme.background
         web.backgroundColor = UIColor(red: bg.r, green: bg.g, blue: bg.b, alpha: 1)
@@ -107,15 +126,29 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        #if DEBUG
+        // Tests and screenshots: VIEWSWITCHER_RESET=1 starts as a first launch (no saved address, no Mac
+        // connected before), so the connector opens the demo again.
+        if ProcessInfo.processInfo.environment["VIEWSWITCHER_RESET"] == "1" {
+            UserDefaults.standard.set(true, forKey: CapacitorMigration.doneKey)
+            WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { [weak self] in
+                self?.webView.load(URLRequest(url: Self.start))
+            }
+            return
+        }
+        #endif
         webView.load(URLRequest(url: Self.start))
     }
 
-    /// The connector; in a Debug build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7435) opens that
-    /// server directly instead, for the simulator, which shares the Mac's ports and would otherwise
-    /// find whatever switcher runs on the Mac's 7420.
+    /// The connector, which opens the demo by itself on a first launch with no Mac (MAC-18). In a Debug
+    /// build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7437) opens that server directly instead, for
+    /// the simulator, which shares the Mac's ports and would otherwise find whatever switcher runs on the
+    /// Mac's 7420; VIEWSWITCHER_START=demo opens the demo.
     static var start: URL {
         #if DEBUG
-        if let s = ProcessInfo.processInfo.environment["VIEWSWITCHER_SERVER"], let u = URL(string: s) { return u }
+        let env = ProcessInfo.processInfo.environment
+        if let s = env["VIEWSWITCHER_SERVER"], let u = URL(string: s) { return u }
+        if env["VIEWSWITCHER_START"] == "demo" { return demo }
         #endif
         if !UserDefaults.standard.bool(forKey: CapacitorMigration.doneKey) {
             UserDefaults.standard.set(true, forKey: CapacitorMigration.doneKey)
