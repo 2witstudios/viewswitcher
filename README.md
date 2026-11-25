@@ -45,7 +45,7 @@ Make a stream for this week's show and add the views you need. Retype this episo
 
 ### 4. Click to switch and control your live
 
-Click a view on your Mac, or tap it on an iPad or iPhone (held sideways, your views fill the phone like a deck). OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.
+Click a view on your Mac, or tap it on your iPhone or iPad. Hold the iPhone sideways and your views fill it like a deck. OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.
 
 <img src="docs/screenshots/how-4.png" alt="OBS on the Mac and an iPad running ViewSwitcher: tapping a view on the iPad puts it on air in OBS" width="560">
 
@@ -63,7 +63,7 @@ In ViewSwitcher, **Edit with AI** connects Claude Desktop, Claude Code or Cursor
 
 ## Free on the Mac
 
-No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later (Apple silicon or Intel), [OBS](https://obsproject.com) (free) and a camera. ViewSwitcher for iPhone and iPad is $9.99 once (one purchase for both), if you want one: coming to the App Store.
+No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later (Apple silicon or Intel), [OBS](https://obsproject.com) (free) and a camera. [ViewSwitcher for iPhone and iPad](https://viewswitcher.com/ipad) is $9.99 once (one purchase for both), if you want one: coming to the App Store.
 
 **[Download ViewSwitcher for Mac](https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg)**: open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It's notarized, and it keeps itself up to date. [Install steps and what's new](https://viewswitcher.com/download) · [Support](https://viewswitcher.com/support) · [Privacy](https://viewswitcher.com/privacy)
 
@@ -85,7 +85,7 @@ bun run dev              # server on :7420 (watch) + Vite on http://localhost:51
 bun run mac:dev          # builds the Mac app (Debug) and runs it, attached to the server above (or starting one from source)
 ```
 
-The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRARY` says otherwise. The first run creates it with the agent skill and a first org, "My channel". Closing the Mac app's window keeps the server running for OBS and the iPad; Quit (in the menu bar or ⌘Q) stops it.
+The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRARY` says otherwise. The first run creates it with the agent skill and a first org, "My channel". Closing the Mac app's window keeps the server running for OBS and the iPhone or iPad; Quit (in the menu bar or ⌘Q) stops it.
 
 <details>
 <summary>Environment variables (all optional; the Mac app passes them through to its server)</summary>
@@ -187,11 +187,11 @@ ViewSwitcher is an MCP server for the AI agent you already use. **Edit with AI**
 
 ### Phones and tablets over Wi-Fi
 
-Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Connect** opens a second listener on the network (announced over Bonjour); **Phones and Tablets…** shows a one-time code, its QR code and the paired devices.
+Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Connect** opens a second listener on the network (announced over Bonjour); **Phones and Tablets…** shows a one-time code, its QR code and the paired devices. The iPhone and iPad app pairs from its own connector (Scan reads the QR code with the app's camera; Enter code finds the Mac over Bonjour and opens its pair page); any phone's browser can pair by opening the QR code's link.
 
 The security model in short: a request counts as "this Mac" only if its socket is loopback, its Host is a loopback name and it carries no proxy headers (the Mac app, browsers on the Mac, OBS's program page and the USB-C iPad, whose tunnel ends on 127.0.0.1). Everything else needs a paired device token, or it gets the pairing page and 401 for everything else. Pairing codes are 8 characters, single use and last 5 minutes, with guesses rate-limited per address and a code cancelled after 10 wrong tries. Device tokens are 32 random bytes in an `HttpOnly; SameSite=Strict` cookie, refreshed with use and valid for 400 days from last use; only their SHA3-256 hash is kept (`<library>/.viewswitcher/devices.json`, 0600). Removing a device stops its token and closes its socket at once. The pairing endpoints answer only this Mac with the secret the app started the server with, so a paired phone can't mint codes or remove devices. Known limit: Wi-Fi traffic is plain HTTP, so the setting says to use it on networks you trust, like home or church Wi-Fi. Details are in `apps/server/src/gate.ts` and `pairing.ts`.
 
-On a phone (≤ 600 px) the switcher is a remote: the library folds into a button, scenes come in two columns, and what's on air with EDIT, REC and GO LIVE stays at the bottom.
+On a phone the switcher is a remote, in the app or a browser. Sideways (a short touch screen up to 1000 px wide) it's a deck: the scenes four across under one slim bar (the stream, on air, REC, LIVE), with the library sliding in from the title. Upright (≤ 600 px) the scene on air shows large above the scenes. Adding and editing scenes, the transition and OBS setup stay on the Mac and iPad.
 
 ### The Mac, iPhone and iPad apps
 
@@ -210,7 +210,7 @@ bun run ipad:deploy            # build, sign, install and launch the app on the 
 
 Updates use Sparkle: the app reads `appcast.xml` from the latest GitHub release, signed with an EdDSA key. The dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
 
-**The iPad over USB-C:** iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects Mac → iPad. The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421, and the app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each web view connection through one of them. So the app simply loads the real switcher, served over the cable; a "USB" pill confirms it. Without the cable, the app pairs over Wi-Fi from its connector: Scan reads the Mac's pairing QR code with the app's own camera (the system Camera would pair Safari instead), and Enter code finds the Mac by Bonjour; the connector then remembers that address. An iPhone works the same way (iPhone 15 and later over USB-C). (Developer-only: a `tailscale serve` address works the same way; the user-facing copy doesn't mention it.)
+**The iPhone and iPad over the cable:** iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects Mac → device. The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421, and the app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each web view connection through one of them. So the app simply loads the real switcher, served over the cable; a "USB" pill confirms it. Without the cable, the app pairs over Wi-Fi from its connector: Scan reads the Mac's pairing QR code with the app's own camera (the system Camera would pair Safari instead), and Enter code finds the Mac by Bonjour; the connector then remembers that address. An iPhone works the same way (iPhone 15 and later over USB-C). (Developer-only: a `tailscale serve` address works the same way; the user-facing copy doesn't mention it.)
 
 ### Repo layout
 
