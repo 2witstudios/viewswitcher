@@ -26,6 +26,8 @@ export type SetupReport = {
   missing: string[];
   /** Whether OBS was switched to the scene (never while it's streaming or recording). */
   switched: boolean;
+  /** What didn't work but doesn't stop the switcher: the preview scene (previews make it again when they need it). */
+  warnings: string[];
 };
 
 export type SetupOptions = {
@@ -98,14 +100,24 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
     log.push(`"${scene}" is ready with "${programSource}" on top. OBS is live, so it stays on its current scene: switch to "${scene}" in OBS when you're ready.`);
   }
 
-  log.push(...(await ensurePreview(obs, names)));
+  // The switcher is set up by now. The preview scene is for agents' previews only, and they make it
+  // when they need it, so a failure here is a warning, never a failed setup.
+  const warnings: string[] = [];
+  try {
+    log.push(...(await ensurePreview(obs, names)));
+  } catch (e) {
+    const why = `Couldn't make the "${names.previewScene}" scene for previews (${(e as Error).message}). Agents' previews will try again.`;
+    console.error(`[obs] ${why}`);
+    warnings.push(why);
+  }
 
   const present = new Set(sceneItems.map((i) => i.sourceName));
-  return { log, missing: devices.filter((d) => !present.has(d)), switched: switchProgram };
+  return { log, missing: devices.filter((d) => !present.has(d)), switched: switchProgram, warnings };
 }
 
 // The preview browser source lives in a scene of its own that is never the program, so nothing it
-// shows reaches the stream. shutdown: false keeps the page alive between previews; its audio is
+// shows reaches the stream. shutdown: false keeps the browser warm between previews (each preview
+// points it back at about:blank when it's done, so the last scene's video doesn't keep playing); its audio is
 // routed into OBS (reroute_audio) and muted there, so a scene's video or sound never plays out of
 // the Mac's speakers, where a desktop-audio capture would put it on stream.
 const previewSettings = { width: 1920, height: 1080, fps_custom: false, reroute_audio: true, shutdown: false, restart_when_active: false };
@@ -166,8 +178,9 @@ if (import.meta.main) {
   const obs = new OBSClient({ url: config.obs.url, password: config.obs.password }).start();
   try {
     await obs.ready();
-    const { log, missing } = await setupObs(obs, config.obs, config.port);
+    const { log, missing, warnings } = await setupObs(obs, config.obs, config.port);
     for (const line of log) console.log(line);
+    for (const line of warnings) console.log(`Warning: ${line}`);
     if (missing.length) {
       console.log(`\nAdd these sources to "${config.obs.scene}" (names must match exactly), then run this again:`);
       for (const d of missing) console.log(`  • ${d}`);

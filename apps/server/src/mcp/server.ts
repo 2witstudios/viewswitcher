@@ -230,7 +230,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     title: "See the program output",
     description: "A picture of what OBS is putting out right now: the scene on air INCLUDING the live camera, screen and iPad, so it shows the people on camera. 960×540, or 1920×1080 with full. Use it to check the real result on air.",
     inputSchema: { full: fullArg },
-    annotations: READ,
+    // Not marked read-only, so clients ask before it runs: it sends live camera frames to the AI provider.
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, run(async ({ full }: { full?: boolean }) => picture(await deps.previewer.program({ full }), "The program output")));
 
   // ------------------------------------------------------------ write
@@ -380,10 +381,13 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("go_on_air", {
     title: "Put a scene on air",
-    description: "Switch OBS to a scene (a template, project scene or stream scene, by its org-prefixed path). Only when the user asks. Whether it's allowed depends on the agent on-air setting (get_state): never, not-live (refused while OBS streams or records), or always. Returns the new state.",
-    inputSchema: { path: pathArg("The scene (.html)") },
+    description: "Switch OBS to a scene (a template, project scene or stream scene, by its org-prefixed path). Only when the user asks. For a project scene that a stream uses as it is (scan_library's sharedScenes), pass that stream's streamId, as the stream page does. Whether it's allowed depends on the agent on-air setting (get_state): never, not-live (refused while OBS streams or records), or always. Returns the new state.",
+    inputSchema: {
+      path: pathArg("The scene (.html)"),
+      streamId: z.string().optional().describe("For a project scene: the stream it goes on air for (one that shares the scene). Leave it out otherwise."),
+    },
     annotations: DESTRUCTIVE,
-  }, run(async ({ path }: { path: string }) => {
+  }, run(async ({ path, streamId }: { path: string; streamId?: string }) => {
     guardNow({ kind: "go_on_air" });
     await needScene(path);
     const l = await lib.scanLibrary(root, plainName(orgOf(path)));
@@ -392,7 +396,14 @@ export function createMcpServer(deps: McpDeps): McpServer {
     if (t) found = { path, label: t.label };
     for (const p of l.projects) {
       const s = p.scenes.find((x) => x.path === path);
-      if (s) found = { path, label: s.label, projectId: p.id };
+      if (s && streamId) {
+        // As the stream page puts a shared scene on air: the project's file, labelled and recorded for the stream.
+        const st = p.streams.find((x) => x.id === streamId);
+        if (!st) throw new Refusal(`Project ${p.id} has no stream "${streamId}". scan_library shows its streams.`);
+        const own = resolveStream(p, st).own.find((x) => x.name === s.name);
+        if (own) throw new Refusal(`Stream ${st.id} has its own copy of that scene. Put ${own.path} on air instead.`);
+        found = { path, label: `${s.label} · ${st.name}`, projectId: p.id, streamId: st.id };
+      } else if (s) found = { path, label: s.label, projectId: p.id };
       for (const st of p.streams) {
         const x = st.scenes.find((y) => y.path === path);
         if (x) found = { path, label: `${x.label} · ${st.name}`, projectId: p.id, streamId: st.id };

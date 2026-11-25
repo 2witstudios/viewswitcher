@@ -103,6 +103,10 @@ describe("initialize", () => {
     expect(i).toContain("fix what you see");
     expect(i).toContain("Every path starts with the org id");
   });
+  test("see_program isn't read-only: clients ask before it sends camera frames", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === "see_program")!.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
+  });
   test("every tool in the contract, with read-only and destructive hints", async () => {
     const { tools } = await client.listTools();
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
@@ -111,7 +115,7 @@ describe("initialize", () => {
       "go_on_air", "list_files", "list_orgs", "preview_scene", "read_file", "rename_scene", "revert_scene", "revert_transition", "scan_library",
       "scene_from_template", "see_program", "write_file",
     ]);
-    for (const n of ["get_state", "list_orgs", "scan_library", "list_files", "read_file", "get_guide", "preview_scene", "see_program"]) {
+    for (const n of ["get_state", "list_orgs", "scan_library", "list_files", "read_file", "get_guide", "preview_scene"]) {
       expect({ n, ro: byName[n]!.annotations?.readOnlyHint }).toEqual({ n, ro: true });
     }
     for (const n of ["go_on_air", "revert_scene", "revert_transition"]) expect({ n, d: byName[n]!.annotations?.destructiveHint }).toEqual({ n, d: true });
@@ -392,6 +396,26 @@ describe("go_on_air and the agent guard", () => {
     // Off air again, the same writes go through.
     state.obs = { connected: true, streaming: false, recording: false };
     expect((await call("write_file", { path: copy.path, text: "<title>T</title>", hash })).isError).toBe(false);
+  });
+});
+
+describe("go_on_air for a stream", () => {
+  test("a project scene a stream shares goes on air for that stream, as the stream page does", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Shared", templates: ["teaching", "brb"] });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Sunday", date: "2026-12-07" });
+    const teaching = `${ORG}/projects/${projectId}/scenes/teaching.html`;
+    await data("go_on_air", { path: teaching, streamId });
+    expect(state.onAir).toMatchObject({ path: teaching, projectId, streamId });
+    expect(state.onAir!.label).toEndWith(" · Sunday");
+    // Without streamId it's the project's scene, as before.
+    await data("go_on_air", { path: teaching });
+    expect(state.onAir!.streamId).toBeUndefined();
+    // A stream with its own copy: that copy goes on air, not the project's.
+    const copy = await data("customize_scene", { org: ORG, projectId, streamId, name: "teaching" });
+    const r = await call("go_on_air", { path: teaching, streamId });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain(copy.path);
+    expect((await call("go_on_air", { path: teaching, streamId: "nope" })).text).toContain('no stream "nope"');
   });
 });
 

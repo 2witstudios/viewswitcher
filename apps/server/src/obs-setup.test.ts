@@ -73,6 +73,19 @@ describe("setupObs (MAC-3)", () => {
     await expect(setupObs(broken, names, PORT)).rejects.toThrow("boom");
   });
 
+  test("a preview scene that can't be made is a warning, not a failed setup (the switcher is set up)", async () => {
+    const obs = fakeObs();
+    // A non-browser input already has the preview source's name: OBS refuses its browser settings.
+    const broken: ObsRequester = { request: (t, d) => (t === "SetInputMute" ? Promise.reject(new OBSRequestError(t, 604, "not an audio input")) : obs.request(t, d)) };
+    const r = await setupObs(broken, names, PORT);
+    expect(r.switched).toBe(true);
+    expect(obs.program()).toBe("ViewSwitcher");
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain(`Couldn't make the "${names.previewScene}" scene for previews`);
+    expect(r.warnings[0]).toContain("not an audio input");
+    expect((await setupObs(obs, names, PORT)).warnings).toEqual([]);
+  });
+
   test("also makes the preview scene, muted and kept alive, which is never switched to nor checked (MCP-1)", async () => {
     const obs = fakeObs();
     const r = await setupObs(obs, names, PORT);

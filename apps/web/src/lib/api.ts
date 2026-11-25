@@ -89,7 +89,7 @@ export const api = {
   },
 
   /** Create the ViewSwitcher scene and sources in OBS (MAC-3). */
-  setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean }>("/api/obs/setup"),
+  setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean; warnings?: string[] }>("/api/obs/setup"),
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
 

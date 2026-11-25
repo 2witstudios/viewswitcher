@@ -64,15 +64,42 @@ describe("preview renderer (MCP-1)", () => {
     expect(obs.scenes.get(names.previewScene)!.map((i) => i.sourceName)).toEqual([names.previewSource]);
     const input = obs.inputs.get(names.previewSource)!;
     expect(input).toMatchObject({ kind: "browser_source", muted: true, settings: { width: 1920, height: 1080, shutdown: false, reroute_audio: true } });
-    expect(pageOf(input.settings.url)).toBe(`http://127.0.0.1:${PORT}/library/${SCENE}?preview`);
+    const pages = () => obs.requests.filter((q) => q.type === "SetInputSettings" && q.data.inputName === names.previewSource).map((q) => String((q.data.inputSettings as { url?: string }).url));
+    const first = pages();
+    expect(first.map(pageOf)).toEqual([`http://127.0.0.1:${PORT}/library/${SCENE}?preview`, "about:blank"]);
     expect(shots(obs).map((s) => s.data)).toContainEqual({ sourceName: names.previewSource, imageFormat: "png", imageWidth: 960, imageHeight: 540 });
+    // Afterwards the source shows a blank page, so the scene doesn't keep running in OBS; the browser stays warm.
+    expect(input.settings).toMatchObject({ url: "about:blank", shutdown: false });
 
     // Once there, it is reused, and each preview reloads the page.
     obs.requests.length = 0;
-    const before = input.settings.url;
     await createPreviewer(obs, opts()).scene(SCENE);
     expect(obs.requests.some((r) => r.type === "CreateScene" || r.type === "CreateInput")).toBe(false);
-    expect(obs.inputs.get(names.previewSource)!.settings.url).not.toBe(before);
+    expect(pages()[0]).not.toBe(first[0]);
+    expect(obs.inputs.get(names.previewSource)!.settings.url).toBe("about:blank");
+  });
+
+  test("an OBS that never answers doesn't hold up the previews queued behind it", async () => {
+    const obs = rendering();
+    const real = obs.request.bind(obs);
+    let hang = true;
+    obs.request = (type: string, d?: object) => (hang && type === "GetSourceScreenshot" ? ((hang = false), new Promise(() => {})) : real(type, d)) as never;
+    const previewer = createPreviewer(obs, opts({ requestTimeoutMs: 50 }));
+    const [a, b] = await Promise.all([previewer.scene(SCENE), previewer.scene(SPACED)]);
+    expect(a).toMatchObject({ ok: false, reason: expect.stringContaining("didn't answer GetSourceScreenshot") });
+    expect(b).toEqual({ ok: true, png: png(colorOf(SPACED)), width: 960, height: 540 });
+  });
+
+  test("a preview that fails or never draws still leaves the source on about:blank", async () => {
+    const obs = connected({ screenshot: () => png([0, 0, 0, 0]) });
+    const r = await createPreviewer(obs, opts({ timeoutMs: 20 })).scene(SCENE);
+    expect(r.ok).toBe(false);
+    expect(obs.inputs.get(names.previewSource)!.settings.url).toBe("about:blank");
+    const failing = connected({ screenshot: () => {
+      throw new OBSRequestError("GetSourceScreenshot", 702, "render failed");
+    } });
+    expect((await createPreviewer(failing, opts()).scene(SCENE)).ok).toBe(false);
+    expect(failing.inputs.get(names.previewSource)!.settings.url).toBe("about:blank");
   });
 
   test("full renders at 1920×1080", async () => {
@@ -154,7 +181,8 @@ describe("preview renderer (MCP-1)", () => {
     expect(c).toEqual({ ok: true, png: png(colorOf(SCENE), 1920, 1080), width: 1920, height: 1080 });
 
     const order = obs.requests.filter((r) => r.type === "SetInputSettings" && r.data.inputSettings.url).map((r) => pageOf(r.data.inputSettings.url));
-    expect(order).toEqual([SCENE, SPACED, SCENE].map((p) => `http://127.0.0.1:${PORT}/library/${p.split("/").map(encodeURIComponent).join("/")}?preview`));
+    // Each one loads its scene and leaves a blank page before the next starts.
+    expect(order).toEqual([SCENE, SPACED, SCENE].flatMap((p) => [`http://127.0.0.1:${PORT}/library/${p.split("/").map(encodeURIComponent).join("/")}?preview`, "about:blank"]));
   });
 
   test("a preview that fails doesn't hold up the next one", async () => {

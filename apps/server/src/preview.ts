@@ -21,14 +21,31 @@ export type PreviewOptions = {
   timeoutMs?: number;
   /** The gap between screenshots while it waits. */
   intervalMs?: number;
+  /** The longest one OBS request may take before the preview gives up on it. */
+  requestTimeoutMs?: number;
 };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const BROWSER = "Open the URL in a browser at 1920×1080 if you can.";
+export const BLANK = "about:blank";
 
-export function createPreviewer(obs: Pick<OBSClient, "request" | "status">, opts: PreviewOptions): Previewer {
-  const { port, timeoutMs = 1500, intervalMs = 100 } = opts;
+export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opts: PreviewOptions): Previewer {
+  const { port, timeoutMs = 1500, intervalMs = 100, requestTimeoutMs = 10_000 } = opts;
+  // Every OBS request a preview makes has a deadline: an OBS that keeps its socket open but never
+  // answers would otherwise hold this preview, and every one queued behind it, for good.
+  const obs = {
+    get status() {
+      return live.status;
+    },
+    request: <T>(type: string, data?: object): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`OBS didn't answer ${type} within ${requestTimeoutMs / 1000} s`)), requestTimeoutMs);
+      });
+      return Promise.race([live.request<T>(type, data), late]).finally(() => clearTimeout(timer));
+    },
+  };
   const library = opts.library ?? config.library;
   const base = `http://127.0.0.1:${port}`;
   let loads = 0;
@@ -89,6 +106,10 @@ export function createPreviewer(obs: Pick<OBSClient, "request" | "status">, opts
           return { ok: true, png, ...dims };
         } catch (e) {
           return { ok: false, reason: `OBS couldn't render the scene (${(e as Error).message}), so there's no picture. ${BROWSER}`, url };
+        } finally {
+          // Done with the page: a blank one, so the scene (a looping video, a countdown) doesn't keep
+          // running in OBS for the rest of the show. The browser itself stays warm (shutdown: false).
+          await obs.request("SetInputSettings", { inputName: opts.obs.previewSource, inputSettings: { url: BLANK } }).catch(() => {});
         }
       });
     },
