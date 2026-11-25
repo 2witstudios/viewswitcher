@@ -176,7 +176,6 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     private func search() {
-        denied = false // only the latest attempt counts; didNotSearch sets it again
         browser.stop()
         browser = NetServiceBrowser()
         browser.delegate = self
@@ -203,20 +202,32 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     }
 
     /// Refused by policy (kDNSServiceErr_PolicyDenied): Local Network access is off, or its first-run prompt is
-    /// still up. Search again for a few seconds (time to answer the prompt), then report `denied` if it's still
-    /// refused. Any other failure (Wi-Fi off, the daemon) ends the search as "no Mac", not a trip to Settings.
+    /// still up (the app is inactive then). Search again until the prompt is answered, then for a few seconds
+    /// more, and report `denied` if it's still refused (or at the overall limit). Any other failure (Wi-Fi off, the daemon) ends the search as "no Mac", not a trip to Settings.
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         MainActor.assumeIsolated {
             guard errorDict[NetService.errorCode]?.intValue == -65570 else { return finish() }
             denied = true
+            // iOS's prompt makes the app inactive: the window starts only once it's answered and we're active.
+            guard UIApplication.shared.applicationState == .active else { refusedAt = nil; return retry() }
             let since = refusedAt ?? Date()
             refusedAt = since
             if Date().timeIntervalSince(since) >= promptTime { return finish() }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self, self.done != nil else { return }
-                self.search()
-            }
+            retry()
         }
+    }
+
+    private func retry() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.done != nil else { return }
+            self.search()
+        }
+    }
+
+    /// A search actually started (access allowed): only now is an earlier refusal out of date. Clearing it on
+    /// every retry instead would lose the refusal when the limit lands between a retry and its answer.
+    nonisolated func netServiceBrowserWillSearch(_ browser: NetServiceBrowser) {
+        MainActor.assumeIsolated { denied = false }
     }
 
     nonisolated func netServiceDidResolveAddress(_ sender: NetService) {

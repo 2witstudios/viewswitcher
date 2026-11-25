@@ -47,8 +47,9 @@ export function Sidebar() {
     page?.setAttribute("inert", "");
     // After the drawer has become visible (it's visibility: hidden until the open class applies).
     const frame = requestAnimationFrame(() => nav.current?.querySelector<HTMLElement>(".side-toggle")?.focus());
-    // Escape closes the drawer, unless a dialog opened from it (New org, New project) is up: that's its Escape.
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("form.modal")) setLibraryOpen(false); };
+    // Escape closes the drawer. A dialog opened from it (New org, New project, templates) takes Escape
+    // first and closes itself (useEscape in ui.tsx); this also skips while any dialog is up.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector(".modal-wrap")) setLibraryOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => {
       cancelAnimationFrame(frame);

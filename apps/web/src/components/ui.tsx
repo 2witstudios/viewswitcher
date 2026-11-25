@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { type FormEvent, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // The V of screens (scripts/brand/icons.ts writes mark.svg from the logo), white for the dark UI.
@@ -60,6 +60,8 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEscape(wrap, () => !busy && onClose());
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -75,7 +77,7 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
   };
   return (
     <Overlay>
-    <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-wrap" ref={wrap} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <form className="modal" role="dialog" aria-label={title} onSubmit={submit}>
         <h2>{title}</h2>
         {children}
@@ -88,6 +90,24 @@ export function Modal({ title, children, submitLabel, onSubmit, onClose }: {
     </div>
     </Overlay>
   );
+}
+
+/** Escape closes a dialog, like Cancel, and stops there, so the sideways library drawer behind stays open.
+ *  Only the topmost dialog (the last .modal-wrap: Edit with AI can open over this one) takes it, and never
+ *  while an input method is composing (Escape cancels the conversion there). */
+export function useEscape(wrap: RefObject<HTMLElement | null>, close: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.isComposing) return;
+      const layers = document.querySelectorAll(".modal-wrap");
+      if (!wrap.current || layers[layers.length - 1] !== wrap.current) return;
+      e.stopImmediatePropagation();
+      close();
+    };
+    // Capture, so the dialog sees it before the drawer's own Escape listener.
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  });
 }
 
 /**
