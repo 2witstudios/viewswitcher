@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
-import { DECK, useMedia } from "../lib/media";
+import { DECK, UPRIGHT, useMedia } from "../lib/media";
 import { queryClient, useLive } from "../lib/live";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
@@ -28,17 +28,17 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
-  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first;
-  // sideways (PHONE-12) it slides in over the deck. The page title opens it too (lib/library-sheet).
-  // Wider screens never see the button and always show the library.
+  // On a phone (MAC-27) the library folds into a button at the left of the top bar, so the scenes come
+  // first; open, it slides in from the left and fills the screen, upright and sideways (PHONE-12). The
+  // page title opens it too (lib/library-sheet). Wider screens never see the button and always show the library.
   const libraryOpen = useLibraryOpen();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => setLibraryOpen(false), [pathname]);
-  // Sideways the library is a modal drawer over the deck: focus moves in, the page behind is inert (so
-  // focus stays in the drawer), Escape closes it, and focus goes back to what opened it. Upright it
-  // unfolds in place and stays a plain disclosure.
+  // Open on a phone, the library is a full-screen modal: focus moves in (to its close button), the page
+  // behind is inert (so focus stays in it), Escape closes it, and focus goes back to what opened it.
   const deck = useMedia(DECK);
-  const modal = deck && libraryOpen;
+  const upright = useMedia(UPRIGHT);
+  const modal = (deck || upright) && libraryOpen;
   const nav = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!modal) return;
@@ -72,10 +72,10 @@ export function Sidebar() {
     <>
     <nav ref={nav} className={`side${libraryOpen ? " open" : ""}`} aria-label="Library" {...(modal ? { role: "dialog", "aria-modal": true } : {})}>
       <div className="brand" data-drag-region>
-        <Mark /><span>ViewSwitcher</span>
-        <button type="button" className="side-toggle" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
-          {libraryOpen ? "Close" : "Library"}
+        <button type="button" className="side-toggle" aria-label={libraryOpen ? "Close the library" : "Library"} aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
+          {libraryOpen ? <CloseIcon /> : <LibraryIcon />}
         </button>
+        <Mark /><span>ViewSwitcher</span>
       </div>
       <div className="side-body" id="side-body">
       <OrgSwitcher current={org} />
@@ -141,11 +141,25 @@ export function Sidebar() {
         />
       )}
     </nav>
-    {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" tabIndex={-1} onClick={() => setLibraryOpen(false)} />}
-    {/* Sideways, on a screen with no page header to open it from (styles.css shows it only there, and
-        hides it while the library is open). Always mounted, so closing the drawer can focus it again. */}
-    <button type="button" className="deck-library" aria-controls="side-body" aria-expanded={libraryOpen} onClick={() => setLibraryOpen(true)}>Library</button>
+    {/* Sideways, the deck has no top bar: this opens the library from the top left (styles.css shows it only
+        there, and hides it while the library is open). Always mounted, so closing it can focus this again. */}
+    <button type="button" className="deck-library" aria-label="Library" aria-controls="side-body" aria-expanded={libraryOpen} onClick={() => setLibraryOpen(true)}><LibraryIcon /></button>
     </>
+  );
+}
+
+/** A sidebar: the phone's button that opens the library. */
+function LibraryIcon() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16M5.5 8h1M5.5 11h1M5.5 14h1" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
   );
 }
 
