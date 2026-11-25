@@ -39,6 +39,10 @@ The homepage, `/download`, `/setup` (OBS setup guide), `/ipad`, `/church-livestr
 
 App screenshots are real: `bun scripts/app-shots.ts` runs the switcher on port 7434 (OBS offline, USB off) against the scratch library, makes Grace Community a Sunday stream, and saves the switcher, the editor and the Connect OBS card to `src/assets/app/`. The iPad ones are the iPad app's App Store screenshots.
 
+## Templates and template packs (SITE-26 · SITE-29)
+
+`/templates` is a gallery of the six example shows' template sets; `/templates/<slug>` is one page per set (`slug`, `goodFor` and each view's `use` line are in `src/data/shows.ts`, fonts come from the set's `theme.css`, photo credits from `CREDITS.md`). `bun run build` first runs `scripts/packs.ts`, which builds each set's template pack with the app's own exporter (`apps/server/src/export-packs.ts`, the same as `bun run packs:export`), reads every zip back, checks it with the shared validator (a bad pack fails the build), and writes `public/packs/<id>.zip` (gitignored). Vercel serves them as `application/zip`; its install includes `@viewswitcher/server` so the exporter resolves. `PACK_INSTALL_VERSION` in `site.config.ts`: the first app release that installs packs (null: "comes in the next update").
+
 ## Demo video (SITE-11)
 
 Record into **`apps/site/public/demo/viewswitcher-demo.mp4`**: 1920×1080 (16:9), H.264 MP4, 10–20 s, no audio track, loops cleanly, ideally under 4 MB. Build again and the hero plays it (autoplay, muted, looped) in the program monitor, with a rendered scene as the poster, in place of the clickable covers.

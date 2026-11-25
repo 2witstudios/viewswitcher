@@ -1,0 +1,38 @@
+---
+// One template set in a gallery: its cover, name, kind, number of views, and Download.
+import ViewFrame from "./ViewFrame.astro";
+import Icon from "./Icon.astro";
+import type { Show } from "../data/shows";
+import { packOf, setPath } from "../lib/templates";
+interface Props { show: Show; sizes?: string; heading?: "h2" | "h3" }
+const { show, sizes = "(min-width: 64rem) 24rem, (min-width: 40rem) 45vw, calc(100vw - 2.5rem)", heading = "h2" } = Astro.props;
+const pack = packOf(show);
+const H = heading;
+---
+<article class="card">
+  <a class="cover" href={setPath(show)} aria-label={`${show.name}: see the template set`} tabindex="-1">
+    <ViewFrame show={show.id} file="main" alt="" sizes={sizes} widths={[480, 720, 960]} />
+  </a>
+  <H class="name"><a href={setPath(show)}>{show.name}</a></H>
+  <p class="meta">{show.kind} templates · {show.views.length} views</p>
+  <p class="blurb">{show.blurb}</p>
+  <div class="row">
+    <a class="dl" href={pack.href} download aria-label={`Download the ${show.name} template pack (.zip)`}><Icon name="download" />Download</a>
+    <a class="more" href={setPath(show)} aria-label={`See all views in ${show.name}`}>See all views</a>
+  </div>
+</article>
+<style>
+  .card { display: grid; gap: 0.5rem; align-content: start; }
+  .cover { display: block; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px -28px #16181e80; }
+  .cover :global(.frame) { border-radius: 12px; }
+  .name { font-size: clamp(1.25rem, 2vw, 1.5rem); margin-top: 0.6rem; }
+  .name a { text-decoration: none; }
+  .name a:hover { text-decoration: underline; }
+  .meta { font-size: 0.9375rem; font-weight: 600; color: var(--ink-3); }
+  .blurb { color: var(--ink-2); max-width: 32rem; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin-top: 0.4rem; }
+  .dl { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.6rem 1rem; border-radius: 10px; border: 1px solid var(--ink); font: 600 0.9375rem/1 var(--text); text-decoration: none; color: var(--ink); }
+  .dl :global(svg) { width: 1rem; height: 1rem; }
+  .dl:hover { background: var(--ink); color: var(--paper); }
+  .more { color: var(--ink-2); font-size: 0.9375rem; }
+</style>

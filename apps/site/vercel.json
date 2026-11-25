@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "astro",
-  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site",
+  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site --filter @viewswitcher/server",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
   "cleanUrls": true,
@@ -31,6 +31,23 @@
     }
   ],
   "headers": [
+    {
+      "source": "/packs/(.*)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/zip"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
     {
       "source": "/_astro/(.*)",
       "headers": [

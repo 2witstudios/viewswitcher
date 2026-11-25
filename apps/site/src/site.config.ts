@@ -11,9 +11,13 @@ const MAC_APP_RELEASED = true;
 // A build can override it with SITE_IPAD_APP_URL.
 const IPAD_APP_URL: string | null = null;
 
-// THE TEMPLATES SWITCH (SITE-26): the page where the example shows' template sets download free, once it's live.
-// Before: the show cards say "Download coming soon" and link /download. After: "Download these templates", linking here.
-const TEMPLATE_DOWNLOADS_URL: string | null = null;
+// THE TEMPLATES SWITCH (SITE-26): where the example shows' template packs download free.
+// Set: the show cards say "Download these templates" and link each set's page. Null: "Download coming soon".
+const TEMPLATE_DOWNLOADS_URL: string | null = "/templates";
+
+// THE PACK INSTALL SWITCH: the first ViewSwitcher release that installs template packs (EDIT-24 shipped after 1.0.0).
+// Null: the template pages say installing packs comes with the next update. Set (e.g. "1.1.0"): "Needs ViewSwitcher 1.1.0 or later."
+const PACK_INSTALL_VERSION: string | null = null;
 
 export const site = {
   url: "https://viewswitcher.com",
@@ -28,6 +32,7 @@ export const site = {
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),
   ipadApp: ipadApp(process.env.SITE_IPAD_APP_URL || IPAD_APP_URL),
   templateDownloads: process.env.SITE_TEMPLATE_DOWNLOADS_URL || TEMPLATE_DOWNLOADS_URL,
+  packInstallVersion: process.env.SITE_PACK_INSTALL_VERSION || PACK_INSTALL_VERSION,
 };
 
 export const cta = ctas(site);
