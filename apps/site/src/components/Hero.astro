@@ -1,12 +1,12 @@
 ---
 import Cta from "./Cta.astro";
 import Program from "./Program.astro";
-import { descriptor } from "../site.config";
+import { heroLine } from "../site.config";
 ---
 <section class="hero wrap" aria-labelledby="hero-title">
   <div class="copy">
     <h1 id="hero-title">Look professional when you go live.</h1>
-    <p class="lede">{descriptor}</p>
+    <p class="lede">{heroLine}</p>
     <Cta />
   </div>
   <Program />
@@ -15,7 +15,7 @@ import { descriptor } from "../site.config";
   .hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2.25rem, 4vw, 2.75rem); padding-block: clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem); }
   .copy { display: grid; justify-items: center; gap: 1.35rem; text-align: center; }
   h1 { font-size: clamp(2.6rem, 6.4vw, 4.75rem); max-width: 11ch; }
-  .lede { font-size: clamp(1.125rem, 1.6vw, 1.25rem); color: var(--ink-2); margin-inline: auto; }
+  .lede { font-size: clamp(1.125rem, 1.6vw, 1.25rem); color: var(--ink-2); margin-inline: auto; max-width: 40rem; }
   .copy :global(.actions) { justify-content: center; margin-top: 0.4rem; width: 100%; }
   /* Phones: a wide, easy-to-hit button. */
   @media (max-width: 40rem) { .copy :global(.btn-primary) { width: min(100%, 22rem); justify-content: center; } }

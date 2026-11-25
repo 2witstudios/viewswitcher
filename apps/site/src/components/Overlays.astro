@@ -1,0 +1,63 @@
+---
+// SITE-27: where the overlays come from. Three ways, in this order: a style, editing on screen, an AI assistant (optional).
+import { Picture } from "astro:assets";
+import ViewFrame from "./ViewFrame.astro";
+import editor from "../assets/app/editor.webp";
+import { site } from "../site.config";
+const downloads = site.styleDownloads;
+---
+<section class="section" id="overlays" aria-labelledby="overlays-title">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="overlays-title">Where your overlays come from</h2>
+      <p class="lede">Every view you switch to is an overlay: the titles, the countdown, the frames around your camera. You don't have to design any of them.</p>
+    </div>
+    <ol class="ways">
+      <li>
+        <div class="vis styles" aria-hidden="true">
+          <ViewFrame show="fullcount" file="main" alt="" sizes="(min-width: 60rem) 11rem, 30vw" widths={[240, 360, 480]} />
+          <ViewFrame show="nova" file="main" alt="" sizes="(min-width: 60rem) 11rem, 30vw" widths={[240, 360, 480]} />
+          <ViewFrame show="kitchen" file="starting-soon" alt="" sizes="(min-width: 60rem) 11rem, 30vw" widths={[240, 360, 480]} />
+          <ViewFrame show="grace" file="main" alt="" sizes="(min-width: 60rem) 11rem, 30vw" widths={[240, 360, 480]} />
+        </div>
+        <h3><span class="n">1</span>Start from a style</h3>
+        <p>ViewSwitcher comes with a designed set of views, from the countdown to the goodbye. Your show's name, colors and titles fill in. {downloads
+          ? <>More styles, like the <a href="#shows">six example shows</a>, are free to <a href={downloads}>download</a>.</>
+          : <>The styles of the <a href="#shows">six example shows</a> below will be free to download too.</>}</p>
+      </li>
+      <li>
+        <div class="vis shot">
+          <Picture src={editor} alt="ViewSwitcher's editor on a sermon view: the scripture and the sermon title are text you can retype, and the camera box has a dashed outline you can drag." widths={[480, 720, 960]} sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" formats={["webp"]} loading="lazy" decoding="async" />
+        </div>
+        <h3><span class="n">2</span>Make it yours on screen</h3>
+        <p>Retype a title, drag and resize the boxes, add your logo or a photo. It works while you're live, too: viewers see the change as you make it.</p>
+      </li>
+      <li>
+        <div class="vis ask on-dark" aria-hidden="true">
+          <p class="bubble">Make me a halftime screen for tonight's show.</p>
+          <ViewFrame show="fullcount" file="brb" alt="" sizes="(min-width: 60rem) 16rem, 70vw" widths={[320, 480, 640]} class="result" />
+        </div>
+        <h3><span class="n">3</span>Or describe a new one</h3>
+        <p>Ask an AI assistant like Claude: "Make me a halftime screen for tonight's show." The new view appears in ViewSwitcher, in your show's style, ready to edit. It's optional; you never need AI.</p>
+      </li>
+    </ol>
+    <p class="why"><b>Why this works:</b> every overlay is a small web page. That's why overlays can animate, count down and show live information, why you can edit them right on screen, and why an AI assistant can make a new one in seconds.</p>
+  </div>
+</section>
+<style>
+  .ways { list-style: none; margin: 0; padding: 0; display: grid; gap: 3rem 2rem; }
+  @media (min-width: 60rem) { .ways { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .ways li { display: grid; gap: 0.85rem; align-content: start; }
+  .ways p { color: var(--ink-2); max-width: 30rem; }
+  h3 { display: flex; align-items: baseline; gap: 0.6rem; margin-top: 0.75rem; }
+  .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
+  .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; background: var(--raised); border: 1px solid var(--rule); padding: 0.6rem; align-content: center; }
+  .styles :global(.frame) { border-radius: 6px; }
+  .shot :global(img) { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+  .ask { background: var(--monitor); padding: 1rem; display: grid; gap: 0.7rem; align-content: center; justify-items: end; }
+  .bubble { margin: 0; justify-self: start; max-width: 85%; background: var(--monitor-2); color: var(--on-monitor) !important; font-size: 0.875rem; line-height: 1.35; padding: 0.55rem 0.8rem; border-radius: 12px 12px 12px 4px; }
+  .ask :global(.result) { width: 72%; border-radius: 6px; }
+  .why { margin-top: 2.5rem; border-top: 1px solid var(--rule); padding-top: 1.5rem; color: var(--ink-2); max-width: 48rem; }
+  .why b { color: var(--ink); font-weight: 600; }
+</style>

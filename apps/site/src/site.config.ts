@@ -11,6 +11,10 @@ const MAC_APP_RELEASED = true;
 // A build can override it with SITE_IPAD_APP_URL.
 const IPAD_APP_URL: string | null = null;
 
+// THE STYLES SWITCH (SITE-26): the page where the example shows' styles download free, once it's live.
+// Before: the show cards say the style is free to download soon and link /download. After: they link here.
+const STYLE_DOWNLOADS_URL: string | null = null;
+
 export const site = {
   url: "https://viewswitcher.com",
   name: "ViewSwitcher",
@@ -23,6 +27,7 @@ export const site = {
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),
   ipadApp: ipadApp(process.env.SITE_IPAD_APP_URL || IPAD_APP_URL),
+  styleDownloads: process.env.SITE_STYLE_DOWNLOADS_URL || STYLE_DOWNLOADS_URL,
 };
 
 export const cta = ctas(site);
@@ -30,6 +35,8 @@ export const github = `https://github.com/${site.repo}`;
 export const releases = `${github}/releases`;
 /** The persistent descriptor (SITE-19): what ViewSwitcher is, in the words people search for. */
 export const descriptor = "The free, one-click OBS scene switcher for Mac.";
+/** The hero's line under the headline (SITE-27): the descriptor, and where the overlays come from. */
+export const heroLine = "The free OBS scene switcher for Mac, with ready-made overlays you edit right on screen or create with AI.";
 
 /** The Mac app as schema.org sees it, for the homepage and /download (free, macOS 14+). */
 export const macAppSchema = (path: string) => softwareApp({
