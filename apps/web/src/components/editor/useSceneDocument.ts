@@ -3,12 +3,13 @@
 // when it changes somewhere else (an agent, another device).
 import { applyEdits, changedElements, scanElements, toBase } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, SceneConflict } from "../../lib/api";
 import { useLive } from "../../lib/live";
 import { createSceneSaver } from "../../lib/scene-saver";
 import { toast } from "../ui";
 import { canReloadIn } from "./mode";
+import { newestOnly } from "./newest";
 import type { ModeStore } from "./useMode";
 import type { UndoEntry } from "./useUndo";
 
@@ -48,10 +49,6 @@ export function useSceneDocument(path: string, opts: {
   const layout = useRef(0);
   /** A 409 whose latest version hasn't loaded yet. */
   const pendingConflict = useRef<{ edits: SceneEdit[]; prev: SceneBase } | null>(null);
-  // Loads can overlap (a conflict, Reload, a change made elsewhere): the newest one wins, and an
-  // older one that answers later waits for it instead of putting back an older version.
-  const loadToken = useRef(0);
-  const latestLoad = useRef<Promise<SceneBase | null>>(Promise.resolve(null));
   /** A change made elsewhere is waiting until the editor is free to load it. */
   const outside = useRef(false);
   const outsideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -70,39 +67,35 @@ export function useSceneDocument(path: string, opts: {
   };
 
   /**
-   * Read the file and show it. With `ifChanged`, only when its hash isn't the base's (the editor's
+   * Read the file and show it. Loads can overlap (a conflict, Reload, a change made elsewhere): the
+   * newest one wins (see newest.ts). With `ifChanged`, only when its hash isn't the base's (the editor's
    * own saves come back as changes too) and the editor is still free to.
    */
-  const load = useCallback((ifChanged?: { stillFree: () => boolean }): Promise<SceneBase | null> => {
-    const token = ++loadToken.current;
-    const run = (async () => {
-      try {
-        const b = toBase(await api.sceneForEdit(path));
-        if (token !== loadToken.current) return latestLoad.current;
-        if (ifChanged) {
-          if (b.hash === baseRef.current?.hash) return baseRef.current;
-          // Someone started something while it was read: try again once they're done.
-          if (!ifChanged.stillFree()) {
-            outside.current = true;
-            outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS);
-            return baseRef.current;
-          }
+  const load = useMemo(() => newestOnly(async (isNewest, ifChanged?: { stillFree: () => boolean }): Promise<SceneBase | null> => {
+    try {
+      const b = toBase(await api.sceneForEdit(path));
+      if (!isNewest()) return null;
+      if (ifChanged) {
+        if (b.hash === baseRef.current?.hash) return baseRef.current;
+        // Someone started something while it was read: try again once they're done.
+        if (!ifChanged.stillFree()) {
+          outside.current = true;
+          outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS);
+          return baseRef.current;
         }
-        apply(b);
-        return b;
-      } catch (e) {
-        if (token !== loadToken.current) return latestLoad.current;
-        // With a scene already open, a failed reload is a message, not the end of the editor.
-        if (baseRef.current) {
-          o.current.onStuck();
-          setStuck(`Couldn't read the scene again: ${(e as Error).message}`);
-        } else setLoadError((e as Error).message);
-        return null;
       }
-    })();
-    latestLoad.current = run;
-    return run;
-  }, [path]);
+      apply(b);
+      return b;
+    } catch (e) {
+      if (!isNewest()) return null;
+      // With a scene already open, a failed reload is a message, not the end of the editor.
+      if (baseRef.current) {
+        o.current.onStuck();
+        setStuck(`Couldn't read the scene again: ${(e as Error).message}`);
+      } else setLoadError((e as Error).message);
+      return null;
+    }
+  }), [path]);
   useEffect(() => void load(), [load]);
 
   // Save edits one at a time against the version their ids came from (see lib/scene-saver.ts).

@@ -165,6 +165,8 @@ export function listenWhileTyping(d: Document | null, id: number, on: { input: (
 
 // ---------------------------------------------------------------- adding and deleting
 
+/** An element's tag as the file has it: ?inert serves every <meta> as <link data-vs-meta> (scene-sandbox.ts). */
+const tagOf = (n: HTMLElement) => ("vsMeta" in n.dataset ? "meta" : n.tagName.toLowerCase());
 /**
  * How the frame's ids line up with version `b`: how many of `b`'s elements it shows, and whether
  * every id it has names one of them, once, with the same tag.
@@ -175,7 +177,7 @@ export function idCheck(d: Document, b: SceneBase): { shown: number; fits: boole
   for (const n of d.querySelectorAll<HTMLElement>("[data-vs]")) {
     const id = Number(n.dataset.vs);
     const el = Number.isInteger(id) ? b.els[id] : undefined;
-    if (!el || seen.has(id) || el.tag !== n.tagName.toLowerCase()) fits = false;
+    if (!el || seen.has(id) || el.tag !== tagOf(n)) fits = false;
     seen.add(id);
   }
   return { shown: seen.size, fits };
