@@ -11,14 +11,14 @@ const mediaImages = import.meta.glob<{ default: ImageMetadata }>("../assets/medi
 
 /** What fills the device boxes: photos (credited in CREDITS.md) and rendered screen shares. */
 const MEDIA: Record<string, { focus: string; alt: string }> = {
-  presenter: { focus: "50% 30%", alt: "a presenter smiling at the camera" },
-  cohost: { focus: "30% 40%", alt: "a guest talking to the camera" },
+  cook: { focus: "75% 35%", alt: "a cook smiling as she stirs a pot at the stove" },
+  "guest-cook": { focus: "62% 40%", alt: "a guest cook flambéing a pan at the stove" },
+  dough: { focus: "50% 50%", alt: "bread dough rising in a lined pot, up close" },
   teacher: { focus: "62% 40%", alt: "a teacher talking to the camera" },
   painting: { focus: "50% 50%", alt: "a watercolor painting in progress, from above" },
   pastor: { focus: "52% 30%", alt: "a pastor preaching with a microphone" },
   host: { focus: "42% 30%", alt: "a podcast host at a microphone" },
   guest: { focus: "68% 35%", alt: "a podcast guest at a microphone" },
-  "screen-design": { focus: "50% 50%", alt: "a design app on the screen share" },
   "screen-sermon": { focus: "50% 50%", alt: "a sermon slide on the screen share" },
 };
 

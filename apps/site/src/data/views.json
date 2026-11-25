@@ -1,10 +1,10 @@
 {
-  "framewell-starting-soon": {
-    "ground": "#0e1116",
+  "kitchen-starting-soon": {
+    "ground": "#13302e",
     "slots": []
   },
-  "framewell-talking-head": {
-    "ground": "#0e1116",
+  "kitchen-talking-head": {
+    "ground": "#13302e",
     "slots": [
       {
         "name": "Camera",
@@ -16,8 +16,8 @@
       }
     ]
   },
-  "framewell-teaching": {
-    "ground": "#0e1116",
+  "kitchen-teaching": {
+    "ground": "#13302e",
     "slots": [
       {
         "name": "Screen",
@@ -37,8 +37,8 @@
       }
     ]
   },
-  "framewell-interview": {
-    "ground": "#0e1116",
+  "kitchen-interview": {
+    "ground": "#13302e",
     "slots": [
       {
         "name": "Camera",
@@ -58,12 +58,12 @@
       }
     ]
   },
-  "framewell-brb": {
-    "ground": "#0e1116",
+  "kitchen-brb": {
+    "ground": "#13302e",
     "slots": []
   },
-  "framewell-ending": {
-    "ground": "#0e1116",
+  "kitchen-ending": {
+    "ground": "#13302e",
     "slots": []
   },
   "watercolor-starting-soon": {

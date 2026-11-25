@@ -35,22 +35,18 @@ bun run start</code></pre>
   </div>
 </section>
 <style>
-  .dark { background: var(--monitor); color: var(--on-monitor); }
-  .dark h2, .dark h3 { color: var(--on-monitor); }
-  .dark .lede { color: var(--on-monitor-2); }
-  .dark :global(.btn-primary) { background: var(--on-monitor); color: var(--ink); }
-  .dark :global(.btn-primary:hover) { background: #ffffff; }
+  .dark { background: var(--monitor); border-block: 1px solid var(--rule); }
   .grid { display: grid; gap: 2.5rem; align-items: center; }
   @media (min-width: 60rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2.5rem 4rem; } .dev { grid-column: 1 / -1; } }
   .copy { display: grid; gap: 1.5rem; }
-  .small { font-size: 0.9375rem; color: var(--on-monitor-2); }
-  .needs { display: grid; gap: 1rem; background: var(--monitor-2); border-radius: 12px; padding: 1.5rem 1.75rem; }
-  .needs ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; color: var(--on-monitor-2); }
-  .needs b { color: var(--on-monitor); font-weight: 600; }
-  .dev { border-top: 1px solid #ffffff1f; padding-top: 1.25rem; color: var(--on-monitor-2); font-size: 0.9375rem; }
-  .dev summary { cursor: pointer; color: var(--on-monitor); font-weight: 600; }
+  .small { font-size: 0.9375rem; color: var(--ink-2); }
+  .needs { display: grid; gap: 1rem; background: var(--raised); border: 1px solid var(--rule); border-radius: 12px; padding: 1.5rem 1.75rem; }
+  .needs ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.55rem; color: var(--ink-2); }
+  .needs b { color: var(--ink); font-weight: 600; }
+  .dev { border-top: 1px solid var(--rule); padding-top: 1.25rem; color: var(--ink-2); font-size: 0.9375rem; }
+  .dev summary { cursor: pointer; color: var(--ink); font-weight: 600; }
   .dev-body { display: grid; gap: 1rem; padding-top: 1rem; max-width: 44rem; }
-  pre { margin: 0; background: var(--monitor-2); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre { margin: 0; background: var(--monitor); border: 1px solid var(--rule); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
   .dev, .dev-body { min-width: 0; }
   .dev code { overflow-wrap: anywhere; }
   .dev code { color: var(--on-monitor); }

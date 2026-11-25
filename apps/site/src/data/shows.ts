@@ -10,16 +10,16 @@ export type Show = { id: string; name: string; initial: string; kind: string; gr
 
 export const SHOWS: Show[] = [
   {
-    id: "framewell", name: "Framewell Live", initial: "F", kind: "Product demo and webinar",
-    ground: "#0e1116", accent: "#5ad1a8",
-    theme: { display: "Inter Tight", body: "Inter", panel: "#171b23", line: "#2a303c", text: "#f2f4f7", muted: "#9aa3b2", onAccent: "#0b1512" },
-    text: { topic: "What's new in Framewell 4", upNext: "What's new in Framewell 4", note: "Ask questions in chat. We answer them live at the end.", nextTime: "Next week: designing with components", starting: "Starting soon.", brb: "Quick break. Back in two minutes.", host: "Sam Ortiz · Product lead", guest: "Lena Brandt · Customer" },
-    blurb: "The product on the screen share, you beside it, and a customer in the interview view.",
+    id: "kitchen", name: "Saltwater Kitchen", initial: "S", kind: "Cooking show",
+    ground: "#13302e", accent: "#f2b544",
+    theme: { display: "Outfit", body: "Figtree", panel: "#1a3f3c", line: "#2a5652", text: "#fbf4e6", muted: "#b9cbc4", onAccent: "#2a1d05" },
+    text: { topic: "Ep. 31 · Sunday bread, start to finish", upNext: "Ep. 31 · Sunday bread, start to finish", note: "You'll need: 500 g flour, 350 g water, 10 g salt, a pinch of yeast.", nextTime: "Next Sunday: fresh pasta by hand", starting: "The kitchen opens soon.", brb: "The dough's resting. Back in five.", host: "Rosa Delgado · Your cook", guest: "Theo Marchetti · Guest cook" },
+    blurb: "The cook at the stove, the pot up close in its own box, and a guest cook in the interview view.",
     views: [
       { file: "starting-soon", name: "Starting soon" },
-      { file: "talking-head", name: "Welcome", media: { Camera: "presenter" } },
-      { file: "teaching", name: "Demo", media: { Screen: "screen-design", Camera: "presenter" } },
-      { file: "interview", name: "Interview", media: { Camera: "presenter", Guest: "cohost" } },
+      { file: "talking-head", name: "Welcome", media: { Camera: "cook" } },
+      { file: "teaching", name: "Cook along", media: { Screen: "dough", Camera: "cook" } },
+      { file: "interview", name: "Guest cook", media: { Camera: "cook", Guest: "guest-cook" } },
       { file: "brb", name: "Be right back" },
       { file: "ending", name: "Thanks for watching" },
     ],

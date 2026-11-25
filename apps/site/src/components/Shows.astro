@@ -3,8 +3,8 @@
 // restyled starter kit (scripts/library.ts, scripts/shots.ts).
 import ViewFrame from "./ViewFrame.astro";
 import { SHOWS } from "../data/shows";
-const order = ["watercolor", "grace", "longtable", "framewell"];
-const lead: Record<string, string> = { watercolor: "teaching", grace: "teaching", longtable: "interview", framewell: "teaching" };
+const order = ["kitchen", "watercolor", "grace", "longtable"];
+const lead: Record<string, string> = { watercolor: "teaching", grace: "teaching", longtable: "interview", kitchen: "teaching" };
 const shows = order.map((id) => SHOWS.find((s) => s.id === id)!);
 ---
 <section class="section" id="shows" aria-labelledby="shows-title">
@@ -33,7 +33,7 @@ const shows = order.map((id) => SHOWS.find((s) => s.id === id)!);
   .shows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4rem 2.5rem; }
   @media (min-width: 48rem) { .shows { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .shows li { display: grid; gap: 0.6rem; align-content: start; }
-  .shows :global(.main) { border-radius: 12px; box-shadow: 0 24px 48px -28px #16181e80; }
+  .shows :global(.main) { border-radius: 12px; box-shadow: 0 0 0 1px #ffffff14, 0 24px 48px -28px #000000cc; }
   .strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin: 0.4rem 0 0.8rem; }
   .strip figure { margin: 0; display: grid; gap: 0.35rem; }
   .strip :global(.mini) { border-radius: 6px; }

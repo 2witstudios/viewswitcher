@@ -20,7 +20,7 @@ await writeFile(join(pub, "favicon.svg"), favicon);
 const tile = (size: number) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><rect width="24" height="24" fill="#16181e"/><g transform="translate(2.4 2.4) scale(.8)">${mark("#f4f5f7", "#a3a8b5", "#16181e")}</g></svg>`);
 await sharp(tile(180)).png().toFile(join(pub, "apple-touch-icon.png"));
 // favicon.ico: a single 32×32 PNG wrapped in an ICO header
-const png32 = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">${mark("#16181e", "#8b909c", "#ffffff")}</svg>`)).png().toBuffer();
+const png32 = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">${mark("#f4f5f7", "#a3a8b5", "#0f1115")}</svg>`)).png().toBuffer();
 const ico = Buffer.alloc(22);
 ico.writeUInt16LE(0, 0); ico.writeUInt16LE(1, 2); ico.writeUInt16LE(1, 4);
 ico.writeUInt8(32, 6); ico.writeUInt8(32, 7); ico.writeUInt16LE(1, 10); ico.writeUInt16LE(32, 12);
@@ -28,8 +28,8 @@ ico.writeUInt32LE(png32.length, 14); ico.writeUInt32LE(22, 18);
 await writeFile(join(pub, "favicon.ico"), new Uint8Array(Buffer.concat([ico, png32])));
 
 // ---- social card
-const id = "framewell-teaching";
-const spec = SHOWS.find((x) => x.id === "framewell")!.views.find((v) => v.file === "teaching")!;
+const id = "kitchen-teaching";
+const spec = SHOWS.find((x) => x.id === "kitchen")!.views.find((v) => v.file === "teaching")!;
 const view = (data as Record<string, { ground: string; slots: { name: string; x: number; y: number; w: number; h: number; radius: string }[] }>)[id]!;
 const shot = await b64(join(site, `src/assets/views/${id}.webp`));
 const pct = (v: number, of: number) => `${(v / of) * 100}%`;
@@ -41,12 +41,12 @@ const html = `<!doctype html><html><head><style>
 @font-face { font-family: SG; src: url(data:font/woff2;base64,${await font("space-grotesk", "space-grotesk-latin-wght-normal.woff2")}) format("woff2"); font-weight: 300 700; }
 @font-face { font-family: IS; src: url(data:font/woff2;base64,${await font("instrument-sans", "instrument-sans-latin-wght-normal.woff2")}) format("woff2"); font-weight: 400 700; }
 * { box-sizing: border-box; margin: 0; }
-body { width: 1200px; height: 630px; background: #fff; color: #16181e; font-family: IS; display: grid; grid-template-columns: 470px 1fr; gap: 40px; padding: 64px; overflow: hidden; }
+body { width: 1200px; height: 630px; background: #0f1115; color: #f3f4f6; font-family: IS; display: grid; grid-template-columns: 470px 1fr; gap: 40px; padding: 64px; overflow: hidden; }
 .copy { display: flex; flex-direction: column; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 12px; font: 700 30px/1 SG; letter-spacing: -0.02em; }
 h1 { font: 700 54px/1.04 SG; letter-spacing: -0.035em; }
-p { font-size: 22px; color: #4b505c; }
-.mon { align-self: center; background: #0b0c0f; border-radius: 20px; padding: 10px; }
+p { font-size: 22px; color: #b9bec8; }
+.mon { align-self: center; background: #1c1f26; border-radius: 20px; padding: 10px; box-shadow: 0 0 0 1px #ffffff24; }
 .bar { color: #f4f5f7; font: 600 17px IS; display: flex; gap: 10px; align-items: center; padding: 4px 8px 12px; }
 .dot { width: 11px; height: 11px; border-radius: 50%; background: #ff4d4f; }
 .frame { position: relative; width: 100%; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: ${view.ground}; }
@@ -54,11 +54,11 @@ p { font-size: 22px; color: #4b505c; }
 .dev { position: absolute; background: center/cover; }
 </style></head><body>
 <div class="copy">
-  <div class="brand"><svg width="40" height="40" viewBox="0 0 24 24">${mark("#16181e", "#8b909c", "#ffffff")}</svg>ViewSwitcher</div>
+  <div class="brand"><svg width="40" height="40" viewBox="0 0 24 24">${mark("#f4f5f7", "#a3a8b5", "#0f1115")}</svg>ViewSwitcher</div>
   <h1>Look professional when you go live.</h1>
   <p>A one-click scene switcher for OBS. Free for Mac.</p>
 </div>
-<div class="mon"><div class="bar"><span class="dot"></span>On air <span style="color:#a3a8b5;font-weight:500">Demo</span></div><div class="frame">${devices}</div></div>
+<div class="mon"><div class="bar"><span class="dot"></span>On air <span style="color:#a3a8b5;font-weight:500">${spec.name}</span></div><div class="frame">${devices}</div></div>
 </body></html>`;
 const browser = await chromium.launch({ channel: "chrome" });
 try {

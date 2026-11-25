@@ -1,13 +1,14 @@
-/* viewswitcher.com — graphite and white; red only for on air. */
+/* viewswitcher.com — dark graphite with near-white ink; red only for on air. */
 :root {
-  --paper: #ffffff;
-  --mist: #f3f4f6;      /* alternate section ground */
-  --rule: #dfe2e7;
-  --ink: #16181e;       /* graphite: text, buttons */
-  --ink-2: #4b505c;     /* secondary text (8:1 on white) */
-  --ink-3: #6a6f7b;     /* quiet labels (5:1 on white) */
-  --monitor: #0b0c0f;   /* the program monitor and the switcher's own ground */
-  --monitor-2: #1c1f27;
+  --paper: #0f1115;     /* page ground: deep graphite */
+  --mist: #15181e;      /* alternate section ground */
+  --raised: #1a1d24;    /* cards and panels that sit on the page */
+  --rule: #2b2f38;
+  --ink: #f3f4f6;       /* near-white: text, the primary button */
+  --ink-2: #b9bec8;     /* secondary text (7:1+ on paper and mist) */
+  --ink-3: #9197a3;     /* quiet labels (4.5:1+ on paper, mist and raised) */
+  --monitor: #0a0b0e;   /* the program monitor and the switcher's own ground */
+  --monitor-2: #1f222a;
   --on-monitor: #f4f5f7;
   --on-monitor-2: #a3a8b5;
   --live: #ff4d4f;      /* tally: on air only */
@@ -20,7 +21,7 @@
   /* viewport-fit=cover: keep content clear of the notch, rounded corners and home indicator. */
   --safe-l: max(var(--gutter), env(safe-area-inset-left, 0px));
   --safe-r: max(var(--gutter), env(safe-area-inset-right, 0px));
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -54,14 +55,14 @@ h3 { font-size: 1.25rem; line-height: 1.25; letter-spacing: -0.015em; font-weigh
 .skip { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: -4rem; background: var(--ink); color: var(--paper); padding: 0.6rem 1rem; border-radius: 8px; z-index: 10; }
 .skip:focus { top: max(1rem, env(safe-area-inset-top, 0px)); }
 
-/* Buttons: one primary (graphite), one plain link-button. */
+/* Buttons: one primary (light on the dark page), one plain link-button. */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.5rem; }
 .btn {
   display: inline-flex; align-items: center; gap: 0.6rem; min-height: 3rem; padding: 0 1.35rem;
   border-radius: 10px; font: 600 1rem/1 var(--text); text-decoration: none; white-space: nowrap;
 }
 .btn-primary { background: var(--ink); color: var(--paper); }
-.btn-primary:hover { background: #2a2d36; }
+.btn-primary:hover { background: #ffffff; }
 .btn-secondary { padding-inline: 0.25rem; color: var(--ink); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.25em; }
 .btn svg { width: 1.15rem; height: 1.15rem; flex: none; }
 
