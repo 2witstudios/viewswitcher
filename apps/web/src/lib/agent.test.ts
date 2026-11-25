@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentClients, AgentStatus } from "@viewswitcher/shared";
-import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, otherPortNote, SETUP_GUIDE_URL, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
+import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, otherPortNote, pendingChoice, type PendingChoice, SETUP_GUIDE_URL, shownChoice, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
 
 const NOW = 1_800_000_000_000;
 const agent = (lastSeen: number | null, client: string | null = "claude-code"): AgentStatus => ({ onAir: "not-live", lastSeen, client });
@@ -72,6 +72,45 @@ describe("the on-air setting's requests (CodeRabbit)", () => {
     await run(post("not-live", 5, true)).catch(() => {});
     await run(post("never", 1));
     expect(server.slice(-2)).toEqual(["not-live", "never"]);
+  });
+});
+
+describe("the radios while a change is on its way (CodeRabbit)", () => {
+  test("Never → click Always → click Never before Always is published: the second click is a change, it's sent, and Never wins", async () => {
+    // The sheet's flow without React: the radios show shownChoice; a click on a radio that isn't
+    // shown fires onChange, which picks, sends in order, and marks its request done.
+    let published: "never" | "not-live" | "always" = "never";
+    let pending: PendingChoice = null;
+    let id = 0;
+    const run = inOrder();
+    const server: string[] = [];
+    const sent: Promise<void>[] = [];
+    const click = (v: typeof published) => {
+      if (shownChoice(pending, published) === v) return; // a radio that's already shown fires no onChange
+      const mine = ++id;
+      pending = pendingChoice(pending, { t: "pick", value: v, id: mine });
+      sent.push(run(async () => {
+        await Bun.sleep(v === "always" ? 20 : 1);
+        server.push(v);
+        published = v; // the server publishes what it wrote
+      }).finally(() => (pending = pendingChoice(pending, { t: "done", id: mine }))));
+    };
+    click("always");
+    expect(shownChoice(pending, published)).toBe("always");
+    click("never"); // before Always is published: the radios show Always, so this is a change
+    expect(shownChoice(pending, published)).toBe("never");
+    await Promise.all(sent);
+    expect(server).toEqual(["always", "never"]);
+    expect(published).toBe("never");
+    expect(pending).toBeNull();
+    expect(shownChoice(pending, published)).toBe("never");
+  });
+  test("an earlier request finishing doesn't clear a later pick", () => {
+    let p = pendingChoice(null, { t: "pick", value: "always", id: 1 });
+    p = pendingChoice(p, { t: "pick", value: "never", id: 2 });
+    p = pendingChoice(p, { t: "done", id: 1 });
+    expect(shownChoice(p, "always")).toBe("never");
+    expect(pendingChoice(p, { t: "done", id: 2 })).toBeNull();
   });
 });
 

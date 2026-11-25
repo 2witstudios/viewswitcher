@@ -647,6 +647,39 @@ describe("dangling links where a new file would go (CodeRabbit)", () => {
   });
 });
 
+describe("destination folders linked outside, with a name that links back in (CodeRabbit)", () => {
+  test("add_asset, scene_from_template and create_project refuse; nothing is written outside", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const away = join(outside, "away");
+    await mkdir(join(away, "assets"), { recursive: true });
+    await mkdir(join(away, "scenes"), { recursive: true });
+    // An org whose assets/ links outside, holding a name that links back into the library.
+    await mkdir(join(root, "away-org"), { recursive: true });
+    await writeFile(join(root, "away-org/org.json"), await readFile(join(root, ORG, "org.json"), "utf8"));
+    await symlink(join(away, "assets"), join(root, "away-org/assets"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(away, "assets/back.svg"));
+    expect((await call("add_asset", { org: "away-org", name: "back.svg", base64: Buffer.from("<svg/>").toString("base64") })).isError).toBe(true);
+    // A project whose scenes/ links outside, with brb.html in it linking back in.
+    const { projectId } = await data("create_project", { org: ORG, name: "Away", templates: [] });
+    await rm(join(root, ORG, "projects", projectId, "scenes"), { recursive: true, force: true });
+    await symlink(join(away, "scenes"), join(root, ORG, "projects", projectId, "scenes"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(away, "scenes/brb.html"));
+    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).isError).toBe(true);
+    expect((await readdir(join(away, "assets"))).sort()).toEqual(["back.svg"]);
+    expect((await readdir(join(away, "scenes"))).sort()).toEqual(["brb.html"]);
+  });
+  test("a template set's template linked outside the library isn't copied", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "templates", "far"), { recursive: true });
+    await writeFile(join(root, ORG, "templates/far/pack.json"), JSON.stringify({ format: 1, id: "far", name: "Far", version: "1.0.0", description: "x", views: ["v"] }));
+    await writeFile(join(outside, "far-v.html"), "<title>Outside</title>");
+    await symlink(join(outside, "far-v.html"), join(root, ORG, "templates/far/v.html"));
+    const r = await call("create_project", { org: ORG, name: "Far show", templates: ["far/v"] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+  });
+});
+
 describe("no absolute paths", () => {
   test("no result, refusal or error has the library's path in it", async () => {
     await call("read_file", { path: `${ORG}/templates/missing.html` });

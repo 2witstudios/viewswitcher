@@ -2,10 +2,10 @@
 // and choose what agents may put on air. Opened from the header, "ask your agent" hints, and the Mac
 // app's Edit with AI… menu item (/?ai or #ai).
 import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
-  agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
+  agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, pendingChoice, shownChoice, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
   wantsAgentSheet, withoutAgentSheet,
 } from "../lib/agent";
 import { clientKind } from "../lib/client-kind";
@@ -95,11 +95,19 @@ function Sheet({ onClose }: { onClose: () => void }) {
 
   const agent = state?.agent;
   const connected = !!agent?.lastSeen && now - agent.lastSeen <= CONNECTED_FOR_MS;
+  // What was clicked, until its request is answered (lib/agent.ts pendingChoice).
+  const [pending, dispatch] = useReducer(pendingChoice, null);
+  const picks = useRef(0);
+  const shown = shownChoice(pending, agent?.onAir);
   const setOnAir = async (v: AgentOnAir) => {
+    const id = ++picks.current;
+    dispatch({ t: "pick", value: v, id });
     try {
       await settingsInOrder(() => api.agentSettings(v));
     } catch (e) {
       toast((e as Error).message);
+    } finally {
+      dispatch({ t: "done", id });
     }
   };
 
@@ -123,7 +131,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
             <legend>Agents put scenes on air</legend>
             {ON_AIR_CHOICES.map((c) => (
               <label key={c.value} className="agent-choice">
-                <input type="radio" name="agent-onair" value={c.value} checked={agent?.onAir === c.value} disabled={!agent} onChange={() => setOnAir(c.value)} />
+                <input type="radio" name="agent-onair" value={c.value} checked={shown === c.value} disabled={!agent} onChange={() => setOnAir(c.value)} />
                 <span><b>{c.label}</b><small>{c.hint}</small></span>
               </label>
             ))}

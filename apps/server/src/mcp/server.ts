@@ -134,9 +134,16 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const s = deps.state();
     return s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p).join("\n") : "";
   };
-  /** Files a tool reads or writes: each really inside the library, through links too (library-files.ts checked). */
+  /**
+   * Files a tool reads or writes: each really inside the library, through links too (library-files.ts
+   * checked), and so is the folder it's in. A new file may get another name in that folder (a free
+   * name), so the folder must be inside on its own, not only through a name that links back in.
+   */
   const contained = async (...paths: string[]) => {
-    for (const p of paths) await checked(root, p);
+    for (const p of paths) {
+      await checked(root, p);
+      if (p.includes("/")) await checked(root, p.slice(0, p.lastIndexOf("/")));
+    }
   };
   /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
   const writes = async (...paths: string[]) => {

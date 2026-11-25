@@ -89,6 +89,22 @@ export function inOrder() {
   };
 }
 
+/** A choice the person made whose request hasn't been answered yet; `id` tells requests apart. */
+export type PendingChoice = { value: AgentOnAir; id: number } | null;
+
+/**
+ * The on-air radios' pending choice. While a request is on its way the radios show what was clicked,
+ * not what the server last published (so clicking back to the old choice is a real change, and is
+ * sent); once the latest request is answered, the published value shows again.
+ */
+export function pendingChoice(p: PendingChoice, e: { t: "pick"; value: AgentOnAir; id: number } | { t: "done"; id: number }): PendingChoice {
+  if (e.t === "pick") return { value: e.value, id: e.id };
+  return p && p.id === e.id ? null : p;
+}
+
+/** What the radios show. */
+export const shownChoice = (p: PendingChoice, published: AgentOnAir | undefined) => p?.value ?? published;
+
 /** What the setting covers (Decisions: it steers agents through the tools; it isn't a lock on the files). */
 export const ON_AIR_SCOPE = "This applies to agents working through ViewSwitcher's tools. An agent that edits the library's files directly isn't held to it.";
 
