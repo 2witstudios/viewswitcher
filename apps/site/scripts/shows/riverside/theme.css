@@ -1,0 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&display=swap");
+/* Riverside Live: a news look. A red LIVE block, a white location bar, a black name strip and a clock. */
+:root {
+  --ground: #101114;
+  --red: #d62828;
+  --black: #111111;
+  --white: #ffffff;
+  --grey: #c9ccd3;
+}
+.scene { font-family: "Inter Tight", sans-serif; color: var(--white); }
+
+/* The station bug and the clock. */
+.bug { position: absolute; display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: 34px; letter-spacing: 0.04em; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+.bug i { width: 26px; height: 26px; background: var(--red); }
+.clock { position: absolute; padding: 10px 22px; background: rgba(0, 0, 0, 0.6); font-weight: 600; font-size: 32px; }
+
+/* The lower third: LIVE | location, then the name strip. */
+.lower { position: absolute; display: flex; flex-direction: column; }
+.lower .row { display: flex; height: 108px; }
+.lower .flag { width: 190px; flex: none; display: flex; align-items: center; justify-content: center; background: var(--red); font-weight: 800; font-size: 42px; letter-spacing: 0.02em; }
+.lower .where { flex: 1; min-width: 0; display: flex; align-items: center; padding: 0 38px; background: var(--white); color: var(--black); font-weight: 800; font-size: 50px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lower .strip { align-self: flex-start; padding: 16px 38px; background: var(--black); font-weight: 600; font-size: 34px; }
+
+/* A label on a box. */
+.label { position: absolute; padding: 8px 18px; background: var(--black); font-weight: 700; font-size: 26px; letter-spacing: 0.08em; }
+.label.red { background: var(--red); }
+
+/* Darkens a device for text on top. */
+.shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10, 10, 12, 0.88) 0%, rgba(10, 10, 12, 0.55) 60%, rgba(10, 10, 12, 0.3) 100%); }
+.grey { color: var(--grey); }

@@ -1,7 +1,7 @@
 ---
 import ViewFrame from "./ViewFrame.astro";
-const covers = ["starting-soon", "teaching", "talking-head", "brb"];
-const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
+const covers = ["starting-soon", "main", "live", "brb"];
+const swatches = ["#eadfca", "#d9472b", "#2b1d14"];
 ---
 <section class="section" id="how" aria-labelledby="how-title">
   <div class="wrap">
@@ -12,8 +12,8 @@ const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
     <ol class="steps">
       <li>
         <div class="vis setup" aria-hidden="true">
-          <div class="field"><span>Show name</span><b>Intro to Watercolor</b></div>
-          <div class="field"><span>This week</span><b>Wet-on-wet skies</b></div>
+          <div class="field"><span>Show name</span><b>Saltwater Kitchen</b></div>
+          <div class="field"><span>This week</span><b>Sunday bread, start to finish</b></div>
           <div class="field"><span>Colors</span><i class="sw">{swatches.map((c) => <i style={`background:${c}`}></i>)}</i></div>
         </div>
         <h3><span class="n">1</span>Pick your views</h3>
@@ -23,7 +23,7 @@ const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
         <div class="vis tiles on-dark" aria-hidden="true">
           {covers.map((file, i) => (
             <div class:list={["tile", { live: i === 1 }]}>
-              <ViewFrame show="watercolor" file={file} alt="" sizes="10rem" widths={[240, 360]} />
+              <ViewFrame show="kitchen" file={file} alt="" sizes="10rem" widths={[240, 360]} />
               {i === 1 && <span class="badge"><i class="dot"></i>On air</span>}
             </div>
           ))}
@@ -32,7 +32,7 @@ const swatches = ["#efe6d8", "#c4553b", "#2d241d"];
         <p>Click a view in the Mac app, in any browser, or on a phone or tablet beside you.</p>
       </li>
       <li>
-        <div class="vis"><ViewFrame show="watercolor" file="teaching" alt="Intro to Watercolor on air: the painting on the screen share, the teacher beside it, this week's lesson in the title" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
+        <div class="vis"><ViewFrame show="kitchen" file="main" alt="Saltwater Kitchen on air: the dough up close, the cook in a polaroid beside it, and today's recipe card" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
         <h3><span class="n">3</span>Everything moves into place</h3>
         <p>Your camera, screen share and titles land where the view puts them, and OBS keeps streaming as usual. Nothing to rebuild for each layout.</p>
       </li>

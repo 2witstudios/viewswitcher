@@ -1,0 +1,43 @@
+@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:ital,opsz,wght@0,9..144,800;1,9..144,600&family=Work+Sans:wght@500;600&display=swap");
+/* Roam with Remi: handmade, as a travel journal. Paper tags, polaroids, tape, a location stamp, Caveat. */
+:root {
+  --ground: #e6dcc8;
+  --paper: #fffdf7;
+  --ink: #2b1d14;
+  --ink-2: #5a4636;
+  --red: #d9472b;
+  --live: #e23b2e;
+  --tape: rgba(255, 243, 205, 0.85);
+  --sticky: #f8e38c;
+}
+.scene { font-family: "Work Sans", sans-serif; color: var(--ink); }
+.hand { font-family: "Caveat", cursive; font-weight: 700; }
+.serif { font-family: "Fraunces", serif; }
+.red { color: var(--red); }
+
+/* Journal paper with dots (view.js cuts the device boxes out of it). */
+.ground.paper { background-color: var(--ground); background-image: radial-gradient(#d2c2a3 1.6px, transparent 1.8px); background-size: 30px 30px; }
+
+/* A paper tag: the live cue, with where we are in handwriting. */
+.tag { position: absolute; display: flex; align-items: center; gap: 12px; padding: 10px 22px; background: var(--paper); transform: rotate(-2deg); box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.5); }
+.tag i { width: 16px; height: 16px; border-radius: 50%; background: var(--live); }
+.tag b { font-size: 24px; font-weight: 600; letter-spacing: 0.16em; }
+.tag span { font-family: "Caveat", cursive; font-weight: 700; font-size: 34px; color: var(--ink-2); }
+
+/* The title tag: show and day, then today's title. */
+.title { position: absolute; padding: 22px 38px 26px; background: var(--paper); transform: rotate(-1deg); box-shadow: 0 20px 40px -16px rgba(0, 0, 0, 0.55); }
+.title small { display: block; font-size: 22px; font-weight: 600; letter-spacing: 0.16em; color: var(--red); }
+.title strong { display: block; font-family: "Fraunces", serif; font-weight: 800; font-size: 64px; line-height: 1.05; }
+
+/* A polaroid around a device box: a paper border (never a background), the caption in its wide bottom. */
+.polaroid { position: absolute; box-sizing: border-box; border: 18px solid var(--paper); border-bottom-width: 96px; box-shadow: 0 18px 40px -18px rgba(60, 40, 20, 0.55); }
+.caption { position: absolute; display: flex; align-items: center; justify-content: center; height: 96px; font-family: "Caveat", cursive; font-weight: 700; font-size: 46px; color: #3b2a1f; }
+.tape { position: absolute; width: 160px; height: 44px; background: var(--tape); }
+
+/* A round location stamp in ink. */
+.stamp { position: absolute; display: flex; align-items: center; justify-content: center; border: 5px solid currentColor; border-radius: 50%; text-align: center; font-family: "Caveat", cursive; font-weight: 700; line-height: 1; transform: rotate(-12deg); }
+
+/* A sticky note from chat. */
+.sticky { position: absolute; padding: 22px 28px; background: var(--sticky); transform: rotate(3deg); box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.55); }
+.sticky small { display: block; font-size: 20px; font-weight: 600; letter-spacing: 0.12em; color: #8a5a1e; }
+.sticky span { display: block; font-family: "Caveat", cursive; font-weight: 700; font-size: 46px; line-height: 1.05; color: #3b2a1f; }

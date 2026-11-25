@@ -11,15 +11,18 @@ const mediaImages = import.meta.glob<{ default: ImageMetadata }>("../assets/medi
 
 /** What fills the device boxes: photos (credited in CREDITS.md) and rendered screen shares. */
 const MEDIA: Record<string, { focus: string; alt: string }> = {
-  cook: { focus: "75% 35%", alt: "a cook smiling as she stirs a pot at the stove" },
-  "guest-cook": { focus: "62% 40%", alt: "a guest cook flambéing a pan at the stove" },
-  dough: { focus: "50% 50%", alt: "bread dough rising in a lined pot, up close" },
-  teacher: { focus: "62% 40%", alt: "a teacher talking to the camera" },
-  painting: { focus: "50% 50%", alt: "a watercolor painting in progress, from above" },
+  "fc-host": { focus: "28% 40%", alt: "a podcast host talking into a microphone" },
+  "fc-analyst": { focus: "40% 35%", alt: "an analyst at a microphone, waving" },
+  "fc-stadium": { focus: "50% 55%", alt: "a football stadium at night under floodlights" },
+  "nova-cam": { focus: "58% 40%", alt: "a streamer with a headset at an RGB-lit desk" },
+  "nova-gameplay": { focus: "50% 50%", alt: "blurred gameplay on the screen" },
   pastor: { focus: "52% 30%", alt: "a pastor preaching with a microphone" },
-  host: { focus: "42% 30%", alt: "a podcast host at a microphone" },
-  guest: { focus: "68% 35%", alt: "a podcast guest at a microphone" },
-  "screen-sermon": { focus: "50% 50%", alt: "a sermon slide on the screen share" },
+  remi: { focus: "50% 40%", alt: "a vlogger filming herself with an action camera on a hillside" },
+  "remi-lake": { focus: "50% 55%", alt: "an alpine lake between mountains at dusk" },
+  kofi: { focus: "50% 32%", alt: "a reporter with a microphone on a street" },
+  festival: { focus: "50% 45%", alt: "a festival crowd with their arms raised" },
+  cook: { focus: "75% 35%", alt: "a cook smiling as she stirs a pot at the stove" },
+  dough: { focus: "50% 50%", alt: "bread dough rising in a lined pot, up close" },
 };
 
 export function media(name: string): Media {

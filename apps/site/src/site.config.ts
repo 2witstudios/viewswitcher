@@ -3,7 +3,7 @@ import { ctas, ipadApp, macAppFlag } from "./lib/cta";
 // THE SWITCH: set to true when the Mac app's first release (MAC-8) is out.
 // Before: "Follow the Mac app" (GitHub releases). After: "Download for Mac" (the dmg).
 // A build can override it with SITE_MAC_APP=1 or 0 (e.g. on a Vercel preview) to show the other state.
-const MAC_APP_RELEASED = false;
+const MAC_APP_RELEASED = true;
 
 // THE iPAD SWITCH: paste the App Store link (https://apps.apple.com/...) once the iPad app is live.
 // Before: "Coming to the App Store". After: the "Download on the App Store" badge links there.
