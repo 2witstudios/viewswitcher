@@ -1026,7 +1026,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (!canDrop()) return;
     const files = Array.from(e.dataTransfer.files);
     const pictures = files.filter(isPicture);
-    if (!pictures.length) return toast(files.some((f) => /\.zip$/i.test(f.name)) ? "That's a style pack: drop it on the Templates page to install it" : "Drop a picture: PNG, JPG, GIF, WebP, AVIF or SVG");
+    if (!pictures.length) return toast(files.some((f) => /\.zip$/i.test(f.name)) ? "That's a template pack: drop it on the Templates page to install it" : "Drop a picture: PNG, JPG, GIF, WebP, AVIF or SVG");
     if (pictures.length > 1) toast("One picture at a time: added the first");
     const at = toScene(e);
     const image = replaceable(at);

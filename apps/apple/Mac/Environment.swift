@@ -26,6 +26,7 @@ enum Env {
             env["VIEWSWITCHER_WEB_DIST"] = res.appendingPathComponent("web").path
             env["VIEWSWITCHER_STARTER"] = res.appendingPathComponent("starter").path
             env["VIEWSWITCHER_LIBRARY_KIT"] = res.appendingPathComponent("library-kit").path
+            env["VIEWSWITCHER_PACKS"] = res.appendingPathComponent("packs").path // built-in template packs (EDIT-29)
             return Launch(executable: sidecar, environment: env, logFile: logFile)
         }
         guard let repo = vars["VIEWSWITCHER_REPO"] else { return nil }

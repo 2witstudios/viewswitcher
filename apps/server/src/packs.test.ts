@@ -1,10 +1,11 @@
-// EDIT-24 · EDIT-25 · EDIT-27: staging, installing and removing style packs on a real (temporary)
+// EDIT-24 · EDIT-25 · EDIT-27 · EDIT-29: staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { sitePacks, starterPack, zipPack } from "./export-packs";
+import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
+import { genericTheme, genericView, sitePacks, starterPack, zipPack } from "./export-packs";
 import { addFromTemplate, createOrg, createProject, scanLibrary } from "./library";
 import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
 import { writeZip } from "./zip";
@@ -100,7 +101,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
   });
 });
 
-test("the site's six example styles each install as a set (EDIT-27)", async () => {
+test("the site's six example shows each install as a set (EDIT-27)", async () => {
   const packs = await sitePacks(resolve(import.meta.dir, "../../site"));
   expect(packs.map((p) => p.id)).toEqual(["fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);
   for (const p of packs) {
@@ -111,6 +112,60 @@ test("the site's six example styles each install as a set (EDIT-27)", async () =
   const sets = (await scanLibrary(root, org)).sets;
   expect(sets.map((s) => s.templates.length)).toEqual([5, 5, 5, 5, 5, 5]);
   expect(await readFile(join(root, org, "templates/nova/main.html"), "utf8")).toContain(`/library/${org}/templates/nova/_shared/theme.css`);
+});
+
+describe("built-in template packs (EDIT-29)", () => {
+  const site = resolve(import.meta.dir, "../../site");
+  test("the starter and the six shows, in the site's order", async () => {
+    const b = await buildBuiltins(starter, site);
+    expect(b.map((p) => p.id)).toEqual(["starter", "fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);
+    expect(b.map((p) => p.name)).toEqual(["Starter", "Full Count", "NOVA_PLAYS", "Grace Community", "Roam with Remi", "Riverside Live", "Saltwater Kitchen"]);
+    expect((await buildBuiltins(starter, null)).map((p) => p.id)).toEqual(["starter"]); // no site: just the starter
+  });
+
+  test("each installs through the drop path as its own set, generic: the org's name and colors, not the show's", async () => {
+    const shows = ["Full Count", "NOVA_PLAYS", "Grace Community", "Roam with Remi", "Riverside Live", "Saltwater Kitchen"];
+    for (const p of await buildBuiltins(starter, site)) {
+      const s = await stagePack(root, org, { files: asDropped(p) }, await starterJs());
+      expect(s.warnings).toEqual([]);
+      const { set } = await installPack(root, org, s.token);
+      const dir = join(root, org, "templates", set);
+      const texts = await Promise.all((await readdir(dir)).filter((f) => f.endsWith(".html")).map((f) => readFile(join(dir, f), "utf8")));
+      for (const t of texts) {
+        expect(t).not.toContain("{{");
+        for (const show of shows) expect(t.toUpperCase()).not.toContain(show.toUpperCase());
+      }
+      const theme = await readFile(join(dir, "_shared/theme.css"), "utf8");
+      expect(theme).toContain("#ff5a36");
+      if (p.id !== "starter") expect(texts.join("")).toContain("Daisy Debate");
+    }
+    expect((await scanLibrary(root, org)).sets.map((s) => s.id).sort()).toEqual(["fullcount", "grace", "kitchen", "nova", "remi", "riverside", "starter"]);
+  });
+
+  test("prebuilt (the Mac app's Resources/packs) reads the same as built from source", async () => {
+    const out = join(root, "..", `${org}-prebuilt-${Date.now()}`);
+    const built = await buildBuiltins(starter, site);
+    for (const p of built) for (const f of p.files) {
+      await mkdir(join(out, p.id, f.path, ".."), { recursive: true });
+      await writeFile(join(out, p.id, f.path), f.data);
+    }
+    await writeFile(join(out, "starter.zip"), "not a folder");
+    const read = await readBuiltins(out);
+    expect(read.map((p) => [p.id, p.files.length])).toEqual(built.map((p) => [p.id, p.files.length]));
+    await rm(out, { recursive: true, force: true });
+  });
+
+  const show = { id: "remi", name: "Roam with Remi", initial: "R", kind: "", accent: "#d9472b", ground: "#e6dcc8", blurb: "", views: [] };
+  test("a view loses the show's name: as typed, over a <br>, in capitals, and in its title", () => {
+    expect(genericView(`<title>Roam with Remi · Walking</title><b>Roam<br>with<br>Remi</b><small>ROAM WITH REMI · DAY 4</small><p>Remi, up top</p>`, show))
+      .toBe(`<title>Walking</title><b>{{ORG_NAME}}</b><small><span style="text-transform: uppercase">{{ORG_NAME}}</span> · DAY 4</small><p>Remi, up top</p>`);
+    expect(genericView(`<p>{{EPISODE}}</p>`, show)).toBe(`<p>Episode title</p>`);
+  });
+  test("a theme takes the org's accent and ground; a paper ground keeps its own color", () => {
+    const css = `:root {\n  --ground: #e6dcc8;\n  --red: #D9472B;\n}\n.ground.paper { background-color: var(--ground); }`;
+    expect(genericTheme(css, show)).toBe(`:root {\n  --ground: {{GROUND}};\n  --paper-ground: #e6dcc8;\n  --red: {{ACCENT}};\n}\n.ground.paper { background-color: var(--paper-ground); }`);
+    expect(() => genericTheme(":root { --ground: #000; }", show)).toThrow(/no --ground/);
+  });
 });
 
 describe("removing a set (EDIT-25)", () => {

@@ -134,6 +134,10 @@ try {
   check(existsSync(join(library, "my-channel/org.json")), "first run: a first org");
   check(existsSync(join(library, ".git")) || !Bun.which("git"), "first run: git init (when git is available)");
   check(readFileSync(join(library, ".gitignore"), "utf8").includes(".viewswitcher/"), "first run: .gitignore");
+  // EDIT-29: the built-in template packs ship in Resources/packs and the bundled server lists them.
+  const builtin = await fetch(`${BASE}/api/packs/builtin`).then((r) => r.json(), () => []) as { id: string }[];
+  check(existsSync(join(appPath, "Contents/Resources/packs/fullcount/pack.json")), "the app ships the built-in template packs (Resources/packs)");
+  check(builtin.map((p) => p.id).join() === "starter,fullcount,nova,grace,remi,riverside,kitchen", `the bundled server lists them (${builtin.map((p) => p.id).join(", ")})`);
   check(await until(async () => (await state()).window?.url.startsWith(`${BASE}/`)), `the window shows the switcher`);
   check(await until(() => evalJs("return document.readyState === 'complete' && !!document.querySelector('.app')")), "the switcher page has loaded");
   const ua = await evalJs<string>("return navigator.userAgent");

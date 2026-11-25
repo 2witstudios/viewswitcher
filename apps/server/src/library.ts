@@ -129,8 +129,8 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
 }
 
 // ---------------------------------------------------------------- template sets (EDIT-25)
-// An installed style pack is a folder templates/<set>/ with its pack.json, its views, _shared/ and
-// assets/ (see packs.ts and docs/style-packs.md). The org's own templates stay in templates/*.html.
+// An installed template pack is a folder templates/<set>/ with its pack.json, its views, _shared/ and
+// assets/ (see packs.ts and docs/template-packs.md). The org's own templates stay in templates/*.html.
 
 /** The org's template sets: folders in templates/ that have a pack.json. */
 async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {

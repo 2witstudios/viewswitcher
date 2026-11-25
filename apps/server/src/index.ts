@@ -1,5 +1,5 @@
 // ViewSwitcher server: the switcher API, the library files, live state, and OBS.
-import { watch } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
@@ -17,6 +17,7 @@ import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging 
 import { withBridge } from "./scene-bridge";
 import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
 import { defuseMeta, libraryHeaders } from "./scene-sandbox";
+import { asDropped, type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
@@ -34,6 +35,18 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
+/** The built-in template packs (EDIT-29): loaded once, on first use. A failure is logged and leaves just none. */
+let builtinsLoad: Promise<BuiltinPack[]> | null = null;
+const builtins = () =>
+  (builtinsLoad ??= (config.packs
+    ? readBuiltins(config.packs)
+    : buildBuiltins(config.starter, existsSync(join(config.site, "src/data/shows.ts")) ? config.site : null)
+  ).catch((e) => {
+    console.error("[packs] built-in template packs:", (e as Error).message);
+    builtinsLoad = null;
+    return [];
+  }));
+void builtins();
 
 // ---------------------------------------------------------------- live state
 
@@ -277,7 +290,7 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     }
     return json({ saved });
   }
-  // Style packs (EDIT-24 · EDIT-25): check a dropped .zip or folder and show it, install it as a
+  // Template packs (EDIT-24 · EDIT-25): check a dropped .zip or folder and show it, install it as a
   // template set, or remove a set. See packs.ts.
   if (path === "/api/packs/stage" && post) {
     const form = await req.formData();
@@ -286,8 +299,18 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     if (zip instanceof File) return json(await stagePack(root, orgId, { zip: new Uint8Array(await zip.arrayBuffer()) }, starterScript));
     const paths = form.getAll("path").map(String);
     const files = form.getAll("file");
-    if (!files.length || files.length !== paths.length || files.some((f) => !(f instanceof File))) return json({ error: "Drop a style pack: a .zip, or its folder" }, 400);
+    if (!files.length || files.length !== paths.length || files.some((f) => !(f instanceof File))) return json({ error: "Drop a template pack: a .zip, or its folder" }, 400);
     return json(await stagePack(root, orgId, { files: files.map((f, i) => ({ path: paths[i]!, data: f as File })) }, starterScript));
+  }
+  // The built-in template packs (EDIT-29 · EDIT-30): listed, then staged like a dropped one.
+  if (path === "/api/packs/builtin" && req.method === "GET") {
+    return json((await builtins()).map(({ id, name, description, views }) => ({ id, name, description, views })));
+  }
+  if (path === "/api/packs/builtin/stage" && post) {
+    const b = await body(req);
+    const pack = (await builtins()).find((p) => p.id === b.id);
+    if (!pack) return json({ error: "There's no built-in template pack by that name" }, 404);
+    return json(await stagePack(root, plainName(String(b.org ?? "")), { files: asDropped(pack) }, starterScript));
   }
   if (path === "/api/packs/install" && post) {
     const b = await body(req);

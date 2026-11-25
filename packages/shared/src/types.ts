@@ -55,7 +55,7 @@ export type Org = {
 };
 
 /**
- * A set of templates installed from a style pack (EDIT-25): templates/<id>/ with the pack's pack.json,
+ * A set of templates installed from a template pack (EDIT-25): templates/<id>/ with the pack's pack.json,
  * its views, _shared/ and assets/. Its templates are named "<set>/<view>" where a template is asked for.
  */
 export type TemplateSet = {
@@ -74,7 +74,7 @@ export type Library = {
   org: Org;
   /** The org's own templates (templates/*.html). */
   templates: Scene[];
-  /** Installed style packs, by name. */
+  /** Installed template packs, by name. */
   sets: TemplateSet[];
   assets: Asset[];
   projects: Project[];

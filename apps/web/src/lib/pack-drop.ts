@@ -1,5 +1,5 @@
 import type { PackScripts } from "@viewswitcher/shared";
-// What a style pack dropped on the Templates page is (EDIT-24): one .zip, or a folder's files with
+// What a template pack dropped on the Templates page is (EDIT-24): one .zip, or a folder's files with
 // their paths inside it. The server checks everything again; this only collects.
 export type DroppedPack = { zip: File } | { files: { path: string; file: File }[] } | null;
 

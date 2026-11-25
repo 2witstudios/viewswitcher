@@ -1,5 +1,5 @@
-// Export the starter kit and the site's six example styles as style packs (EDIT-27): the format proven
-// on real sets of views, and installable looks for any org.
+// Export the starter kit and the site's six example shows as template packs (EDIT-27, EDIT-29): the
+// format proven on real sets of views, and the app's built-in template sets for any org.
 //
 //   bun run packs:export [out-dir]      (default: dist/packs → <id>/ and <id>.zip for each)
 //
@@ -84,20 +84,63 @@ export async function starterPack(starter: string, version = "1.0.0"): Promise<P
   );
 }
 
+type SiteShow = { id: string; name: string; initial: string; kind: string; accent: string; ground: string; blurb: string; views: { file: string }[] };
+
 /**
- * The site's example styles (apps/site/scripts/shows/<id>/, listed in apps/site/src/data/shows.ts),
- * one pack each: its views in the site's order, its theme.css, and the shared base.css and view.js.
+ * Show content a site view may mark for the site's renders only (apps/site/scripts/library.ts fills
+ * them with the show's data); a pack gets this generic sample text instead, which people retype.
+ */
+export const SITE_SAMPLES: Record<string, string> = { EPISODE: "Episode title" };
+
+/**
+ * A site show's view, made generic (EDIT-29): the show's name becomes {{ORG_NAME}} (as typed, run
+ * together over a <br>, or in capitals, which keep their look), its <title> loses the show's name
+ * (the cover reads "Pregame", not "Full Count · Pregame"), and show-only content marked with a
+ * SITE_SAMPLES placeholder ({{EPISODE}}) becomes generic sample text.
+ */
+export function genericView(html: string, show: SiteShow): string {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let out = html.replace(new RegExp(`<title>\\s*${esc(show.name)}\\s*·\\s*`), "<title>");
+  for (const [k, v] of Object.entries(SITE_SAMPLES)) out = out.replaceAll(`{{${k}}}`, v);
+  const upper = show.name.toUpperCase();
+  if (upper !== show.name) out = out.replaceAll(upper, `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`);
+  out = out.replaceAll(show.name.replace(/ /g, "<br>"), "{{ORG_NAME}}").replaceAll(show.name, "{{ORG_NAME}}");
+  if (out.includes(show.name) || out.includes(upper)) throw new Error(`${show.id}: the show's name is still in a view`);
+  return out;
+}
+
+/**
+ * A site show's theme, made generic: its accent and ground become {{ACCENT}} and {{GROUND}}. A paper
+ * ground (Remi, Kitchen) keeps its own color in --paper-ground: the paper is the look, and an org's
+ * dark ground under dark ink wouldn't read.
+ */
+export function genericTheme(css: string, show: SiteShow): string {
+  const esc = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const ground = new RegExp(`--ground:\\s*${esc(show.ground)};`, "i");
+  const accent = new RegExp(`(--[\\w-]+:\\s*)${esc(show.accent)};`, "i");
+  if (!ground.test(css) || !accent.test(css)) throw new Error(`${show.id}: theme.css has no --ground ${show.ground} or no variable set to the accent ${show.accent}`);
+  const paper = /\.ground\.paper\s*\{[^}]*var\(--ground\)/.test(css);
+  let out = css.replace(ground, paper ? `--ground: {{GROUND}};\n  --paper-ground: ${show.ground};` : "--ground: {{GROUND}};");
+  if (paper) out = out.replace(/(\.ground\.paper\s*\{[^}]*)var\(--ground\)/, "$1var(--paper-ground)");
+  return out.replace(accent, "$1{{ACCENT}};");
+}
+
+/**
+ * The site's example shows (apps/site/scripts/shows/<id>/, listed in apps/site/src/data/shows.ts) as
+ * template packs, one each, generic: filled with the installing org's name and colors. The site's own
+ * renders fill the same placeholders with the show's (apps/site/scripts/library.ts). Its views in the
+ * site's order, its theme.css, and the shared base.css and view.js.
  */
 export async function sitePacks(site: string): Promise<{ id: string; files: PackFileOut[] }[]> {
-  const { SHOWS } = (await import(join(site, "src/data/shows.ts"))) as { SHOWS: { id: string; name: string; kind: string; blurb: string; views: { file: string }[] }[] };
+  const { SHOWS } = (await import(join(site, "src/data/shows.ts"))) as { SHOWS: SiteShow[] };
   const styles = join(site, "scripts/shows");
   const common = await sharedOf(join(styles, "_shared"));
   const out = [];
   for (const s of SHOWS) {
-    const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, await readFile(join(styles, s.id, `${v.file}.html`), "utf8")] as [string, string]));
-    const theme = await readFile(join(styles, s.id, "theme.css"), "utf8");
+    const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, genericView(await readFile(join(styles, s.id, `${v.file}.html`), "utf8"), s)] as [string, string]));
+    const theme = genericTheme(await readFile(join(styles, s.id, "theme.css"), "utf8"), s);
     const id = s.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    out.push({ id, files: buildPack({ id, name: s.name, description: `${s.kind}, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) });
+    out.push({ id, files: buildPack({ id, name: s.name, description: `${s.kind} templates, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) });
   }
   return out;
 }

@@ -81,7 +81,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 <Menu
                   label="New scene from a template"
                   onClose={() => setAdding(false)}
-                  // By set (EDIT-25): the org's own templates, then each style pack's.
+                  // By set (EDIT-25): the org's own templates, then each template pack's.
                   items={templateGroups(data).filter((g) => g.templates.length).flatMap((g, i, all): MenuItem[] => [
                     ...(all.length > 1 ? [{ heading: g.name }] : []),
                     ...g.templates.map((t) => ({
