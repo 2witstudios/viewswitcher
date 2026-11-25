@@ -622,6 +622,31 @@ describe("CodeRabbit follow-ups", () => {
   });
 });
 
+describe("dangling links where a new file would go (CodeRabbit)", () => {
+  test("Duplicate (MCP and the switcher's), New scene from a template and a stream copy never write through one", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    const nowhere = (name: string) => join(outside, `dangling-${name}`);
+    // x-copy.html is a link to a file outside the library that doesn't exist yet.
+    await writeFile(join(root, ORG, "templates/dang.html"), "<title>Dang</title>");
+    await symlink(nowhere("copy.html"), join(root, ORG, "templates/dang-copy.html"));
+    const viaMcp = await data("duplicate_scene", { path: `${ORG}/templates/dang.html` });
+    expect(viaMcp.path).toBe(`${ORG}/templates/dang-copy-2.html`);
+    expect((await duplicateScene(root, `${ORG}/templates/dang.html`)).path).toBe(`${ORG}/templates/dang-copy-3.html`);
+    // A template copied where a dangling link has its name.
+    const { projectId } = await data("create_project", { org: ORG, name: "Dangling", templates: [] });
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "projects", projectId, "scenes"), { recursive: true });
+    await symlink(nowhere("brb.html"), join(root, ORG, "projects", projectId, "scenes/brb.html"));
+    expect((await data("scene_from_template", { org: ORG, template: "brb", projectId })).path).toBe(`${ORG}/projects/${projectId}/scenes/brb-2.html`);
+    // A stream copy where a dangling link has the copy's name: refused, nothing written outside.
+    await writeFile(join(root, ORG, "projects", projectId, "scenes/teach.html"), "<title>T</title>");
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Dangle", date: "2026-12-09" });
+    await symlink(nowhere("teach.html"), join(root, ORG, "projects", projectId, "streams", streamId, "teach.html"));
+    expect((await call("customize_scene", { org: ORG, projectId, streamId, name: "teach" })).isError).toBe(true);
+    for (const n of ["copy.html", "brb.html", "teach.html"]) expect(await stat(nowhere(n)).catch(() => null)).toBeNull();
+  });
+});
+
 describe("no absolute paths", () => {
   test("no result, refusal or error has the library's path in it", async () => {
     await call("read_file", { path: `${ORG}/templates/missing.html` });
