@@ -1,0 +1,140 @@
+---
+// The agents page (SITE-27): connect the AI agent you already use. The scenes skill as a download
+// (scripts/skill.ts zips it at build time from apps/server/library-kit), the ways to connect over MCP
+// (the same as the app's Edit with AI sheet, which links here), and two calls to action: Download for
+// Mac (Cta.astro, the homepage's own button and switch) and the iPad beta signup.
+//
+// The signup form posts to /api/ipad-beta (api/ipad-beta.ts → src/lib/ipad-beta.ts). Without
+// JavaScript the function redirects back to /ai#beta-<state> and CSS (:target) shows that message;
+// with it, the script below submits in place. Both stay inside the CSP (form-action and connect-src
+// 'self'; the script is emitted as a file for script-src 'self').
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Cta from "../components/Cta.astro";
+import { github } from "../site.config";
+import { BETA_MESSAGES } from "../lib/ipad-beta";
+
+const MCP_URL = "http://127.0.0.1:7420/mcp";
+const CODEX_TOML = `[mcp_servers.viewswitcher]\nurl = "${MCP_URL}"`;
+const SKILL_ZIP = "/skills/viewswitcher-scenes.zip";
+const states = Object.entries(BETA_MESSAGES) as [keyof typeof BETA_MESSAGES, string][];
+---
+<Base title="Connect your AI agent · ViewSwitcher" description="Connect Claude Code, Claude Desktop, Cursor or Codex to ViewSwitcher on your Mac, and it makes and fixes your OBS scenes. Download the scenes skill, connect over MCP, or sign up for the iPad beta." path="/ai">
+  <Header />
+  <main id="main" class="wrap prose guide">
+    <p class="eyebrow">Agents</p>
+    <h1>Connect the AI agent you already use</h1>
+    <p class="lede">Connect Claude, Cursor or Codex to ViewSwitcher, and it makes and fixes your scenes. It reads your library, edits scenes, sees each one rendered in OBS, and fixes what it sees. It puts things on air only when you let it.</p>
+    <div class="actions ctas">
+      <Cta />
+      <a class="btn btn-secondary" href="#beta">Sign up for the iPad beta</a>
+    </div>
+
+    <h2 id="skill">Download the skill</h2>
+    <p>The <strong>viewswitcher-scenes</strong> skill teaches an agent how ViewSwitcher scenes work: the library's folders, which file to change, the scene format, and each org's brand.</p>
+    <p><a class="btn btn-secondary" href={SKILL_ZIP} download>Download viewswitcher-scenes.zip</a></p>
+    <p>To add it to Claude, go to <strong>Customize › Skills</strong>, choose <strong>Upload a skill</strong> and pick the zip. Skills need <strong>Code execution and file creation</strong> turned on in Settings › Capabilities.</p>
+    <p class="quiet">Using Claude Code? You don't need the download. The Mac app already puts the skill in your library, at <code>.claude/skills/viewswitcher-scenes</code>.</p>
+
+    <h2 id="mcp">Connect over MCP</h2>
+    <p>ViewSwitcher on your Mac is an MCP server, so your agent can use it directly. In ViewSwitcher, press <strong>Edit with AI</strong> (in the switcher's header or the Mac menu bar) and pick your agent.</p>
+    <ul class="ways">
+      <li><strong>Claude Code.</strong> Start Claude Code in your library folder (<code>cd ~/ViewSwitcher\ Library && claude</code>). The library's <code>.mcp.json</code> connects it; the first time, Claude Code asks once to allow the <strong>viewswitcher</strong> server.</li>
+      <li><strong>Claude Desktop.</strong> In Edit with AI, press <strong>Add to Claude Desktop</strong>. Claude Desktop opens and asks you to install the ViewSwitcher extension.</li>
+      <li><strong>Cursor.</strong> In Edit with AI, press <strong>Add to Cursor</strong>, and Cursor asks you to add the server. Opening your library folder in Cursor works too: its <code>.cursor/mcp.json</code> connects it.</li>
+      <li><strong>Codex and other agents.</strong> Any MCP client on your Mac can use the address <code>{MCP_URL}</code>. For Codex, add this to <code>~/.codex/config.toml</code>:</li>
+    </ul>
+    <pre><code>{CODEX_TOML}</code></pre>
+    <p>Everything runs on your Mac. ViewSwitcher only lets in agents on the same Mac (loopback only), and it needs to be open while you work.</p>
+    <p><strong>On air:</strong> a setting in Edit with AI says when agents may put a scene on air: never, when you're not live (the default), or always.</p>
+    <p class="quiet">The tools, the stdio command and the details are in <a href={`${github}#agents-mcp`}>the README</a>.</p>
+
+    <h2 id="get-it">Get ViewSwitcher</h2>
+    <div class="get">
+      <div class="card">
+        <h3>ViewSwitcher for Mac</h3>
+        <p>Free. The switcher, the library and the MCP server, all on your Mac.</p>
+        <Cta />
+      </div>
+      <form class="card beta" id="beta" method="post" action="/api/ipad-beta">
+        <h3>Sign up for the iPad beta</h3>
+        <p>Switch scenes from an iPad beside you. Leave your email for an invite to the TestFlight beta. We use it only to send the invite.</p>
+        <label for="beta-email">Email</label>
+        <div class="row">
+          <input id="beta-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+          <button class="btn btn-primary" type="submit">Sign up</button>
+        </div>
+        <div class="hp" aria-hidden="true">
+          <label for="beta-website">Leave this empty</label>
+          <input id="beta-website" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <p class="beta-status" id="beta-status" role="status" aria-live="polite"></p>
+        {states.map(([state, message]) => <p class={`beta-msg ${state === "joined" ? "good" : "bad"}`} id={`beta-${state}`}>{message}</p>)}
+        <p class="quiet">See <a href="/privacy">Privacy</a>.</p>
+      </form>
+    </div>
+  </main>
+  <Footer />
+</Base>
+
+<script>
+  // Submit in place. Without this script the form still posts, and the function redirects back here.
+  const form = document.getElementById("beta") as HTMLFormElement | null;
+  const status = document.getElementById("beta-status");
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const button = form.querySelector("button");
+    if (button) button.disabled = true;
+    document.querySelectorAll<HTMLElement>(".beta-msg").forEach((m) => (m.hidden = true));
+    let text = "Something went wrong. Try again in a minute.";
+    let good = false;
+    try {
+      const res = await fetch(form.action, {
+        method: "POST",
+        headers: { accept: "application/json" },
+        body: new URLSearchParams(new FormData(form) as unknown as Record<string, string>),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
+      if (data?.message) text = data.message;
+      good = !!data?.ok;
+    } catch {}
+    if (status) {
+      status.textContent = text;
+      status.className = `beta-status ${good ? "good" : "bad"}`;
+    }
+    if (good) form.reset();
+    if (button) button.disabled = false;
+  });
+</script>
+
+<style>
+  .ctas { margin-block: 0.4rem 0.6rem; }
+  .btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--rule); }
+  .btn-secondary:hover { border-color: var(--ink-3); }
+  .prose a.btn-secondary { color: var(--ink); }
+  .ways li { padding-left: 0.1rem; }
+  pre { margin: 0; background: var(--monitor); border-radius: 12px; padding: 1.1rem 1.3rem; line-height: 1.7; color: var(--on-monitor); white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre code { color: var(--on-monitor); }
+  code { overflow-wrap: anywhere; }
+  .get { display: grid; gap: 1rem; }
+  @media (min-width: 48rem) { .get { grid-template-columns: 1fr 1.4fr; align-items: start; } }
+  .card { display: grid; gap: 0.75rem; align-content: start; padding: 1.25rem 1.4rem; border: 1px solid var(--rule); border-radius: 14px; background: var(--raised); }
+  .card h3, .card p { margin: 0; }
+  .beta label { font-weight: 600; color: var(--ink); }
+  .row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .row input { flex: 1 1 14rem; min-height: 3rem; padding: 0 1rem; border: 1px solid var(--rule); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; }
+  .row input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .row .btn { border: 0; cursor: pointer; }
+  .row .btn:disabled { opacity: 0.6; cursor: default; }
+  /* The honeypot: out of sight and out of the tab order; people never fill it in. */
+  .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  .beta-status:empty { display: none; }
+  /* Without JavaScript, the function sends you back to /ai#beta-<state>: show that one. */
+  .beta-msg { display: none; }
+  .beta-msg:target { display: block; }
+  .beta-msg[hidden] { display: none; }
+  .good { color: var(--ink); font-weight: 600; }
+  .bad { color: var(--ink); }
+  .bad::before { content: "! "; font-weight: 700; }
+</style>

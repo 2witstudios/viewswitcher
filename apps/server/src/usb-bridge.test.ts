@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { bridgePorts, fromThisMacOnly } from "./gate";
 import { type BridgeStatus, startUsbBridge } from "./usb-bridge";
 import { concat, decodeOne, encodeMessage, u8 } from "./usbmux";
 
@@ -108,5 +109,29 @@ describe("usb bridge status (MAC-4)", () => {
     tunnel.on("data", (c) => (reply += c.toString()));
     tunnel.write("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     await until(() => reply.includes("hello from the Mac"));
+  });
+  test("the server tells the iPad's requests from this Mac's (gate.ts fromThisMacOnly): /mcp and /api/info stay this Mac's only", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
+    cleanup.push(() => rm(dir, { recursive: true, force: true }));
+    const { fake, close } = await fakeUsbmuxd(join(dir, "usbmuxd"));
+    cleanup.push(close);
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (req, srv) => new Response(fromThisMacOnly(srv.requestIP(req), req.headers) ? "this Mac" : "not this Mac") });
+    cleanup.push(() => server.stop(true));
+    const bridge = startUsbBridge({ serverPort: server.port!, socketPath: join(dir, "usbmuxd"), log: () => {} });
+    cleanup.push(() => bridge.stop());
+    await Bun.sleep(50);
+    fake.attach();
+    await until(() => fake.tunnels.size > 0);
+    const tunnel = [...fake.tunnels][0]!;
+    let reply = "";
+    tunnel.on("data", (c) => (reply += c.toString()));
+    // What the iPad's WebView sends: Host 127.0.0.1, no proxy headers.
+    tunnel.write(`GET /mcp HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\nConnection: close\r\n\r\n`);
+    await until(() => /this Mac/.test(reply));
+    expect(reply).toContain("not this Mac");
+    // The Mac's own request still is.
+    expect(await (await fetch(`http://127.0.0.1:${server.port}/mcp`)).text()).toBe("this Mac");
+    // A closed tunnel's port is forgotten (the OS may give it to a local client next).
+    await until(() => bridgePorts.size === 0);
   });
 });

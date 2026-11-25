@@ -4,7 +4,10 @@ import { OBSRequestError } from "./obs";
 import { obsReady } from "@viewswitcher/shared";
 import { checkObsSetup, type ObsRequester, programUrl, setupObs } from "./obs-setup";
 
-const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"] };
+const names = {
+  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"],
+  previewScene: "ViewSwitcher Preview", previewSource: "ViewSwitcher Preview Render",
+};
 const PORT = 7433;
 
 /** Bottom to top, as OBS indexes scene items. */
@@ -49,7 +52,7 @@ describe("setupObs (MAC-3)", () => {
       inputs: { "Daisy Ground": { kind: "color_source_v3", settings: {} }, "Daisy Program": { kind: "browser_source", settings: { url: "x" } }, Camera: { kind: "av_capture_input", settings: {} } },
     });
     await setupObs(obs, names, PORT);
-    expect([...obs.scenes.keys()]).toEqual(["ViewSwitcher"]);
+    expect([...obs.scenes.keys()]).toEqual(["ViewSwitcher", "ViewSwitcher Preview"]);
     expect(order(obs)).toEqual(["ViewSwitcher Ground", "Camera", "ViewSwitcher Program"]);
   });
 
@@ -68,5 +71,40 @@ describe("setupObs (MAC-3)", () => {
     const obs = fakeObs();
     const broken: ObsRequester = { request: (t, d) => (t === "CreateScene" ? Promise.reject(new OBSRequestError(t, 500, "boom")) : obs.request(t, d)) };
     await expect(setupObs(broken, names, PORT)).rejects.toThrow("boom");
+  });
+
+  test("a preview scene that can't be made is a warning, not a failed setup (the switcher is set up)", async () => {
+    const obs = fakeObs();
+    // A non-browser input already has the preview source's name: OBS refuses its browser settings.
+    const broken: ObsRequester = { request: (t, d) => (t === "SetInputMute" ? Promise.reject(new OBSRequestError(t, 604, "not an audio input")) : obs.request(t, d)) };
+    const r = await setupObs(broken, names, PORT);
+    expect(r.switched).toBe(true);
+    expect(obs.program()).toBe("ViewSwitcher");
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain(`Couldn't make the "${names.previewScene}" scene for previews`);
+    expect(r.warnings[0]).toContain("not an audio input");
+    expect((await setupObs(obs, names, PORT)).warnings).toEqual([]);
+  });
+
+  test("also makes the preview scene, muted and kept alive, which is never switched to nor checked (MCP-1)", async () => {
+    const obs = fakeObs();
+    const r = await setupObs(obs, names, PORT);
+    expect(order(obs)).toEqual(["ViewSwitcher Ground", "ViewSwitcher Program"]);
+    expect(obs.scenes.get(names.previewScene)!.map((i) => i.sourceName)).toEqual([names.previewSource]);
+    expect(obs.inputs.get(names.previewSource)).toMatchObject({ kind: "browser_source", muted: true, settings: { width: 1920, height: 1080, shutdown: false, reroute_audio: true } });
+    expect(r.log).toContain(`Created scene "${names.previewScene}" for previews.`);
+    expect(obs.program()).toBe("ViewSwitcher");
+    expect(obs.requests.filter((q) => q.type === "SetCurrentProgramScene").map((q) => q.data.sceneName)).toEqual(["ViewSwitcher"]);
+    const ready = await checkObsSetup(obs, names, PORT);
+    expect(ready).toEqual({ scene: true, program: true, ground: true, missingDevices: ["Camera", "Screen", "iPad"] });
+
+    // Without it, setup is still complete: nothing asks for it.
+    obs.scenes.delete(names.previewScene);
+    expect(await checkObsSetup(obs, names, PORT)).toEqual(ready);
+    // Running again brings it back, putting the surviving source back in, and keeps its page.
+    obs.inputs.get(names.previewSource)!.settings.url = "http://127.0.0.1:7433/library/x.html?preview";
+    await setupObs(obs, names, PORT);
+    expect(obs.scenes.get(names.previewScene)!.map((i) => i.sourceName)).toEqual([names.previewSource]);
+    expect(obs.inputs.get(names.previewSource)!.settings.url).toBe("http://127.0.0.1:7433/library/x.html?preview");
   });
 });

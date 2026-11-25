@@ -13,7 +13,7 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 
 - **Orgs**: one library holds any number of orgs (brands or channels). Each has its own templates, assets, projects and brand.
 - **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
-- **Scenes are files you edit by talking to an agent** (Claude Code or any other) in the library, using its `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
+- **Scenes are files you edit by talking to an agent** (Claude Code, Claude Desktop, Cursor, Codex or any other), connected over MCP (below) and using the library's `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
 - **Template packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own template set in the org's name and colors. Seven come built in (the starter and the site's six example shows): pick them for a new org, or with **Add templates** ([docs/template-packs.md](docs/template-packs.md)).
 - **iPad app over USB-C**: the ViewSwitcher iPad app talks to the Mac over the cable, for low latency and no dependence on Wi-Fi.
 
@@ -46,6 +46,18 @@ OBS scene "ViewSwitcher"
 
 New orgs are created from the org menu in the sidebar. They start from `apps/server/starter/`: neutral templates using the org's name and accent color, ready to be branded.
 
+## Agents (MCP)
+
+ViewSwitcher is an MCP server for the AI agent you already use. **Edit with AI** (in the switcher's header, and in the Mac menu bar) connects one in a step and shows whether one is connected; the [setup guide](https://viewswitcher.com/ai) walks through each agent.
+
+- **Endpoint:** Streamable HTTP at `http://127.0.0.1:7420/mcp` (stateless, JSON responses). Only this Mac itself may use it (`fromThisMacOnly` in `apps/server/src/gate.ts`): a loopback connection to a loopback host, with no proxy headers and no other site's `Origin`, and not the USB-C iPad. A phone or tablet paired over Wi-Fi passes the gate (below) but still gets 404 here, as do `/api/info`, `/api/agent/clients` and the Claude Desktop extension; unpaired devices and forwarded requests are stopped by the gate first.
+- **stdio**, for clients that only launch commands: `/Applications/ViewSwitcher.app/Contents/Helpers/viewswitcher-server --mcp-stdio --port 7420` (from source, `bun apps/server/src/index.ts --mcp-stdio --port <port>`; `VIEWSWITCHER_PORT` works too, `PORT` is ignored). It relays to the running switcher and never starts a second one; it opens the app if nothing answers, and never sends a call twice.
+- **Port 7420:** the library's `.mcp.json`, `.cursor/mcp.json` and `AGENTS.md` name it, as the Mac app always uses it. On another port, Edit with AI gives the address to add instead.
+- **Connecting:** the library has `.mcp.json` (Claude Code, which asks once to allow it), `.cursor/mcp.json` and `AGENTS.md` (with the Codex snippet). Edit with AI adds a per-install Claude Desktop extension (`.mcpb`), a Cursor install link, and the URL, stdio command and Codex TOML for the rest.
+- **Tools:** `get_state`, `list_orgs`, `scan_library`, `list_files`, `read_file`, `get_guide` to read; `preview_scene`, `see_program` to look; `write_file`, `add_asset`, `list_template_sets` / `add_template_set` (the built-in template sets, as Add templates), `create_project`, `create_stream`, `scene_from_template`, `customize_scene`, `revert_scene`, `duplicate_scene`, `rename_scene`, `customize_transition`, `revert_transition` to change; `go_on_air`. Paths start with the org id; writes to an existing file need the hash from `read_file`, as in the switcher's editor.
+- **Previews:** `preview_scene` renders a library scene in OBS, in a muted "ViewSwitcher Preview" scene that's never switched to, and returns the picture; `see_program` returns what OBS is putting out, camera and screen included. Without OBS, they return the scene's preview URL instead.
+- **On air:** the agent setting (Edit with AI on the Mac; `.viewswitcher/settings.json`) says what agents may put on air: **Never**, **When not live** (the default: not while OBS is streaming or recording, and no changes then to the scene on air, its transition, the org's shared files or anything the scene loads) or **Always**. It limits agents' MCP tools only, never people in the switcher. It steers agents that use the tools; it isn't a security boundary: an agent with plain file access to the library is outside it. Scenes can't get around it: they run sandboxed (opaque origin), so their requests to the switcher's API are refused.
+
 ## Development
 
 Running from source needs [Bun](https://bun.sh):
@@ -76,6 +88,7 @@ Environment (all optional; the Mac app passes them through to its server):
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
+| `VIEWSWITCHER_VERSION` | set by the Mac app to its version, which the Claude Desktop extension carries (default `1.0.0`) |
 | `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |
 | `VIEWSWITCHER_ORIGINS` | extra addresses the switcher is reached at, e.g. `http://192.168.1.20:7420` (comma-separated). The server answers only to this Mac's loopback names, `*.ts.net`, and (while Wi-Fi is on) this Mac's own `<name>.local` and LAN addresses, and refuses changes sent by other websites |
 
@@ -126,7 +139,8 @@ Off by default. In the Mac app's menu, **Let Phones and Tablets on This Wi-Fi Co
 ```
 apps/server      Bun server: API, library + watcher, orgs, live state, OBS placement and setup, USB bridge
 apps/server/starter   the starter kit copied into each new org
-apps/server/library-kit   what a new library starts with: the agent skill, CLAUDE.md, .gitignore
+apps/server/library-kit   what a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, MCP configs, .gitignore
+apps/server/src/mcp   the MCP server for agents (/mcp and --mcp-stdio)
 apps/web         Vite + React + TanStack Router/Query SPA: switcher + /program
 apps/apple       one Xcode project (XcodeGen): ViewSwitcher.app for macOS, ViewSwitcher for iPad, the shared ViewSwitcherKit
 apps/site        viewswitcher.com (Astro)

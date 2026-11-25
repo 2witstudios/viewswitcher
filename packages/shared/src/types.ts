@@ -133,6 +133,22 @@ export type UsbStatus = {
   connected: boolean;
 };
 
+/** What an AI agent connected over MCP may put on air: never, only while OBS isn't streaming or recording, or always. */
+export type AgentOnAir = "never" | "not-live" | "always";
+
+/** The agent connection (MCP). */
+export type AgentStatus = {
+  /** The setting, from .viewswitcher/settings.json (default "not-live"). */
+  onAir: AgentOnAir;
+  /** When an agent last called /mcp (ms since epoch), or null. */
+  lastSeen: number | null;
+  /** The agent's name, from its MCP initialize (e.g. "claude-code"), or null. */
+  client: string | null;
+};
+
+/** Which agent apps this Mac has (GET /api/agent/clients, this Mac only), for Edit with AI. */
+export type AgentClients = { claudeCode: boolean; claudeDesktop: boolean; cursor: boolean; codex: boolean; vscode: boolean };
+
 export type LiveState = {
   onAir: OnAir | null;
   obs: ObsStatus;
@@ -140,6 +156,7 @@ export type LiveState = {
   obsSetup: ObsSetup | null;
   usb: UsbStatus;
   warnings: string[];
+  agent: AgentStatus;
 };
 
 /** Server → client WebSocket messages. */

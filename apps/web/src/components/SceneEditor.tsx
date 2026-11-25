@@ -14,7 +14,9 @@ import { useLibrary } from "../lib/library";
 import { inApp, libraryUrl, useLive } from "../lib/live";
 import { EDITOR_SANDBOX } from "../lib/scene-frame";
 import { createSceneSaver } from "../lib/scene-saver";
+import { AskAgent, openAgentSheet } from "./AgentSheet";
 import { attempt, toast } from "./ui";
+import { modalOpen } from "../lib/modal";
 
 const W = 1920;
 const H = 1080;
@@ -536,7 +538,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     const b = baseRef.current;
     if (!b) return;
     const root = sceneRoot(b.source);
-    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.");
+    if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
     const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {
@@ -548,7 +550,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const remove = (id: number) => {
     const b = baseRef.current;
     if (!b) return;
-    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.");
+    if (!canRemove(b.source, id)) return toast("This can't be deleted here. Ask your agent, or open the file.", { label: "Edit with AI", run: openAgentSheet });
     setMenu(null);
     void structural({ id, remove: true }).then((done) => done && toast("Deleted. Undo puts it back."));
   };
@@ -918,6 +920,8 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     if (e.defaultPrevented) return; // already handled (e.g. Return/Esc in the text being typed)
+    // Edit with AI (or another modal) is open over the editor: its keys are its own.
+    if (modalOpen(document)) return;
     // An add or delete is saving: element ids are about to change, so nothing may start on the old ones.
     if (busyRef.current) {
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Delete", "Backspace"].includes(e.key) || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z")) e.preventDefault();
@@ -1475,7 +1479,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                   {Icon.changed}
                   <div>
                     <b>This scene changed while you were editing</b>
-                    <p>Your agent (or someone with the file open) saved a new version, so you're now looking at the latest. Your last change didn't save:</p>
+                    <p><AskAgent>Your agent</AskAgent> (or someone with the file open) saved a new version, so you're now looking at the latest. Your last change didn't save:</p>
                   </div>
                 </div>
                 {conflict.edits.map((e, i) => {

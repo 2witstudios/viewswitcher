@@ -2,6 +2,7 @@ import { resolveStream, shortDate } from "@viewswitcher/shared";
 import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { AskAgent } from "../../../components/AgentSheet";
 import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
@@ -160,7 +161,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 ]}
               />
             ) : (
-              <p className="empty">For a designed one, ask your agent for {org}/projects/{projectId}/transition.html (this project) or {org}/templates/_shared/transition.html (every project).</p>
+              <p className="empty">For a designed one, <AskAgent /> for {org}/projects/{projectId}/transition.html (this project) or {org}/templates/_shared/transition.html (every project).</p>
             )}
           </div>
         </section>

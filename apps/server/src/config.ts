@@ -32,7 +32,7 @@ export const config = {
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
   /** The site's sources the built-in packs come from in a source run (see builtin-packs.ts). */
   site: resolve(env.VIEWSWITCHER_SITE ?? join(import.meta.dir, "../../site")),
-  /** What a new library starts with: the agent skill, CLAUDE.md, .gitignore (see library-kit/README.md). */
+  /** What a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, the MCP configs, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
   allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
@@ -52,6 +52,9 @@ export const config = {
     programSource: env.OBS_PROGRAM_SOURCE ?? "ViewSwitcher Program",
     /** Color source under everything; set to the on-air org's ground color. */
     groundSource: env.OBS_GROUND_SOURCE ?? "ViewSwitcher Ground",
+    /** A scene of its own, never the program, whose one browser source renders scenes for agents to look at (preview.ts). */
+    previewScene: env.OBS_PREVIEW_SCENE ?? "ViewSwitcher Preview",
+    previewSource: env.OBS_PREVIEW_SOURCE ?? "ViewSwitcher Preview Render",
     /** OBS sources that scenes can place with data-slot. Hidden when a scene doesn't use them. */
     devices: (env.OBS_DEVICES ?? "Camera,Screen,iPad").split(",").map((s) => s.trim()).filter(Boolean),
   },

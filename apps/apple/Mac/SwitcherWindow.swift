@@ -99,6 +99,16 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         }
     }
 
+    /// Edit with AI… (MCP-10): the page opens its sheet for #ai, or for /?ai when it loads.
+    func openAgentSheet() {
+        if let url = webView.url, !webView.isLoading, url.scheme?.hasPrefix("http") == true, NavigationPolicy.mac(url, server: base, mainFrame: true) == .allow {
+            webView.evaluateJavaScript("location.hash = 'ai'")
+        } else if var c = URLComponents(url: base.appendingPathComponent(""), resolvingAgainstBaseURL: false) {
+            c.query = "ai"
+            if let url = c.url { webView.load(URLRequest(url: url)) }
+        }
+    }
+
     func show() {
         if !window.isVisible { window.makeKeyAndOrderFront(nil) }
         window.makeKeyAndOrderFront(nil)
@@ -208,7 +218,11 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
         let mainFrame = action.targetFrame?.isMainFrame ?? true
-        switch NavigationPolicy.mac(url, server: base, mainFrame: mainFrame, newWindow: action.targetFrame == nil) {
+        if mainFrame, NavigationPolicy.isExtensionDownload(url, server: base) {
+            saveAndOpen(url)
+            return decisionHandler(.cancel)
+        }
+        switch NavigationPolicy.mac(url, server: base, mainFrame: mainFrame, newWindow: action.targetFrame == nil, fromSwitcher: startedBySwitcher(action)) {
         case .allow:
             decisionHandler(action.shouldPerformDownload ? .cancel : .allow)
         case .openInBrowser(let u):
@@ -220,6 +234,14 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         }
     }
 
+    /// Whether the switcher's own page started this navigation (NavigationPolicy.startedBySwitcher).
+    /// sourceFrame through KVC: WebKit can leave it nil (a load the app started), which the Swift
+    /// signature doesn't admit.
+    private func startedBySwitcher(_ action: WKNavigationAction) -> Bool {
+        let source = action.value(forKey: "sourceFrame") as? WKFrameInfo
+        return NavigationPolicy.startedBySwitcher(source: source?.request.url, sourceMainFrame: source?.isMainFrame ?? false, server: base)
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
         // Nothing downloads into the app.
         decisionHandler(response.canShowMIMEType ? .allow : .cancel)
@@ -227,12 +249,30 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
 
     /// window.open and target=_blank: never a second window; web pages go to the browser.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url, case .openInBrowser(let u) = NavigationPolicy.mac(url, server: base, mainFrame: true, newWindow: true) {
+        if let url = action.request.url, case .openInBrowser(let u) = NavigationPolicy.mac(url, server: base, mainFrame: true, newWindow: true, fromSwitcher: startedBySwitcher(action)) {
             Outside.openInBrowser(u)
         } else {
             events.append("denied window \(action.request.url?.absoluteString ?? "")")
         }
         return nil
+    }
+
+    /// Add to Claude Desktop: save the server's extension in Downloads and open it, so Claude Desktop
+    /// shows its install dialog. (The window downloads nothing else; under e2e it saves to a temp folder.)
+    private func saveAndOpen(_ url: URL) {
+        events.append("download \(url.path)")
+        Task {
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw ServerError.startFailed("The server didn't make the extension.") }
+                let folder = Env.e2e ? FileManager.default.temporaryDirectory : (FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
+                let file = folder.appendingPathComponent("ViewSwitcher.mcpb")
+                try data.write(to: file, options: .atomic)
+                Outside.openFile(file)
+            } catch {
+                Outside.alert("Couldn't add ViewSwitcher to Claude Desktop", error.localizedDescription)
+            }
+        }
     }
 
     // The server can be starting (Dock click during launch) or restarting: keep retrying instead of

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { queryClient, useLive } from "../lib/live";
+import { AskAgent } from "./AgentSheet";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
 
@@ -201,7 +202,7 @@ function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: s
       onSubmit={async () => onCreated((await api.createOrg(name, accent)).orgId, name.trim())}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Bible Study" /></label>
       <label className="field">Accent color<input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} /></label>
-      <p className="empty" style={{ margin: 0, fontSize: 13 }}>Starts with neutral templates in its own folder; next, pick any built-in template sets to start from. Ask Claude to brand them.</p>
+      <p className="empty" style={{ margin: 0, fontSize: 13 }}>Starts with neutral templates in its own folder; next, pick any built-in template sets to start from. <AskAgent>Ask your agent</AskAgent> to brand them.</p>
     </Modal>
   );
 }

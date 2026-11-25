@@ -116,6 +116,18 @@ describe("cross-site POST: Origin from another site", () => {
     expect((await request("/api/packs/install", { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).onAir).toBeNull();
   });
+  test("a scene can't turn the agent on-air setting off either (the MCP preview path)", async () => {
+    // preview_scene loads an agent-written scene in OBS from this server's origin; under the CSP
+    // sandbox its fetches carry Origin: null, so the settings route (which has no agent guard) refuses them.
+    const set = (origin: string) =>
+      request("/api/agent/settings", { method: "POST", headers: { origin, "content-type": "text/plain" }, body: JSON.stringify({ onAir: "always" }) });
+    expect((await set("null")).status).toBe(403);
+    expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("not-live");
+    // The same request from the switcher's own page works (people are never blocked).
+    expect((await set(`http://127.0.0.1:${port}`)).status).toBe(200);
+    expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("always");
+    expect((await request("/api/agent/settings", { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify({ onAir: "not-live" }) })).status).toBe(200);
+  });
   test("is refused, and changes nothing", async () => {
     expect((await onAir({ origin: "https://evil.example" })).status).toBe(403);
     expect((await onAir({ origin: "http://evil.example:7420" })).status).toBe(403);
@@ -138,6 +150,25 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
       expect(r.headers["x-content-type-options"]).toBe("nosniff");
     }
     expect((await request("/library/my-channel/templates/_shared/brand/mark.svg")).headers["content-security-policy"]).toStartWith("sandbox allow-scripts;");
+  });
+  test("preview_scene's URL (top-level in OBS) is sandboxed and still renders: scene.js, the theme and assets load, ?preview applies", async () => {
+    // The exact shape preview.ts loads: ?preview plus a cache-busting load= parameter.
+    const r = await request("/library/my-channel/templates/brb.html?preview&load=1-1");
+    expect(r.status).toBe(200);
+    expect(r.headers["content-security-policy"]).toStartWith("sandbox allow-scripts;");
+    expect(r.headers["content-security-policy"]).not.toContain("allow-same-origin");
+    expect(r.headers["content-security-policy"]).not.toContain("allow-top-navigation");
+    // Classic <script src> and <link rel=stylesheet>: allowed by the CSP (no script-src / style-src) and no CORS needed.
+    const refs = [...r.body.matchAll(/(?:src|href)="(\/library\/[^"]+)"/g)].map((m) => m[1]!);
+    expect(refs).toContain("/library/my-channel/templates/_shared/scene.js");
+    expect(refs).toContain("/library/my-channel/templates/_shared/theme.css");
+    for (const ref of refs) expect({ ref, status: (await request(ref)).status }).toEqual({ ref, status: 200 });
+    const js = await request("/library/my-channel/templates/_shared/scene.js");
+    expect(js.headers["content-type"]).toContain("javascript");
+    // scene.js reads location.search, which a sandboxed document keeps: the preview class applies.
+    expect(js.body).toContain('new URLSearchParams(location.search).has("preview")');
+    expect(js.body).toContain('classList.add("preview")');
+    expect((await request("/library/my-channel/templates/_shared/theme.css")).headers["content-type"]).toContain("text/css");
   });
   test("every library response is sandboxed, whatever it's called; a trailing slash finds nothing", async () => {
     const r = await request("/library/my-channel/templates/brb.html/");

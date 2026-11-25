@@ -30,6 +30,25 @@ export function fromThisMac(peer: string | null | undefined, headers: Headers): 
   return loopbackAddress(peer) && loopbackHost(headers.get("host")) && !proxied(headers);
 }
 
+/**
+ * The local ports of the USB-C bridge's connections to this server (usb-bridge.ts marks each one before
+ * it sends the iPad's first byte, and forgets it on close). The iPad's tunnel ends on 127.0.0.1 with a
+ * loopback Host, so fromThisMac passes it, as the switcher should; these ports tell it apart.
+ */
+export const bridgePorts = new Set<number>();
+
+/** The other end of a request's connection (Bun's server.requestIP). */
+export type Peer = { address: string; port?: number } | null | undefined;
+
+/**
+ * This Mac itself and nothing else: fromThisMac, and not the iPad over the USB-C bridge. For what only
+ * this Mac may see or use: /mcp (an agent that can change the library), /api/info and the Claude
+ * Desktop extension (absolute paths), /api/agent/clients, and the Mac app's pairing admin.
+ */
+export function fromThisMacOnly(peer: Peer, headers: Headers, bridged: ReadonlySet<number> = bridgePorts): boolean {
+  return fromThisMac(peer?.address, headers) && !(peer?.port !== undefined && bridged.has(peer.port));
+}
+
 export type Gate =
   /** From this Mac, or a paired device: on to the normal handlers. */
   | { kind: "pass" }

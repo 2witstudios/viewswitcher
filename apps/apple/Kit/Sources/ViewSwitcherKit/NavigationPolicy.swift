@@ -3,7 +3,7 @@ import Foundation
 /// What a web view does with a navigation (MAC-13, MAC-14). Pure, so XCTest covers every case.
 public enum NavigationDecision: Equatable, Sendable {
     case allow
-    /// Cancel it and open the URL in the default browser (http and https only).
+    /// Cancel it and open the URL outside: in the default browser (http and https), or Cursor's MCP install link.
     case openInBrowser(URL)
     /// Cancel it: a scheme that could launch something (file:, app URL schemes, javascript: …).
     case deny
@@ -23,20 +23,46 @@ public enum NavigationPolicy {
         u.port ?? (u.scheme?.lowercased() == "https" ? 443 : u.scheme?.lowercased() == "http" ? 80 : nil)
     }
 
+    /// Edit with AI's "Add to Cursor" (cursor.com/docs/mcp/install-links): the one app URL the Mac window
+    /// opens. Only Cursor's MCP install, which asks before it adds anything, never another cursor: link.
+    public static func isCursorInstall(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "cursor" && url.host?.lowercased() == "anysphere.cursor-deeplink" && url.path == "/mcp/install"
+    }
+
+    /// What may leave the window for another app: web pages, and Cursor's install link.
+    public static func opensOutside(_ url: URL) -> Bool { isWeb(url) || isCursorInstall(url) }
+
+    /// A navigation the switcher itself started: from the main frame while it shows the switcher's own
+    /// pages, never a scene. (Scenes are sandboxed frames without allow-top-navigation, so they can't
+    /// navigate the window anyway; a scene opened on its own in the window is under /library/.)
+    /// `source` is the URL of the frame the navigation came from, nil when unknown.
+    public static func startedBySwitcher(source: URL?, sourceMainFrame: Bool, server: URL) -> Bool {
+        guard sourceMainFrame, let s = source, sameOrigin(s, server) else { return false }
+        return !s.path.lowercased().hasPrefix("/library/")
+    }
+
+    /// Edit with AI's "Add to Claude Desktop": the server's extension for this install, which the Mac
+    /// window saves to Downloads and opens (Claude Desktop shows its install dialog). Nothing else downloads.
+    public static func isExtensionDownload(_ url: URL, server: URL) -> Bool {
+        sameOrigin(url, server) && url.path == "/api/agent/viewswitcher.mcpb"
+    }
+
     /// Schemes a frame inside the page may load (scene previews, the editor), never file: or app schemes.
     public static func frameAllowed(_ url: URL) -> Bool {
         ["http", "https", "about", "blob", "data"].contains(url.scheme?.lowercased() ?? "")
     }
 
     /// The Mac window: the main frame stays on the server; other web pages go to the browser.
-    /// `newWindow` is window.open / target=_blank, which never opens inside the app.
-    public static func mac(_ url: URL, server: URL, mainFrame: Bool, newWindow: Bool = false) -> NavigationDecision {
-        if newWindow { return isWeb(url) ? .openInBrowser(url) : .deny }
+    /// `newWindow` is window.open / target=_blank, which never opens inside the app. Cursor's install
+    /// link opens only when `fromSwitcher` (startedBySwitcher): Edit with AI's own button, never a scene.
+    public static func mac(_ url: URL, server: URL, mainFrame: Bool, newWindow: Bool = false, fromSwitcher: Bool = false) -> NavigationDecision {
+        let outside = isWeb(url) || (fromSwitcher && isCursorInstall(url))
+        if newWindow { return outside ? .openInBrowser(url) : .deny }
         if !mainFrame { return frameAllowed(url) ? .allow : .deny }
         if sameOrigin(url, server) { return .allow }
         // about:blank and the like while the page sets itself up are harmless; everything else leaves.
         if url.scheme?.lowercased() == "about" { return .allow }
-        return isWeb(url) ? .openInBrowser(url) : .deny
+        return outside ? .openInBrowser(url) : .deny
     }
 
     /// The scheme of the iPad app's bundled connector page (viewswitcher://connector/).
