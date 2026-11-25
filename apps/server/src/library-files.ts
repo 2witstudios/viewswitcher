@@ -71,7 +71,8 @@ export type WriteResult =
  * that version; a new one is created only when `hash` is left out. Missing folders are made; nothing
  * is ever moved or deleted.
  */
-export function writeText(root: string, path: unknown, text: unknown, hash?: unknown): Promise<WriteResult> {
+/** `beforeWrite` runs in turn, right before anything is written, and throws to refuse the write. */
+export function writeText(root: string, path: unknown, text: unknown, hash?: unknown, { beforeWrite }: { beforeWrite?: () => unknown } = {}): Promise<WriteResult> {
   return serial(async (): Promise<WriteResult> => {
     if (typeof text !== "string") throw new PathError("text must be a string");
     const { path: p, abs } = await checked(root, path);
@@ -86,11 +87,13 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
       if (hash === undefined || hash === null || hash === "") return { ok: false, path: p, hash: now, reason: `${p} already exists. read_file it first and pass its hash, so you change what's really there.` };
       if (hash !== now) return { ok: false, path: p, hash: now, reason: `${p} changed since you read it (someone saved it in the switcher or another tool). read_file it again and redo your change on the new text.` };
       if (current === text) return { ok: true, path: p, hash: now, created: false, changed: false };
+      await beforeWrite?.();
       const r = await replaceChecked(real, read, now, text, {});
       if (!r.ok) return { ok: false, path: p, hash: r.hash, reason: `${p} changed while you were writing it. read_file it again and redo your change.` };
       return { ok: true, path: p, hash: sceneHash(text), created: false, changed: true };
     }
     if (hash !== undefined && hash !== null && hash !== "") return { ok: false, path: p, hash: null, reason: `${p} doesn't exist any more. Leave out hash to create it.` };
+    await beforeWrite?.();
     await mkdir(dirname(abs), { recursive: true });
     try {
       await writeFile(abs, text, { flag: "wx" });

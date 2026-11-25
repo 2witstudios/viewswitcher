@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { AgentOnAir } from "@viewswitcher/shared";
 import { agentGuard, type GuardAction } from "./agent-guard";
 
-const onAir = { path: "daisy/projects/ld/streams/12-04-x/teaching.html", transition: "daisy/templates/_shared/transition.html" };
+const onAir = {
+  path: "daisy/projects/ld/streams/12-04-x/teaching.html",
+  transition: "daisy/templates/_shared/transition.html",
+  loads: ["daisy/assets/logo.svg", "daisy/projects/ld/streams/12-04-x/lower-third.css", "daisy/templates/_shared/theme.css"],
+};
 const go: GuardAction = { kind: "go_on_air" };
 const write = (...paths: string[]): GuardAction => ({ kind: "write", paths });
 
@@ -26,6 +30,15 @@ const rows: [AgentOnAir, boolean, GuardAction, boolean][] = [
   ["not-live", true, write("daisy/templates/teaching.html"), true],
   ["not-live", true, write("other/templates/_shared/theme.css"), true], // another org's shared files
   ["not-live", true, write("daisy/projects/other/transition.html"), true],
+  // Files the scene on air loads (its <img>, <link>, <script>, <video>, CSS url() targets).
+  ["not-live", true, write("daisy/assets/logo.svg"), false],
+  ["not-live", true, write("Daisy/Assets/Logo.svg"), false],
+  ["not-live", true, write("daisy/projects/ld/streams/12-04-x/lower-third.css"), false],
+  ["not-live", true, write("daisy/assets/logo-v2.svg"), true], // a new file beside it
+  ["not-live", true, write("daisy/assets/other.png"), true],
+  ["not-live", false, write("daisy/assets/logo.svg"), true],
+  ["never", true, write("daisy/assets/logo.svg"), false],
+  ["always", true, write("daisy/assets/logo.svg"), true],
   ["not-live", false, write(onAir.path, "daisy/templates/_shared/theme.css"), true],
   ["never", true, write("daisy/templates/_shared/theme.css"), false],
   ["never", false, write(onAir.path), true],
@@ -51,6 +64,7 @@ describe("agentGuard", () => {
     expect(r(write(onAir.path))).toBe("That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.");
     expect(r(write("daisy/templates/_shared/transition.html"))).toContain("Wait until the stream ends");
     expect(r(write("daisy/templates/_shared/theme.css"))).toContain("customize_scene");
+    expect(r(write("daisy/assets/logo.svg"))).toContain("uses that file");
     expect(r(go)).toContain("let them put it on air in the switcher");
     expect(r(go, "never")).toContain("never put scenes on air");
   });

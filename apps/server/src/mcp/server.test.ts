@@ -10,6 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { LiveState } from "@viewswitcher/shared";
 import { config } from "../config";
 import { onAirFor, renamedOnAir } from "../library-actions";
+import { writeText } from "../library-files";
 import { ensureLibrary } from "../library-kit";
 import type { PreviewResult } from "../preview-types";
 import { readForEdit, sceneHash } from "../scene-edit";
@@ -30,6 +31,8 @@ const fresh = (): LiveState => ({
   agent: { onAir: "not-live", lastSeen: null, client: null },
 });
 let state = fresh();
+/** Runs inside goOnAir after the scene is looked up and before it commits (a test makes OBS go live there). */
+let beforeCommit: (() => void) | null = null;
 let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -46,8 +49,12 @@ beforeAll(async () => {
     kit: config.libraryKit,
     port: PORT,
     state: () => state,
-    goOnAir: async (b) => {
-      state.onAir = await onAirFor(root, b);
+    // As main.ts does it: look the scene up, run the agent's check, then commit.
+    goOnAir: async (b, check) => {
+      const next = await onAirFor(root, b);
+      beforeCommit?.();
+      check?.();
+      state.onAir = next;
       return state;
     },
     renamed: async (from, name, r) => {
@@ -66,6 +73,7 @@ afterAll(() => {
 });
 beforeEach(() => {
   state = fresh();
+  beforeCommit = null;
   previews = { scene: { ok: true, png, width: 960, height: 540 }, program: { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/program` } };
 });
 
@@ -384,6 +392,63 @@ describe("go_on_air and the agent guard", () => {
     // Off air again, the same writes go through.
     state.obs = { connected: true, streaming: false, recording: false };
     expect((await call("write_file", { path: copy.path, text: "<title>T</title>", hash })).isError).toBe(false);
+  });
+});
+
+describe("the guard covers what the scene on air loads, and is checked again as a change commits", () => {
+  test("while live, files the on-air scene loads (pictures, stylesheets, through its theme) are refused; others aren't", async () => {
+    await writeFile(join(root, ORG, "assets/live-logo.svg"), "<svg/>");
+    await writeFile(join(root, ORG, "assets/spare.svg"), "<svg/>");
+    await writeFile(join(root, ORG, "assets/live.css"), ".x { background: url(tex.svg) }");
+    await writeFile(join(root, ORG, "assets/tex.svg"), "<svg/>");
+    const scene = `${ORG}/templates/live-scene.html`;
+    await writeFile(join(root, scene), `<title>Live</title><link rel="stylesheet" href="/library/${ORG}/assets/live.css"><img src="../assets/live-logo.svg"><img src="/library/${ORG}/assets/soon.png">`);
+    await data("go_on_air", { path: scene });
+    const hashOf = async (p: string) => (await data("read_file", { path: p })).hash;
+    const [logo, css, tex, spare] = [await hashOf(`${ORG}/assets/live-logo.svg`), await hashOf(`${ORG}/assets/live.css`), await hashOf(`${ORG}/assets/tex.svg`), await hashOf(`${ORG}/assets/spare.svg`)];
+    live();
+    for (const [path, hash] of [[`${ORG}/assets/live-logo.svg`, logo], [`${ORG}/assets/live.css`, css], [`${ORG}/assets/tex.svg`, tex]] as const) {
+      const r = await call("write_file", { path, text: "<svg>new</svg>", hash });
+      expect({ path, err: r.isError, text: r.text }).toEqual({ path, err: true, text: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends." });
+    }
+    expect(await readFile(join(root, ORG, "assets/live-logo.svg"), "utf8")).toBe("<svg/>");
+    // A picture the scene asks for but that isn't there yet would show the moment it's created.
+    expect((await call("add_asset", { org: ORG, name: "soon.png", base64: Buffer.from("png").toString("base64") })).isError).toBe(true);
+    // An upload whose name is taken gets a free name, so it never replaces what's on air.
+    expect((await data("add_asset", { org: ORG, name: "live-logo.svg", base64: Buffer.from("<svg/>").toString("base64") })).path).not.toBe(`${ORG}/assets/live-logo.svg`);
+    expect((await call("write_file", { path: `${ORG}/assets/spare.svg`, text: "<svg>new</svg>", hash: spare })).isError).toBe(false);
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await call("write_file", { path: `${ORG}/assets/live-logo.svg`, text: "<svg>new</svg>", hash: logo })).isError).toBe(false);
+  });
+  test("go_on_air: OBS going live while the scene is looked up stops it", async () => {
+    beforeCommit = live;
+    const r = await call("go_on_air", { path: `${ORG}/templates/brb.html` });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("streaming or recording");
+    expect(state.onAir).toBeNull();
+  });
+  test("go_on_air: the setting changed to never in the meantime stops it", async () => {
+    beforeCommit = () => (state.agent.onAir = "never");
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("never put scenes on air");
+    expect(state.onAir).toBeNull();
+  });
+  test("writeText runs beforeWrite in turn, after the hash check and before writing; a throw writes nothing", async () => {
+    const p = `${ORG}/templates/queued.html`;
+    await writeFile(join(root, p), "<title>A</title>");
+    const order: string[] = [];
+    const refuse = () => {
+      order.push("check");
+      throw new Error("live now");
+    };
+    expect(writeText(root, p, "<title>B</title>", sceneHash("<title>A</title>"), { beforeWrite: refuse })).rejects.toThrow("live now");
+    expect(writeText(root, `${ORG}/templates/queued-new.html`, "x", undefined, { beforeWrite: refuse })).rejects.toThrow("live now");
+    await Bun.sleep(10);
+    expect(order).toEqual(["check", "check"]);
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>A</title>");
+    expect(await stat(join(root, ORG, "templates/queued-new.html")).catch(() => null)).toBeNull();
+    // A stale hash is refused before the check runs.
+    expect((await writeText(root, p, "x", "stale", { beforeWrite: refuse })).ok).toBe(false);
+    expect(order.length).toBe(2);
   });
 });
 

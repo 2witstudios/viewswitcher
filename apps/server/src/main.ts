@@ -82,9 +82,11 @@ async function persist() {
 }
 
 /** Put a scene on air: for the switcher (POST /api/onair) and for agents (go_on_air). */
-async function goOnAir(b: OnAirRequest): Promise<LiveState> {
+async function goOnAir(b: OnAirRequest, check?: () => void): Promise<LiveState> {
   if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
-  state.onAir = await onAirFor(config.library, b);
+  const next = await onAirFor(config.library, b);
+  check?.(); // an agent's go_on_air: the on-air setting against the state now, after the await
+  state.onAir = next;
   state.warnings = [];
   await persist();
   publishState();

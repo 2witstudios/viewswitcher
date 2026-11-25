@@ -17,6 +17,7 @@ import { listFiles, readText, writeText } from "../library-files";
 import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
+import { loadedFiles } from "../scene-refs";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
@@ -25,8 +26,11 @@ export type McpDeps = {
   kit: string;
   port: number;
   state: () => LiveState;
-  /** Put a scene on air exactly as the switcher does (state, persist, publish); resolves to the new state. */
-  goOnAir: (b: OnAirRequest) => Promise<LiveState>;
+  /**
+   * Put a scene on air exactly as the switcher does (state, persist, publish); resolves to the new
+   * state. `check` runs right before the change commits and throws to refuse it.
+   */
+  goOnAir: (b: OnAirRequest, check?: () => void) => Promise<LiveState>;
   /** After a scene was renamed: keeps the on-air record pointing at it, as the switcher's rename does. */
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
@@ -106,15 +110,24 @@ export function createMcpServer(deps: McpDeps): McpServer {
       return path;
     }
   };
-  const guard = (action: GuardAction) => {
+  /** The guard (agent-guard.ts) against the state right now; throws the refusal. `loads`: what the scene on air loads. */
+  const guardNow = (action: GuardAction, loads?: string[]) => {
     const s = deps.state();
-    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition) };
+    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads };
     // A link to the scene on air is the scene on air.
     const checked: GuardAction = action.kind === "write" ? { kind: "write", paths: action.paths.flatMap((p) => [p, realRel(p)]) } : action;
     const g = agentGuard({ setting: s.agent.onAir, live: s.obs.streaming || s.obs.recording, onAir, action: checked });
     if (!g.ok) throw new Refusal(g.reason);
   };
-  const writes = (...paths: string[]) => guard({ kind: "write", paths });
+  /** The files the scene on air (and its transition) load, read only when the guard would use them. */
+  const onAirLoads = async () => {
+    const s = deps.state();
+    if (!s.onAir || s.agent.onAir === "always" || !(s.obs.streaming || s.obs.recording)) return undefined;
+    const pages = [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p);
+    return (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]);
+  };
+  /** Refuses (throws) a change to `paths` that the agent on-air setting doesn't allow right now. */
+  const writes = async (...paths: string[]) => guardNow({ kind: "write", paths }, await onAirLoads());
 
   const exists = (abs: string) => stat(abs).then(() => true, () => false);
   const needProject = async (org: string, projectId: string) => {
@@ -228,8 +241,10 @@ export function createMcpServer(deps: McpDeps): McpServer {
     inputSchema: { path: pathArg("The file"), text: z.string().describe("The whole new text of the file."), hash: z.string().optional().describe("The hash read_file gave you; required when the file exists.") },
     annotations: WRITE,
   }, run(async ({ path, text: body, hash }: { path: string; text: string; hash?: string }) => {
-    writes(String(path).replace(/\/+$/, ""));
-    const r = await writeText(root, path, body, hash);
+    const target = String(path).replace(/\/+$/, "");
+    await writes(target);
+    // Checked again just before the write: OBS may have gone live while it waited its turn.
+    const r = await writeText(root, path, body, hash, { beforeWrite: () => writes(target) });
     if (!r.ok) return refusal(r.hash ? `${r.reason} (current hash: ${r.hash})` : r.reason);
     return text({ path: r.path, hash: r.hash, ...(r.created ? { created: true } : {}), ...(r.changed ? {} : { unchanged: true }) });
   }));
@@ -246,7 +261,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const bytes = Buffer.from(base64, "base64");
     if (bytes.length === 0) throw new Refusal("That isn't base64 file data");
     if (bytes.length > MAX_ASSET) throw new Refusal("That file is over 15 MB");
-    writes(`${org}/assets/${name}`);
+    // An existing name gets a free one instead (saveAsset), so only a new file at this name could show on air.
+    if (!(await exists(inside(dir, `assets/${plainName(name)}`)))) await writes(`${org}/assets/${name}`);
     const saved = await lib.saveAsset(dir, new File([bytes], String(name)));
     return text({ path: `${org}/${saved.path}` });
   }));
@@ -258,7 +274,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ org, name, templates }: { org: string; name: string; templates?: string[] }) => {
     const dir = await existingOrg(root, org);
-    writes(`${org}/projects/${slugify(name)}/project.json`);
+    await writes(`${org}/projects/${slugify(name)}/project.json`);
     return text(await lib.createProject(dir, name, templates ?? []));
   }));
 
@@ -269,7 +285,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ org, projectId, name, date }: { org: string; projectId: string; name: string; date?: string }) => {
     const dir = await needProject(org, projectId);
-    writes(`${org}/projects/${projectId}/streams/${slugify(name)}/stream.json`);
+    await writes(`${org}/projects/${projectId}/streams/${slugify(name)}/stream.json`);
     return text(await lib.createStream(dir, projectId, name, date ?? today()));
   }));
 
@@ -281,7 +297,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, template, projectId, streamId }: { org: string; template: string; projectId: string; streamId?: string }) => {
     const dir = streamId ? await needStream(org, projectId, streamId) : await needProject(org, projectId);
     if (!(await exists(inside(dir, `templates/${plainName(template)}.html`)))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates.`);
-    writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${template}.html`);
+    await writes(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${template}.html`);
     return text(await sceneFromTemplate(root, { org, template, projectId, streamId }));
   }));
 
@@ -293,7 +309,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, projectId, streamId, name }: { org: string; projectId: string; streamId: string; name: string }) => {
     const dir = await needStream(org, projectId, streamId);
     if (!(await exists(inside(dir, `projects/${projectId}/scenes/${plainName(name)}.html`)))) throw new Refusal(`Project ${projectId} has no scene "${name}". scan_library shows its scenes.`);
-    writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
+    await writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
     return text(await customizeScene(root, { org, projectId, streamId, name }));
   }));
 
@@ -305,7 +321,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, projectId, streamId, name }: { org: string; projectId: string; streamId: string; name: string }) => {
     const dir = await needStream(org, projectId, streamId);
     if (!(await exists(inside(dir, `projects/${projectId}/streams/${streamId}/${plainName(name)}.html`)))) throw new Refusal(`Stream ${streamId} has no copy of "${name}"`);
-    writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
+    await writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
     await lib.revert(dir, projectId, streamId, name);
     return text({ ok: true });
   }));
@@ -317,7 +333,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ path }: { path: string }) => {
     await needScene(path);
-    writes(`${path.slice(0, -5)}-copy.html`);
+    await writes(`${path.slice(0, -5)}-copy.html`);
     return text(await duplicateScene(root, path));
   }));
 
@@ -328,7 +344,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ path, hash, name }: { path: string; hash: string; name: string }) => {
     await needScene(path);
-    writes(path, `${path.slice(0, path.lastIndexOf("/"))}/${slugify(name)}.html`);
+    await writes(path, `${path.slice(0, path.lastIndexOf("/"))}/${slugify(name)}.html`);
     const r = await renameScene(root, path, hash, name);
     if (!r.ok) return refusal(`${path} changed since you read it. read_file it again and use the new hash. (current hash: ${r.hash})`);
     await deps.renamed(path, name, r);
@@ -343,7 +359,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ org, projectId }: { org: string; projectId: string }) => {
     const dir = await needProject(org, projectId);
     const path = `${org}/projects/${projectId}/transition.html`;
-    writes(path);
+    await writes(path);
     await lib.customizeTransition(dir, projectId);
     return text({ path });
   }));
@@ -355,7 +371,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: DESTRUCTIVE,
   }, run(async ({ org, projectId }: { org: string; projectId: string }) => {
     const dir = await needProject(org, projectId);
-    writes(`${org}/projects/${projectId}/transition.html`);
+    await writes(`${org}/projects/${projectId}/transition.html`);
     await lib.revertTransition(dir, projectId);
     return text({ ok: true });
   }));
@@ -368,7 +384,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     inputSchema: { path: pathArg("The scene (.html)") },
     annotations: DESTRUCTIVE,
   }, run(async ({ path }: { path: string }) => {
-    guard({ kind: "go_on_air" });
+    guardNow({ kind: "go_on_air" });
     await needScene(path);
     const l = await lib.scanLibrary(root, plainName(orgOf(path)));
     let found: OnAirRequest | null = null;
@@ -383,7 +399,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
       }
     }
     if (!found) throw new Refusal("Only an org's templates, project scenes and stream scenes go on air. scan_library lists them.");
-    return text(stateView(await deps.goOnAir(found)));
+    // Checked again as it commits: OBS may have gone live, or the setting changed, in the meantime.
+    return text(stateView(await deps.goOnAir(found, () => guardNow({ kind: "go_on_air" }))));
   }));
 
   return server;
