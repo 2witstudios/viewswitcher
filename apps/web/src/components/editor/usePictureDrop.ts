@@ -12,7 +12,7 @@ import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "r
 import { api } from "../../lib/api";
 import { libraryUrl } from "../../lib/live";
 import { toast } from "../ui";
-import { canStart, type Made, type Mode } from "./mode";
+import { canStart, idsUnsettled, type Made } from "./mode";
 import type { ModeStore } from "./useMode";
 
 /** Pictures the editor takes from a drop. */
@@ -35,7 +35,6 @@ const fileSize = async (f: File) => {
   }
 };
 const srcFor = (path: string) => libraryUrl(path).replace(/'/g, "%27");
-const WAIT_MS = 100;
 
 export type Point = { x: number; y: number };
 /** Where a picture being dragged over would land, and the image it would replace. */
@@ -52,23 +51,20 @@ export function imageNow(made: Made, now: { base: SceneBase | null; layout: numb
   return edit && "src" in edit && replaceableImage(b, edit.id) ? edit : null;
 }
 
-/** An add or delete is saving (ids change when it lands), or the editor is leaving: a picture waits it out. */
-const idsUnsettled = (m: Mode) => m.kind === "saving-structure" || m.kind === "leaving";
-
 /**
  * Where a replacing picture goes once it has uploaded. It waits while an add or delete is saving,
  * because ids change when that lands and the id it holds would name another image. Then it follows
  * image `id` of version `made` into the scene as it is. Null when it can't: the image is gone or has
- * a twin, a conflict came up, or the editor went.
+ * a twin, or a conflict came up.
  */
 export async function replaceTarget(
-  env: { mode: () => Mode; base: () => SceneBase | null; layout: () => number; alive: () => boolean; wait: () => Promise<unknown> },
+  env: { mode: Pick<ModeStore, "until">; base: () => SceneBase | null; layout: () => number },
   made: Made,
   id: number,
   src: string,
 ): Promise<SrcEdit | null> {
-  while (env.alive() && idsUnsettled(env.mode())) await env.wait();
-  if (!env.alive() || env.mode().kind === "conflict") return null;
+  const m = await env.mode.until((m) => !idsUnsettled(m));
+  if (m.kind === "conflict") return null;
   return imageNow(made, { base: env.base(), layout: env.layout() }, id, src);
 }
 
@@ -76,7 +72,6 @@ export function usePictureDrop(opts: {
   org: string;
   mode: ModeStore;
   base: () => SceneBase | null;
-  generation: () => number;
   /** Bumped whenever element ids change. */
   layout: () => number;
   ready: boolean;
@@ -107,15 +102,14 @@ export function usePictureDrop(opts: {
 
   const made = (): Made | null => {
     const b = o.current.base();
-    return b ? { gen: o.current.generation(), base: b, layout: o.current.layout() } : null;
+    return b ? { base: b, layout: o.current.layout() } : null;
   };
   const canDrop = () => opts.ready && canStart(mode.now()) && !uploadingRef.current;
 
-  const sleep = () => new Promise((r) => setTimeout(r, WAIT_MS));
   /** Put `src` in place of image `id` of version `from`, if it's still there. */
   const replaceWith = async (from: Made, id: number, src: string) => {
     const k = o.current;
-    const edit = await replaceTarget({ mode: mode.now, base: k.base, layout: k.layout, alive: () => alive.current, wait: sleep }, from, id, src);
+    const edit = await replaceTarget({ mode, base: k.base, layout: k.layout }, from, id, src);
     const b = o.current.base();
     if (!alive.current) return false;
     if (!edit || !b) {
@@ -127,14 +121,11 @@ export function usePictureDrop(opts: {
     return true;
   };
 
-  /** Wait until nothing else is under way (a drag lets go, an add finishes saving); false if the editor went or a conflict came up. */
+  /** Wait until nothing else is under way (a drag lets go, an add finishes saving); false if a conflict came up or the editor went. */
   const whenFree = async () => {
-    if (mode.now().kind === "typing") o.current.finishTyping();
-    while (alive.current && !canStart(mode.now())) {
-      if (mode.now().kind === "conflict") return false;
-      await sleep();
-    }
-    return alive.current;
+    o.current.finishTyping();
+    const m = await mode.until((m) => canStart(m) || m.kind === "conflict");
+    return m.kind !== "conflict" && alive.current;
   };
 
   const place = async (file: File, at: Point, image: { id: number; made: Made } | null) => {

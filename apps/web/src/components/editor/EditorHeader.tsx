@@ -2,13 +2,14 @@ import type { AddKind } from "@viewswitcher/shared";
 import { Icon } from "../icons";
 import { TitleField } from "./TitleField";
 
-const ADD_ITEMS: { kind: AddKind; label: string; hint?: string; icon: "text" | "title" | "image" | "camera" | "screen" | "guest" }[] = [
-  { kind: "text", label: "Text", icon: "text" },
-  { kind: "title", label: "Title bar", icon: "title" },
-  { kind: "image", label: "Image", icon: "image" },
-  { kind: "camera", label: "Camera box", hint: "Camera source", icon: "camera" },
-  { kind: "screen", label: "Screen box", hint: "Screen source", icon: "screen" },
-  { kind: "guest", label: "Guest box", hint: "Guest or 2nd camera", icon: "guest" },
+/** Each kind's icon has the kind's own name. */
+const ADD_ITEMS: { kind: AddKind; label: string; hint?: string }[] = [
+  { kind: "text", label: "Text" },
+  { kind: "title", label: "Title bar" },
+  { kind: "image", label: "Image" },
+  { kind: "camera", label: "Camera box", hint: "Camera source" },
+  { kind: "screen", label: "Screen box", hint: "Screen source" },
+  { kind: "guest", label: "Guest box", hint: "Guest or 2nd camera" },
 ];
 
 /** The editor's top bar: Back, where the scene lives and its name, and (once it's open) Add, Undo, Open the file and Done. */
@@ -62,7 +63,7 @@ export function EditorHeader({ crumb, title, onBack, open }: {
                 <div role="menu" aria-label="Add to the scene" className="ed-menu add-menu">
                   {ADD_ITEMS.map((it) => (
                     <button key={it.kind} type="button" role="menuitem" onClick={() => open.onAdd(it.kind)}>
-                      {Icon[it.icon]}<span>{it.label}{it.hint && <small>{it.hint}</small>}</span>
+                      {Icon[it.kind]}<span>{it.label}{it.hint && <small>{it.hint}</small>}</span>
                     </button>
                   ))}
                 </div>

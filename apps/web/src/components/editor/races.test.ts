@@ -6,7 +6,7 @@ import type { SceneBase, SrcEdit } from "@viewswitcher/shared";
 import { idBaseline, idsMatch } from "./frame-dom";
 import { newestOnly } from "./newest";
 import { createSceneSaver } from "../../lib/scene-saver";
-import { IDLE, type Mode } from "./mode";
+import { createModeStore } from "./mode";
 import { imageNow, replaceTarget } from "./usePictureDrop";
 
 const deferred = <T,>() => {
@@ -63,7 +63,7 @@ const v1 = toBase({ html, hash: "1" });
 const imgs = (b: SceneBase) => b.els.filter((e) => e.tag === "img").map((e) => e.id);
 const [logo, photo] = imgs(v1) as [number, number];
 const NEW = "/library/daisy/assets/new.png";
-const made = { gen: 1, layout: 1, base: v1 };
+const made = { layout: 1, base: v1 };
 
 describe("a picture that lands after the scene changed", () => {
   test("goes to the image it was dropped on while no ids have changed", () => {
@@ -91,7 +91,7 @@ describe("a picture that lands after the scene changed", () => {
     const twin = html.replace("photo.png", "logo.png").replace("top: 200px", "top: 0px");
     const v0 = toBase({ html: twin, hash: "0" });
     const v2 = toBase({ html: twin.replace("Title", "New title"), hash: "2" });
-    expect(imageNow({ gen: 1, layout: 1, base: v0 }, { base: v2, layout: 2 }, imgs(v0)[0]!, NEW)).toBeNull();
+    expect(imageNow({ layout: 1, base: v0 }, { base: v2, layout: 2 }, imgs(v0)[0]!, NEW)).toBeNull();
   });
 });
 
@@ -108,8 +108,7 @@ describe("a Replace that finishes uploading while an add or delete is saving", (
     let file = scene;
     let base: SceneBase = toBase({ html: file, hash: file });
     let layout = 1;
-    let mode: Mode = IDLE;
-    let gone = false;
+    const mode = createModeStore();
     const held = deferred<void>();
     let holdNext = true;
     const save = createSceneSaver<SceneBase, null>({
@@ -135,31 +134,30 @@ describe("a Replace that finishes uploading while an add or delete is saving", (
         throw e;
       },
     });
-    const env = { mode: () => mode, base: () => base, layout: () => layout, alive: () => !gone, wait: () => new Promise((r) => setTimeout(r, 1)) };
+    const env = { mode, base: () => base, layout: () => layout };
     return {
       save, env,
       file: () => file,
       base: () => base,
-      setMode: (m: Mode) => void (mode = m),
+      mode,
       /** The add or delete lands: ids change, and the editor is idle again. */
       land: async (saving: Promise<void>) => {
         held.resolve();
         await saving;
         layout++;
-        mode = IDLE;
+        mode.dispatch({ t: "end", kind: "saving-structure" });
       },
-      leave: () => void (gone = true),
     };
   }
   const srcs = (html: string) => [...html.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1]);
 
   test("waits for it to land, then replaces the image it was dropped on", async () => {
     const ed = editor();
-    const made = { gen: 1, layout: 1, base: ed.base() };
+    const made = { layout: 1, base: ed.base() };
     const [logo] = imgs(ed.base()) as [number];
     const title = ed.base().els.find((e) => e.tag === "p")!.id;
     // Delete the title: an add or delete is saving, its request still on its way.
-    ed.setMode({ kind: "saving-structure" });
+    ed.mode.dispatch({ t: "structure" });
     const deleting = ed.save([{ id: title, remove: true }], null);
     // The upload finishes now.
     let target: SrcEdit | null | undefined;
@@ -172,20 +170,14 @@ describe("a Replace that finishes uploading while an add or delete is saving", (
     expect(srcs(ed.file())).toEqual([NEW, "/library/daisy/assets/photo.png"]);
   });
 
-  test("is refused when a conflict comes up meanwhile, or the editor goes", async () => {
+  test("is refused when a conflict comes up meanwhile", async () => {
     const ed = editor();
-    const made = { gen: 1, layout: 1, base: ed.base() };
+    const made = { layout: 1, base: ed.base() };
     const [logo] = imgs(ed.base()) as [number];
-    ed.setMode({ kind: "saving-structure" });
+    ed.mode.dispatch({ t: "structure" });
     const waiting = replaceTarget(ed.env, made, logo, NEW);
-    ed.setMode({ kind: "conflict", edits: [], changed: [], prev: ed.base(), latest: ed.base() });
+    ed.mode.dispatch({ t: "conflict", conflict: { edits: [], changed: [], prev: ed.base(), latest: ed.base() } });
     expect(await waiting).toBeNull();
-
-    const ed2 = editor();
-    ed2.setMode({ kind: "leaving" });
-    const going = replaceTarget(ed2.env, { gen: 1, layout: 1, base: ed2.base() }, logo, NEW);
-    ed2.leave();
-    expect(await going).toBeNull();
   });
 });
 

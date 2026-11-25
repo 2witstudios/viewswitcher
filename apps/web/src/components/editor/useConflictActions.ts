@@ -6,14 +6,13 @@ import type { InsertEdit, RemoveEdit, SceneBase, SceneEdit } from "@viewswitcher
 import { useRef } from "react";
 import { toast } from "../ui";
 import type { ModeStore } from "./useMode";
-import type { UndoEntry } from "./useUndo";
 
 export function useConflictActions(opts: {
   mode: ModeStore;
   current: () => SceneBase | null;
-  applyDom: (edit: SceneEdit) => void;
+  /** Change an element now: on screen, live, saved, undoable against `before`. */
+  change: (edit: SceneEdit, before: SceneEdit | null) => void;
   preview: (edit: SceneEdit, gen?: number) => void;
-  save: (edits: SceneEdit[], undo: UndoEntry[]) => void;
   structural: (edit: InsertEdit | RemoveEdit) => Promise<unknown>;
 }) {
   const o = useRef(opts);
@@ -35,12 +34,7 @@ export function useConflictActions(opts: {
     // Each goes as its own save: a move and a resize of one box both change its left.
     const last = new Map<string, SceneEdit>();
     for (const { m } of pairs) if (m && !isStructural(m)) last.set(`${m.id}:${editKind(m)}`, m);
-    for (const e of last.values()) {
-      const before = valueIn(latest, e);
-      k.applyDom(e);
-      k.preview(e);
-      k.save([e], before ? [{ before, after: e }] : []);
-    }
+    for (const e of last.values()) k.change(e, valueIn(latest, e));
     // Adding and deleting go through the same path as the first time (saved, then the frame follows),
     // one at a time, each placed in the version as it is by then.
     for (const { e, m } of pairs) {

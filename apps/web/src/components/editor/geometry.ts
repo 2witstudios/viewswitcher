@@ -1,10 +1,10 @@
 // Dragging, resizing and nudging boxes, in scene pixels (1920×1080). Pure, so every rule here is
 // tested without a browser: the 8 px grid, snapping to other boxes, 16:9 device boxes, the corners.
-import { snapMove } from "@viewswitcher/shared";
+import { SCENE, snapMove } from "@viewswitcher/shared";
 import type { Box, SizeEdit } from "@viewswitcher/shared";
 
-export const SCENE_W = 1920;
-export const SCENE_H = 1080;
+export const SCENE_W = SCENE.width;
+export const SCENE_H = SCENE.height;
 export const MIN_SIZE = 24;
 const GRID = 8;
 
@@ -15,6 +15,9 @@ export const CORNERS: readonly Corner[] = ["nw", "ne", "sw", "se"];
 
 /** Which edges a corner moves: a west corner moves the left edge, a north one the top. */
 export const sidesOf = (corner: Corner) => ({ west: corner === "nw" || corner === "sw", north: corner === "nw" || corner === "ne" });
+
+/** A box in scene pixels as CSS on the stage, which shows the scene at `scale`. */
+export const onStage = (b: Box, scale: number) => ({ left: b.x * scale, top: b.y * scale, width: b.w * scale, height: b.h * scale });
 
 /** A corner handle's point on a box's screen rect (before scaling). */
 export const cornerPoint = (rect: Box, corner: Corner) => ({ x: rect.x + (corner[1] === "e" ? rect.w : 0), y: rect.y + (corner[0] === "s" ? rect.h : 0) });

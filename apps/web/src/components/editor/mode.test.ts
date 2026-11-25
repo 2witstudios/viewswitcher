@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { toBase } from "@viewswitcher/shared";
-import { canReloadIn, canStart, canUndo, IDLE, type Mode, type ModeEvent, reduce } from "./mode";
+import { canReloadIn, canStart, canUndo, createModeStore, IDLE, type Mode, type ModeEvent, reduce } from "./mode";
 
 const v1 = toBase({ html: `<main><p style="left: 0px; top: 0px">One</p><p>Two</p></main>`, hash: "1" });
 const v2 = toBase({ html: `<main><p style="left: 0px; top: 0px">One</p><p>Changed</p></main>`, hash: "2" });
-const made = { gen: 1, layout: 1, base: v1 };
+const made = { layout: 1, base: v1 };
 const conflict = { edits: [{ id: 1, text: "Mine" }], changed: [], prev: v1, latest: v1 };
 const file = new File(["x"], "a.png", { type: "image/png" });
 
@@ -111,5 +111,21 @@ describe("guards", () => {
     for (const e of [typing, drag(8), { t: "resize", id: 1, width: 1, height: 1 }, { t: "structure" }, { t: "pick", replace: null, made }, { t: "leave" }] as ModeEvent[]) {
       expect(canReloadIn(run(e))).toBe(false);
     }
+  });
+});
+
+describe("waiting for the mode", () => {
+  test("until() resolves once the mode matches: at once, or on the event that makes it so", async () => {
+    const store = createModeStore();
+    expect(await store.until((m) => m.kind === "idle")).toBe(IDLE);
+    store.dispatch({ t: "structure" });
+    let woke = null as string | null;
+    const waiting = store.until((m) => m.kind !== "saving-structure").then((m) => (woke = m.kind));
+    store.dispatch(typing); // refused: an add or delete is saving
+    await Promise.resolve();
+    expect(woke).toBeNull();
+    store.dispatch({ t: "end", kind: "saving-structure" });
+    await waiting;
+    expect(woke).toBe("idle");
   });
 });

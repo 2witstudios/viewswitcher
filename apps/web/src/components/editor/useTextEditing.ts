@@ -65,8 +65,6 @@ export function useTextEditing(opts: {
     }
     redraw();
   };
-  const finishRef = useRef(finish);
-  finishRef.current = finish;
 
   useEffect(() => {
     if (!typing) return;
@@ -76,9 +74,10 @@ export function useTextEditing(opts: {
         o.current.preview({ id, text }, gen);
         o.current.redraw();
       },
-      enter: () => finishRef.current(true),
-      escape: () => finishRef.current(false),
-      outside: () => finishRef.current(true),
+      // `finish` reads everything through `o`, so this render's copy is as good as the next one's.
+      enter: () => finish(true),
+      escape: () => finish(false),
+      outside: () => finish(true),
     });
   }, [typing?.id, typing?.gen]);
 

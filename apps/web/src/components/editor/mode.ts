@@ -11,7 +11,7 @@ import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 
 export type Guides = { x: number[]; y: number[] };
 /** The version an element id came from (`layout` bumps whenever ids change): ids from another one may name a different element. */
-export type Made = { gen: number; layout: number; base: SceneBase };
+export type Made = { layout: number; base: SceneBase };
 export type Conflict = { edits: SceneEdit[]; changed: number[]; prev: SceneBase; latest: SceneBase };
 /** A picture dropped on an image: Replace it, or Add it as a new one. `x`/`y` are where the menu goes. */
 export type DropChoice = { file: File; at: { x: number; y: number }; image: number; x: number; y: number; made: Made };
@@ -92,6 +92,31 @@ export function reduce(mode: Mode, e: ModeEvent): Mode {
 /** Something new may start: a press, a key, a drop, Add, Undo. */
 export const canStart = (m: Mode) => m.kind === "idle";
 /** Undo only acts on a quiet scene: never while typing, dragging, saving an add or delete, or with a conflict up. */
-export const canUndo = (m: Mode) => m.kind === "idle";
+export const canUndo = canStart;
+/** An add or delete is saving (ids change when it lands), or the editor is leaving: something holding an id waits it out. */
+export const idsUnsettled = (m: Mode) => m.kind === "saving-structure" || m.kind === "leaving";
 /** A change made elsewhere may be loaded now without losing anything the person is doing. */
 export const canReloadIn = (m: Mode) => m.kind === "idle" || m.kind === "conflict";
+
+/**
+ * The mode as the editor holds it: `now()` for handlers that run between renders (a save landing, a
+ * timer), each event applied at once so the next guard already sees it, and `until()` for a step
+ * that has to wait for the mode (a picture waiting out an add or delete). `changed` hears every new mode.
+ */
+export function createModeStore(changed: (m: Mode) => void = () => {}) {
+  let mode = IDLE;
+  const waiting = new Set<{ pred: (m: Mode) => boolean; resolve: (m: Mode) => void }>();
+  return {
+    now: () => mode,
+    dispatch: (e: ModeEvent): Mode => {
+      const next = reduce(mode, e);
+      if (next === mode) return mode;
+      mode = next;
+      changed(next);
+      for (const w of waiting) if (w.pred(next)) (waiting.delete(w), w.resolve(next));
+      return next;
+    },
+    /** Resolves with the mode once `pred` holds: now, or after a later event. */
+    until: (pred: (m: Mode) => boolean): Promise<Mode> => (pred(mode) ? Promise.resolve(mode) : new Promise((resolve) => void waiting.add({ pred, resolve }))),
+  };
+}

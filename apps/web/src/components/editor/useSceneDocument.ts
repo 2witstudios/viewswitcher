@@ -1,7 +1,7 @@
 // The scene file the editor works on: the version it last read or saved (the base), the generation
 // that every element id is checked against, the save queue, conflicts, and reading the file again
 // when it changes somewhere else (an agent, another device).
-import { applyEdits, changedElements, scanElements, toBase } from "@viewswitcher/shared";
+import { applyEdits, changedElements, isStructural, scanElements, toBase } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, SceneConflict } from "../../lib/api";
@@ -58,6 +58,11 @@ export function useSceneDocument(path: string, opts: {
   /** A change made elsewhere is waiting until the editor is free to load it. */
   const outside = useRef(false);
   const outsideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Look at a change made elsewhere again in `ms`. */
+  const recheck = (ms: number) => {
+    clearTimeout(outsideTimer.current);
+    outsideTimer.current = setTimeout(() => void refreshRef.current(), ms);
+  };
 
   const apply = (b: SceneBase) => {
     generation.current++;
@@ -71,7 +76,7 @@ export function useSceneDocument(path: string, opts: {
     pendingConflict.current = null;
     if (pending) mode.dispatch({ t: "conflict", conflict: { ...pending, changed: changedElements(pending.prev.source, b.source), latest: b } });
     // The file changed elsewhere while this was being read (before the editor first opened it, say): check again.
-    if (outside.current) outsideTimer.current = setTimeout(() => void refreshRef.current(), 0);
+    if (outside.current) recheck(0);
   };
 
   /**
@@ -89,7 +94,7 @@ export function useSceneDocument(path: string, opts: {
         if (verdict === "same") return baseRef.current;
         if (verdict === "retry") {
           outside.current = true;
-          outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS);
+          recheck(OUTSIDE_RETRY_MS);
           return baseRef.current;
         }
       }
@@ -117,6 +122,8 @@ export function useSceneDocument(path: string, opts: {
       isConflict: (e) => e instanceof SceneConflict,
       onSaved: (b, edits, hash) => {
         const source = applyEdits(b.source, edits);
+        // An add or delete renumbers the elements after it.
+        if (edits.some(isStructural)) layout.current++;
         setBase({ source, hash, els: scanElements(source) });
       },
       // The conflict opens when the latest version has loaded (now, or after Reload if this read fails),
@@ -169,9 +176,8 @@ export function useSceneDocument(path: string, opts: {
     clearTimeout(outsideTimer.current);
     // Before the first version is open there's nothing to compare with: the first load checks again when it lands.
     if (!alive.current || !outside.current || !baseRef.current) return;
-    const later = () => (outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS));
     // The editor's own saves land first (free() waits for them): their new versions aren't someone else's change.
-    if (!free()) return void later();
+    if (!free()) return recheck(OUTSIDE_RETRY_MS);
     outside.current = false;
     await load({ stillFree: free });
   };

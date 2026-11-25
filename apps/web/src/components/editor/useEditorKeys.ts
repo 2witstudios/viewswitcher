@@ -7,6 +7,9 @@ import { listenKeys } from "./frame-dom";
 import { isArrow } from "./geometry";
 import type { ModeStore } from "./useMode";
 
+/** Focus is in a form field (the position bar, the name): its keys are its own. */
+export const isField = (el: Element | null) => !!(el as HTMLElement | null)?.closest?.("input, textarea, select");
+
 export function useEditorKeys(opts: {
   mode: ModeStore;
   frame: () => Document | null;
@@ -52,7 +55,7 @@ export function useEditorKeys(opts: {
         default:
           return;
       }
-      if ((e.target as HTMLElement)?.closest?.("input, textarea, select")) return;
+      if (isField(e.target as Element | null)) return;
       if (undoKey && !e.shiftKey) {
         e.preventDefault();
         k.undo();

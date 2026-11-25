@@ -1,6 +1,6 @@
 import type { Box } from "@viewswitcher/shared";
 import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { CORNERS, cornerPoint } from "./geometry";
+import { CORNERS, cornerPoint, onStage } from "./geometry";
 import type { Guides } from "./mode";
 import type { DropAt } from "./usePictureDrop";
 
@@ -35,7 +35,7 @@ export function EditorOverlay({ overlayRef, scale: s, typing, handlers, hover, s
   drop: { at: DropAt; image: Box | null } | null;
   marks: { id: number; rect: Box }[];
 }) {
-  const px = (b: Box) => ({ left: b.x * s, top: b.y * s, width: b.w * s, height: b.h * s });
+  const px = (b: Box) => onStage(b, s);
   return (
     <div ref={overlayRef} className={`editor-overlay${typing ? " passive" : ""}${drag ? " dragging" : ""}`} {...handlers}>
       {hover && !drag && <div className="ed-hover" style={px(hover)} />}

@@ -18,8 +18,6 @@ export function useAddDelete(opts: {
   mode: ModeStore;
   current: () => SceneBase | null;
   generation: () => number;
-  /** Element ids changed: bump the layout counter. */
-  idsChanged: () => void;
   /** A 409 is waiting for the newest version to load. */
   conflictPending: () => boolean;
   waitForSaves: () => Promise<void>;
@@ -45,7 +43,7 @@ export function useAddDelete(opts: {
   /** Resolves to the inserted element's id (null for a delete) once saved and shown; to false if it didn't happen. */
   const structural = async (edit: InsertEdit | RemoveEdit, record = true): Promise<{ added: number | null } | false> => {
     const k = o.current;
-    if (k.mode.now().kind === "typing") k.finishTyping();
+    k.finishTyping();
     if (k.mode.dispatch({ t: "structure" }).kind !== "saving-structure") return false;
     try {
       k.flushNudge();
@@ -68,7 +66,6 @@ export function useAddDelete(opts: {
       // Not saved (a conflict or an error reloaded the scene): nothing to show.
       const saved = k.current();
       if (k.generation() !== gen || !saved || saved === b) return false;
-      k.idsChanged();
       // The frame follows the saved file. If it's loading again meanwhile, it loads the saved file anyway.
       const d = k.shownFrame();
       if (d) {

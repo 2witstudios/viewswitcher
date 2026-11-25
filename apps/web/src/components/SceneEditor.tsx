@@ -21,12 +21,12 @@ import { DropChoiceMenu, EditMenu, type MenuState } from "./editor/EditMenu";
 import { EditorBanner, EditorHeader } from "./editor/EditorHeader";
 import { EditorOverlay } from "./editor/EditorOverlay";
 import { applyEdit, frameDoc, type Hit, hitAt, type IdBaseline, idBaseline, nodeOf, prepareFrame, rectIn, shownPos, shownSize, shownVersion, textShown } from "./editor/frame-dom";
-import { clampSize, type Pos, samePos, sameSize, SCENE_H, SCENE_W, type Size } from "./editor/geometry";
+import { clampSize, onStage, type Pos, samePos, sameSize, SCENE_H, SCENE_W, type Size } from "./editor/geometry";
 import { canUndo } from "./editor/mode";
 import { PositionBar } from "./editor/PositionBar";
 import { useAddDelete } from "./editor/useAddDelete";
 import { useConflictActions } from "./editor/useConflictActions";
-import { useEditorKeys } from "./editor/useEditorKeys";
+import { isField, useEditorKeys } from "./editor/useEditorKeys";
 import { useGestures } from "./editor/useGestures";
 import { useLivePreview } from "./editor/useLivePreview";
 import { useMode } from "./editor/useMode";
@@ -38,7 +38,6 @@ import { useTextEditing } from "./editor/useTextEditing";
 import { type UndoEntry, useUndo } from "./editor/useUndo";
 import { attempt, toast } from "./ui";
 
-const fieldFocused = () => !!(document.activeElement as HTMLElement | null)?.closest?.("input, textarea, select");
 
 export function SceneEditor({ org, path, rename = false }: { org: string; path: string; /** Open with the name ready to retype (a fresh copy). */ rename?: boolean }) {
   const navigate = useNavigate();
@@ -78,6 +77,12 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const frameMismatches = useRef(0);
   /** How the frame's ids lined up with the file when it loaded; checked after every add or delete. */
   const ids0 = useRef<IdBaseline | null>(null);
+  /** Menus, selection and hover name elements by id: they go when a version loads or typing starts. */
+  const clearPointers = () => {
+    setMenu(null);
+    setSelected(null);
+    setHover(null);
+  };
   const reloadFrame = () => {
     setReady(false);
     setFrameKey((k) => k + 1);
@@ -93,9 +98,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
         const p = posIn(b, e.id);
         if (p) origins.current.set(e.id, { left: p.left, top: p.top });
       });
-      setMenu(null);
-      setSelected(null);
-      setHover(null);
+      clearPointers();
       gestures.drop();
       nudges.drop();
       undo.clear();
@@ -107,7 +110,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     },
     onStuck: () => setReady(false),
     onSaveFailed: () => undo.clear(),
-    quiet: () => !gestures.gesture.current && !nudges.pending() && !fieldFocused() && !pictures.isUploading(),
+    quiet: () => !gestures.gesture.current && !nudges.pending() && !isField(document.activeElement) && !pictures.isUploading(),
   });
   const { base, baseRef, generation } = doc;
 
@@ -212,11 +215,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     preview,
     save,
     redraw,
-    onStart: () => {
-      setMenu(null);
-      setSelected(null);
-      setHover(null);
-    },
+    onStart: clearPointers,
   });
   const typing = text.typing;
 
@@ -224,7 +223,6 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     mode: modes,
     current: () => baseRef.current,
     generation: () => generation.current,
-    idsChanged: () => void doc.layout.current++,
     conflictPending: () => doc.pendingConflict.current !== null,
     waitForSaves: () => doc.saver.idle(),
     save,
@@ -252,9 +250,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (!last) return;
     undo.pop();
     if (isStructural(last.before)) return void edits.structural(last.before, false);
-    applyDom(last.before);
-    preview(last.before);
-    save([last.before]);
+    change(last.before, null);
   };
 
   // ------------------------------------------------------------ pointer, keys, pictures
@@ -288,7 +284,6 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     org,
     mode: modes,
     base: () => baseRef.current,
-    generation: () => generation.current,
     layout: () => doc.layout.current,
     ready,
     replaceableAt: (p) => {
@@ -323,7 +318,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     closeDropChoice: () => pictures.choose(null),
   });
 
-  const conflicts = useConflictActions({ mode: modes, current: () => baseRef.current, applyDom, preview, save, structural: edits.structural });
+  const conflicts = useConflictActions({ mode: modes, current: () => baseRef.current, change, preview, structural: edits.structural });
 
   // ------------------------------------------------------------ leaving, rename, Edit a copy
 
@@ -396,7 +391,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       })
     : [];
   const s = scale;
-  const px = (b: { x: number; y: number; w: number; h: number }) => ({ left: b.x * s, top: b.y * s, width: b.w * s, height: b.h * s });
+  const px = (b: { x: number; y: number; w: number; h: number }) => onStage(b, s);
   const selPos = sel !== null ? posNow(sel) : null;
   const idle = mode.kind === "idle";
 
