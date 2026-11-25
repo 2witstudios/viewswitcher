@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private(set) var remotes: RemotesWindow?
     private let announcer = Announcer()
     /// The banner over the switcher, kept here so a window opened later shows it too.
-    private var notice: (text: String, seconds: TimeInterval?)?
+    private var notice: (text: String, until: Date?)?
 
     // ------------------------------------------------------------ lifecycle
 
@@ -158,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func showNotice(_ text: String?, for seconds: TimeInterval? = nil) {
-        notice = text.map { ($0, seconds) }
+        notice = text.map { ($0, seconds.map { Date().addingTimeInterval($0) }) }
         switcher?.showNotice(text, for: seconds)
     }
 
@@ -206,7 +206,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openWindow() {
         if switcher == nil {
             switcher = SwitcherWindow(base: Env.base)
-            if let notice { switcher?.showNotice(notice.text, for: notice.seconds) }
+            // Only what's still showing: a timed notice keeps its own end, an expired one is gone.
+            if let notice {
+                let left = notice.until.map { $0.timeIntervalSinceNow }
+                if left.map({ $0 > 0 }) ?? true { switcher?.showNotice(notice.text, for: left) }
+            }
         }
         switcher?.show()
     }
