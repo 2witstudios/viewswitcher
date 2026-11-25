@@ -101,6 +101,10 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       undo.clear();
       reloadFrame();
     },
+    onConflictFound: () => {
+      text.finish(true);
+      nudges.flush();
+    },
     onStuck: () => setReady(false),
     onSaveFailed: () => undo.clear(),
     quiet: () => !gestures.gesture.current && !nudges.pending() && !fieldFocused() && !pictures.isUploading(),

@@ -23,6 +23,11 @@ export function useSceneDocument(path: string, opts: {
   onLoaded: (b: SceneBase) => void;
   /** A scene is open but couldn't be read again. */
   onStuck: () => void;
+  /**
+   * A save hit a newer version, which is about to load. Work still under way (typing, nudges) is
+   * saved now, so it joins the conflict card instead of ending with the old version's frame.
+   */
+  onConflictFound: () => void;
   /** A save failed (not a conflict): Undo no longer matches the file. */
   onSaveFailed: () => void;
   /** Nothing outside the mode is under way that loading another version would lose (a press, a nudge, a typed number, an upload). */
@@ -65,6 +70,8 @@ export function useSceneDocument(path: string, opts: {
     const pending = pendingConflict.current;
     pendingConflict.current = null;
     if (pending) mode.dispatch({ t: "conflict", conflict: { ...pending, changed: changedElements(pending.prev.source, b.source), latest: b } });
+    // The file changed elsewhere while this was being read (before the editor first opened it, say): check again.
+    if (outside.current) outsideTimer.current = setTimeout(() => void refreshRef.current(), 0);
   };
 
   /**
@@ -118,6 +125,7 @@ export function useSceneDocument(path: string, opts: {
         // A reload that failed earlier left a pending conflict on this same version: add to it.
         if (pendingConflict.current) pendingConflict.current.edits.push(...edits);
         else pendingConflict.current = { edits, prev: b };
+        o.current.onConflictFound();
         await load();
       },
       // Queued behind the change that hit the conflict: their ids are from the same old version,
@@ -159,6 +167,7 @@ export function useSceneDocument(path: string, opts: {
   const alive = useRef(true);
   refreshRef.current = async () => {
     clearTimeout(outsideTimer.current);
+    // Before the first version is open there's nothing to compare with: the first load checks again when it lands.
     if (!alive.current || !outside.current || !baseRef.current) return;
     const later = () => (outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS));
     // The editor's own saves land first (free() waits for them): their new versions aren't someone else's change.

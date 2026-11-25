@@ -12,7 +12,7 @@ import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "r
 import { api } from "../../lib/api";
 import { libraryUrl } from "../../lib/live";
 import { toast } from "../ui";
-import { canStart, type Made } from "./mode";
+import { canStart, type Made, type Mode } from "./mode";
 import type { ModeStore } from "./useMode";
 
 /** Pictures the editor takes from a drop. */
@@ -50,6 +50,26 @@ export function imageNow(made: Made, now: { base: SceneBase | null; layout: numb
   if (!b) return null;
   const edit = made.layout === now.layout ? { id, src } : retarget(made.base.source, b.source, { id, src });
   return edit && "src" in edit && replaceableImage(b, edit.id) ? edit : null;
+}
+
+/** An add or delete is saving (ids change when it lands), or the editor is leaving: a picture waits it out. */
+const idsUnsettled = (m: Mode) => m.kind === "saving-structure" || m.kind === "leaving";
+
+/**
+ * Where a replacing picture goes once it has uploaded. It waits while an add or delete is saving,
+ * because ids change when that lands and the id it holds would name another image. Then it follows
+ * image `id` of version `made` into the scene as it is. Null when it can't: the image is gone or has
+ * a twin, a conflict came up, or the editor went.
+ */
+export async function replaceTarget(
+  env: { mode: () => Mode; base: () => SceneBase | null; layout: () => number; alive: () => boolean; wait: () => Promise<unknown> },
+  made: Made,
+  id: number,
+  src: string,
+): Promise<SrcEdit | null> {
+  while (env.alive() && idsUnsettled(env.mode())) await env.wait();
+  if (!env.alive() || env.mode().kind === "conflict") return null;
+  return imageNow(made, { base: env.base(), layout: env.layout() }, id, src);
 }
 
 export function usePictureDrop(opts: {
@@ -91,10 +111,13 @@ export function usePictureDrop(opts: {
   };
   const canDrop = () => opts.ready && canStart(mode.now()) && !uploadingRef.current;
 
+  const sleep = () => new Promise((r) => setTimeout(r, WAIT_MS));
   /** Put `src` in place of image `id` of version `from`, if it's still there. */
-  const replaceWith = (from: Made, id: number, src: string) => {
+  const replaceWith = async (from: Made, id: number, src: string) => {
+    const k = o.current;
+    const edit = await replaceTarget({ mode: mode.now, base: k.base, layout: k.layout, alive: () => alive.current, wait: sleep }, from, id, src);
     const b = o.current.base();
-    const edit = imageNow(from, { base: b, layout: o.current.layout() }, id, src);
+    if (!alive.current) return false;
     if (!edit || !b) {
       toast("The scene changed meanwhile, so the image wasn't replaced. Try again.");
       return false;
@@ -109,7 +132,7 @@ export function usePictureDrop(opts: {
     if (mode.now().kind === "typing") o.current.finishTyping();
     while (alive.current && !canStart(mode.now())) {
       if (mode.now().kind === "conflict") return false;
-      await new Promise((r) => setTimeout(r, WAIT_MS));
+      await sleep();
     }
     return alive.current;
   };
@@ -122,7 +145,7 @@ export function usePictureDrop(opts: {
       if (!saved[0]) throw new Error("The picture didn't upload");
       const src = srcFor(saved[0].path);
       if (image) {
-        if (replaceWith(image.made, image.id, src)) toast("Replaced");
+        if (await replaceWith(image.made, image.id, src)) toast("Replaced");
         return;
       }
       if (!(await whenFree())) return toast("The scene changed meanwhile, so the picture wasn't added. Try again.");
@@ -189,7 +212,7 @@ export function usePictureDrop(opts: {
     mode.dispatch({ t: "end", kind: "picking" });
     const src = srcFor(asset.path);
     if (c.replace !== null) {
-      replaceWith(c.made, c.replace, src);
+      void replaceWith(c.made, c.replace, src);
       return;
     }
     // Its natural size keeps its shape.
