@@ -140,8 +140,9 @@ export function Sidebar() {
       )}
     </nav>
     {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" onClick={() => setLibraryOpen(false)} />}
-    {/* Sideways, on a screen with no page header to open it from (styles.css shows it only there). */}
-    {!libraryOpen && <button type="button" className="deck-library" aria-controls="side-body" aria-expanded={false} onClick={() => setLibraryOpen(true)}>Library</button>}
+    {/* Sideways, on a screen with no page header to open it from (styles.css shows it only there, and
+        hides it while the library is open). Always mounted, so closing the drawer can focus it again. */}
+    <button type="button" className="deck-library" aria-controls="side-body" aria-expanded={libraryOpen} onClick={() => setLibraryOpen(true)}>Library</button>
     </>
   );
 }

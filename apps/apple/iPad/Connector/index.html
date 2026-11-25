@@ -91,16 +91,23 @@
 
   // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
   // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
-  let busy = false, leaving = false, browsing = false, touched = false;
+  let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
   const go = (url) => { leaving = true; location.replace(url); };
 
   // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app.
   $("scan").addEventListener("click", async () => {
-    touched = true;
-    const scanned = await ask("scan");
+    if (scanning) return;
+    scanning = touched = true;
+    // Look on the Wi-Fi meanwhile: on a fresh install that brings up the Local Network prompt while the
+    // camera is up, so it's answered before the .local name is tried below.
+    if (!browsing) ask("browse").catch(() => {});
+    const scanned = await ask("scan").catch(() => null);
+    scanning = false;
     if (!scanned || !VS.usable(scanned.link)) return;
-    // Pair on the Mac's .local name when it answers: it outlasts the Mac's LAN address changing.
-    const local = scanned.local && VS.usable(scanned.local) && (await VS.reachable(new URL(scanned.local).origin)) ? scanned.local : null;
+    // Pair on the Mac's .local name when it answers (a cold mDNS lookup can be slow, so up to 5 s, twice):
+    // it outlasts the Mac's LAN address changing. Else the address in the code.
+    const answers = async (u) => (await VS.reachable(u, 5000)) || (await VS.reachable(u, 5000));
+    const local = scanned.local && VS.usable(scanned.local) && (await answers(new URL(scanned.local).origin)) ? scanned.local : null;
     const link = local || scanned.link;
     VS.saveNetwork(new URL(link).origin);
     go(link);

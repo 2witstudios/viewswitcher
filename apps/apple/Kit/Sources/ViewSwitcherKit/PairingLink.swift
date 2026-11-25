@@ -57,7 +57,9 @@ public enum PairingLink {
         let parts = host.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 4 else { return false }
         let n = parts.compactMap { p -> Int? in
-            guard !p.isEmpty, p.count <= 3, p.allSatisfy(\.isASCII), p.allSatisfy(\.isNumber), let v = Int(p), v <= 255 else { return nil }
+            // No leading zeros: WebKit reads 010 as octal (8), so "010.1.2.3" would be the public 8.1.2.3.
+            guard !p.isEmpty, p.count <= 3, p.allSatisfy(\.isASCII), p.allSatisfy(\.isNumber), p.count == 1 || p.first != "0",
+                  let v = Int(p), v <= 255 else { return nil }
             return v
         }
         guard n.count == 4 else { return false }

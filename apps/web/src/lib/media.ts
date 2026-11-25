@@ -5,9 +5,13 @@ import { useSyncExternalStore } from "react";
 
 /** The phone layout (MAC-27): upright, the on-air cover on top. */
 export const UPRIGHT = "(max-width: 600px)";
-/** The deck: a phone held sideways, a short touch screen no wider than the largest phone (932 pt), so a
- *  short iPad window (Stage Manager, the keyboard up) keeps its editing. Wins over UPRIGHT where both match. */
-export const DECK = "(max-height: 500px) and (max-width: 950px) and (pointer: coarse)";
+/** The deck: a phone held sideways, a short touch screen no wider than the largest phone (the iPhone 16 and
+ *  17 Pro Max, 956 pt) and narrower than any iPad held sideways (the mini, 1133 pt), so an iPad with the
+ *  keyboard up keeps its editing. Wins over UPRIGHT where both match. */
+export const DECK = "(max-height: 500px) and (max-width: 1000px) and (pointer: coarse)";
+
+/** Sideways viewports, for the tests: [width, height, the deck?]. */
+export const SIDEWAYS: [number, number, boolean][] = [[956, 440, true], [932, 430, true], [844, 390, true], [568, 320, true], [1133, 480, false], [1180, 480, false]];
 
 export const isUprightPhone = ({ upright, deck }: { upright: boolean; deck: boolean }) => upright && !deck;
 

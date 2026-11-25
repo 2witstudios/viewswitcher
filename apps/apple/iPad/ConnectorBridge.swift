@@ -31,7 +31,8 @@ final class ConnectorBridge: NSObject, WKScriptMessageHandlerWithReply {
     // ------------------------------------------------------------ scan (PHONE-4)
 
     private func scan(_ done: @escaping @MainActor (URL?) -> Void) {
-        guard let host else { return done(nil) }
+        // Already presenting (the scanner or the camera alert): UIKit would refuse a second one and never reply.
+        guard let host, host.presentedViewController == nil else { return done(nil) }
         guard DataScannerViewController.isSupported else { return tell(host, "No camera", "Use Enter code instead.", done) }
         // Ask for the camera first: with access denied the scanner would only show black.
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -154,7 +155,7 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     struct Mac: Equatable { let name: String; let url: String }
     private static var running: [MacFinder] = []
 
-    private let browser = NetServiceBrowser()
+    private var browser = NetServiceBrowser()
     private var services: [NetService] = []
     private var found: [Mac] = []
     private var denied = false
@@ -162,14 +163,20 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     private var done: (([Mac], Bool) -> Void)?
 
     /// `limit`: the longest it looks with nothing found; `settle`: how long it keeps looking after the first Mac.
-    static func find(limit: TimeInterval = 20, settle: TimeInterval = 1.2, _ done: @escaping ([Mac], Bool) -> Void) {
+    static func find(limit: TimeInterval = 30, settle: TimeInterval = 1.2, _ done: @escaping ([Mac], Bool) -> Void) {
         let f = MacFinder()
         running.append(f)
         f.done = done
         f.settle = settle
-        f.browser.delegate = f
-        f.browser.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
+        f.search()
         DispatchQueue.main.asyncAfter(deadline: .now() + limit) { f.finish() }
+    }
+
+    private func search() {
+        browser.stop()
+        browser = NetServiceBrowser()
+        browser.delegate = self
+        browser.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
     }
     private var settle: TimeInterval = 1.2
 
@@ -191,11 +198,17 @@ final class MacFinder: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
         }
     }
 
-    /// Local Network access is off for the app (the browse is refused by policy): say so rather than "no Mac".
+    /// Refused by policy (kDNSServiceErr_PolicyDenied): Local Network access is off, or its first-run prompt is
+    /// still up. Search again until the limit, and report `denied` only if it's still refused then. Any other
+    /// failure (Wi-Fi off, the daemon) ends the search as "no Mac", not a trip to Settings.
     nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
         MainActor.assumeIsolated {
+            guard errorDict[NetService.errorCode]?.intValue == -65570 else { return finish() }
             denied = true
-            finish()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self, self.done != nil else { return }
+                self.search()
+            }
         }
     }
 

@@ -3,11 +3,17 @@
 // the server runs (a new Wi-Fi network, a renamed Mac), so they are read again every few seconds.
 import { networkInterfaces } from "node:os";
 
-/** IPv4 addresses on this Mac's network interfaces, apart from loopback and link-local (169.254/16). */
+/** A VPN's interface (utun: Tailscale and most VPNs; ipsec, ppp): a phone on the Wi-Fi can't reach it. */
+const vpn = (name: string) => /^(utun|ipsec|ppp)\d*$/.test(name);
+
+/** IPv4 addresses on this Mac's network interfaces, apart from loopback and link-local (169.254/16).
+ *  VPN interfaces come last, so the pairing QR code never prefers a Tailscale 100.x address over a Wi-Fi
+ *  one in the same range (a hotspot or campus network is 100.64/10 too, PHONE-4). */
 export function lanAddresses(ifaces = networkInterfaces()): string[] {
   const out = new Set<string>();
-  for (const list of Object.values(ifaces)) {
-    for (const i of list ?? []) {
+  const names = Object.keys(ifaces).sort((a, b) => Number(vpn(a)) - Number(vpn(b)));
+  for (const name of names) {
+    for (const i of ifaces[name] ?? []) {
       if (i.family === "IPv4" && !i.internal && !i.address.startsWith("169.254.")) out.add(i.address);
     }
   }

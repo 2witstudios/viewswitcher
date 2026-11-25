@@ -465,7 +465,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
    the screen four across under one slim bar; the library slides in from the title. Switching only: adding
    and editing scenes, the transition and OBS setup stay on the Mac and iPad (upright works too). Comes
    after the phone rules so a small phone sideways (568×320, both at once) gets the deck. */
-@media (max-height: 500px) and (max-width: 950px) and (pointer: coarse) {
+@media (max-height: 500px) and (max-width: 1000px) and (pointer: coarse) {
   .side { position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: min(340px, 85vw); max-width: none; height: auto; max-height: none; flex: none;
     padding: calc(10px + var(--safe-top)) 12px calc(16px + var(--safe-bottom)) calc(12px + var(--safe-left));
     border-right: 1px solid var(--line-strong); border-bottom: 0; overflow-y: auto; overscroll-behavior: contain;
@@ -478,6 +478,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
   .side-scrim { display: block; position: fixed; z-index: 29; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, 0.55); }
   /* A screen with no page header (a stream that's gone, no orgs yet) still needs a way to the library. */
   .app:not(:has(.stream-pick)) .deck-library { display: inline-flex; }
+  .app .side.open ~ .deck-library { display: none; }
   .app:not(:has(.stream-pick)) .main { padding-top: calc(64px + var(--safe-top)); }
 
   .main { padding: calc(4px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left)); gap: 10px; }

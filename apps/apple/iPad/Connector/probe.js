@@ -31,9 +31,9 @@ window.VS = (() => {
   };
 
   // Reachable = the request completed (no-cors: the response is opaque, which is all we need).
-  async function reachable(base) {
+  async function reachable(base, ms = 1200) {
     const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 1200);
+    const t = setTimeout(() => ctl.abort(), ms);
     try {
       await fetch(`${base}/api/state?probe=${Date.now()}`, { mode: "no-cors", cache: "no-store", signal: ctl.signal });
       return true;
