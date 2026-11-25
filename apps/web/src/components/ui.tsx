@@ -11,7 +11,7 @@ export const PlusIcon = ({ size = 14 }: { size?: number }) => (
   <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#a3a8b5" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
 );
 
-export type MenuItem = { label: string; hint?: string; run: () => void | Promise<void> } | "divider";
+export type MenuItem = { label: string; hint?: string; run: () => void | Promise<void> } | "divider" | { heading: string };
 
 /** A popover menu anchored inside a `.tile`. */
 export function Menu({ label, items, onClose }: { label: string; items: MenuItem[]; onClose: () => void }) {
@@ -27,6 +27,8 @@ export function Menu({ label, items, onClose }: { label: string; items: MenuItem
         {items.map((item, i) =>
           item === "divider" ? (
             <hr key={i} />
+          ) : "heading" in item ? (
+            <span key={i} className="menu-heading" role="presentation">{item.heading}</span>
           ) : (
             <button
               key={i}

@@ -1,7 +1,7 @@
 import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { decodeEntities, slugify, transitionCandidates } from "@viewswitcher/shared";
-import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream } from "@viewswitcher/shared";
+import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
+import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
 
 const KINDS: Record<string, AssetKind> = {
@@ -27,7 +27,7 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string): Promise<Scene[]> {
+async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
   let files: string[] = [];
   try {
     files = (await readdir(join(root, rel))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
@@ -39,7 +39,7 @@ async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: s
       const name = f.slice(0, -5);
       const html = await readFile(join(root, rel, f), "utf8").catch(() => "");
       const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
-      return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin } satisfies Scene;
+      return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
     }),
   );
   const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length);
@@ -97,6 +97,7 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
   const prefix = `${org.id}/`;
   const meta = await readJson(join(root, "templates/_shared/order.json"), { order: [] as string[] });
   const templates = await scenesIn(root, "templates", "template", meta.order, prefix);
+  const sets = await listSets(root, prefix);
 
   let assets: Asset[] = [];
   try {
@@ -124,7 +125,43 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
     projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix), streams, transition });
   }
   const transition = (await exists(join(root, ORG_TRANSITION))) ? `${prefix}${ORG_TRANSITION}` : null;
-  return { org, templates, assets, projects, transition };
+  return { org, templates, sets, assets, projects, transition };
+}
+
+// ---------------------------------------------------------------- template sets (EDIT-25)
+// An installed style pack is a folder templates/<set>/ with its pack.json, its views, _shared/ and
+// assets/ (see packs.ts and docs/style-packs.md). The org's own templates stay in templates/*.html.
+
+/** The org's template sets: folders in templates/ that have a pack.json. */
+async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {
+  const sets: TemplateSet[] = [];
+  for (const id of await dirs(join(root, "templates"))) {
+    const text = await readFile(join(root, "templates", id, "pack.json"), "utf8").catch(() => null);
+    if (text === null) continue;
+    const read = readManifest(text);
+    // A pack.json someone edited by hand into something odd: still list the set, by its folder.
+    const m = read.ok ? read.manifest : { name: id, version: "", description: "", views: [] as string[] };
+    const rel = `templates/${id}`;
+    const transition = (await exists(join(root, rel, "_shared", TRANSITION))) ? `${prefix}${rel}/_shared/${TRANSITION}` : null;
+    sets.push({
+      id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}),
+      templates: await scenesIn(root, rel, "template", m.views, prefix, id),
+      transition,
+    });
+  }
+  return sets.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The file of a template, by its name: "teaching" is the org's own (templates/teaching.html),
+ * "neon/teaching" is in the set "neon" (templates/neon/teaching.html).
+ */
+export function templateFile(root: string, template: string): { file: string; name: string } {
+  const parts = String(template ?? "").split("/");
+  if (parts.length > 2) throw new PathError(`Bad template: ${template}`);
+  const name = plainName(parts.at(-1)!);
+  const set = parts.length === 2 ? plainName(parts[0]!) : null;
+  return { file: inside(root, set ? `templates/${set}/${name}.html` : `templates/${name}.html`), name };
 }
 
 // ---------------------------------------------------------------- transitions
@@ -156,12 +193,12 @@ export async function revertTransition(root: string, projectId: string) {
 
 // ---------------------------------------------------------------- mutations
 
-async function exists(path: string) {
+export async function exists(path: string) {
   return stat(path).then(() => true, () => false);
 }
 
 /** "teaching" in a folder that already has it → "teaching-2". */
-async function freeName(dir: string, base: string, ext: string) {
+export async function freeName(dir: string, base: string, ext: string) {
   let name = base, n = 2;
   while (await exists(join(dir, name + ext))) name = `${base}-${n++}`;
   return name;
@@ -185,11 +222,16 @@ export async function createProject(root: string, name: string, templates: strin
   const dir = join(parent, id);
   await mkdir(join(dir, "scenes"), { recursive: true });
   await mkdir(join(dir, "streams"), { recursive: true });
-  await writeFile(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order: templates }, null, 2) + "\n");
+  // Templates from sets ("neon/teaching") become scenes named by their view ("teaching", "teaching-2"…).
+  const order: string[] = [];
   for (const t of templates) {
-    const src = inside(root, `templates/${plainName(t)}.html`);
-    if (await exists(src)) await copyFile(src, join(dir, "scenes", `${t}.html`));
+    const { file, name: view } = templateFile(root, t);
+    if (!(await exists(file))) continue;
+    const scene = await freeName(join(dir, "scenes"), view, ".html");
+    await copyFile(file, join(dir, "scenes", `${scene}.html`));
+    order.push(scene);
   }
+  await writeFile(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
   return { projectId: id };
 }
 
@@ -208,10 +250,10 @@ export async function createStream(root: string, projectId: string, name: string
 
 /** Copy a template into a project's shared scenes, or into one stream. */
 export async function addFromTemplate(root: string, template: string, projectId: string, streamId?: string) {
-  const src = inside(root, `templates/${plainName(template)}.html`);
+  const { file: src, name: view } = templateFile(root, template);
   const dir = streamId ? streamDir(root, projectId, streamId) : join(projectDir(root, projectId), "scenes");
   await mkdir(dir, { recursive: true });
-  const name = await freeName(dir, template, ".html");
+  const name = await freeName(dir, view, ".html");
   await copyFile(src, join(dir, `${name}.html`));
   return { name };
 }
