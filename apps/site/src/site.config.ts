@@ -22,7 +22,7 @@ const PACK_INSTALL_VERSION: string | null = "1.1.0";
 // THE AI SWITCH: true once Edit with AI (MCP, PR #8) ships, in v1.2.0. How it works step 1 then says
 // you can connect your favorite AI in one click, with the Edit with AI sheet as its picture, and /download
 // gets a line. False: today's step 1. A build can override it with SITE_AI_CONNECT_RELEASED=1 or 0.
-const AI_CONNECT_RELEASED = false;
+const AI_CONNECT_RELEASED = true;
 
 export const site = {
   url: "https://viewswitcher.com",
