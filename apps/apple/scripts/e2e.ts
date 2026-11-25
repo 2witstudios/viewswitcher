@@ -202,8 +202,14 @@ try {
   check((await state()).menu.includes("Edit with AI…"), 'menu bar: "Edit with AI…"');
   await cmd("menu", { item: "Edit with AI…" });
   check(await until(() => evalJs("return !!document.querySelector('.agent-sheet') && !location.search.includes('ai') && location.hash !== '#ai'"), 8000), "Edit with AI… opens the window on the sheet");
-  const rows = await evalJs<string[]>("return [...document.querySelectorAll('.agent-way h3')].map((h) => h.firstChild.textContent)");
-  check(["Claude Code", "Claude Desktop", "Cursor", "Codex, VS Code and other agents"].every((r) => rows.includes(r)) && (await evalJs("return !!document.querySelector('.agent-guide') && !document.querySelector('.agent-builtin')")), `the sheet in the Mac window: every way in and the Setup guide link, no built-in AI row (${JSON.stringify(rows)})`);
+  // The sheet fills in as /api/info and /api/agent/clients answer (the Claude Desktop button needs info), so wait for it to settle.
+  let rows: string[] = [];
+  const settled = await until(async () => {
+    rows = await evalJs<string[]>("return [...document.querySelectorAll('.agent-way h3')].map((h) => h.firstChild.textContent)");
+    return ["Claude Code", "Claude Desktop", "Cursor", "Codex, VS Code and other agents"].every((r) => rows.includes(r)) &&
+      (await evalJs("return !!document.querySelector('.agent-guide') && !document.querySelector('.agent-builtin') && [...document.querySelectorAll('.agent-way a')].some((a) => a.textContent === 'Add to Claude Desktop')"));
+  }, 8000);
+  check(settled, `the sheet in the Mac window: every way in and the Setup guide link, no built-in AI row (${JSON.stringify(rows)})`);
   const before = (await state()).opened.length;
   await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Claude Desktop").click(); return true`);
   check(await until(async () => (await state()).opened.slice(before).some((p) => p.endsWith("/ViewSwitcher.mcpb")), 8000), "Add to Claude Desktop saves the extension and opens it");
