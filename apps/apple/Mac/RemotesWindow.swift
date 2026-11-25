@@ -2,41 +2,7 @@ import AppKit
 import SwiftUI
 import ViewSwitcherKit
 
-/// The server's pairing endpoints (/api/remote…), which answer only this app: from this Mac, with the
-/// secret it started the server with (Env.adminToken).
-enum RemoteAPI {
-    struct Failure: LocalizedError {
-        let errorDescription: String?
-    }
-
-    static func call(_ path: String, body: [String: Any]? = nil) async throws -> RemoteStatus {
-        var req = URLRequest(url: Env.base.appendingPathComponent(path))
-        req.setValue(Env.adminToken, forHTTPHeaderField: "x-viewswitcher-admin")
-        req.cachePolicy = .reloadIgnoringLocalCacheData
-        if let body {
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "content-type")
-            req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        }
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 404 {
-            throw Failure(errorDescription: "Pairing works with the server this app starts. Quit the other ViewSwitcher server (bun run dev), then choose Restart Server.")
-        }
-        if status != 200 {
-            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
-            throw Failure(errorDescription: msg ?? "The server said no (\(status)).")
-        }
-        return try RemoteStatus.decode(data)
-    }
-
-    static func status() async throws -> RemoteStatus { try await call("api/remote") }
-    static func setEnabled(_ on: Bool) async throws -> RemoteStatus { try await call("api/remote", body: ["enabled": on]) }
-    static func newCode() async throws -> RemoteStatus { try await call("api/remote/code", body: [:]) }
-    static func remove(_ id: String) async throws -> RemoteStatus { try await call("api/remote/remove", body: ["id": id]) }
-}
-
-/// Bonjour (MAC-23): "ViewSwitcher" as an http service on the Wi-Fi while phones may connect, so it
+/// Bonjour: "ViewSwitcher" as an http service on the Wi-Fi while phones may connect, so it
 /// shows up next to <mac>.local in network browsers.
 @MainActor
 final class Announcer {
@@ -101,7 +67,7 @@ final class RemotesModel: ObservableObject {
     func refresh(newCodeIfNone: Bool = false) async {
         do {
             let started = generation
-            let s = try await RemoteAPI.status()
+            let s = try await Env.api.remoteStatus()
             guard started == generation else { return }
             apply(s)
             if newCodeIfNone, !codeOpen { await newCode() }
@@ -121,7 +87,7 @@ final class RemotesModel: ObservableObject {
     func newCode() async {
         generation += 1
         do {
-            let s = try await RemoteAPI.newCode()
+            let s = try await Env.api.newPairingCode()
             code = s.code?.code
             pairUrl = s.pairUrl
             apply(s)
@@ -135,7 +101,7 @@ final class RemotesModel: ObservableObject {
         generation += 1
         defer { busy = false }
         do {
-            apply(try await RemoteAPI.setEnabled(on))
+            apply(try await Env.api.setRemoteEnabled(on))
             // The QR code points at a Wi-Fi address: a fresh code so it carries one (or none, once off).
             await newCode()
         } catch {
@@ -145,7 +111,7 @@ final class RemotesModel: ObservableObject {
 
     func remove(_ id: String) async {
         generation += 1
-        do { apply(try await RemoteAPI.remove(id)) } catch { self.error = error.localizedDescription }
+        do { apply(try await Env.api.removeDevice(id)) } catch { self.error = error.localizedDescription }
     }
 }
 
@@ -238,7 +204,7 @@ struct RemotesView: View {
     }
 }
 
-/// Phones and Tablets… (MAC-24, MAC-26): the Wi-Fi setting, a code with its QR code, and the paired devices.
+/// Phones and Tablets…: the Wi-Fi setting, a code with its QR code, and the paired devices.
 @MainActor
 final class RemotesWindow: NSObject, NSWindowDelegate {
     let window: NSWindow

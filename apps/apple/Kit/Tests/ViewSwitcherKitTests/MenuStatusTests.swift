@@ -1,7 +1,7 @@
 import XCTest
 @testable import ViewSwitcherKit
 
-/// The menu-bar text (MAC-12), same cases as apps/mac/src/status.test.ts had.
+/// The menu-bar text for each live state.
 final class MenuStatusTests: XCTestCase {
     let base = LiveState(obs: .init(connected: true), obsSetup: .init(scene: true, program: true, ground: true), usb: .init(enabled: true))
 
@@ -43,7 +43,7 @@ final class MenuStatusTests: XCTestCase {
         XCTAssertEqual(MenuStatus(s).ipad, "iPad: plugged in · open ViewSwitcher on it")
         s.usb = .init(enabled: false)
         XCTAssertEqual(MenuStatus(s).ipad, "iPhone or iPad: USB link off")
-        // PHONE-8: an iPhone plugged in is named as one.
+        // An iPhone plugged in is named as one.
         s.usb = .init(enabled: true, attached: true, connected: true, device: "iPhone")
         XCTAssertEqual(MenuStatus(s).ipad, "iPhone: connected over USB")
         s.usb = .init(enabled: true, attached: true, connected: false, device: "iPhone")

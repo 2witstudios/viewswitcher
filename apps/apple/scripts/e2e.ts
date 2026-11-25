@@ -1,4 +1,4 @@
-// End-to-end check of a built ViewSwitcher.app (MAC-11 … MAC-13a), without touching a live switcher,
+// End-to-end check of a built ViewSwitcher.app, without touching a live switcher,
 // OBS or an iPad:
 //
 //   bun apps/apple/scripts/e2e.ts [path/to/ViewSwitcher.app]     (default: apps/apple/build/export)
@@ -7,9 +7,10 @@
 // bridge off, updates off and a fresh temp library. It drives the app through VIEWSWITCHER_E2E_DIR
 // (apps/apple/Mac/E2E.swift) and checks: first run, the bundled server, the window and its user
 // agent, the menu-bar status, agents (the sidecar's /mcp and --mcp-stdio, Edit with AI), navigation
-// and permissions, Undo forwarding, the traffic lights and drag regions (MAC-13a), close-keeps-serving, Quit stopping the server, attach mode (Quit leaves a
-// server it didn't start), Restart Server, a port held by something else, and that the server exits
-// if the app is killed, and phones and tablets on the Wi-Fi (MAC-23 … MAC-26: the menu, the Wi-Fi
+// and permissions, Undo forwarding, the traffic lights and drag regions, a crashed server coming back
+// by itself, close-keeps-serving, Quit stopping the server, attach mode (Quit leaves a server it
+// didn't start), Restart Server, a port held by something else, that the server exits if the app is
+// killed and a relaunch replaces it, and phones and tablets on the Wi-Fi (the menu, the Wi-Fi
 // listener on this Mac's LAN address E2E_LAN_IP, pairing from that address, removing a device,
 // turning it off). SCREENSHOTS=<dir> also saves the window, windowed and full screen, and the
 // Phones and Tablets window and the menu.
@@ -108,7 +109,7 @@ type Remotes = { visible: boolean; enabled: boolean; code: string; pairUrl: stri
 type State = {
   wifi: boolean; remotes: Remotes | null;
   menu: string[]; menuEnabled: string[]; statusTitle: string; statusLive: boolean;
-  server: { owned: boolean; pid: number } | null;
+  server: { owned: boolean; pid: number } | null; serverState: string;
   window: { visible: boolean; number: number; fullscreen: boolean; url: string; frame: [number, number]; lights: number[][]; events: string[] } | null;
   opened: string[]; alerts: string[]; notices: string[]; loginItem: boolean; updater: boolean; undoRoute: string; feed: string;
 };
@@ -150,7 +151,7 @@ const shoot = async (name: string) => {
 try {
   console.log(`\n${appPath}\nport ${PORT}, library ${library}\n`);
 
-  // ------------------------------------------------------------ first run, bundled server, window (MAC-11)
+  // ------------------------------------------------------------ first run, bundled server, window
   let app = await launch();
   check(await until(answers), "the bundled server answers");
   const [pid] = listeners();
@@ -160,7 +161,7 @@ try {
   check(existsSync(join(library, "my-channel/org.json")), "first run: a first org");
   check(existsSync(join(library, ".git")) || !Bun.which("git"), "first run: git init (when git is available)");
   check(readFileSync(join(library, ".gitignore"), "utf8").includes(".viewswitcher/"), "first run: .gitignore");
-  // EDIT-29: the built-in template packs ship in Resources/packs and the bundled server lists them.
+  // The built-in template packs ship in Resources/packs and the bundled server lists them.
   const builtin = await fetch(`${BASE}/api/packs/builtin`).then((r) => r.json(), () => []) as { id: string }[];
   check(existsSync(join(appPath, "Contents/Resources/packs/fullcount/pack.json")), "the app ships the built-in template packs (Resources/packs)");
   check(builtin.map((p) => p.id).join() === "starter,fullcount,nova,grace,remi,riverside,kitchen", `the bundled server lists them (${builtin.map((p) => p.id).join(", ")})`);
@@ -175,7 +176,7 @@ try {
   const plist = Bun.spawnSync(["/usr/libexec/PlistBuddy", "-c", "Print :SUPublicEDKey", join(appPath, "Contents/Info.plist")]).stdout.toString().trim();
   check(plist.length === 44, "Sparkle public EdDSA key is in Info.plist");
 
-  // ------------------------------------------------------------ menu bar (MAC-12)
+  // ------------------------------------------------------------ menu bar
   check(await until(async () => (await state()).menu.includes("OBS: not connected")), "menu bar: OBS not connected");
   const s1 = await state();
   console.log(`  menu: ${s1.menu.filter(Boolean).join(" | ")}`);
@@ -201,7 +202,7 @@ try {
   const evil = await fetch(`${BASE}/api/obs/stream`, { method: "POST", headers: { origin: "https://evil.example", "content-type": "text/plain" }, body: "{}" });
   check(evil.status === 403, "a cross-site POST (Origin: https://evil.example) is refused with 403");
 
-  // ------------------------------------------------------------ agents: MCP and Edit with AI (MCP-10)
+  // ------------------------------------------------------------ agents: MCP and Edit with AI
   const rpc = (id: number, method: string, params: Record<string, unknown> = {}) => ({ jsonrpc: "2.0", id, method, params });
   const init = rpc(1, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "vs-e2e", version: "1" } });
   const mcpInit = await fetch(`${BASE}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify(init) }).then((r) => r.json(), () => null);
@@ -268,7 +269,7 @@ try {
   check(await until(async () => (await state()).opened.includes("https://viewswitcher.com/ai"), 5000), "Setup guide opens viewswitcher.com/ai in the browser");
   await evalJs(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); return true`);
 
-  // ------------------------------------------------------------ permissions and navigation (MAC-13)
+  // ------------------------------------------------------------ permissions and navigation
   const perms = await evalJs<Record<string, string>>(`
     const out = {};
     out.notifications = typeof Notification === "undefined" ? "unavailable" : await Notification.requestPermission();
@@ -291,7 +292,7 @@ try {
   const opened = s3.opened.slice(openedBefore).filter((u) => /^https?:\/\/example\./.test(u) || !u.startsWith("/") && !u.startsWith(BASE));
   check(s3.window!.url.startsWith(BASE) && JSON.stringify(opened) === JSON.stringify(["https://example.com/", "https://example.org/"]), `only http(s) leaves the window, in the browser (opened: ${JSON.stringify(opened)}; events: ${JSON.stringify(s3.window!.events.filter((e) => e.startsWith("denied")))})`);
 
-  // ------------------------------------------------------------ Undo forwards to the page (MAC-13)
+  // ------------------------------------------------------------ Undo forwards to the page
   await evalJs(`window.__keys = []; window.addEventListener("keydown", (e) => window.__keys.push((e.metaKey ? "⌘" : "") + (e.shiftKey ? "⇧" : "") + e.key.toLowerCase())); document.activeElement?.blur(); return true;`);
   await cmd("menu", { menu: "Edit", item: "Undo" });
   await cmd("menu", { menu: "Edit", item: "Redo" });
@@ -309,7 +310,7 @@ try {
   check(field !== "abc" && (await evalJs<string[]>("return window.__keys")).length === 0 && (await state()).undoRoute === "native", `in a text field, Undo is the native text undo ("abc" → "${field}")`);
   await evalJs(`document.getElementById("e2e-field")?.remove(); return true`);
 
-  // ------------------------------------------------------------ safe zones (MAC-13a)
+  // ------------------------------------------------------------ safe zones
   await cmd("resize", { w: 1280, h: 800 });
   await sleep(500);
   const s4 = await state();
@@ -361,7 +362,7 @@ try {
   const backLights = (await state()).window!.lights[0];
   check(!back.full && back.lights !== "0px" && Math.abs(backLights[1] + backLights[3] / 2 - 32) <= 1, `back from full screen, the lights and inset return (${JSON.stringify(back)})`);
 
-  // ------------------------------------------------------------ phones and tablets on the Wi-Fi (MAC-23 … MAC-26)
+  // ------------------------------------------------------------ phones and tablets on the Wi-Fi
   if (!LAN_IP) console.log("- no LAN address: skipping the Wi-Fi checks");
   else {
     const WIFI = "Let Phones and Tablets on This Wi-Fi Connect";
@@ -378,7 +379,7 @@ try {
     await cmd("remotes");
     check(await until(async () => !!(await state()).remotes?.code, 8000), "Phones and Tablets… shows a code");
     const r = (await state()).remotes!;
-    // (PHONE-4: and, when the Mac has a .local name, `&mac=<name>.local` for the iPhone and iPad app.)
+    // (And, when the Mac has a .local name, `&mac=<name>.local` for the iPhone and iPad app.)
     check(new RegExp(`^http://${LAN_IP.replace(/\./g, "\\.")}:${PORT}/pair\\?code=${r.code}(&mac=[a-z0-9-]+\\.local)?$`).test(r.pairUrl), `the QR code links to this Mac's LAN address with the code (${r.pairUrl})`);
     if (shots) {
       await sleep(500);
@@ -401,7 +402,28 @@ try {
     check((await state()).menuEnabled.includes(WIFI), "the setting stays in the menu");
   }
 
-  // ------------------------------------------------------------ close keeps serving; Quit stops (MAC-11)
+  // ------------------------------------------------------------ the server crashes mid-show: it comes back by itself
+  {
+    const before = await state();
+    const crashed = before.server!.pid;
+    const page = before.window?.url;
+    process.kill(crashed, "SIGKILL");
+    check(await until(async () => {
+      const s = await state();
+      return s.server?.owned === true && s.server.pid !== crashed;
+    }, 15_000), `a killed sidecar comes back by itself (${(await state()).serverState})`);
+    check(await until(answers), "…and answers");
+    check(listeners().length === 1 && command(listeners()[0]).startsWith(sidecar), "…as the app's own sidecar");
+    const after = await state();
+    check(after.notices.some((n) => n.startsWith("ViewSwitcher server stopped")) && after.notices.some((n) => n.startsWith("ViewSwitcher server restarted")), `a notification says it stopped, then that it's back (${after.notices.join(" | ")})`);
+    check(await until(async () => /restarted/.test(await evalJs<string>(`return document.getElementById("viewswitcher-shell-notice")?.textContent ?? ""`)), 5000), "the window's banner says it was restarted");
+    await shoot("server-restarted");
+    check(after.window?.url === page, "the window stays on its page (no reload)");
+    check(await until(async () => (await state()).menu.includes("Nothing on air") || (await state()).menu.some((l) => l.startsWith("On air")), 8000), "the menu follows the new server");
+    check(!(await state()).menu.includes("Restart Server"), "…with no Restart Server to click");
+  }
+
+  // ------------------------------------------------------------ close keeps serving; Quit stops
   await cmd("close");
   await sleep(800);
   check((await state()).window?.visible === false, "closing hides the window");
@@ -441,6 +463,18 @@ try {
   check(await until(answers), "relaunched: server up");
   process.kill(app.proc.pid, "SIGKILL");
   check(await until(async () => listeners().length === 0, 8000), "when the app is killed, its server exits too (no orphan on the port)");
+
+  // Relaunched straight after a crash, while the orphan may still answer: the app replaces it (or,
+  // if the orphan already went, starts its own); either way it owns its server and never attaches.
+  app = await launch();
+  check(await until(async () => (await state()).server?.owned === true), "relaunched: its own server");
+  const orphan = listeners()[0];
+  process.kill(app.proc.pid, "SIGKILL");
+  app = await launch();
+  check(await until(async () => (await state()).server?.owned === true, 15_000), `relaunched right after a crash: it owns a server instead of attaching to the orphan (${(await state()).serverState})`);
+  check(await until(async () => listeners().length === 1 && listeners()[0] !== orphan, 8000), "…a new one, and the orphan is gone");
+  check(await quit(app), "Quit ends the app");
+  check(await until(async () => listeners().length === 0, 8000), `port ${PORT} free`);
 
   // ------------------------------------------------------------ the port is someone else's
   const squatter = Bun.serve({ hostname: "127.0.0.1", port: Number(PORT), fetch: () => new Response("not us", { status: 404 }) });

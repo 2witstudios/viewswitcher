@@ -5,19 +5,21 @@ import ViewSwitcherKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private(set) var server: Server?
+    /// The server's whole life: starting, attached or owned, restarting after a crash, Quit.
+    let supervisor = ServerSupervisor(base: Env.base) { try Env.launch() }
+    var server: Server? { supervisor.server }
     private(set) var live: LiveState?
     private(set) var switcher: SwitcherWindow?
     private var liveClient: LiveClient?
     private var statusItem: NSStatusItem?
     private(set) var statusMenu = NSMenu()
-    private var restarting = false
-    private var quitting = false
-    private var stopped = false
+    private lazy var menuBuilder = StatusMenuBuilder { [weak self] in self?.perform($0) }
     private var updater: SPUStandardUpdaterController?
     private var e2e: E2E?
     private(set) var remotes: RemotesWindow?
     private let announcer = Announcer()
+    /// The banner over the switcher, kept here so a window opened later shows it too.
+    private var notice: (text: String, seconds: TimeInterval?)?
 
     // ------------------------------------------------------------ lifecycle
 
@@ -33,20 +35,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             other.activate()
             exit(0)
         }
+        // Asked now, so the first banner (often the server stopping mid-show) isn't held behind the question.
+        if !Env.e2e { Notifier.shared.requestPermission() }
         NSApp.mainMenu = mainMenu()
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.imagePosition = .imageLeading
         statusMenu.delegate = self
         item.menu = statusMenu
         statusItem = item
+        supervisor.onChange = { [weak self] old, new in self?.serverChanged(from: old, to: new) }
         renderStatus()
         if let dir = Env.e2eDir { e2e = E2E(dir: dir, app: self) }
         startUpdater()
 
         Task {
-            guard await startServer(atLaunch: true) else { return }
-            watchState()
-            renderStatus()
+            await supervisor.start()
+            // At launch, a server that can't start ends the app.
+            if case .failed(let why) = supervisor.state { return couldntStart(why, quit: true) }
             openWindow()
         }
     }
@@ -61,68 +66,77 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        quitting = true
         liveClient?.stop()
-        guard !stopped, let s = server, s.owned else { return .terminateNow }
-        server = nil
+        guard let s = supervisor.quit() else { return .terminateNow }
         // While AppKit waits for the reply it runs the main run loop in its modal mode, where main-actor
         // tasks don't run: stop off the main actor, and reply through a run-loop block in common modes.
         Task.detached {
             await s.stop()
             CFRunLoopPerformBlock(CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue) {
-                MainActor.assumeIsolated {
-                    self.stopped = true
-                    NSApp.reply(toApplicationShouldTerminate: true)
-                }
+                MainActor.assumeIsolated { NSApp.reply(toApplicationShouldTerminate: true) }
             }
             CFRunLoopWakeUp(CFRunLoopGetMain())
         }
         return .terminateLater
     }
 
-    // ------------------------------------------------------------ server (MAC-11)
+    // ------------------------------------------------------------ server
 
-    /// At launch a server that can't start ends the app; from Restart Server it only says why.
-    @discardableResult
-    func startServer(atLaunch: Bool) async -> Bool {
-        do {
-            guard let launch = Env.launch() else {
-                throw ServerError.startFailed("This build has no server inside it. Run it with bun run mac:dev, or build it with bun run mac:build.")
+    /// What the person sees as the server comes and goes: the menu, a notification, the window's banner.
+    func serverChanged(from old: ServerState, to new: ServerState) {
+        switch new {
+        case .owned, .attached:
+            announceWifi()
+            watchState()
+            if case .restarting = old {
+                Outside.notify("ViewSwitcher server restarted", "It stopped unexpectedly and is running again.", id: "server")
+                showNotice("ViewSwitcher's server stopped unexpectedly and was restarted.", for: 8)
+            } else {
+                showNotice(nil)
             }
-            server = try await connectOrStart(Env.base, launch: launch)
-        } catch {
-            let portTaken: Bool = if case ServerError.portTaken = error { true } else { false }
-            let why = error.localizedDescription + (portTaken ? "" : "\n\nServer log: \(Env.logFile.path)")
-            Outside.alert(portTaken ? "Port in use" : "ViewSwitcher couldn't start", why, style: .critical)
-            if atLaunch {
-                quitting = true
-                NSApp.terminate(nil)
+        case .restarting(let attempt, let code):
+            down()
+            if attempt == 1 { Outside.notify("ViewSwitcher server stopped", "It exited (\(code)). Restarting it now.", id: "server") }
+            showNotice("ViewSwitcher's server stopped. Restarting it…")
+        case .crashed(let code):
+            down()
+            Outside.notify("ViewSwitcher server keeps stopping", "It exited (\(code)) again, so it wasn't restarted. Choose Restart Server in the menu bar. Server log: \(Env.logFile.path)", id: "server")
+            showNotice("ViewSwitcher's server keeps stopping. Choose Restart Server in the menu bar.")
+        case .failed(let why):
+            down()
+            // A restart that found the port taken; at launch and from Restart Server, the caller says why.
+            if case .restarting = old {
+                Outside.notify("ViewSwitcher server stopped", why.localizedDescription, id: "server")
+                showNotice("ViewSwitcher's server stopped and couldn't restart. Choose Restart Server in the menu bar.")
             }
-            return false
+        case .lost:
+            down()
+        case .starting, .quitting:
+            break
         }
-        announceWifi()
-        server?.onExit = { [weak self] code in
-            guard let self else { return }
-            self.announcer.set(false, port: 0)
-            self.server = nil
-            self.live = nil
-            self.renderStatus()
-            if !self.quitting { Outside.notify("ViewSwitcher server stopped", "It exited (\(code)). Use Restart Server in the menu bar.") }
-        }
-        return true
+        renderStatus()
+    }
+
+    /// No server: nothing to announce or show.
+    private func down() {
+        announcer.set(false, port: 0)
+        live = nil
+    }
+
+    private func couldntStart(_ why: ServerError, quit: Bool) {
+        let portTaken: Bool = if case .portTaken = why { true } else { false }
+        let text = why.localizedDescription + (portTaken ? "" : "\n\nServer log: \(Env.logFile.path)")
+        Outside.alert(portTaken ? "Port in use" : "ViewSwitcher couldn't start", text, style: .critical)
+        if quit { NSApp.terminate(nil) }
     }
 
     @objc func restartServer() {
-        guard !restarting, server == nil else { return } // a second click while one starts would race it for the port
-        restarting = true
-        renderStatus()
+        // A second click while one starts would race it for the port; the supervisor ignores it.
+        guard supervisor.state.stopped else { return }
         Task {
-            if await startServer(atLaunch: false) {
-                watchState()
-                switcher?.reloadCurrent()
-            }
-            restarting = false
-            renderStatus()
+            await supervisor.start()
+            if case .failed(let why) = supervisor.state { return couldntStart(why, quit: false) }
+            switcher?.reloadCurrent()
         }
     }
 
@@ -134,26 +148,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.live = state
             self?.renderStatus()
         }
+        // Attached to a server someone else started (bun run dev) and it went away: the supervisor
+        // forgets it, so the menu offers Restart Server (which attaches again, or starts the bundled one).
         client.onClose = { [weak self] in
-            guard let self, let s = self.server, !s.owned, !self.quitting else { return }
-            // Attached to a server someone else started (bun run dev) and it went away: forget it, so
-            // the menu offers Restart Server (which attaches again, or starts the bundled one).
-            Task {
-                if await probe(Env.base) == .none, self.server === s {
-                    self.server = nil
-                    self.renderStatus()
-                }
-            }
+            Task { await self?.supervisor.checkAttached() }
         }
         liveClient = client
         client.start()
     }
 
-    // ------------------------------------------------------------ phones and tablets (MAC-23 … MAC-26)
+    func showNotice(_ text: String?, for seconds: TimeInterval? = nil) {
+        notice = text.map { ($0, seconds) }
+        switcher?.showNotice(text, for: seconds)
+    }
+
+    // ------------------------------------------------------------ phones and tablets
 
     /// Bonjour follows the setting, for a server this app started (it was launched with the setting).
     func announceWifi() {
-        announcer.set(Env.wifi && server?.owned == true, port: Int(Env.port) ?? 7420)
+        announcer.set(Env.wifi && supervisor.state == .owned, port: Int(Env.port) ?? 7420)
     }
 
     @objc func openRemotes() {
@@ -174,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let on = !Env.wifi
         Task {
             do {
-                let s = try await RemoteAPI.setEnabled(on)
+                let s = try await Env.api.setRemoteEnabled(on)
                 Env.wifi = s.enabled
                 announceWifi()
                 buildStatusMenu()
@@ -191,19 +204,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // ------------------------------------------------------------ window
 
     @objc func openWindow() {
-        if switcher == nil { switcher = SwitcherWindow(base: Env.base) }
+        if switcher == nil {
+            switcher = SwitcherWindow(base: Env.base)
+            if let notice { switcher?.showNotice(notice.text, for: notice.seconds) }
+        }
         switcher?.show()
     }
 
-    /// The switcher's Edit with AI sheet (MCP-10): connect an agent, the agent on-air setting.
+    /// The switcher's Edit with AI sheet: connect an agent, the agent on-air setting.
     @objc func editWithAI() {
         openWindow()
         switcher?.openAgentSheet()
     }
 
-    // ------------------------------------------------------------ menu bar (MAC-12)
+    // ------------------------------------------------------------ menu bar
 
-    var status: MenuStatus { MenuStatus(server == nil ? nil : live) }
+    var status: MenuStatus { MenuStatus(supervisor.state.running ? live : nil) }
+
+    var menuContext: StatusMenu.Context {
+        StatusMenu.Context(
+            status: status,
+            server: supervisor.state,
+            obsConnected: live?.obs.connected == true,
+            wifi: Env.wifi,
+            updater: updater != nil,
+            openAtLogin: SMAppService.mainApp.status == .enabled
+        )
+    }
 
     func renderStatus() {
         let s = status
@@ -220,40 +247,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if menu === statusMenu { buildStatusMenu() }
     }
 
-    private func item(_ title: String, _ action: Selector?, enabled: Bool = true) -> NSMenuItem {
-        let i = NSMenuItem(title: title, action: enabled ? action : nil, keyEquivalent: "")
-        i.target = self
-        i.isEnabled = enabled && action != nil
-        return i
+    func buildStatusMenu() {
+        menuBuilder.fill(statusMenu, with: StatusMenu.items(menuContext))
     }
 
-    func buildStatusMenu() {
-        let s = status
-        let m = statusMenu
-        m.autoenablesItems = false
-        m.removeAllItems()
-        for line in [s.onAir, s.obs, s.ipad] { m.addItem(item(line, nil, enabled: false)) }
-        m.addItem(.separator())
-        m.addItem(item("Open ViewSwitcher", #selector(openWindow)))
-        m.addItem(item("Edit with AI…", #selector(editWithAI), enabled: server != nil))
-        m.addItem(item("Open in Browser", #selector(openInBrowser), enabled: server != nil))
-        m.addItem(item("Open Library Folder", #selector(openLibrary), enabled: server != nil))
-        m.addItem(item(s.obsReady ? "Set Up OBS Again" : "Set Up OBS…", #selector(setUpObs), enabled: live?.obs.connected == true && server != nil))
-        m.addItem(.separator())
-        let wifi = item("Let Phones and Tablets on This Wi-Fi Connect", #selector(toggleWifi), enabled: server?.owned == true)
-        wifi.state = Env.wifi ? .on : .off
-        wifi.toolTip = RemoteText.help
-        m.addItem(wifi)
-        m.addItem(item("Phones and Tablets…", #selector(openRemotes), enabled: server?.owned == true))
-        m.addItem(.separator())
-        if server == nil { m.addItem(item(restarting ? "Starting Server…" : "Restart Server", #selector(restartServer), enabled: !restarting)) }
-        m.addItem(item("Check for Updates…", #selector(checkForUpdates), enabled: updater != nil))
-        let login = item("Open at Login", #selector(toggleLogin))
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        m.addItem(login)
-        m.addItem(item("Show Server Log", #selector(showLog)))
-        m.addItem(.separator())
-        m.addItem(item(server.map { !$0.owned } == true ? "Quit ViewSwitcher (server keeps running)" : "Quit ViewSwitcher", #selector(quit)))
+    private func perform(_ action: StatusMenu.Action) {
+        switch action {
+        case .openWindow: openWindow()
+        case .editWithAI: editWithAI()
+        case .openInBrowser: openInBrowser()
+        case .openLibrary: openLibrary()
+        case .setUpObs: setUpObs()
+        case .toggleWifi: toggleWifi()
+        case .openRemotes: openRemotes()
+        case .restartServer: restartServer()
+        case .checkForUpdates: checkForUpdates()
+        case .toggleLogin: toggleLogin()
+        case .showLog: showLog()
+        case .quit: quit()
+        }
     }
 
     @objc func openInBrowser() { Outside.openInBrowser(Env.base.appendingPathComponent("")) }
@@ -261,12 +273,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openLibrary() {
         Task {
             do {
-                // The one API response with an absolute path in it, answered only on loopback (apps/server/src/index.ts).
-                let (data, _) = try await URLSession.shared.data(from: Env.base.appendingPathComponent("api/info"))
-                guard let info = try JSONSerialization.jsonObject(with: data) as? [String: Any], let path = info["library"] as? String else {
-                    throw ServerError.startFailed("The server didn't say where the library is.")
-                }
-                Outside.openFolder(URL(fileURLWithPath: path, isDirectory: true))
+                // One of the few answers with an absolute path in it, given only to this Mac itself.
+                let info = try await Env.api.info()
+                Outside.openFolder(URL(fileURLWithPath: info.library, isDirectory: true))
             } catch {
                 Outside.alert("Couldn't open the library folder", error.localizedDescription)
             }
@@ -285,19 +294,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         Task {
             do {
-                var req = URLRequest(url: Env.base.appendingPathComponent("api/obs/setup"))
-                req.httpMethod = "POST"
-                req.setValue("application/json", forHTTPHeaderField: "content-type")
-                req.httpBody = Data("{}".utf8)
-                let (data, response) = try await URLSession.shared.data(for: req)
-                let body = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                    throw ServerError.startFailed(body["error"] as? String ?? "The server said no.")
-                }
-                let missing = body["missing"] as? [String] ?? []
-                let next = missing.isEmpty ? "" : " Add \(missing.joined(separator: ", ")) to the ViewSwitcher scene in OBS, then set up again."
-                let switched = body["switched"] as? Bool ?? false
-                Outside.notify("OBS is set up", (switched ? "The ViewSwitcher scene is ready." : "The ViewSwitcher scene is ready; OBS stayed on its current scene.") + next)
+                let r = try await Env.api.setUpObs()
+                let next = r.missing.isEmpty ? "" : " Add \(r.missing.joined(separator: ", ")) to the ViewSwitcher scene in OBS, then set up again."
+                Outside.notify("OBS is set up", (r.switched ? "The ViewSwitcher scene is ready." : "The ViewSwitcher scene is ready; OBS stayed on its current scene.") + next)
             } catch {
                 Outside.alert("Couldn't set up OBS", error.localizedDescription)
             }
@@ -323,13 +322,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func quit() { NSApp.terminate(nil) }
 
-    // ------------------------------------------------------------ updates (MAC-15)
+    // ------------------------------------------------------------ updates
 
     /// Sparkle against the appcast on GitHub Releases. Not in a build without a public key (Debug)
     /// or with VIEWSWITCHER_UPDATES=0 (scripts/e2e.ts).
     func startUpdater() {
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
-        guard Env.updatesEnabled, !Env.e2e, key.count > 20, Env.launch().map({ $0.executable.lastPathComponent == "viewswitcher-server" }) == true else { return }
+        guard Env.updatesEnabled, !Env.e2e, key.count > 20, (try? Env.launch())?.executable.lastPathComponent == "viewswitcher-server" else { return }
         updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     }
 
@@ -368,7 +367,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             i("Quit ViewSwitcher", #selector(quit), "q", target: self),
         ])
         sub("File", [i("Close Window", #selector(NSWindow.performClose(_:)), "w")])
-        // Undo/Redo forward to the page (MAC-13): see forwardUndo.
+        // Undo/Redo forward to the page: see forwardUndo.
         sub("Edit", [
             i("Undo", #selector(forwardUndo(_:)), "z", target: self),
             i("Redo", #selector(forwardRedo(_:)), "z", [.command, .shift], target: self),

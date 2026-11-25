@@ -1,6 +1,7 @@
 import UIKit
+import ViewSwitcherKit
 
-/// ViewSwitcher on the iPad (MAC-14). The bundled connector page finds the server on the Mac
+/// ViewSwitcher on the iPhone and iPad. The bundled connector page finds the server on the Mac
 /// (USB-C first, through UsbTunnel, then a saved network address) and opens the switcher it serves.
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {

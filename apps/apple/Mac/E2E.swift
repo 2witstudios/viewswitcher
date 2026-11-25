@@ -103,6 +103,7 @@ final class E2E {
                 "statusTitle": app.status.title.isEmpty ? "" : " \(app.status.title)",
                 "statusLive": app.status.live,
                 "server": app.server.map { ["owned": $0.owned, "pid": Int($0.pid ?? 0)] } ?? NSNull(),
+                "serverState": String(describing: app.supervisor.state),
                 "window": w.map { w in [
                     "visible": w.window.isVisible,
                     "number": w.window.windowNumber,
