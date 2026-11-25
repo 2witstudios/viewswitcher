@@ -246,7 +246,7 @@ The Apple apps have XCTest (`xcodebuild test`, see [apps/apple/README.md](apps/a
 
 ### Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Agents working in this repo: [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Agents working in this repo: [AGENTS.md](AGENTS.md).
 
 ### License
 

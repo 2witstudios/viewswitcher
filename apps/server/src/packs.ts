@@ -45,7 +45,7 @@ type StageMeta = { org: string; set: string; manifest: PackManifest; files: stri
 const tokenOk = (t: unknown): t is string => typeof t === "string" && /^[a-f0-9]{24}$/.test(t);
 const stageDir = (root: string, orgId: string, token: string) => inside(root, `${plainName(orgId)}/${STAGING}/${token}`);
 
-/** A filesystem error, without the absolute path Node puts in its message (CLAUDE.md: none in responses). */
+/** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
 function plainFsError(e: unknown, doing: string): Error {
   if (e instanceof PackError || e instanceof PathError) return e;
   const code = (e as { code?: string })?.code;

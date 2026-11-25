@@ -32,4 +32,4 @@ Keep `packages/shared` dependency-free and tested. The Apple apps have XCTest; s
 
 ## Where planning lives
 
-Plans, the board and decisions live in PageSpace (the drive "ViewSwitcher"). If you're an AI agent, start with [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md). Questions, bugs and ideas: [GitHub issues](https://github.com/2witstudios/viewswitcher/issues).
+Plans, the board and decisions live in PageSpace (the drive "ViewSwitcher"). If you're an AI agent, start with [AGENTS.md](AGENTS.md). Questions, bugs and ideas: [GitHub issues](https://github.com/2witstudios/viewswitcher/issues).
