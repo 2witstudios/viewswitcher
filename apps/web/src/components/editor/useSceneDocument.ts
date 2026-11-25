@@ -10,6 +10,7 @@ import { createSceneSaver } from "../../lib/scene-saver";
 import { toast } from "../ui";
 import { canReloadIn } from "./mode";
 import { newestOnly } from "./newest";
+import { refreshVerdict } from "./refresh";
 import type { ModeStore } from "./useMode";
 import type { UndoEntry } from "./useUndo";
 
@@ -72,13 +73,14 @@ export function useSceneDocument(path: string, opts: {
    * own saves come back as changes too) and the editor is still free to.
    */
   const load = useMemo(() => newestOnly(async (isNewest, ifChanged?: { stillFree: () => boolean }): Promise<SceneBase | null> => {
+    const readFrom = baseRef.current;
     try {
       const b = toBase(await api.sceneForEdit(path));
       if (!isNewest()) return null;
       if (ifChanged) {
-        if (b.hash === baseRef.current?.hash) return baseRef.current;
-        // Someone started something while it was read: try again once they're done.
-        if (!ifChanged.stillFree()) {
+        const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, free: ifChanged.stillFree() });
+        if (verdict === "same") return baseRef.current;
+        if (verdict === "retry") {
           outside.current = true;
           outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS);
           return baseRef.current;
@@ -152,17 +154,14 @@ export function useSceneDocument(path: string, opts: {
   // for someone else's, and when it saves against the old version the conflict screen takes over.
   const version = useLive().versions[path] ?? 0;
   const seen = useRef(version);
-  const free = () => canReloadIn(mode.now()) && o.current.quiet();
+  const free = () => canReloadIn(mode.now()) && !saver.busy() && o.current.quiet();
   const refreshRef = useRef(async () => {});
   const alive = useRef(true);
   refreshRef.current = async () => {
     clearTimeout(outsideTimer.current);
     if (!alive.current || !outside.current || !baseRef.current) return;
     const later = () => (outsideTimer.current = setTimeout(() => void refreshRef.current(), OUTSIDE_RETRY_MS));
-    if (!free()) return void later();
-    // The editor's own saves land first: their new versions aren't someone else's change.
-    await saver.idle();
-    if (!alive.current) return;
+    // The editor's own saves land first (free() waits for them): their new versions aren't someone else's change.
     if (!free()) return void later();
     outside.current = false;
     await load({ stillFree: free });

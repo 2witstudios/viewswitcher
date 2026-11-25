@@ -21,8 +21,11 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
   onError: (e: unknown) => Promise<void>;
 }) {
   let queue: Promise<unknown> = Promise.resolve();
+  /** Saves queued or on their way. */
+  let waiting = 0;
   /** `madeIn`: the generation the edit's ids came from, when it started before this call (a drag, typing). */
   const save = (edits: SceneEdit[], meta: M, madeIn = opts.generation()): Promise<void> => {
+    waiting++;
     const next = queue.then(async () => {
       if (opts.generation() !== madeIn) return opts.onStale(edits);
       const b = opts.base();
@@ -36,7 +39,7 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
       }
     });
     // A handler that throws mustn't stop every later save.
-    queue = next.catch(() => {});
+    queue = next.catch(() => {}).finally(() => void waiting--);
     return next;
   };
   /** Resolves once the queue is empty: every save so far (and any queued meanwhile) has finished. */
@@ -47,5 +50,7 @@ export function createSceneSaver<B extends SaverBase, M>(opts: {
       await seen;
     } while (seen !== queue);
   };
-  return Object.assign(save, { idle });
+  /** A save is queued or on its way: the file may be about to change under the editor's own hand. */
+  const busy = () => waiting > 0;
+  return Object.assign(save, { idle, busy });
 }

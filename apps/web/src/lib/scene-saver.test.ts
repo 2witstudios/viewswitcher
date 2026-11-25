@@ -45,7 +45,7 @@ function setup() {
       throw e;
     },
   });
-  return { save, idle: save.idle, sent, stale, conflicts, saved, file: () => file, agentWrites: (f: (s: string) => string) => void (file = f(file)) };
+  return { save, idle: save.idle, busy: save.busy, sent, stale, conflicts, saved, file: () => file, agentWrites: (f: (s: string) => string) => void (file = f(file)) };
 }
 
 describe("createSceneSaver", () => {
@@ -127,5 +127,19 @@ describe("createSceneSaver", () => {
     await s.save([{ id: para + 1, text: "After reload" }], null);
     expect(s.file()).toContain(">After reload</p>");
     expect(s.file()).toContain(">Notes</span>");
+  });
+
+  test("busy() is true from the moment a save is queued until it has landed", async () => {
+    const s = setup();
+    const title = idOf(teaching, "Today's topic");
+    expect(s.busy()).toBe(false);
+    const a = s.save([{ id: title, text: "One" }], null);
+    const b = s.save([{ id: title, text: "Two" }], null);
+    expect(s.busy()).toBe(true);
+    await a;
+    expect(s.busy()).toBe(true);
+    await b;
+    await s.idle();
+    expect(s.busy()).toBe(false);
   });
 });
