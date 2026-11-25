@@ -7,7 +7,7 @@ import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
-import { useLibrary } from "../../../lib/library";
+import { templateGroups, templateId, useLibrary } from "../../../lib/library";
 import { useLive } from "../../../lib/live";
 
 export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
@@ -82,11 +82,15 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 <Menu
                   label="New scene from a template"
                   onClose={() => setAdding(false)}
-                  items={data.templates.map((t) => ({
-                    label: t.label,
-                    hint: "A copy in this stream, open to change",
-                    run: () => attempt(async () => openEditor((await api.addFromTemplate(org, t.name, projectId, streamId)).path)),
-                  }))}
+                  // By set (EDIT-25): the org's own templates, then each style pack's.
+                  items={templateGroups(data).filter((g) => g.templates.length).flatMap((g, i, all): MenuItem[] => [
+                    ...(all.length > 1 ? [{ heading: g.name }] : []),
+                    ...g.templates.map((t) => ({
+                      label: t.label,
+                      hint: "A copy in this stream, open to change",
+                      run: () => attempt(async () => openEditor((await api.addFromTemplate(org, templateId(t), projectId, streamId)).path)),
+                    })),
+                  ])}
                 />
               )}
             </div>

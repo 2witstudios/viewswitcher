@@ -1,0 +1,77 @@
+---
+// SITE-20: one clear release path. What's out, what it needs, what happens after you open it, and the iPad app's status.
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Cta from "../components/Cta.astro";
+import IpadStore from "../components/IpadStore.astro";
+import MoreGuides from "../components/MoreGuides.astro";
+import { site, github, releases, macAppSchema } from "../site.config";
+import { IPAD_PRICE } from "../lib/cta";
+import { breadcrumbs } from "../lib/seo";
+const v = site.mac.version;
+---
+<Base
+  title="Download ViewSwitcher for Mac: free OBS scene switcher"
+  description={`Download ViewSwitcher ${v} for Mac: free, for macOS 14 Sonoma or later on Apple silicon and Intel, notarized by Apple, and it keeps itself up to date.`}
+  path="/download"
+  schema={[macAppSchema("/download"), breadcrumbs(site.url, [{ name: "Download", path: "/download" }])]}>
+  <Header />
+  <main id="main" class="wrap prose guide">
+    <p class="eyebrow">Download</p>
+    <h1>Download ViewSwitcher for Mac</h1>
+    <p class="lede">ViewSwitcher {v} is out. It's free, it runs on macOS 14 Sonoma or later, and one download works on Apple silicon and Intel Macs.</p>
+    <Cta />
+    <p class="quiet">ViewSwitcher.dmg, version {v}. <a href={`${releases}/latest`}>Release notes</a></p>
+
+    <h2 id="at-a-glance">At a glance</h2>
+    <dl class="facts">
+      <div><dt>Version</dt><dd>{v} (<a href={`${releases}/latest`}>what's new</a>)</dd></div>
+      <div><dt>Price</dt><dd>Free and open source. No subscription, no account, no watermark.</dd></div>
+      <div><dt>Needs</dt><dd>macOS 14 Sonoma or later</dd></div>
+      <div><dt>Macs</dt><dd>Apple silicon and Intel, in one universal app</dd></div>
+      <div><dt>Security</dt><dd>Signed with a Developer ID and notarized by Apple. The first time, macOS asks whether to open an app downloaded from the internet; choose Open.</dd></div>
+      <div><dt>Updates</dt><dd>It checks for a new version every few hours and offers to install it. You can also choose <strong>Check for Updates…</strong> from its menu bar icon.</dd></div>
+    </dl>
+
+    <h2 id="what-you-need">What you need</h2>
+    <ul>
+      <li><strong>OBS</strong>, the free streaming app, from <a href="https://obsproject.com">obsproject.com</a>. OBS does the streaming; ViewSwitcher tells it what to show.</li>
+      <li><strong>A camera</strong> OBS can see: the Mac's own camera, a USB webcam, or a camera through a capture card.</li>
+      <li>Optional: a second camera, a screen to share, and an iPad to switch from.</li>
+    </ul>
+
+    <h2 id="after-you-open-it">After you open it</h2>
+    <ol>
+      <li>Open <strong>ViewSwitcher.dmg</strong> and drag ViewSwitcher to Applications, then open it from there.</li>
+      <li>It makes your library the first time: a folder in your home folder, <strong>ViewSwitcher Library</strong>, with a first channel, "My channel", and its set of views.</li>
+      <li>Open OBS and turn on <strong>Tools → WebSocket Server Settings → Enable WebSocket server</strong>. ViewSwitcher connects by itself.</li>
+      <li>Press <strong>Set up OBS</strong>. It makes a "ViewSwitcher" scene in OBS and switches to it.</li>
+      <li>Add your camera to that scene as a source named <strong>Camera</strong> (and your screen as <strong>Screen</strong>), then press <strong>Set up OBS again</strong>.</li>
+      <li>Click a view. It's on air.</li>
+    </ol>
+    <p>Each step, with screenshots and what to do if something doesn't show up: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
+    <p>Closing the window keeps ViewSwitcher running in the menu bar, so OBS and the iPad stay connected. Quit it from the menu bar icon or with ⌘Q.</p>
+
+    <h2 id="release-notes">Release notes and updates</h2>
+    <p>Every version is published on GitHub with its notes: <a href={releases}>all releases</a>. ViewSwitcher installs updates from there, so there's nothing to download again by hand.</p>
+
+    <h2 id="ipad">ViewSwitcher for iPad</h2>
+    <p>The iPad app is the remote for ViewSwitcher on your Mac: tap a view on the iPad beside you and the stream changes. It's optional, {IPAD_PRICE} once, with no subscription.</p>
+    <IpadStore />
+    <p><a href="/ipad">How the iPad app works</a></p>
+
+    <h2 id="source">Running it from source</h2>
+    <p>ViewSwitcher is open source. To run it from source with <a href="https://bun.sh">Bun</a>, follow the <a href={`${github}#development`}>development notes</a> in the README.</p>
+
+    <MoreGuides current="/download" />
+  </main>
+  <Footer />
+</Base>
+<style>
+  .facts { margin: 0; display: grid; border-top: 1px solid var(--rule); max-width: 44rem; }
+  .facts div { display: grid; grid-template-columns: 7rem 1fr; gap: 1rem; padding-block: 0.8rem; border-bottom: 1px solid var(--rule); }
+  dt { font-weight: 600; color: var(--ink); }
+  dd { margin: 0; color: var(--ink-2); }
+  @media (max-width: 30rem) { .facts div { grid-template-columns: 1fr; gap: 0.2rem; } }
+</style>

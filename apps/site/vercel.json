@@ -1,9 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "astro",
-  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site",
+  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site --filter @viewswitcher/server",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
     {
@@ -16,9 +17,37 @@
       ],
       "destination": "https://viewswitcher.com/:path",
       "permanent": true
+    },
+    {
+      "source": "/:path(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "viewswitcher-site(-2witstudios-projects|-git-main-2witstudios-projects)?\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://viewswitcher.com/:path",
+      "permanent": true
     }
   ],
   "headers": [
+    {
+      "source": "/packs/(.*)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/zip"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "attachment"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
     {
       "source": "/_astro/(.*)",
       "headers": [
@@ -50,6 +79,21 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "missing": [
+        {
+          "type": "host",
+          "value": "viewswitcher.com"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
         }
       ]
     }

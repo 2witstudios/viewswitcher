@@ -1,0 +1,16 @@
+---
+// A real screenshot of the app (src/assets/app/, from scripts/app-shots.ts or the iPad's own screenshots), with a caption.
+import { Picture } from "astro:assets";
+import type { ImageMetadata } from "astro";
+interface Props { src: ImageMetadata; alt: string; caption?: string; sizes?: string; class?: string }
+const { src, alt, caption, sizes = "(min-width: 56rem) 52rem, calc(100vw - 2.5rem)", class: cls } = Astro.props;
+---
+<figure class:list={["shot", cls]}>
+  <Picture src={src} alt={alt} widths={[640, 960, 1280, 1664]} sizes={sizes} formats={["webp"]} loading="lazy" decoding="async" />
+  {caption && <figcaption>{caption}</figcaption>}
+</figure>
+<style>
+  .shot { margin: 0.6rem 0 0.4rem; display: grid; gap: 0.7rem; }
+  .shot :global(img) { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--rule); box-shadow: 0 24px 48px -32px #16181e66; }
+  figcaption { font-size: 0.9375rem; color: var(--ink-3); }
+</style>

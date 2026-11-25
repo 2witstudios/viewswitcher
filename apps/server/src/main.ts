@@ -20,7 +20,10 @@ import { hostTrusted, originAllowed } from "./origin";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
+import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
+import { withBridge } from "./scene-bridge";
 import { editScene, parseEdit, readForEdit, renameScene, type RenameResult, scenePath } from "./scene-edit";
+import { defuseMeta, libraryHeaders } from "./scene-sandbox";
 import { readSettings, SettingsError, writeSettings } from "./settings";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
@@ -36,6 +39,9 @@ if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
   console.log(`[library] ${did.join("; ")}`);
 }
 const stateFile = join(config.library, ".viewswitcher", "state.json");
+await sweepStaging(config.library).catch(() => {});
+/** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
+const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
 
 // ---------------------------------------------------------------- live state
 
@@ -303,6 +309,31 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
     }
     return json({ saved });
   }
+  // Style packs (EDIT-24 · EDIT-25): check a dropped .zip or folder and show it, install it as a
+  // template set, or remove a set. See packs.ts.
+  if (path === "/api/packs/stage" && post) {
+    const form = await req.formData();
+    const orgId = plainName(String(form.get("org") ?? ""));
+    const zip = form.get("zip");
+    if (zip instanceof File) return json(await stagePack(root, orgId, { zip: new Uint8Array(await zip.arrayBuffer()) }, starterScript));
+    const paths = form.getAll("path").map(String);
+    const files = form.getAll("file");
+    if (!files.length || files.length !== paths.length || files.some((f) => !(f instanceof File))) return json({ error: "Drop a style pack: a .zip, or its folder" }, 400);
+    return json(await stagePack(root, orgId, { files: files.map((f, i) => ({ path: paths[i]!, data: f as File })) }, starterScript));
+  }
+  if (path === "/api/packs/install" && post) {
+    const b = await body(req);
+    return json(await installPack(root, plainName(String(b.org ?? "")), b.token));
+  }
+  if (path === "/api/packs/cancel" && post) {
+    const b = await body(req);
+    await cancelPack(root, plainName(String(b.org ?? "")), b.token);
+    return json({ ok: true });
+  }
+  if (path === "/api/sets/remove" && post) {
+    const b = await body(req);
+    return json(await removeSet(root, plainName(String(b.org ?? "")), String(b.set ?? "")));
+  }
   if (path === "/api/open" && post) {
     const b = await body(req);
     const abs = inside(root, b.path);
@@ -351,10 +382,10 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   return json({ error: "Not found" }, 404);
 }
 
-async function fileResponse(abs: string, cache = "no-store") {
+async function fileResponse(abs: string, cache = "no-store", extra: Record<string, string> = {}) {
   const s = await stat(abs).catch(() => null);
   if (!s?.isFile()) return null;
-  return new Response(Bun.file(abs), { headers: { "cache-control": cache } });
+  return new Response(Bun.file(abs), { headers: { "cache-control": cache, ...extra } });
 }
 
 // What an agent runs to connect over stdio: this executable with --mcp-stdio. In the Mac app's compiled
@@ -393,6 +424,10 @@ const server = Bun.serve({
         return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
       }
       if (path === "/ws") {
+        // Pages from other sites, and scenes (sandboxed: their Origin is "null"), get no socket.
+        if (!originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins })) {
+          return json({ error: "Not allowed from this page" }, 403);
+        }
         return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
       if (path === "/mcp") {
@@ -415,22 +450,34 @@ const server = Bun.serve({
         return await api(req, path, url);
       }
       if (path.startsWith("/library/")) {
-        if (url.searchParams.has("edit") && path.endsWith(".html")) {
-          // The scene with data-vs element ids, for the editor and the program page; the file is only read.
+        // Every library page is served sandboxed (scene-sandbox.ts): a scene's scripts never run as the switcher.
+        const rel = path.slice("/library/".length);
+        // "x.html/" would resolve to the file: library URLs never end in a slash.
+        if (rel.endsWith("/")) return new Response("Not found", { status: 404, headers: libraryHeaders(rel) });
+        const inert = url.searchParams.has("inert");
+        // INERT_CSP (same-origin) only on a body that went through defuseMeta below; anything else is sandboxed as usual.
+        const headers = libraryHeaders(rel);
+        if (path.endsWith(".html") && (url.searchParams.has("edit") || url.searchParams.has("bridge"))) {
+          // ?edit: the scene with data-vs element ids, for the editor and the program page; the file is only read.
           // If it can't be tagged for any reason, serve the plain file: the program shows the scene and
-          // live previews simply don't apply to it.
-          const rel = path.slice("/library/".length);
-          const scene = await readForEdit(config.library, rel).catch((e) => {
-            if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
-            return null;
-          });
-          if (scene) {
-            return new Response(scene.html, {
-              headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" },
+          // live previews simply don't apply to it. ?bridge: with the bridge the program page talks to it through.
+          const scene = url.searchParams.has("edit")
+            ? await readForEdit(config.library, rel).catch((e) => {
+                if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
+                return null;
+              })
+            : null;
+          const html = scene?.html ?? (await readFile(inside(config.library, rel), "utf8").catch(() => null));
+          if (html !== null) {
+            return new Response(inert ? defuseMeta(html) : url.searchParams.has("bridge") ? withBridge(html) : html, {
+              headers: {
+                ...(inert ? libraryHeaders(rel, true) : headers), "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+                ...(scene ? { "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" } : {}),
+              },
             });
           }
         }
-        return (await fileResponse(inside(config.library, path.slice("/library/".length)))) ?? new Response("Not found", { status: 404 });
+        return (await fileResponse(inside(config.library, rel), "no-store", headers)) ?? new Response("Not found", { status: 404 });
       }
       // The built SPA: real files, else index.html for client-side routes.
       const immutable = path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-store";
@@ -439,9 +486,10 @@ const server = Bun.serve({
       const index = await fileResponse(join(config.webDist, "index.html"));
       return index ?? new Response("The switcher isn't built yet. Run `bun run build`, or use the dev server (`bun run dev`, then http://localhost:5173).", { status: 503 });
     } catch (e) {
-      if (e instanceof PathError || e instanceof EditError || e instanceof SettingsError) return json({ error: e.message }, 400);
+      if (e instanceof PathError || e instanceof EditError || e instanceof SettingsError || e instanceof PackError) return json({ error: e.message }, 400);
       console.error(e);
-      return json({ error: (e as Error).message }, 500);
+      // No absolute paths in responses (CLAUDE.md): a filesystem error names the file it failed on.
+      return json({ error: String((e as Error).message).replaceAll(config.library, "<library>") }, 500);
     }
   },
   websocket: {

@@ -1,0 +1,106 @@
+---
+// SITE-23: one audience page, for churches. Grace Community is one of the site's made-up example shows
+// (src/data/shows.ts); its views are rendered from scripts/shows/grace/ and the switcher screenshot is real.
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Cta from "../components/Cta.astro";
+import Shot from "../components/Shot.astro";
+import ViewFrame from "../components/ViewFrame.astro";
+import MoreGuides from "../components/MoreGuides.astro";
+import { site } from "../site.config";
+import { IPAD_PRICE } from "../lib/cta";
+import { breadcrumbs, faqPage } from "../lib/seo";
+import switcher from "../assets/app/switcher.webp";
+
+const order = [
+  { file: "starting-soon", when: "Before the service", text: "A countdown to 10:30 under \"Welcome home.\" Put it on air ten minutes early so people joining online know they're in the right place." },
+  { file: "live", when: "Worship and announcements", text: "The camera full screen with a name strip. Retype the name for whoever is leading: the worship leader, then the pastor." },
+  { file: "main", when: "The sermon", text: "The scripture beside the pastor, with the sermon title underneath. The verse is text you retype each week, not a slide to make." },
+  { file: "brb", when: "Giving", text: "A calm thank-you with how to give, over the camera, while the offering is taken." },
+  { file: "ending", when: "The goodbye", text: "\"Go in peace\" and next Sunday's time, to leave on while the stream ends." },
+];
+const faqs = [
+  { q: "Do we need a tech person to run it?", a: "No. Once it's set up, running the stream is clicking views: a welcome, the camera, the sermon, giving and the goodbye. A volunteer who can use an iPad or a Mac can do it." },
+  { q: "What does it cost a church?", a: `ViewSwitcher for Mac is free and open source, with no yearly seat fee and no watermark. OBS is free too. The iPad app is optional, ${IPAD_PRICE} once.` },
+  { q: "Where does the stream go?", a: "Wherever OBS sends it: YouTube, Facebook, Vimeo, or your own streaming service. ViewSwitcher decides what's on screen; OBS does the streaming." },
+  { q: "Can we show song lyrics and slides?", a: "ViewSwitcher doesn't run lyrics. If you show lyrics or slides from ProPresenter, Keynote or another app, add that screen to OBS as the Screen source and use a view with a screen box; ViewSwitcher places it beside the camera." },
+  { q: "Can we use more than one camera?", a: "Yes. Add the second camera in OBS as a source named Guest, and give a view a second camera box for it in the editor." },
+];
+---
+<Base
+  title="Church livestreaming with OBS on a Mac · ViewSwitcher"
+  description="Livestream your church service with OBS on a Mac. Free views for the welcome, worship, sermon with scripture, giving and goodbye; a volunteer just clicks."
+  path="/church-livestream"
+  schema={[faqPage(faqs), breadcrumbs(site.url, [{ name: "Church livestreaming", path: "/church-livestream" }])]}>
+  <Header />
+  <main id="main" class="wrap prose guide">
+    <p class="eyebrow">For churches</p>
+    <h1>A church livestream that looks cared for, run by one volunteer</h1>
+    <p class="lede">Set up your service's views once: a welcome, worship, the sermon with the scripture beside the pastor, giving and the goodbye. Each Sunday is new titles, and running it is a click per part of the service. ViewSwitcher is free on the Mac and works with OBS.</p>
+    <Cta />
+    <figure class="lead">
+      <ViewFrame show="grace" file="main" alt="Grace Community's sermon view: Romans 12:2 in large serif type beside the pastor preaching, letterboxed, with the sermon title underneath" sizes="(min-width: 56rem) 52rem, calc(100vw - 2.5rem)" eager />
+      <figcaption>The sermon view of Grace Community, a made-up church we use as an example.</figcaption>
+    </figure>
+
+    <h2 id="sunday">How a Sunday service runs</h2>
+    <p>Grace Community's set has five views, one for each part of the service. A volunteer clicks the next one as the service moves along, and the camera, the scripture and the titles land where that view puts them.</p>
+    <ol class="order">
+      {order.map((o) => {
+        const name = { "starting-soon": "Welcome", live: "Pastor", main: "Sermon", brb: "Giving", ending: "Goodbye" }[o.file];
+        return (
+          <li>
+            <ViewFrame show="grace" file={o.file} sizes="(min-width: 48rem) 20rem, calc(100vw - 2.5rem)" widths={[400, 640, 960]} class="mini" />
+            <div><h3>{o.when} <span>· the {name} view</span></h3><p>{o.text}</p></div>
+          </li>
+        );
+      })}
+    </ol>
+    <p>The look is yours to change: your church's name, colors and logo. Set them once and every view uses them. <a href="/templates/grace-community">Download the Grace Community templates</a>, free.</p>
+
+    <h2 id="volunteer">What the volunteer does</h2>
+    <h3>During the week, five minutes</h3>
+    <p>Someone adds this Sunday's stream: the date, the sermon title and the scripture. The views stay the same from week to week, so that's all that changes. Retype a title right on the view; there's nothing to design.</p>
+    <h3>Sunday morning</h3>
+    <ol>
+      <li>Open OBS and ViewSwitcher on the Mac. They find each other by themselves.</li>
+      <li>Click <strong>Welcome</strong>, check the camera, and press <strong>Go Live</strong> ten minutes before the service.</li>
+      <li>Click <strong>Pastor</strong> when worship starts, <strong>Sermon</strong> for the message, <strong>Giving</strong> for the offering, and <strong>Goodbye</strong> at the end.</li>
+      <li>Press <strong>Live</strong> to stop the stream.</li>
+    </ol>
+    <p>If the pastor changes the sermon title on the day, retype it while it's on air; people watching see it change.</p>
+    <Shot src={switcher} alt="ViewSwitcher on the Mac: Grace Community's Sunday Live project, the Romans 12 stream for November 29, with the Welcome, Pastor, Sermon, Giving and Goodbye views. The Sermon view has a red On air outline." caption="This Sunday's stream in ViewSwitcher, with the sermon on air. The camera boxes fill in once OBS is connected." />
+    <p>The volunteer doesn't have to sit at the Mac. With <a href="/ipad">ViewSwitcher for iPad</a> on a USB-C cable, they can run the stream from an iPad at the sound desk.</p>
+
+    <h2 id="what-you-need">What your church needs</h2>
+    <ul>
+      <li><strong>A Mac</strong> with macOS 14 Sonoma or later, Apple silicon or Intel</li>
+      <li><strong>OBS</strong>, the free streaming app, which sends the stream to YouTube, Facebook or wherever you stream today</li>
+      <li><strong>A camera</strong>: a webcam, or a camcorder through a capture card</li>
+      <li>Optional: a second camera, the lyrics or slides computer's screen, and an iPad for the volunteer</li>
+    </ul>
+    <p>Setting it up the first time takes about ten minutes: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
+
+    <h2 id="questions">Questions churches ask</h2>
+    {faqs.map((f) => <><h3>{f.q}</h3><p>{f.a}</p></>)}
+
+    <h2 id="download">Download ViewSwitcher</h2>
+    <p>Free for Mac, version {site.mac.version}. <a href="/download">What's in the download</a></p>
+    <Cta />
+
+    <MoreGuides current="/church-livestream" />
+  </main>
+  <Footer />
+</Base>
+<style>
+  .lead { margin: 0.8rem 0 0.4rem; display: grid; gap: 0.7rem; }
+  .lead :global(.frame) { border-radius: 12px; box-shadow: 0 24px 48px -28px #16181e80; }
+  .lead figcaption { font-size: 0.9375rem; color: var(--ink-3); }
+  .order { list-style: none; padding: 0; margin: 0.4rem 0 0; display: grid; gap: 1.5rem; max-width: 52rem; }
+  .order li { display: grid; gap: 0.9rem; align-items: center; }
+  @media (min-width: 48rem) { .order li { grid-template-columns: 20rem minmax(0, 1fr); gap: 1.5rem; } }
+  .order :global(.mini) { border-radius: 8px; }
+  .order h3 { margin: 0 0 0.3rem; }
+  .order h3 span { font: 500 0.9375rem var(--text); color: var(--ink-3); letter-spacing: 0; }
+</style>

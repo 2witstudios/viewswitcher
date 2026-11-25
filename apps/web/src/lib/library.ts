@@ -1,3 +1,4 @@
+import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { api } from "./api";
@@ -30,3 +31,11 @@ export const lastOrg = {
     } catch {}
   },
 };
+
+/** How a template is asked for: "teaching" (the org's own) or "neon/teaching" (in the set "neon"). */
+export const templateId = (t: Scene) => (t.set ? `${t.set}/${t.name}` : t.name);
+
+/** Templates by set (EDIT-25): the org's own first, then each installed style pack. */
+export function templateGroups(lib: Library): { set: TemplateSet | null; name: string; templates: Scene[] }[] {
+  return [{ set: null, name: lib.org.name, templates: lib.templates }, ...lib.sets.map((s) => ({ set: s, name: s.name, templates: s.templates }))];
+}

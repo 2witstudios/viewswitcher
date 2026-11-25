@@ -1,0 +1,123 @@
+---
+// SITE-21: setting up OBS with ViewSwitcher, from install to a first stream, with real screenshots (scripts/app-shots.ts).
+import Base from "../layouts/Base.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import Cta from "../components/Cta.astro";
+import Shot from "../components/Shot.astro";
+import MoreGuides from "../components/MoreGuides.astro";
+import { site, github } from "../site.config";
+import { breadcrumbs, howTo } from "../lib/seo";
+import connectObs from "../assets/app/connect-obs.webp";
+import switcher from "../assets/app/switcher.webp";
+import editor from "../assets/app/editor.webp";
+
+const url = new URL("/setup", site.url).href;
+const abs = (img: { src: string }) => new URL(img.src, site.url).href;
+const steps = [
+  { id: "install", name: "Install OBS and ViewSwitcher", text: "Install OBS from obsproject.com and ViewSwitcher from viewswitcher.com/download, then open both." },
+  { id: "websocket", name: "Turn on OBS's WebSocket server", text: "In OBS, choose Tools → WebSocket Server Settings and turn on Enable WebSocket server. ViewSwitcher connects by itself.", image: abs(connectObs) },
+  { id: "set-up-obs", name: "Press Set up OBS", text: "In ViewSwitcher, press Set up OBS. It adds a ViewSwitcher scene to OBS with the program page on top and the background color underneath, and switches OBS to it." },
+  { id: "sources", name: "Add your camera and screen", text: "In the ViewSwitcher scene in OBS, add your camera as a Video Capture Device named Camera and your screen as a macOS Screen Capture named Screen, then press Set up OBS again." },
+  { id: "first-stream", name: "Go live", text: "Set your streaming service in OBS's Settings → Stream once. Then click Starting soon in ViewSwitcher, press Go Live, and click views as the show goes.", image: abs(switcher) },
+];
+---
+<Base
+  title="How to set up OBS with ViewSwitcher on a Mac"
+  description="Set up OBS with ViewSwitcher on a Mac: turn on the WebSocket server, press Set up OBS, add your camera and screen, and go live. With screenshots and fixes."
+  path="/setup"
+  schema={[
+    howTo({ name: "How to set up OBS with ViewSwitcher on a Mac", description: "From install to a first stream: connect OBS, set it up in one click, add your camera and screen, and go live.", totalTime: "PT10M", tools: ["A Mac with macOS 14 or later", "OBS", "A camera"], steps: steps.map((s) => ({ name: s.name, text: s.text, url: `${url}#${s.id}`, image: s.image })) }),
+    breadcrumbs(site.url, [{ name: "Set up OBS", path: "/setup" }]),
+  ]}>
+  <Header />
+  <main id="main" class="wrap prose guide">
+    <p class="eyebrow">Guide · about 10 minutes</p>
+    <h1>How to set up OBS with ViewSwitcher</h1>
+    <p class="lede">ViewSwitcher sets up OBS for you. This guide goes through it once, from installing both apps to your first stream, and what to do if something doesn't show up.</p>
+    <nav class="toc" aria-label="On this page">
+      <ol>{steps.map((s) => <li><a href={`#${s.id}`}>{s.name}</a></li>)}<li><a href="#troubleshooting">Troubleshooting</a></li></ol>
+    </nav>
+
+    <h2 id="install">1. Install OBS and ViewSwitcher</h2>
+    <p>OBS is the free app that does the streaming. ViewSwitcher tells it what to show and where your camera and screen go, so you keep streaming to YouTube, Facebook, Twitch or wherever you go live today.</p>
+    <ul>
+      <li>Download OBS from <a href="https://obsproject.com">obsproject.com</a> and open it once.</li>
+      <li>Download ViewSwitcher, drag it to Applications and open it. It needs macOS 14 Sonoma or later.</li>
+    </ul>
+    <Cta />
+
+    <h2 id="websocket">2. Turn on OBS's WebSocket server</h2>
+    <p>This is how ViewSwitcher talks to OBS. In OBS, choose <strong>Tools → WebSocket Server Settings</strong> and turn on <strong>Enable WebSocket server</strong>. Leave the port as it is. ViewSwitcher finds it and connects by itself, even with a password set, since it reads OBS's settings on the same Mac.</p>
+    <p>Until then, ViewSwitcher shows this card and "OBS offline" at the top:</p>
+    <Shot src={connectObs} alt="ViewSwitcher's Connect OBS card: Open OBS, then turn on Tools, WebSocket Server Settings, Enable WebSocket server. The switcher connects by itself. A pill at the top right reads OBS offline." />
+
+    <h2 id="set-up-obs">3. Press Set up OBS</h2>
+    <p>Once OBS is connected, the card changes to <strong>Set up OBS</strong>. Press it, and ViewSwitcher adds one scene to OBS and switches to it:</p>
+    <div class="tree" role="group" aria-label="The ViewSwitcher scene in OBS's Sources list">
+      <p class="tree-head">OBS scene "ViewSwitcher"</p>
+      <ul>
+        <li><b>ViewSwitcher Program</b><span>a browser source showing the view on air, on top</span></li>
+        <li><b>Camera · Screen · iPad</b><span>your devices, moved and cropped into each view's boxes</span></li>
+        <li><b>ViewSwitcher Ground</b><span>a color source behind everything, in your show's color</span></li>
+      </ul>
+    </div>
+    <p>Your other scenes in OBS stay as they are. If OBS is already streaming or recording, ViewSwitcher asks first and leaves OBS on the scene it's showing.</p>
+
+    <h2 id="sources">4. Add your camera and screen</h2>
+    <p>Now add your devices to the "ViewSwitcher" scene in OBS (the <strong>+</strong> under Sources), with exactly these names. ViewSwitcher lists the ones it's still missing.</p>
+    <table>
+      <thead><tr><th scope="col">Name in OBS</th><th scope="col">Source type</th><th scope="col">What it is</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Camera</strong></td><td>Video Capture Device</td><td>Your main camera: the Mac's own, a USB webcam, or a capture card</td></tr>
+        <tr><td><strong>Screen</strong></td><td>macOS Screen Capture</td><td>The screen or window you share: slides, a browser, a game</td></tr>
+        <tr><td><strong>Guest</strong></td><td>Video Capture Device</td><td>Optional: a second camera, for views with a guest box</td></tr>
+        <tr><td><strong>iPad</strong></td><td>Video Capture Device</td><td>Optional: an iPad's screen over its cable, to draw or show apps</td></tr>
+      </tbody>
+    </table>
+    <p>Then press <strong>Set up OBS again</strong>. That puts the program page back on top of the sources you added. Don't have an iPad? Press <strong>Not now</strong> and ViewSwitcher stops asking.</p>
+    <p>From here on, ViewSwitcher moves these sources. Each view says where its camera and screen boxes are, and when you switch, ViewSwitcher moves and crops the sources into them. You don't need a separate OBS scene for each layout.</p>
+
+    <h2 id="first-stream">5. Go live</h2>
+    <p>Tell OBS where to stream once: <strong>Settings → Stream</strong>, then pick YouTube, Facebook, Twitch or another service and connect your account or paste the stream key. Then, in ViewSwitcher:</p>
+    <ol>
+      <li>Under <strong>Projects</strong>, press <strong>+</strong> to make one for your show, and pick the views it uses.</li>
+      <li>Add a <strong>stream</strong> for today, with its date and title. Next week is a new stream, and the views stay the same.</li>
+      <li>Click <strong>Starting soon</strong>, then <strong>Go Live</strong> and confirm. OBS starts streaming and the button reads <strong>Live</strong>. <strong>Rec</strong> records at the same time, if you want a copy.</li>
+      <li>Click views as the show goes. The one on air has a red outline.</li>
+      <li>End on your goodbye view, then press <strong>Live</strong> to stop streaming.</li>
+    </ol>
+    <Shot src={switcher} alt="ViewSwitcher on the Mac: Grace Community's Sunday Live project, the Romans 12 stream for November 29, with Welcome, Pastor, Sermon, Giving and Goodbye views. The Sermon view has a red On air outline." caption="A church's Sunday stream in ViewSwitcher. Clicking a view puts it on air; the red outline shows which one people see. The camera boxes fill in once OBS is connected." />
+    <p>To change a title or move a box, press <strong>Edit</strong>. Right-click or double-click text to retype it and drag boxes where you want them. If the view is on air, viewers see the change as you make it, so there's an <strong>Edit a copy instead</strong> button too.</p>
+    <Shot src={editor} alt="ViewSwitcher's editor on the Sermon view: the scripture Romans 12:2, the sermon title, and a dashed camera box. A red bar says the scene is on air and changes show on stream as you make them." />
+
+    <h2 id="troubleshooting">Troubleshooting</h2>
+    <h3>ViewSwitcher says OBS is offline</h3>
+    <p>Check that OBS is open and that <strong>Enable WebSocket server</strong> is on in Tools → WebSocket Server Settings. If you changed its port, change it back to 4455.</p>
+    <h3>The view is blank in OBS</h3>
+    <p>In OBS, open <strong>Settings → Advanced</strong>, turn off <strong>Enable Browser Source Hardware Acceleration</strong>, and restart OBS. On some versions of macOS and OBS, the browser source stays blank with it on.</p>
+    <h3>My camera or screen isn't in the view</h3>
+    <p>The source has to be in the "ViewSwitcher" scene and named exactly <strong>Camera</strong>, <strong>Screen</strong> or <strong>Guest</strong>, with the same capital letter. Rename it in OBS, then press Set up OBS again. If a view has a box for a source OBS doesn't have, ViewSwitcher shows a warning that names it.</p>
+    <h3>The screen capture is black</h3>
+    <p>macOS needs to let OBS record the screen. Open <strong>System Settings → Privacy &amp; Security → Screen &amp; System Audio Recording</strong>, turn OBS on, and restart OBS.</p>
+    <h3>The views cover my camera, or my camera covers the views</h3>
+    <p>Press <strong>Set up OBS again</strong>. It puts the program page back on top and the background color at the bottom, with your devices in between.</p>
+    <p>Still stuck? See <a href="/support">Support</a>, or <a href={`${github}/issues/new`}>ask on GitHub</a> with what you expected to happen.</p>
+
+    <MoreGuides current="/setup" />
+  </main>
+  <Footer />
+</Base>
+<style>
+  .toc { border: 1px solid var(--rule); border-radius: 12px; padding: 1rem 1.25rem; background: var(--raised); max-width: 44rem; }
+  .toc ol { gap: 0.3rem; }
+  .tree { border: 1px solid var(--rule); border-radius: 12px; padding: 1rem 1.25rem; max-width: 44rem; display: grid; gap: 0.6rem; }
+  .tree-head { font-family: var(--mono); font-size: 0.9375rem; color: var(--ink); }
+  .tree ul { list-style: none; padding-left: 0.9rem; border-left: 2px solid var(--rule); gap: 0.6rem; }
+  .tree li { display: grid; gap: 0.1rem; }
+  .tree b { font-family: var(--mono); font-weight: 600; font-size: 0.9375rem; color: var(--ink); }
+  .tree span { font-size: 0.9375rem; }
+  table { border-collapse: collapse; width: 100%; max-width: 44rem; font-size: 0.9375rem; display: block; overflow-x: auto; }
+  th, td { text-align: left; padding: 0.6rem 0.9rem 0.6rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  th { color: var(--ink); font-weight: 600; }
+</style>

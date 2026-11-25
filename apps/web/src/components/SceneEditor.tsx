@@ -8,11 +8,11 @@ import {
 } from "@viewswitcher/shared";
 import type { AddKind, Box, InsertEdit, Library, RemoveEdit, ScannedElement, SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, SceneConflict } from "../lib/api";
 import { useLibrary } from "../lib/library";
-import { type PreviewDoc, shownVersion } from "../lib/apply-preview";
-import { libraryUrl, useLive } from "../lib/live";
+import { inApp, libraryUrl, useLive } from "../lib/live";
+import { EDITOR_SANDBOX } from "../lib/scene-frame";
 import { createSceneSaver } from "../lib/scene-saver";
 import { AskAgent, openAgentSheet } from "./AgentSheet";
 import { attempt, toast } from "./ui";
@@ -34,6 +34,20 @@ type Pos = { left: number; top: number };
 type Size = { width: number; height: number };
 type Corner = "nw" | "ne" | "sw" | "se";
 const MIN_SIZE = 24;
+
+/** The version the frame shows: stamped on <html>, or on a bare fragment's first element. */
+const shownVersion = (d: Document) => d.documentElement.dataset.vsHash ?? d.querySelector<HTMLElement>("[data-vs-hash]")?.dataset.vsHash;
+/** Pictures the editor takes from a drop (EDIT-22). */
+const isPicture = (f: File) => /^image\/(png|jpe?g|gif|webp|avif|svg\+xml)$/.test(f.type) || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(f.name);
+/** A picture's own size, read locally before it's uploaded (0×0 when it can't be read, e.g. an SVG without one). */
+const naturalSize = (f: File) =>
+  new Promise<{ width: number; height: number }>((resolve) => {
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => (URL.revokeObjectURL(url), resolve({ width: img.naturalWidth, height: img.naturalHeight }));
+    img.onerror = () => (URL.revokeObjectURL(url), resolve({ width: 0, height: 0 }));
+    img.src = url;
+  });
 
 const toBase = ({ html, hash }: { html: string; hash: string }): Base => {
   const source = untagForEdit(html);
@@ -201,6 +215,11 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const [addOpen, setAddOpen] = useState(false);
   /** Choosing a picture from the org's assets: for a new image, or to replace image `id`. */
   const [picker, setPicker] = useState<{ replace: number | null } | null>(null);
+  /** A picture being dragged over the scene (EDIT-22): where it would land, and the image it would replace. */
+  const [dropAt, setDropAt] = useState<{ x: number; y: number; image: number | null } | null>(null);
+  /** Dropped on an image: Replace this image, or Add it as a new one. `x`/`y` are where the menu goes. */
+  const [dropChoice, setDropChoice] = useState<{ file: File; at: { x: number; y: number }; image: number; x: number; y: number } | null>(null);
+  const [dropping, setDropping] = useState(false);
   const [, setTick] = useState(0);
   const redraw = () => setTick((t) => t + 1);
   /** Where each movable element was when the editor opened, for Put it back. */
@@ -513,7 +532,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     }
   };
 
-  const add = (kind: AddKind, image?: { src: string; width: number; height: number }) => {
+  const add = (kind: AddKind, image?: { src: string; width: number; height: number }, at?: { x: number; y: number }) => {
     setAddOpen(false);
     const b = baseRef.current;
     if (!b) return;
@@ -521,7 +540,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (root === null) return toast("This scene has no place to add things. Ask your agent to add it.", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
     const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
-    void structural({ id: root, insert: markupFor(kind, { slots, image }) }).then((done) => {
+    void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {
       if (done && slot && onAirRef.current) toast(`On air: OBS puts its "${slot}" source in the new box`);
       else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`This box asks OBS for a source named "${slot}"`);
     });
@@ -961,6 +980,79 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     };
   }, [ready, frameKey]);
 
+  // ------------------------------------------------------------ dropping a picture in (EDIT-22)
+  // A picture file dropped on the scene goes into the org's assets and lands where it was dropped, as
+  // one new image (a source patch like Add → Image, live and undoable). Dropped on an image the scene
+  // has, it asks: Replace this image, or Add as a new image.
+
+  /** The image under scene point `p` that a picture could replace (a library picture, no srcset), or null. */
+  const replaceable = (p: { x: number; y: number }) => {
+    const b = baseRef.current;
+    const id = hit(p.x, p.y).image;
+    return b && id !== null && isLibraryUrl(attrIn(b, id, "src") ?? "") && attrIn(b, id, "srcset") === null ? id : null;
+  };
+  const canDrop = () => ready && !editing && !conflict && !busyRef.current && !dropping;
+  const hasFiles = (e: ReactDragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
+  const placePicture = async (file: File, at: { x: number; y: number }, replace: number | null) => {
+    setDropping(true);
+    try {
+      const [{ saved }, size] = await Promise.all([api.upload(org, [file]), naturalSize(file)]);
+      if (!saved[0]) throw new Error("The picture didn't upload");
+      const src = libraryUrl(saved[0].path).replace(/'/g, "%27");
+      if (replace !== null) {
+        const b = baseRef.current;
+        change({ id: replace, src }, b ? valueIn(b, { id: replace, src }) : null);
+        toast("Replaced. Undo puts the old picture back.");
+      } else add("image", { src, width: size.width || 1, height: size.height || 1 }, at);
+    } catch (e) {
+      toast(`Couldn't add the picture: ${(e as Error).message}`);
+    } finally {
+      setDropping(false);
+    }
+  };
+
+  const onDragOver = (e: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = canDrop() ? "copy" : "none";
+    if (!canDrop()) return;
+    const p = toScene(e);
+    setDropAt((d) => (d && Math.abs(d.x - p.x) < 4 && Math.abs(d.y - p.y) < 4 ? d : { ...p, image: replaceable(p) }));
+  };
+  const onDrop = (e: ReactDragEvent<HTMLDivElement>) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDropAt(null);
+    if (!canDrop()) return;
+    const files = Array.from(e.dataTransfer.files);
+    const pictures = files.filter(isPicture);
+    if (!pictures.length) return toast(files.some((f) => /\.zip$/i.test(f.name)) ? "That's a style pack: drop it on the Templates page to install it" : "Drop a picture: PNG, JPG, GIF, WebP, AVIF or SVG");
+    if (pictures.length > 1) toast("One picture at a time: added the first");
+    const at = toScene(e);
+    const image = replaceable(at);
+    if (image !== null) {
+      const r = overlay.current!.getBoundingClientRect();
+      setDropChoice({ file: pictures[0]!, at, image, x: e.clientX - r.left + 10, y: e.clientY - r.top + 10 });
+      setSelected(null);
+      return;
+    }
+    void placePicture(pictures[0]!, at, null);
+  };
+  // A picture dropped just outside the scene would make the browser open the file instead of the
+  // editor: the editor page takes every file drop, and only the scene uses them.
+  useEffect(() => {
+    const stop = (e: DragEvent) => {
+      if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) e.preventDefault();
+    };
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
+  }, []);
+
   // ------------------------------------------------------------ conflict
 
   const applyAgain = async () => {
@@ -1192,10 +1284,17 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
               key={frameKey}
               ref={frame}
               title={`${place.title} (editing)`}
-              src={`${libraryUrl(path)}?edit&preview&k=${frameKey}`}
+              // The scene's DOM, without its scripts (EDIT-26): a pack's code never runs where the
+              // editor can reach it. ?inert serves it with a CSP sandbox that has no scripts either.
+              src={`${libraryUrl(path)}?edit&inert&preview&k=${frameKey}`}
+              sandbox={EDITOR_SANDBOX}
               onLoad={() => {
                 // Editor-only styling inside the scene (never saved): no browser focus ring while typing.
                 const d = frame.current?.contentDocument;
+                // What scene.js does for ?preview (it doesn't run here): the ground and device slot labels.
+                d?.documentElement.classList.add("preview");
+                // While typing, the scene itself is under the pointer: a file dropped there mustn't open in it.
+                if (d) for (const t of ["dragover", "drop"]) d.addEventListener(t, (e) => (e as DragEvent).dataTransfer?.types.includes("Files") && e.preventDefault());
                 if (d?.head && !d.getElementById("vs-editor-style")) {
                   const style = d.createElement("style");
                   style.id = "vs-editor-style";
@@ -1206,7 +1305,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                 // aren't the base's. Read both again.
                 // (The stamp is on <html>, or on a bare fragment's first element; with no stamp at all there's nothing to check.)
                 const b = baseRef.current;
-                const stamp = d ? shownVersion(d as unknown as PreviewDoc) : undefined;
+                const stamp = d ? shownVersion(d) : undefined;
                 if (b && stamp !== undefined && stamp !== b.hash) {
                   // Once is a file that just changed; again means it keeps changing: stop and offer Reload.
                   if (frameMismatches.current++ === 0) void load();
@@ -1227,6 +1326,11 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
               onPointerLeave={() => setHover(null)}
+              onDragOver={onDragOver}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null);
+              }}
+              onDrop={onDrop}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (editing || conflict) return;
@@ -1251,6 +1355,14 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
               {drag && selRect && (
                 <div className="ed-readout" style={{ left: (selRect.x + selRect.w) * s + 10, top: selRect.y * s }}>x {drag.left} · y {drag.top}</div>
               )}
+              {dropAt && (() => {
+                const r = dropAt.image !== null ? rectOf(dropAt.image) : null;
+                return r ? (
+                  <div className="ed-drop replace" style={px(r)}><span>Replace this image?</span></div>
+                ) : (
+                  <div className="ed-drop-point" style={{ left: dropAt.x * s, top: dropAt.y * s }}><span>Drop to add the picture here</span></div>
+                );
+              })()}
               {marks.map((id) => {
                 const r = rectOf(id);
                 return r ? (
@@ -1268,6 +1380,30 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                 <button type="button" className="save" onPointerDown={(e) => e.preventDefault()} onClick={() => finishEdit(true)}>Save <small>Return</small></button>
               </div>
             )}
+            {dropChoice && (
+              <>
+                <button type="button" className="backdrop" aria-label="Cancel" onClick={() => setDropChoice(null)} />
+                <div role="menu" aria-label="Dropped on an image" className="ed-menu" style={{ left: Math.min(dropChoice.x, W * s - 250), top: Math.max(4, Math.min(dropChoice.y, H * s - 170)) }}>
+                  <button type="button" role="menuitem" className="first" onClick={() => {
+                    const c = dropChoice;
+                    setDropChoice(null);
+                    void placePicture(c.file, c.at, c.image);
+                  }}>
+                    {Icon.image}<span>Replace this image</span>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => {
+                    const c = dropChoice;
+                    setDropChoice(null);
+                    void placePicture(c.file, c.at, null);
+                  }}>
+                    {Icon.plus}<span>Add as a new image</span>
+                  </button>
+                  <hr />
+                  <button type="button" role="menuitem" className="quiet" onClick={() => setDropChoice(null)}><span>Cancel</span></button>
+                </div>
+              </>
+            )}
+            {dropping && <div className="ed-uploading" role="status">Adding the picture…</div>}
             {menu && base && (
               <>
                 {/* Closes on a new press, not on the click that ends the long-press that opened it. */}
@@ -1380,7 +1516,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
           <>
             <span className="hint">{Icon.text}Right-click, long-press or double-tap text to edit it</span>
             <span className="hint">{Icon.move}Drag panels and camera boxes to move them</span>
-            <span className="hint">{Icon.plus}Add text, a title bar, an image or a camera box</span>
+            <span className="hint">{Icon.plus}Add text, a title bar or a camera box, or drop a picture in</span>
           </>
         )}
         {sel !== null && onAir && <span className="live-note"><span className="dot" />On air: it moves on stream as you drag</span>}
@@ -1477,7 +1613,7 @@ function AssetPicker({ org, library, replacing, onPick, onClose }: {
     <div className="modal-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal picker" role="dialog" aria-label={replacing ? "Replace image" : "Add an image"}>
         <h2>{replacing ? "Replace image" : "Add an image"}</h2>
-        <p className="picker-note">From {library?.org.name ?? org}'s assets.</p>
+        <p className="picker-note">From {library?.org.name ?? org}'s assets, or upload one{inApp ? " from Photos or Files" : ""}. You can also drop a picture straight onto the scene.</p>
         <div className="picker-grid">
           {images.map((a) => (
             <button key={a.path} type="button" className="picker-item" onClick={() => onPick(a)} aria-label={a.name}>
@@ -1490,7 +1626,7 @@ function AssetPicker({ org, library, replacing, onPick, onClose }: {
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files)} />
         <div className="actions">
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn primary" disabled={uploading} onClick={() => file.current?.click()}>{uploading ? "Uploading…" : "Upload an image"}</button>
+          <button type="button" className="btn primary" disabled={uploading} onClick={() => file.current?.click()}>{uploading ? "Uploading…" : inApp ? "Photos or Files…" : "Upload an image"}</button>
         </div>
       </div>
     </div>

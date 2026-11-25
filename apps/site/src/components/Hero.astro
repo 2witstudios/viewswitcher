@@ -1,11 +1,12 @@
 ---
 import Cta from "./Cta.astro";
 import Program from "./Program.astro";
+import { descriptor } from "../site.config";
 ---
 <section class="hero wrap" aria-labelledby="hero-title">
   <div class="copy">
     <h1 id="hero-title">Look professional when you go live.</h1>
-    <p class="lede">A one-click scene switcher for OBS.</p>
+    <p class="lede">{descriptor}</p>
     <Cta />
   </div>
   <Program />
