@@ -11,6 +11,7 @@ const project: Project = {
   name: "LD",
   scenes: ["starting-soon", "teaching", "brb"].map((n) => scene(n, "project", "projects/ld-2026/scenes")),
   streams: [],
+  transition: null,
 };
 
 describe("resolveStream", () => {

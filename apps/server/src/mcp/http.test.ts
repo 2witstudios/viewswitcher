@@ -1,12 +1,13 @@
 // POST /mcp on the real server (from source, OBS offline, no USB, a temp library), and who may use it:
 // only this Mac's own agents. Plus handleMcp alone, for a peer that isn't loopback.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { Subprocess } from "bun";
 import { mkdtempSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import http from "node:http";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { freePort, SERVER_START_MS, startServer } from "../test-server";
 import type { AgentStatus } from "@viewswitcher/shared";
 import type { Previewer } from "../preview-types";
 import { clientName, handleMcp, noteSeen } from "./http";
@@ -18,7 +19,7 @@ const noPreview = (port: number): Previewer => ({
 });
 
 let port = 0;
-let proc: ReturnType<typeof Bun.spawn>;
+let proc: Subprocess;
 const library = mkdtempSync(join(tmpdir(), "vs-mcp-http-"));
 
 /** node:http, because it sends the Host header we give it (fetch derives it from the URL). */
@@ -39,23 +40,9 @@ const initialize = (id = 1, name = "test-agent") => ({ jsonrpc: "2.0", id, metho
 const mcp = (msg: unknown, headers: Record<string, string> = {}) => request("/mcp", { method: "POST", headers: { ...MCP_HEADERS, ...headers }, body: JSON.stringify(msg) });
 
 beforeAll(async () => {
-  port = await new Promise<number>((r) => {
-    const s = createServer().listen(0, "127.0.0.1", () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => r(p));
-    });
-  });
-  proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts")], {
-    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" },
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  for (let i = 0; i < 100; i++) {
-    if (await request("/api/state").then((r) => r.status === 200, () => false)) return;
-    await Bun.sleep(50);
-  }
-  throw new Error("server didn't start");
-});
+  port = await freePort();
+  proc = await startServer({ PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" }, () => request("/api/state").then((r) => r.status === 200));
+}, SERVER_START_MS);
 afterAll(() => {
   proc?.kill();
   rmSync(library, { recursive: true, force: true });
