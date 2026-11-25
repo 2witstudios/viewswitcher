@@ -99,16 +99,26 @@ export type OnAir = {
   /** The transition page played when switching to this scene (see transitionCandidates); null for a plain ground-color wipe. */
   transition?: string | null;
   label: string;
-  /** Set when the scene on air was renamed (EDIT-19): its old path, so the program page swaps without a transition. */
+  /** The path this scene had on air before it was renamed, or the stream copy it replaced on Revert: the program page swaps without a transition. */
   renamedFrom?: string;
   projectId?: string;
   streamId?: string;
+  /**
+   * The file was deleted while on air and nothing took its place: the program keeps showing the
+   * version it has (reloading would put a 404 on stream) until another scene goes on air or the file is back.
+   */
+  missing?: boolean;
 };
 
 export type ObsStatus = {
   connected: boolean;
   recording: boolean;
   streaming: boolean;
+  /**
+   * Why OBS won't let the switcher in, while it won't: it asks for a password and none is set
+   * ("missing"), or it refused the one given ("wrong"). Absent once connected, or when OBS isn't there at all.
+   */
+  auth?: "missing" | "wrong";
 };
 
 /** What OBS has of what the switcher needs (see "Set up OBS"). */
@@ -119,6 +129,11 @@ export type ObsSetup = {
   program: boolean;
   /** Its ground color source exists. */
   ground: boolean;
+  /**
+   * The program source is the top item and the ground the bottom one. A source added in OBS above the
+   * program covers every scene, so setup is needed again (it puts them back in order).
+   */
+  ordered: boolean;
   /** Device sources (Camera, Screen, iPad) not in the scene yet; the user adds them in OBS. */
   missingDevices: string[];
 };

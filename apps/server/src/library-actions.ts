@@ -56,9 +56,15 @@ export async function duplicateScene(root: string, path: string, check?: lib.Bef
 
 export type OnAirRequest = { path: string; label?: string; projectId?: string; streamId?: string };
 
-/** The on-air record for a scene: its org's ground color and the transition that plays for it. */
+/**
+ * The on-air record for a scene: its org's ground color and the transition that plays for it. Refuses
+ * a scene that isn't there: the program page would put the 404 on stream.
+ */
 export async function onAirFor(root: string, b: OnAirRequest): Promise<OnAir> {
-  inside(root, b.path);
+  const file = inside(root, b.path);
+  if (!String(b.path).endsWith(".html") || !(await stat(file).then((s) => s.isFile(), () => false))) {
+    throw new PathError(`There's no scene at ${b.path}. It may have been renamed or deleted.`);
+  }
   const o = await lib.readOrg(root, orgOf(b.path));
   const transition = await lib.resolveTransition(root, b.path);
   return { path: b.path, org: o.id, ground: o.ground, transition, label: String(b.label ?? b.path), projectId: b.projectId, streamId: b.streamId };

@@ -1,0 +1,213 @@
+// The switcher's live state: what's on air, OBS, the USB link, the agent, and the warnings. It is
+// published to every client on each change, and the on-air record is saved in .viewswitcher/state.json
+// so a restart comes back to the same scene.
+//
+// Changes to what's on air (a person's tap, an agent's go_on_air, a rename, the on-air file going
+// away) run one at a time, in the order they were asked: two requests close together always end on
+// the one asked last, and state.json is only ever written by one of them at a time (and atomically).
+import { stat } from "node:fs/promises";
+import { orgOf } from "@viewswitcher/shared";
+import type { LiveState, OnAir, ServerMessage } from "@viewswitcher/shared";
+import { writeAtomic } from "../atomic";
+import * as lib from "../library";
+import { onAirFor, type OnAirRequest, renamedOnAir } from "../library-actions";
+import { inside } from "../paths";
+import type { RenameResult } from "../scene-edit";
+
+export type LiveStoreOptions = {
+  /** The library root. */
+  root: string;
+  /** Where the on-air record is kept (state.json). */
+  file: string;
+  /** Sends a message to every client (the live socket's hub); called on every change. */
+  publish: (msg: ServerMessage) => void;
+  /** What the rest of the state starts as. */
+  initial: Omit<LiveState, "onAir" | "warnings">;
+  log?: (line: string) => void;
+};
+
+const isFile = (abs: string) => stat(abs).then((s) => s.isFile(), () => false);
+
+/** A stream's own copy of a project scene: the project scene it overrides. */
+const STREAM_SCENE = /^([^/]+)\/projects\/([^/]+)\/streams\/([^/]+)\/([^/]+\.html)$/;
+export function overriddenScene(path: string): string | null {
+  const m = STREAM_SCENE.exec(path);
+  return m ? `${m[1]}/projects/${m[2]}/scenes/${m[4]}` : null;
+}
+
+export const missingWarning = (on: OnAir) =>
+  `"${on.label}" was deleted while on air. The program keeps showing it until you put another view on air.`;
+
+export class LiveStore {
+  readonly state: LiveState;
+  private placementWarnings: string[] = [];
+  private onAirWarnings: string[] = [];
+  private queue: Promise<unknown> = Promise.resolve();
+  /** Each org's ground color, read once from org.json and forgotten when that file changes. */
+  private grounds = new Map<string, Promise<string | null>>();
+
+  private constructor(private opts: LiveStoreOptions, onAir: OnAir | null) {
+    this.state = { ...opts.initial, onAir, warnings: [] };
+  }
+
+  /** The store as it was saved: the scene that was on air, with its transition looked up again. */
+  static async open(opts: LiveStoreOptions): Promise<LiveStore> {
+    const saved = await Bun.file(opts.file).json().then((v) => (v?.onAir ?? null) as OnAir | null, () => null);
+    const store = new LiveStore(opts, saved && typeof saved.path === "string" ? saved : null);
+    const on = store.state.onAir;
+    if (on) {
+      on.transition = await lib.resolveTransition(opts.root, on.path).catch(() => null);
+      delete on.missing;
+      if (!(await isFile(store.abs(on.path)))) store.markMissing(on);
+    }
+    return store;
+  }
+
+  /** Publish the state as it is now. */
+  publish() {
+    this.opts.publish({ t: "state", state: this.state });
+  }
+
+  /** Change the parts of the state other modules own (OBS, its setup, USB, the agent) and publish. */
+  update(patch: Partial<Pick<LiveState, "obs" | "obsSetup" | "usb" | "agent">>) {
+    Object.assign(this.state, patch);
+    this.publish();
+  }
+
+  /** What the last placement in OBS reported (replacing the previous placement's warnings). */
+  setPlacementWarnings(warnings: string[]) {
+    this.placementWarnings = warnings;
+    this.composeWarnings();
+    this.publish();
+  }
+
+  /**
+   * Put a scene on air: for the switcher (POST /api/onair) and for agents (go_on_air). `check` is the
+   * agent guard: it runs once the scene is looked up, and again right after the record is saved; if
+   * it refuses then, the saved record goes back to the scene on air.
+   */
+  goOnAir(b: OnAirRequest, check?: () => void): Promise<LiveState> {
+    return this.serial(() => this.commit(b, check));
+  }
+
+  /** A scene was renamed (switcher or agent): if it's the one on air, the on-air record follows it. */
+  renamed(from: string, name: string, r: Extract<RenameResult, { ok: true }>): Promise<void> {
+    return this.serial(async () => {
+      const on = this.state.onAir;
+      if (!on || on.path !== from) return;
+      this.state.onAir = renamedOnAir(on, from, name, r);
+      // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
+      this.publish();
+      await this.persist(this.state.onAir).catch((e) => console.error("[state] couldn't save:", (e as Error).message));
+    });
+  }
+
+  /**
+   * Library files changed (the watcher, debounced). The scene on air may have lost its file (Revert
+   * on a stream's copy, Finder, a removed set) or got it back, and its transition may have changed.
+   * Run before clients hear about the change, so none reloads the on-air scene into a 404.
+   */
+  filesChanged(paths: string[]): Promise<void> {
+    if (paths.some((p) => p.endsWith("org.json") || !p.includes("/"))) this.grounds.clear();
+    return this.serial(async () => {
+      const on = this.state.onAir;
+      if (!on) return;
+      const there = await isFile(this.abs(on.path));
+      if (!there && !on.missing) return this.removed(on);
+      if (there && on.missing) {
+        delete on.missing;
+        this.onAirWarnings = [];
+        this.composeWarnings();
+        this.publish();
+      }
+      if (paths.some((p) => p.endsWith("transition.html"))) {
+        const transition = await lib.resolveTransition(this.opts.root, on.path).catch(() => null);
+        // Only for the scene it was worked out for: another may have gone on air meanwhile.
+        if (this.state.onAir === on && transition !== on.transition) {
+          on.transition = transition;
+          this.publish();
+        }
+      }
+    });
+  }
+
+  /** The ground color of the org `path` belongs to, from its org.json (cached). */
+  groundFor(path: string): Promise<string | null> {
+    const org = orgOf(path);
+    let g = this.grounds.get(org);
+    if (!g) {
+      g = lib.readOrg(this.opts.root, org).then((o) => o.ground ?? null, () => null);
+      this.grounds.set(org, g);
+    }
+    return g;
+  }
+
+  // ---------------------------------------------------------------- inside the queue
+
+  private async commit(b: OnAirRequest, check?: () => void, extra: Partial<OnAir> = {}): Promise<LiveState> {
+    this.opts.log?.(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
+    const next = { ...(await onAirFor(this.opts.root, b)), ...extra };
+    check?.(); // an agent's go_on_air: the on-air setting against the state now, after the await
+    // Saved first: if saving fails, the scene on air stays as it was (nothing else can pick up a new
+    // scene that wasn't saved).
+    await this.persist(next);
+    try {
+      check?.();
+    } catch (e) {
+      await this.persist(this.state.onAir).catch((err) => console.error("[state] couldn't save:", (err as Error).message));
+      throw e;
+    }
+    this.state.onAir = next;
+    this.onAirWarnings = [];
+    this.placementWarnings = [];
+    this.composeWarnings();
+    this.publish();
+    return this.state;
+  }
+
+  /** The on-air file is gone: the project's scene it overrode, else keep showing it with a warning. */
+  private async removed(on: OnAir) {
+    const fallback = overriddenScene(on.path);
+    if (fallback && (await isFile(this.abs(fallback)))) {
+      try {
+        // The same view, back to the project's version: swapped in place, like a rename, not a transition.
+        await this.commit({ path: fallback, label: on.label, projectId: on.projectId, streamId: on.streamId }, undefined, { renamedFrom: on.path });
+        return;
+      } catch (e) {
+        console.error("[state] couldn't put the project's scene back on air:", (e as Error).message);
+      }
+    }
+    this.markMissing(on);
+    this.publish();
+  }
+
+  private markMissing(on: OnAir) {
+    on.missing = true;
+    this.onAirWarnings = [missingWarning(on)];
+    this.composeWarnings();
+  }
+
+  private composeWarnings() {
+    this.state.warnings = [...this.onAirWarnings, ...this.placementWarnings];
+  }
+
+  private persist(onAir: OnAir | null) {
+    const { missing: _, ...saved } = onAir ?? ({} as OnAir);
+    return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null }, null, 2));
+  }
+
+  private abs(path: string) {
+    try {
+      return inside(this.opts.root, path);
+    } catch {
+      return "";
+    }
+  }
+
+  /** Runs `fn` after every change asked before it; a failure is its caller's, never the next one's. */
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn);
+    this.queue = run.catch(() => {});
+    return run;
+  }
+}

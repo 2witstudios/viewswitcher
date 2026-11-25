@@ -86,10 +86,10 @@ describe("orgs", () => {
 });
 
 describe("obsReady", () => {
-  const full = { scene: true, program: true, ground: true, missingDevices: [] as string[] };
-  test("needs the scene, program and ground; missing devices don't count", () => {
+  const full = { scene: true, program: true, ground: true, ordered: true, missingDevices: [] as string[] };
+  test("needs the scene, program and ground, in order; missing devices don't count", () => {
     expect(obsReady(full)).toBe(true);
     expect(obsReady({ ...full, missingDevices: ["iPad"] })).toBe(true);
-    for (const k of ["scene", "program", "ground"] as const) expect(obsReady({ ...full, [k]: false })).toBe(false);
+    for (const k of ["scene", "program", "ground", "ordered"] as const) expect(obsReady({ ...full, [k]: false })).toBe(false);
   });
 });

@@ -47,7 +47,11 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
             <span className="dot" />{obs?.streaming ? "LIVE" : "GO LIVE"}
           </button>
           {appLink && <span className="pill link" title={appLink === "USB" ? "USB-C" : "Network"}>{appLink}</span>}
-          {!obs?.connected && <span className="pill off" title="Enable OBS's WebSocket server"><span className="dot" />OBS offline</span>}
+          {!obs?.connected && (
+            <span className="pill off" title={obs?.auth ? "OBS's WebSocket server: Tools → WebSocket Server Settings" : "Enable OBS's WebSocket server"}>
+              <span className="dot" />{obs?.auth === "missing" ? "OBS needs a password" : obs?.auth === "wrong" ? "OBS refused the password" : "OBS offline"}
+            </span>
+          )}
           {!appLink && state?.usb.attached && (
             // PHONE-8: named for the device plugged in (iPhone or iPad); an unknown one reads as before.
             <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "USB-C" : `Open ViewSwitcher on the ${state.usb.device ?? "iPad"}`}>

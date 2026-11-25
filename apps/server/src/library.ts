@@ -3,6 +3,7 @@ import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writ
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
+import { writeAtomic } from "./atomic";
 import { inside, PathError, plainName } from "./paths";
 
 const KINDS: Record<string, AssetKind> = {
@@ -288,7 +289,7 @@ export async function createProject(root: string, name: string, templates: strin
     if (!(await exists(file))) continue;
     order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readFile(file, "utf8"), check));
   }
-  await writeFile(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
+  await writeAtomic(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
   return { projectId: id };
 }
 
@@ -302,7 +303,7 @@ export async function createStream(root: string, projectId: string, name: string
   let id = base, n = 2;
   while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
   await mkdir(join(parent, id));
-  await writeFile(join(parent, id, "stream.json"), JSON.stringify({ name: name.trim(), date }, null, 2) + "\n");
+  await writeAtomic(join(parent, id, "stream.json"), JSON.stringify({ name: name.trim(), date }, null, 2) + "\n");
   return { projectId, streamId: id };
 }
 

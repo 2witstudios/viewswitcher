@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const env = process.env;
 
 /** On this Mac, read the obs-websocket password from OBS's own settings when OBS_PASSWORD isn't set. */
-function localObsPassword(): string | undefined {
+export function localObsPassword(): string | undefined {
   try {
     const file = join(homedir(), "Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json");
     const c = JSON.parse(readFileSync(file, "utf8"));
@@ -46,7 +46,11 @@ export const config = {
   adminToken: env.VIEWSWITCHER_ADMIN_TOKEN || "",
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
-    password: env.OBS_PASSWORD ?? localObsPassword(),
+    /**
+     * Read on every connect, not once at start: the password is often turned on or changed in OBS
+     * after the switcher is already running.
+     */
+    password: (): string | undefined => env.OBS_PASSWORD ?? localObsPassword(),
     /** The one OBS scene that holds the program browser source and the devices. */
     scene: env.OBS_SCENE ?? "ViewSwitcher",
     programSource: env.OBS_PROGRAM_SOURCE ?? "ViewSwitcher Program",

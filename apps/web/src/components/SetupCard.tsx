@@ -17,7 +17,7 @@ const dismissed = (key: string) => {
   }
 };
 
-/** Shown while OBS, or the switcher's scene and sources in it, are missing (MAC-3). */
+/** Shown while OBS, or the switcher's scene and sources in it, are missing or out of order. */
 export function SetupCard() {
   const { state, connected } = useLive();
   const [busy, setBusy] = useState(false);
@@ -48,10 +48,34 @@ export function SetupCard() {
 
   return (
     <section className="setup-card" aria-label="OBS setup">
-      {card.kind === "connect" && (
+      {card.kind === "connect" && !card.auth && (
         <div className="setup-text">
           <h2>Connect OBS</h2>
           <p>In OBS: <b>Tools → WebSocket Server Settings → Enable</b>.</p>
+        </div>
+      )}
+      {card.kind === "connect" && card.auth === "missing" && (
+        <div className="setup-text">
+          <h2>OBS wants a password</h2>
+          <p>
+            OBS's WebSocket server asks for a password that ViewSwitcher can't find. In OBS: <b>Tools → WebSocket Server Settings</b>,
+            press <b>Apply</b> so OBS saves it, or turn off <b>Enable Authentication</b>. ViewSwitcher tries again every few seconds.
+          </p>
+        </div>
+      )}
+      {card.kind === "connect" && card.auth === "wrong" && (
+        <div className="setup-text">
+          <h2>OBS refused the password</h2>
+          <p>
+            The password ViewSwitcher has doesn't match OBS's. In OBS: <b>Tools → WebSocket Server Settings</b>, check the password and
+            press <b>Apply</b>. ViewSwitcher tries again every few seconds.
+          </p>
+        </div>
+      )}
+      {card.kind === "order" && (
+        <div className="setup-text">
+          <h2>Set up OBS again</h2>
+          <p>A source in the ViewSwitcher scene sits above the program page, so it covers your views. Set up OBS puts the program back on top.</p>
         </div>
       )}
       {card.kind === "setup" && (
