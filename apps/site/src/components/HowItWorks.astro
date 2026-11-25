@@ -1,7 +1,8 @@
 ---
 import ViewFrame from "./ViewFrame.astro";
+import { github } from "../site.config";
 const covers = ["starting-soon", "main", "live", "brb"];
-const swatches = ["#eadfca", "#d9472b", "#2b1d14"];
+const skill = `${github}/blob/main/apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md`;
 ---
 <section class="section" id="how" aria-labelledby="how-title">
   <div class="wrap">
@@ -11,13 +12,14 @@ const swatches = ["#eadfca", "#d9472b", "#2b1d14"];
     </div>
     <ol class="steps">
       <li>
-        <div class="vis setup" aria-hidden="true">
-          <div class="field"><span>Show name</span><b>Saltwater Kitchen</b></div>
-          <div class="field"><span>This week</span><b>Sunday bread, start to finish</b></div>
-          <div class="field"><span>Colors</span><i class="sw">{swatches.map((c) => <i style={`background:${c}`}></i>)}</i></div>
-        </div>
-        <h3><span class="n">1</span>Pick your views</h3>
-        <p>Start from a designed set of views, then put in your show's name, your colors and this week's title.</p>
+        <div class="vis code" aria-hidden="true"><pre><code><span class="t">&lt;div</span> <span class="a">class</span>=<span class="s">"card"</span><span class="t">&gt;</span>
+  <span class="t">&lt;small&gt;</span>Saltwater Kitchen · Ep. 31<span class="t">&lt;/small&gt;</span>
+  <span class="t">&lt;strong&gt;</span>Sunday bread, start to finish<span class="t">&lt;/strong&gt;</span>
+<span class="t">&lt;/div&gt;</span>
+<span class="t">&lt;div</span> <span class="a">data-slot</span>=<span class="s">"Camera"</span><span class="t">&gt;&lt;/div&gt;</span>
+<span class="t">&lt;p</span> <span class="a">class</span>=<span class="s">"caption"</span><span class="t">&gt;</span>Ana, at the stove<span class="t">&lt;/p&gt;</span></code></pre></div>
+        <h3><span class="n">1</span>Pick or make your views</h3>
+        <p>Each view is just a web page (HTML). Start from the templates that come with ViewSwitcher or <a href="/templates">download free ones</a>, code your own, or have an AI assistant code one: the <a href={skill}>ViewSwitcher skill</a> teaches it how.</p>
       </li>
       <li>
         <div class="vis tiles on-dark" aria-hidden="true">
@@ -29,7 +31,7 @@ const swatches = ["#eadfca", "#d9472b", "#2b1d14"];
           ))}
         </div>
         <h3><span class="n">2</span>Click to switch</h3>
-        <p>Click a view in the Mac app, in any browser, or on a phone or tablet beside you.</p>
+        <p>Click a view in the Mac app or a browser on the Mac, or tap it on an iPad plugged in beside you. Coming soon: pair your phone or iPad over Wi-Fi.</p>
       </li>
       <li>
         <div class="vis"><ViewFrame show="kitchen" file="main" alt="Saltwater Kitchen on air: the dough up close, the cook in a polaroid beside it, and today's recipe card" sizes="(min-width: 60rem) 22rem, calc(100vw - 2.5rem)" /></div>
@@ -48,12 +50,11 @@ const swatches = ["#eadfca", "#d9472b", "#2b1d14"];
   .n { font: 700 0.9375rem/1 var(--display); color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .vis { aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; }
   .vis > :global(.frame) { height: 100%; aspect-ratio: auto; border-radius: 14px; }
-  .setup { background: var(--paper); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; gap: 0.55rem; }
-  .field { display: grid; grid-template-columns: 6.5rem 1fr; align-items: center; gap: 0.75rem; border: 1px solid var(--rule); border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
-  .field span { color: var(--ink-3); }
-  .field b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .sw { display: flex; gap: 0.4rem; }
-  .sw i { width: 1.1rem; height: 1.1rem; border-radius: 50%; box-shadow: inset 0 0 0 1px #0000001f; }
+  .code { background: var(--raised); border: 1px solid var(--rule); padding: 1rem 1.1rem; display: grid; align-content: center; }
+  .code pre { margin: 0; font-size: clamp(0.6875rem, 1.1vw, 0.75rem); line-height: 1.65; color: var(--ink); white-space: pre; overflow: hidden; }
+  .code .t { color: #8a3b2a; }
+  .code .a { color: #2b5c8a; }
+  .code .s { color: #3d6b35; }
   .tiles { background: var(--monitor); padding: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-content: center; }
   .tile { position: relative; }
   .tile :global(.frame) { border-radius: 6px; outline: 2px solid transparent; outline-offset: 2px; }

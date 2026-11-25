@@ -1,0 +1,113 @@
+# Style packs
+
+A style pack is one whole look for a show: a set of views (starting soon, the main layouts, be right back, ending…) with their own theme, scripts, transition and pictures, in one folder or `.zip`. People install one by dropping it on the switcher's Templates page (or **Import a style pack**). It goes into the org as its own **template set**, filled in with the org's name and colors, beside the org's own templates.
+
+Packs come from agents, from the site's six example styles and the starter kit (`bun run packs:export`), and later from the overlay studio on viewswitcher.com. They all make this one format. It's plain HTML, CSS and a little JS, so a pack stays the source of truth after it's installed: people and agents keep editing the same files.
+
+The validator is `packages/shared/src/style-pack.ts` (`planPack`, `readManifest`, `checkPack`), tested in `style-pack.test.ts`. Installing is `apps/server/src/packs.ts`.
+
+## Layout
+
+```
+neon-night/                         the pack (a folder, or a .zip of it)
+├─ pack.json                        required
+├─ templates/<view>.html            the views: one file per name in pack.json's "views"
+├─ _shared/                         the pack's own shared files
+│  ├─ theme.css                     tokens and classes (see the starter kit's)
+│  ├─ scene.js                      the starter kit's, or the pack's own
+│  ├─ transition.html               optional: its transition page
+│  └─ brand/…, fonts/…              pictures and fonts the theme uses
+├─ assets/                          optional: pictures, video, audio, fonts the views use
+├─ README.md, LICENSE               optional, installed alongside
+```
+
+A `.zip` may hold these at its top, or inside one folder (what Finder's Compress makes). `__MACOSX/`, `.DS_Store`, `Thumbs.db` and other hidden files are left out.
+
+## pack.json
+
+```json
+{
+  "format": 1,
+  "id": "neon-night",
+  "name": "Neon Night",
+  "version": "1.0.0",
+  "description": "Electric blue on black, with a scanline transition.",
+  "author": "Someone",
+  "views": ["starting-soon", "main", "interview", "brb", "ending"],
+  "placeholders": ["ORG_NAME", "ACCENT", "GROUND", "PACK"]
+}
+```
+
+| field | |
+|---|---|
+| `format` | `1`. Optional (1 is assumed). A pack with a higher number is refused with "made for a newer ViewSwitcher". |
+| `id` | lower-case letters, numbers and dashes, up to 40. The set's folder name (`templates/<id>/`); `<id>-2`, `-3`… when the org already has one. |
+| `name` | up to 60 characters. Shown as the set's heading. |
+| `version` | like `1.0.0` (`1.0` and a `-beta.1` suffix are fine). |
+| `description` | optional, up to 400 characters. |
+| `author` | optional, up to 80 characters. |
+| `views` | the views, in the order the switcher lists them. Each name is `templates/<name>.html` (lower-case letters, numbers and dashes). A view file not listed still installs, after the listed ones, with a warning. |
+| `placeholders` | the placeholders the pack's files use (below). Optional; one used but not listed is still filled, with a warning. |
+
+## Placeholders
+
+Every `.html`, `.css`, `.js`, `.json`, `.svg`, `.md` and `.txt` file is filled in on install:
+
+| placeholder | becomes |
+|---|---|
+| `{{ORG_NAME}}` | the org's name (`org.json` name) |
+| `{{ORG_INITIAL}}` | its first letter, upper-case |
+| `{{ORG_ID}}` | its folder name |
+| `{{ACCENT}}` | `org.json` accent |
+| `{{GROUND}}` | `org.json` ground (OBS paints it behind every scene) |
+| `{{PACK}}` | the set's folder as a URL: `/library/<org>/templates/<set>` |
+
+Anything else in `{{LIKE_THIS}}` stays as typed (with a warning).
+
+**Link the pack's own files through `{{PACK}}`:** `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg`, `{{PACK}}/_shared/brand/mark.svg`. Views are installed at the set's top level, beside `_shared/`, so another view is `{{PACK}}/<view>.html`. Absolute URLs keep working when a view is copied into a project or stream, which relative ones wouldn't. A link to a pack file that isn't in the pack is a warning. A view may also link the org's own files (`/library/{{ORG_ID}}/assets/…`).
+
+## Views
+
+Views follow the scene contract in the library's skill (`apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md`): 1920 × 1080, a transparent page, `<main class="scene">`, device boxes as `<div class="slot" data-slot="Camera">` with inline px `left/top/width/height`, text in its own small elements so people can retype it in the switcher, a short `<title>` (the cover's label), and the transition contract (`<meta name="viewswitcher:hold">`, the `play` class) for `_shared/transition.html`.
+
+## Limits
+
+| | |
+|---|---|
+| files | 400 (after junk is left out) |
+| one file | 25 MB |
+| all files, unpacked | 100 MB |
+| the `.zip` | 60 MB |
+| a path | 200 characters, 5 folders deep; names use letters, numbers, dots, dashes, spaces and `_` |
+| `templates/` | `.html` only, no subfolders |
+| `_shared/` | `.css`, `.js`, `transition.html`, pictures (`png jpg jpeg gif webp avif svg`), fonts (`woff woff2 ttf otf`) |
+| `assets/` | pictures, fonts, video (`mp4 webm mov m4v`), audio (`mp3 wav m4a aac ogg`) |
+| top level | `pack.json`, `README.md`, `LICENSE`, `LICENSE.md`, `LICENSE.txt` |
+
+Scripts may only be in `_shared/`, so what a pack runs is in one place.
+
+## What installing does, and refuses
+
+1. **Before anything is written**, every entry is checked: a path that leaves the pack (`..`, an absolute path, a drive letter, a backslash), a symlink or device, a file type where it doesn't belong, two names that differ only in case, too many or too big. Any of these refuses the whole pack, with the reason in plain words.
+2. The zip is read by `apps/server/src/zip.ts`: entries are inflated one at a time and never past the size they declare (a zip bomb that lies about its sizes stops there), checked against their CRC, and encrypted entries, ZIP64 and other compression methods are refused.
+3. Accepted files are unpacked into `<org>/.viewswitcher/staging/<token>/`. pack.json and the views are checked (`checkPack`). A copy filled in for the org is the preview the switcher shows: covers of every view and the transition, what the pack runs, and any warnings.
+4. **Install** fills the files in again with the set's real URL in a staging folder, then renames that folder to `<org>/templates/<set>/`. That rename is the only step that touches the org, so a failed install leaves nothing behind. **Cancel** (or an hour without either) deletes the staging folder.
+
+**Removing a set** (Templates → Remove set) deletes its folder. If scenes made from it still link its files, only its views and pack.json go: its `_shared/` and `assets/` stay so those scenes keep their look, and the switcher says how many use them. Scenes are never touched.
+
+## Scripts and the sandbox
+
+A pack from a stranger may contain JavaScript. Scenes are served from the switcher's own server, so without a sandbox a scene's script could call `/api` (put anything on air, edit files, upload), open the live socket, or reach into the page around it. So every library page is sandboxed:
+
+- Every `/library/` response, whatever its name, carries `Content-Security-Policy: sandbox allow-scripts; connect-src https: wss:; …` (`apps/server/src/scene-sandbox.ts`), and every frame the switcher shows a scene in has `sandbox="allow-scripts"`. A scene therefore has an opaque origin: its scripts run, but its requests say `Origin: null`, which the API and the socket refuse, it can't read anything back from the server, can't touch `parent` or `top`, can't navigate, submit forms or open windows, and `connect-src` keeps it off `http:`/`ws:` addresses, including OBS's own websocket on this Mac.
+- The program page still needs a scene's slot positions and the editor's live previews. A small bridge the server adds to scenes it serves with `?bridge` (`apps/server/src/scene-bridge.ts`) answers over `postMessage`; the program page only listens to the frame it's showing, and all a scene can tell it is where its own slots are.
+- The scene editor needs the scene's DOM, so its frame is the other way round: same-origin, but none of the scene's code runs. `?inert` serves it with `script-src 'none'`, no frames, objects or workers, and every `<meta` start tag renamed to `<link data-vs-meta` (wherever it is, so no refresh can navigate the frame). Only that defused copy is same-origin: any other `?inert` request is sandboxed as usual. The frame itself keeps `allow-scripts` only because WebKit won't run the editor's own listeners without it.
+- What a scene can still do: run scripts, load the library's scripts (classic or `type="module"`), styles and fonts (these three are sent with CORS), show its pictures and media, and `fetch`/`WebSocket` to `https:`/`wss:` addresses. What it can't: `fetch` library JSON or anything over plain `http:`/`ws:`, load library pictures or media with `crossorigin` (or draw them on a canvas and read it back: they aren't sent with CORS, so other websites open on the Mac can't read an org's media either), `localStorage`, cookies, `parent`/`top`, forms, pop-ups.
+
+On install the switcher says what the pack runs: ViewSwitcher's standard `scene.js` (when the pack's is the starter kit's), its own script files, views and SVGs with code written into them (inline `<script>`, `on…` handlers, `javascript:` links; in an SVG any `<script>`) and scripts from other sites. The decision is recorded on the Decisions page (EDIT-26).
+
+## Making packs
+
+- `bun run packs:export [out-dir]` writes the starter kit and the site's six example styles (apps/site/scripts/shows: fullcount, nova, grace, remi, riverside, kitchen) as `<id>/` and `<id>.zip` (default `dist/packs/`), each checked with the same validator, so an export that wouldn't install, or that warns, fails there.
+- The site's styles keep their shows' own names and colors (they use only `{{ORG_ID}}`); a version that takes on the installing org's name would use `{{ORG_NAME}}` and friends.
+- An agent can write a pack folder from the library skill's "Template sets and style packs" section and this page.

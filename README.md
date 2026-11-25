@@ -13,7 +13,8 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 
 - **Orgs**: one library holds any number of orgs (brands or channels). Each has its own templates, assets, projects and brand.
 - **Projects and streams**: a project is a series with shared scenes; a stream is one dated episode that can override any of them.
-- **Scenes are files you edit by talking to an agent** (Claude Code or any other) in the library, using its `viewswitcher-scenes` skill. The switcher only switches and organizes.
+- **Scenes are files you edit by talking to an agent** (Claude Code or any other) in the library, using its `viewswitcher-scenes` skill. The switcher switches and organizes, and its scene editor does light edits: retype text, move and resize, add, and drop a picture onto a scene.
+- **Style packs**: a whole look in one folder or `.zip`. Drop one on the Templates page and it installs as its own set of templates in the org's name and colors ([docs/style-packs.md](docs/style-packs.md)).
 - **iPad app over USB-C**: the ViewSwitcher iPad app talks to the Mac over the cable, for low latency and no dependence on Wi-Fi.
 
 ## How it works
@@ -24,10 +25,13 @@ The menu bar shows what's on air and whether OBS and the iPad are connected. Clo
 │  ├─ org.json                     { name, accent, ground }
 │  ├─ BRAND.md                     the org's brand rules, for agents
 │  ├─ templates/*.html, templates/_shared/{theme.css, scene.js, transition.html, brand/mark.svg}
+│  ├─ templates/<set>/              a template set installed from a style pack: pack.json, views, _shared/, assets/
 │  ├─ assets/
 │  └─ projects/<project>/{project.json, transition.html?, scenes/*.html, streams/<MM-DD-slug>/*.html}
 └─ .claude/skills/viewswitcher-scenes/SKILL.md     from apps/server/library-kit (changes ship there)
 ```
+
+Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's style pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/style-packs.md](docs/style-packs.md#scripts-and-the-sandbox)).
 
 OBS has one scene with one browser source showing `/program`. Each scene file marks device boxes with `data-slot="Camera"` and similar; the server moves and crops those OBS sources into the boxes over obs-websocket, and paints the ground color of the org that's on air.
 
@@ -131,7 +135,9 @@ ios/inkcast      parked Swift Pencil app (InkCast); its drawing moves into the i
 post/            YouTube post pipeline (from Daisy Debate's daisy-video); see post/README.md
 ```
 
-`bun test` runs the shared logic, usbmux protocol, path-safety, library kit and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
+`bun run packs:export` writes the starter kit and the site's six example styles as style packs (`dist/packs/<id>.zip`).
+
+`bun test` runs the shared logic, usbmux protocol, path-safety, library kit, style pack and OBS setup tests; the Apple apps have XCTest (`xcodebuild test`, see apps/apple/README.md).
 
 ## Mac app
 

@@ -1,4 +1,4 @@
-import type { Library, LiveState, Org, SceneEdit } from "@viewswitcher/shared";
+import type { Library, LiveState, Org, PackManifest, PackScripts, SceneEdit } from "@viewswitcher/shared";
 import { libraryUrl } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
@@ -88,6 +88,42 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Upload failed");
     return res.json();
   },
+};
+
+/** A style pack the server has checked and staged, ready to install (apps/server/src/packs.ts). */
+export type StagedPack = {
+  token: string;
+  set: string;
+  manifest: PackManifest;
+  views: { name: string; label: string; path: string }[];
+  transition: string | null;
+  scripts: PackScripts & { standard: boolean };
+  warnings: string[];
+  files: number;
+  bytes: number;
+};
+
+async function form<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(path, { method: "POST", body });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? (res.status === 413 ? "That's too big" : res.statusText));
+  return data as T;
+}
+
+export const packs = {
+  stage: (org: string, pack: { zip: File } | { files: { path: string; file: File }[] }) => {
+    const body = new FormData();
+    body.append("org", org);
+    if ("zip" in pack) body.append("zip", pack.zip);
+    else for (const f of pack.files) {
+      body.append("path", f.path);
+      body.append("file", f.file);
+    }
+    return form<StagedPack>("/api/packs/stage", body);
+  },
+  install: (org: string, token: string) => post<{ set: string }>("/api/packs/install", { org, token }),
+  cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
+  removeSet: (org: string, set: string) => post<{ kept: number }>("/api/sets/remove", { org, set }),
 };
 
 /** Copy text; falls back to a prompt where the clipboard API is unavailable (plain http on the iPad). */

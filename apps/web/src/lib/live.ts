@@ -62,7 +62,8 @@ function connect() {
       const versions = { ...live.versions };
       for (const p of msg.paths) {
         versions[p] = (versions[p] ?? 0) + 1;
-        if (p.includes("templates/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
+        // An org's or a template set's shared theme: every cover may use it.
+        if (p.includes("/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
       }
       set({ versions });
       queryClient.invalidateQueries({ queryKey: ["library"] });
@@ -82,9 +83,10 @@ export function useLive(): Live {
  * URL for a library file that changes whenever the file (or the shared theme) changes.
  * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
  */
-export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false) {
+/** `bridge`: with the bridge the program page talks to the sandboxed scene through (EDIT-26). */
+export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
-  return `${libraryUrl(path)}?${edit ? "edit&" : ""}${preview ? "preview&" : ""}v=${v}`;
+  return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;
 }
 
 /** /library/<path> with each segment encoded, so a "#", "?" or "%" in a file name survives. */

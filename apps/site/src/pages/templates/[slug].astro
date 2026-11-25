@@ -1,0 +1,123 @@
+---
+// SITE-29: one page per template set, with its pack (SITE-26): every view, what it's for, install steps,
+// fonts and photo credits. Data: src/data/shows.ts, the set's theme.css, CREDITS.md.
+import Base from "../../layouts/Base.astro";
+import Header from "../../components/Header.astro";
+import Footer from "../../components/Footer.astro";
+import ViewFrame from "../../components/ViewFrame.astro";
+import TemplateCard from "../../components/TemplateCard.astro";
+import PackInstall from "../../components/PackInstall.astro";
+import Icon from "../../components/Icon.astro";
+import { site } from "../../site.config";
+import { SHOWS, type Show } from "../../data/shows";
+import { breadcrumbs } from "../../lib/seo";
+import { creditsOf, fontsOf, packOf, related, setPath } from "../../lib/templates";
+
+export function getStaticPaths() {
+  return SHOWS.map((show) => ({ params: { slug: show.slug }, props: { show } }));
+}
+interface Props { show: Show }
+const { show } = Astro.props;
+const pack = packOf(show);
+const fonts = fontsOf(show.id);
+const credits = creditsOf(show);
+const kind = show.kind.toLowerCase();
+const title = `${show.kind} templates for OBS: ${show.name}`;
+const description = `Free ${kind} templates for OBS on Mac: ${show.views.map((v) => v.name.toLowerCase()).join(", ")}. Download the ${show.name} template pack for ViewSwitcher.`;
+---
+<Base title={title} description={description} path={setPath(show)}
+  schema={[breadcrumbs(site.url, [{ name: "Templates", path: "/templates" }, { name: show.name, path: setPath(show) }])]}>
+  <Header />
+  <main id="main" class="wrap page">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="/templates">Templates</a> <span aria-hidden="true">/</span> <span aria-current="page">{show.name}</span></nav>
+    <div class="head">
+      <h1>{show.name} <span>{kind} templates</span></h1>
+      <p class="lede">{show.blurb}</p>
+      <div class="actions">
+        <a class="btn btn-primary" href={pack.href} download><Icon name="download" />Download template pack (.zip)</a>
+        <p class="quiet">Free · {show.views.length} views{pack.kb ? ` · ${pack.kb} KB` : ""}</p>
+      </div>
+    </div>
+    <figure class="hero">
+      <ViewFrame show={show.id} file="main" alt={`${show.name}'s ${show.views.find((v) => v.file === "main")!.name.toLowerCase()} view, as it looks on stream`} sizes="(min-width: 76rem) 76rem, calc(100vw - 2.5rem)" widths={[640, 960, 1280, 1600, 1920]} eager />
+    </figure>
+
+    <section aria-labelledby="good-for">
+      <h2 id="good-for">Good for</h2>
+      <p class="text">{show.goodFor}</p>
+    </section>
+
+    <section aria-labelledby="views">
+      <h2 id="views">The {show.views.length} views</h2>
+      <ol class="views">
+        {show.views.map((v) => (
+          <li>
+            <ViewFrame show={show.id} file={v.file} alt={`${show.name}: the ${v.name.toLowerCase()} view`} sizes="(min-width: 64rem) 24rem, (min-width: 40rem) 45vw, calc(100vw - 2.5rem)" widths={[480, 720, 960]} class="mini" />
+            <h3>{v.name}</h3>
+            <p>{v.use}</p>
+          </li>
+        ))}
+      </ol>
+      <p class="note">The photos fill the camera and screen boxes in these previews. In ViewSwitcher, your own camera and screen go there.</p>
+    </section>
+
+    <section class="cols" aria-labelledby="install">
+      <div>
+        <h2 id="install">Install it</h2>
+        <PackInstall />
+        <a class="btn btn-primary" href={pack.href} download><Icon name="download" />Download template pack (.zip)</a>
+      </div>
+      <div class="facts">
+        <h2 id="details">Details</h2>
+        <h3>Fonts</h3>
+        <p>{fonts.join(", ")}, from Google Fonts (SIL Open Font License), loaded when a view is shown.</p>
+        <h3>Photos in these previews</h3>
+        <ul>
+          {credits.map((c) => <li><a href={c.photoUrl}>{c.photo}</a> by <a href={c.byUrl}>{c.by}</a> ({c.license})</li>)}
+        </ul>
+        <p class="quiet">The photos are only on this site; they aren't in the template pack. The show, names and titles are made up.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="more">
+      <h2 id="more">More template sets</h2>
+      <ul class="related">
+        {related(show).map((s) => <li><TemplateCard show={s} heading="h3" sizes="(min-width: 64rem) 18rem, (min-width: 40rem) 45vw, calc(100vw - 2.5rem)" /></li>)}
+      </ul>
+      <p><a href="/templates">All templates</a></p>
+    </section>
+  </main>
+  <Footer />
+</Base>
+<style>
+  .page { padding-block: clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem); display: grid; gap: clamp(2.5rem, 5vw, 4rem); }
+  .crumbs { font-size: 0.9375rem; color: var(--ink-3); }
+  .crumbs a { color: var(--ink-2); }
+  .head { display: grid; gap: 1rem; }
+  h1 { font-size: clamp(2.25rem, 5vw, 3.5rem); }
+  h1 span { display: block; font: 500 clamp(1.125rem, 2vw, 1.375rem)/1.3 var(--text); letter-spacing: 0; color: var(--ink-3); margin-top: 0.4rem; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.25rem; margin-top: 0.4rem; }
+  .actions .btn, .cols .btn { width: fit-content; }
+  .hero { margin: 0; }
+  .hero :global(.frame) { border-radius: 14px; box-shadow: 0 30px 60px -36px #16181e99; }
+  section { display: grid; gap: 1.1rem; }
+  section h2 { font-size: clamp(1.5rem, 3vw, 2rem); }
+  .text { color: var(--ink-2); max-width: 44rem; font-size: 1.125rem; }
+  .views { list-style: none; margin: 0; padding: 0; display: grid; gap: 2rem 1.5rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 40rem) { .views { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .views { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .views li { display: grid; gap: 0.45rem; align-content: start; }
+  .views :global(.mini) { border-radius: 10px; margin-bottom: 0.4rem; }
+  .views p, .note { color: var(--ink-2); }
+  .note { font-size: 0.9375rem; color: var(--ink-3); }
+  .cols { display: grid; gap: 2.5rem 4rem; border-top: 1px solid var(--rule); padding-top: 2.5rem; }
+  @media (min-width: 60rem) { .cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .cols > div { display: grid; gap: 1rem; align-content: start; }
+  .facts h3 { font-size: 1.0625rem; margin-top: 0.4rem; }
+  .facts p, .facts li { color: var(--ink-2); }
+  .facts ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; }
+  .facts a { color: var(--ink); }
+  .related { list-style: none; margin: 0; padding: 0; display: grid; gap: 2.5rem 1.5rem; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 40rem) { .related { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .related { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+</style>
