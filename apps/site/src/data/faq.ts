@@ -1,17 +1,15 @@
-// The homepage's questions. The page shows them and its FAQPage structured data repeats them word for word.
-// `more` links to the page that answers the question in full.
+// The homepage's questions (Jono's design: five, collapsed). The page shows them and its FAQPage
+// structured data repeats them word for word. "Do I need AI?" follows AI_CONNECT_RELEASED.
 import { site } from "../site.config";
-import { IPAD_PRICE } from "../lib/cta";
 
 export type Faq = { q: string; a: string; more?: { href: string; label: string } };
 
 export const FAQS: Faq[] = [
-  { q: "Do I need OBS?", a: "Yes. OBS is the free app that does the streaming, and ViewSwitcher sets it up for you the first time. After that, ViewSwitcher tells OBS what to show and where your camera goes; you keep streaming to YouTube, Facebook or wherever you go live today.", more: { href: "/setup", label: "How to set up OBS with ViewSwitcher" } },
-  { q: "Do I need to know how to code?", a: "No. You pick views, type in your show's name and titles, and drag boxes where you want them." },
-  { q: "Does it work on Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
-  { q: "Can my church use it?", a: "Yes. Set up views once for your service (a welcome, worship, the sermon with the scripture beside the pastor, giving, the goodbye) and each Sunday is just new titles. There's no yearly seat fee.", more: { href: "/church-livestream", label: "Church livestreaming with ViewSwitcher" } },
-  { q: "Does it work with my camera?", a: "If OBS can see it, ViewSwitcher can place it: the Mac's built-in camera, a USB webcam, or a camera through a capture card. Your screen share and an iPad's screen work the same way." },
-  { q: "Can I switch from an iPad?", a: `Yes, with ViewSwitcher for iPad: plug it into the Mac with a USB-C cable and tap views on it. It's optional, ${IPAD_PRICE} once, ${site.ipadApp.state === "store" ? "on the App Store" : "and coming to the App Store"}.`, more: { href: "/ipad", label: "ViewSwitcher for iPad" } },
-  { q: "Can I switch from my phone?", a: "Not yet. Today you switch from the Mac app, a browser on the Mac, or an iPad on a USB-C cable. Pairing your phone or iPad over Wi-Fi is coming soon." },
-  { q: "What does it cost?", a: `The Mac app is free and open source, with no subscription. The iPad app is optional: ${IPAD_PRICE}, once, ${site.ipadApp.state === "store" ? "on the App Store" : "when it arrives on the App Store"}.` },
+  { q: "Do I need to know how to code?", a: "No. Start from a template, then retype your titles and drag the boxes right on the view. Templates are small web pages, so you can code your own if you like." },
+  { q: "Do I need AI?", a: site.aiConnect
+    ? "No. The templates work on their own, and you edit them right on the view. Connecting your favorite AI (Claude, Cursor or any app with MCP) is optional and free: it makes custom overlays and slides when you ask."
+    : "No. Start from a free template and edit it right on the view. If you want a view that isn't there, an AI assistant can make one for you, but that's optional." },
+  { q: "Does it work with my camera?", a: "If OBS can see it, ViewSwitcher can place it: the Mac's built-in camera, a USB webcam, or a camera through a capture card. Your screen share works the same way." },
+  { q: "Can I switch from my phone?", a: "Yes. In ViewSwitcher's menu bar, turn on Let Phones and Tablets on This Wi-Fi Connect, then scan the QR code with your phone's camera. Only phones and tablets you pair can switch scenes. Use it on Wi-Fi you trust, like home or church Wi-Fi." },
+  { q: "Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
 ];

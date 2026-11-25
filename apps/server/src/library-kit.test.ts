@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureLibrary, FIRST_ORG, KIT_FILES } from "./library-kit";
+import { ensureLibrary, findGit, FIRST_ORG, KIT_FILES } from "./library-kit";
 
 const kit = join(import.meta.dir, "../library-kit");
 const starter = join(import.meta.dir, "../starter");
@@ -69,10 +69,10 @@ describe("ensureLibrary", () => {
 
   test("an existing library keeps its own files, orgs and history", async () => {
     const root = await tempDir();
-    await mkdir(join(root, ".claude/skills/viewswitcher-scenes"), { recursive: true });
-    await writeFile(join(root, ".claude/skills/viewswitcher-scenes/SKILL.md"), "my own skill");
-    await writeFile(join(root, "CLAUDE.md"), "my own notes");
-    await writeFile(join(root, ".gitignore"), "mine\n");
+    for (const { to } of KIT_FILES) {
+      await mkdir(join(root, to, ".."), { recursive: true });
+      await writeFile(join(root, to), `my own ${to}\n`);
+    }
     await mkdir(join(root, "acme"));
     await writeFile(join(root, "acme/org.json"), JSON.stringify({ name: "Acme" }));
     const before = await snapshot(root);
@@ -103,7 +103,7 @@ describe("ensureLibrary", () => {
     await ensureLibrary(root, { kit: oldKit, starter, gitInit: fakeGit });
     await writeFile(join(root, "CLAUDE.md"), "old library-CLAUDE.md\nplus my notes");
     const r = await ensureLibrary(root, { kit, starter, gitInit: fakeGit });
-    expect(r.updated).toEqual([".gitignore", ".claude/skills/viewswitcher-scenes/SKILL.md"]);
+    expect(r.updated).toEqual(KIT_FILES.map((f) => f.to).filter((to) => to !== "CLAUDE.md"));
     expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toBe("old library-CLAUDE.md\nplus my notes");
     expect(await readFile(join(root, ".claude/skills/viewswitcher-scenes/SKILL.md"), "utf8")).toBe(
       await readFile(join(kit, "skills/viewswitcher-scenes/SKILL.md"), "utf8"),
@@ -114,10 +114,74 @@ describe("ensureLibrary", () => {
     expect(await snapshot(root)).toEqual(before);
   });
 
+  test("a fresh library gets the agent files: AGENTS.md and MCP configs for Claude Code and Cursor", async () => {
+    const root = await tempDir();
+    await ensureLibrary(root, { kit, starter, gitInit: fakeGit });
+    expect((await stat(join(root, ".cursor"))).isDirectory()).toBe(true);
+    expect(JSON.parse(await readFile(join(root, ".mcp.json"), "utf8"))).toEqual({
+      mcpServers: { viewswitcher: { type: "http", url: "http://127.0.0.1:7420/mcp" } },
+    });
+    expect(JSON.parse(await readFile(join(root, ".cursor/mcp.json"), "utf8"))).toEqual({
+      mcpServers: { viewswitcher: { url: "http://127.0.0.1:7420/mcp" } },
+    });
+    const agents = await readFile(join(root, "AGENTS.md"), "utf8");
+    expect(agents).toContain(".claude/skills/viewswitcher-scenes/SKILL.md");
+    expect(agents).toContain("get_guide");
+    expect(agents).toContain("http://127.0.0.1:7420/mcp");
+  });
+
+  test("someone's own MCP config and AGENTS.md are never touched, even under an older kit", async () => {
+    const root = await tempDir();
+    const oldKit = await tempDir();
+    for (const { from } of KIT_FILES) {
+      await mkdir(join(oldKit, from, ".."), { recursive: true });
+      await writeFile(join(oldKit, from), `old ${from}`);
+    }
+    await ensureLibrary(root, { kit: oldKit, starter, gitInit: fakeGit });
+    const mine = JSON.stringify({ mcpServers: { viewswitcher: { url: "http://127.0.0.1:7433/mcp" }, other: { command: "x" } } });
+    await writeFile(join(root, ".cursor/mcp.json"), mine);
+    await writeFile(join(root, ".mcp.json"), mine);
+    await writeFile(join(root, "AGENTS.md"), "my agents notes");
+    const r = await ensureLibrary(root, { kit, starter, gitInit: fakeGit });
+    expect(r.updated).not.toContain(".mcp.json");
+    expect(r.updated).not.toContain(".cursor/mcp.json");
+    expect(r.updated).not.toContain("AGENTS.md");
+    expect(await readFile(join(root, ".cursor/mcp.json"), "utf8")).toBe(mine);
+    expect(await readFile(join(root, ".mcp.json"), "utf8")).toBe(mine);
+    expect(await readFile(join(root, "AGENTS.md"), "utf8")).toBe("my agents notes");
+  });
+
+  // The agent files belong in the library's repo, so people's agents find them after a clone.
+  test.skipIf(!findGit())("the kit's .gitignore ignores none of the kit's files", async () => {
+    const root = await tempDir();
+    const git = findGit()!;
+    await ensureLibrary(root, { kit, starter, gitInit: async (dir) => Bun.spawnSync([git, "init", "--quiet"], { cwd: dir }).exitCode === 0 });
+    for (const { to } of KIT_FILES) {
+      const p = Bun.spawnSync([git, "-c", "core.excludesFile=/dev/null", "check-ignore", "--no-index", "-q", to], { cwd: root });
+      // check-ignore exits 1 when the path is not ignored (0 ignored, 128 error)
+      expect({ to, exit: p.exitCode }).toEqual({ to, exit: 1 });
+    }
+  });
+
   test("the kit is generic: no one's own orgs, paths or names", async () => {
     for (const { from } of KIT_FILES) {
       const text = await readFile(join(kit, from), "utf8");
       expect({ from, hit: text.match(/daisy|pagespace|bible|jono|Projects\/viewswitcher/i)?.[0] ?? null }).toEqual({ from, hit: null });
     }
+  });
+});
+
+describe("the scene skill's frontmatter", () => {
+  // Claude's skill upload (the site's skills/viewswitcher-scenes.zip) rejects malformed YAML frontmatter.
+  test("is a YAML mapping with a name and a one-paragraph description", async () => {
+    const text = await Bun.file(join(import.meta.dir, "../library-kit/skills/viewswitcher-scenes/SKILL.md")).text();
+    const m = text.match(/^---\n([\s\S]*?)\n---\n/);
+    expect(m).not.toBeNull();
+    const fm = Bun.YAML.parse(m![1]!) as Record<string, unknown>;
+    expect(Object.keys(fm).sort()).toEqual(["description", "name"]);
+    expect(fm.name).toBe("viewswitcher-scenes");
+    expect(typeof fm.description).toBe("string");
+    // Every frontmatter line is a key: a stray unindented line would be a YAML error in strict parsers.
+    for (const line of m![1]!.split("\n")) expect(line).toMatch(/^[a-z_]+: /);
   });
 });

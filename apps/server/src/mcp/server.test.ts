@@ -1,0 +1,880 @@
+// The MCP tools through a real SDK Client on the in-memory transport, against a temp library made
+// the way a new one is (ensureLibrary: the kit and a first org from the starter).
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { LiveState } from "@viewswitcher/shared";
+import { type BuiltinPack, buildBuiltins } from "../builtin-packs";
+import { config } from "../config";
+import { onAirFor, renamedOnAir } from "../library-actions";
+import { writeText } from "../library-files";
+import { ensureLibrary } from "../library-kit";
+import type { PreviewResult } from "../preview-types";
+import { readForEdit, sceneHash } from "../scene-edit";
+import { createMcpServer, INSTRUCTIONS } from "./server";
+
+const root = mkdtempSync(join(tmpdir(), "vs-mcp-"));
+const realRoot = realpathSync(root);
+const outside = mkdtempSync(join(tmpdir(), "vs-mcp-outside-"));
+const ORG = "my-channel";
+const PORT = 7433;
+
+const fresh = (): LiveState => ({
+  onAir: null,
+  obs: { connected: false, recording: false, streaming: false },
+  obsSetup: null,
+  usb: { enabled: false, attached: false, connected: false },
+  warnings: [],
+  agent: { onAir: "not-live", lastSeen: null, client: null },
+});
+let state = fresh();
+/** Runs inside goOnAir after the scene is looked up and before it commits (a test makes OBS go live there). */
+let beforeCommit: (() => void) | null = null;
+/** Runs on every read of the switcher state by the tools (a test counts reads to pick an instant). */
+let onStateRead: (() => void) | null = null;
+/** Runs at write_file's commit instant (McpDeps.onCommit), so a test can change the state exactly then. */
+let atCommit: (() => void) | null = null;
+/** OBSClient.outputsKnown: false right after OBS connects, until it says whether it's streaming or recording. */
+let outputsKnown = true;
+let previews: { scene: PreviewResult; program: PreviewResult };
+const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+
+let client: Client;
+let builtins: Promise<BuiltinPack[]> | undefined;
+/** Every result text, to check none of them has the library's absolute path. */
+const seen: string[] = [];
+
+beforeAll(async () => {
+  await ensureLibrary(root, { kit: config.libraryKit, starter: config.starter, gitInit: async () => false });
+  // The starter has no transition; most orgs make one.
+  await writeFile(join(root, ORG, "templates/_shared/transition.html"), "<title>Wipe</title>");
+  const server = createMcpServer({
+    root,
+    kit: config.libraryKit,
+    port: PORT,
+    state: () => (onStateRead?.(), state),
+    // As main.ts does it: look the scene up, run the agent's check, then commit.
+    goOnAir: async (b, check) => {
+      const next = await onAirFor(root, b);
+      beforeCommit?.();
+      check?.();
+      state.onAir = next;
+      return state;
+    },
+    renamed: async (from, name, r) => {
+      if (state.onAir?.path === from) state.onAir = renamedOnAir(state.onAir, from, name, r);
+    },
+    previewer: { scene: async () => previews.scene, program: async () => previews.program },
+    onCommit: () => atCommit?.(),
+    outputsKnown: () => outputsKnown,
+    // The real built-in sets, built from the repo as a source run does.
+    templateSets: () => (builtins ??= buildBuiltins(config.starter, config.site)),
+    starterScript: null,
+  });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a);
+  client = new Client({ name: "test-agent", version: "1" });
+  await client.connect(b);
+});
+afterAll(() => {
+  rmSync(root, { recursive: true, force: true });
+  rmSync(outside, { recursive: true, force: true });
+});
+beforeEach(() => {
+  state = fresh();
+  beforeCommit = null;
+  onStateRead = null;
+  atCommit = null;
+  outputsKnown = true;
+  previews = { scene: { ok: true, png, width: 960, height: 540 }, program: { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/program` } };
+});
+
+type Result = { isError: boolean; text: string; content: { type: string; text?: string; data?: string; mimeType?: string }[] };
+async function call(name: string, args: Record<string, unknown> = {}): Promise<Result> {
+  const r = (await client.callTool({ name, arguments: args })) as { isError?: boolean; content: Result["content"] };
+  const text = r.content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  seen.push(JSON.stringify(r));
+  return { isError: !!r.isError, text, content: r.content };
+}
+const data = async (name: string, args: Record<string, unknown> = {}) => {
+  const r = await call(name, args);
+  if (r.isError) throw new Error(`${name} refused: ${r.text}`);
+  return JSON.parse(r.text);
+};
+const live = () => {
+  state.obs = { connected: true, streaming: true, recording: false };
+};
+
+describe("initialize", () => {
+  test("instructions say what ViewSwitcher is, get_guide first, preview after changes, org-prefixed paths", () => {
+    const i = client.getInstructions() ?? "";
+    expect(i).toBe(INSTRUCTIONS);
+    expect(i).toContain("live-stream scene switcher for OBS");
+    expect(i).toContain("Call get_guide before creating or editing scenes");
+    expect(i).toContain("preview_scene after every visual change");
+    expect(i).toContain("fix what you see");
+    expect(i).toContain("Every path starts with the org id");
+  });
+  test("see_program isn't read-only: clients ask before it sends camera frames", async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === "see_program")!.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
+  });
+  test("every tool in the contract, with read-only and destructive hints", async () => {
+    const { tools } = await client.listTools();
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
+    expect(Object.keys(byName).sort()).toEqual([
+      "add_asset", "create_project", "create_stream", "customize_scene", "customize_transition", "duplicate_scene", "get_guide", "get_state",
+      "go_on_air", "list_files", "list_orgs", "preview_scene", "read_file", "rename_scene", "revert_scene", "revert_transition", "scan_library",
+      "scene_from_template", "see_program", "write_file",
+      "add_template_set", "list_template_sets",
+    ].sort());
+    for (const n of ["get_state", "list_orgs", "scan_library", "list_files", "read_file", "get_guide", "preview_scene", "list_template_sets"]) {
+      expect({ n, ro: byName[n]!.annotations?.readOnlyHint }).toEqual({ n, ro: true });
+    }
+    for (const n of ["go_on_air", "revert_scene", "revert_transition"]) expect({ n, d: byName[n]!.annotations?.destructiveHint }).toEqual({ n, d: true });
+    for (const n of ["write_file", "add_asset", "add_template_set", "create_project", "create_stream", "scene_from_template", "customize_scene", "duplicate_scene", "rename_scene", "customize_transition"]) {
+      expect({ n, ro: byName[n]!.annotations?.readOnlyHint, d: byName[n]!.annotations?.destructiveHint }).toEqual({ n, ro: false, d: false });
+    }
+    expect(byName.see_program!.description).toContain("INCLUDING the live camera");
+    expect(byName.write_file!.description).toContain("hash");
+    expect(byName.read_file!.description).toContain("hash");
+  });
+});
+
+describe("read tools", () => {
+  test("get_state: on air, OBS, warnings, the agent setting", async () => {
+    state.onAir = await onAirFor(root, { path: `${ORG}/templates/brb.html`, label: "BRB" });
+    state.warnings = ["Camera isn't in OBS"];
+    const s = await data("get_state");
+    expect(s.onAir).toMatchObject({ path: `${ORG}/templates/brb.html`, label: "BRB", org: ORG });
+    expect(s).toMatchObject({ live: false, obs: { connected: false, streaming: false, recording: false }, warnings: ["Camera isn't in OBS"], agent: { onAir: "not-live" } });
+  });
+  test("list_orgs and scan_library return what the API does, paths starting with the org", async () => {
+    const orgs = await data("list_orgs");
+    expect(orgs.map((o: { id: string }) => o.id)).toEqual([ORG]);
+    const l = await data("scan_library", { org: ORG });
+    expect(l.org.id).toBe(ORG);
+    expect(l.templates.map((t: { path: string }) => t.path)).toContain(`${ORG}/templates/brb.html`);
+    for (const t of l.templates) expect(t.path.startsWith(`${ORG}/`)).toBe(true);
+    expect((await call("scan_library", { org: "nope" })).text).toContain("There's no org \"nope\"");
+    expect((await call("scan_library", { org: "../etc" })).isError).toBe(true);
+  });
+  test("scan_library marks a stream's overrides and the project scenes it shares", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Scan Show", templates: ["brb", "ending"] });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Ep 1", date: "2026-12-04" });
+    await data("customize_scene", { org: ORG, projectId, streamId, name: "brb" });
+    const l = await data("scan_library", { org: ORG });
+    const s = l.projects.find((p: { id: string }) => p.id === projectId).streams[0];
+    expect(s.scenes.map((x: { name: string; overrides: boolean }) => [x.name, x.overrides])).toEqual([["brb", true]]);
+    expect(s.sharedScenes).toEqual(["ending"]);
+  });
+  test("list_files: an org or a folder in it, no dot-files", async () => {
+    const top = await data("list_files", { path: ORG });
+    expect(top.find((e: { name: string }) => e.name === "templates")).toEqual({ name: "templates", path: `${ORG}/templates`, type: "dir", size: 0 });
+    expect(top.find((e: { name: string }) => e.name === "org.json")).toMatchObject({ path: `${ORG}/org.json`, type: "file" });
+    const shared = await data("list_files", { path: `${ORG}/templates/_shared` });
+    expect(shared.length).toBeGreaterThan(0);
+    await writeFile(join(root, ORG, ".secret"), "x");
+    expect((await data("list_files", { path: ORG })).some((e: { name: string }) => e.name.startsWith("."))).toBe(false);
+    for (const path of ["", ".viewswitcher", `${ORG}/../..`, "/etc", `${ORG}/.git`]) expect({ path, err: (await call("list_files", { path })).isError }).toEqual({ path, err: true });
+  });
+  test("read_file: the text and the same hash the scene editor uses", async () => {
+    const path = `${ORG}/templates/brb.html`;
+    const r = await data("read_file", { path });
+    const text = await readFile(join(root, path), "utf8");
+    expect(r).toEqual({ text, hash: sceneHash(text) });
+    expect(r.hash).toBe((await readForEdit(root, path)).hash);
+  });
+  test("read_file refuses binaries, pointing at /library/<path>", async () => {
+    await writeFile(join(root, ORG, "assets", "logo.png"), png);
+    const r = await call("read_file", { path: `${ORG}/assets/logo.png` });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain(`/library/${ORG}/assets/logo.png`);
+  });
+  test("read_file refuses dot-folders, other orgs' escapes and links out of the library", async () => {
+    await writeFile(join(outside, "secret.md"), "secret");
+    await symlink(join(outside, "secret.md"), join(root, ORG, "link.md"));
+    for (const path of [".viewswitcher/state.json", ".claude/skills/viewswitcher-scenes/SKILL.md", `${ORG}/../CLAUDE.md`, `${ORG}/link.md`, `${ORG}/.git/config`]) {
+      const r = await call("read_file", { path });
+      expect({ path, err: r.isError, leaked: r.text.includes("secret") && !r.text.includes("Bad path") }).toEqual({ path, err: true, leaked: false });
+    }
+  });
+  test("get_guide and viewswitcher://guide: the library's skill, else the kit's", async () => {
+    const mine = join(root, ".claude/skills/viewswitcher-scenes/SKILL.md");
+    const kit = await readFile(join(config.libraryKit, "skills/viewswitcher-scenes/SKILL.md"), "utf8");
+    expect((await call("get_guide")).text).toBe(await readFile(mine, "utf8"));
+    await writeFile(mine, "# My own scene rules\n");
+    expect((await call("get_guide")).text).toBe("# My own scene rules\n");
+    const res = await client.readResource({ uri: "viewswitcher://guide" });
+    expect(res.contents[0]).toMatchObject({ uri: "viewswitcher://guide", mimeType: "text/markdown", text: "# My own scene rules\n" });
+    await rm(mine);
+    expect((await call("get_guide")).text).toBe(kit);
+  });
+});
+
+describe("look tools", () => {
+  test("preview_scene returns the PNG and one line of text", async () => {
+    const r = await call("preview_scene", { path: `${ORG}/templates/brb.html` });
+    expect(r.isError).toBe(false);
+    expect(r.content[0]).toEqual({ type: "image", data: Buffer.from(png).toString("base64"), mimeType: "image/png" });
+    expect(r.text).toBe(`Preview of ${ORG}/templates/brb.html (960×540).`);
+  });
+  test("without a picture: the reason and the URL, as text, not an error", async () => {
+    previews.scene = { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview` };
+    const r = await call("preview_scene", { path: `${ORG}/templates/brb.html` });
+    expect(r.isError).toBe(false);
+    expect(r.text).toBe(`No picture: Previews need OBS. Preview of ${ORG}/templates/brb.html is at http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`);
+    expect(r.text).toContain(`http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`);
+    // A reason that already ends a sentence isn't given a second period.
+    previews.scene = { ok: false, reason: "OBS isn't connected. Open the URL in a browser at 1920×1080 if you can.", url: `http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview` };
+    expect((await call("preview_scene", { path: `${ORG}/templates/brb.html` })).text).toBe(
+      `No picture: OBS isn't connected. Open the URL in a browser at 1920×1080 if you can. Preview of ${ORG}/templates/brb.html is at http://127.0.0.1:${PORT}/library/${ORG}/templates/brb.html?preview`,
+    );
+    const p = await call("see_program");
+    expect(p.isError).toBe(false);
+    expect(p.text).toContain(`http://127.0.0.1:${PORT}/program`);
+  });
+  test("see_program returns OBS's output", async () => {
+    previews.program = { ok: true, png, width: 1920, height: 1080 };
+    const r = await call("see_program", { full: true });
+    expect(r.content[0]).toMatchObject({ type: "image", mimeType: "image/png" });
+    expect(r.text).toContain("1920×1080");
+  });
+  test("preview_scene of something that isn't a scene is refused", async () => {
+    expect((await call("preview_scene", { path: `${ORG}/templates/nope.html` })).text).toContain("There's no scene");
+    expect((await call("preview_scene", { path: `${ORG}/org.json` })).isError).toBe(true);
+  });
+});
+
+describe("write_file", () => {
+  const path = `${ORG}/templates/_shared/extra.css`;
+  test("creates a new file without a hash, then needs the current hash", async () => {
+    expect(await data("write_file", { path, text: "a{}" })).toEqual({ path, hash: sceneHash("a{}"), created: true });
+    const missing = await call("write_file", { path, text: "b{}" });
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain("read_file it first");
+    expect(missing.text).toContain(`current hash: ${sceneHash("a{}")}`);
+    const stale = await call("write_file", { path, text: "b{}", hash: sceneHash("old") });
+    expect(stale.text).toContain("changed since you read it");
+    expect(stale.text).toContain(`current hash: ${sceneHash("a{}")}`);
+    expect(await readFile(join(root, path), "utf8")).toBe("a{}");
+    expect(await data("write_file", { path, text: "b{}", hash: sceneHash("a{}") })).toEqual({ path, hash: sceneHash("b{}") });
+    expect(await readFile(join(root, path), "utf8")).toBe("b{}");
+    expect(await data("write_file", { path, text: "b{}", hash: sceneHash("b{}") })).toEqual({ path, hash: sceneHash("b{}"), unchanged: true });
+  });
+  test("a hash for a file that isn't there is refused", async () => {
+    expect((await call("write_file", { path: `${ORG}/templates/ghost.html`, text: "x", hash: "abc" })).text).toContain("doesn't exist any more");
+  });
+  test("makes missing folders inside an org", async () => {
+    await data("write_file", { path: `${ORG}/projects/new-folder/notes.md`, text: "# hi" });
+    expect(await readFile(join(root, ORG, "projects/new-folder/notes.md"), "utf8")).toBe("# hi");
+  });
+  test("text types only, 2 MB at most", async () => {
+    expect((await call("write_file", { path: `${ORG}/assets/x.png`, text: "x" })).text).toContain("Only text files");
+    expect((await call("write_file", { path: `${ORG}/run.sh`, text: "x" })).text).toContain("Only text files");
+    expect((await call("write_file", { path: `${ORG}/big.txt`, text: "x".repeat(2 * 1024 * 1024 + 1) })).text).toContain("over 2 MB");
+    for (const ext of ["css", "js", "json", "md", "svg", "txt"]) expect((await call("write_file", { path: `${ORG}/t.${ext}`, text: "x" })).isError).toBe(false);
+    expect((await call("write_file", { path: `${ORG}/templates/t.html`, text: "x" })).isError).toBe(false);
+  });
+  test("pages follow the template pack rules: lower-case .html, scene names, where scenes live", async () => {
+    const refused = async (path: string) => (await call("write_file", { path, text: "<title>X</title>" })).text;
+    expect(await refused(`${ORG}/templates/loud.HTML`)).toContain("lower-case .html");
+    expect(await refused(`${ORG}/templates/Big Title.html`)).toContain('"big-title.html"');
+    expect(await refused(`${ORG}/assets/page.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/templates/_shared/extra.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/page.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/projects/p/page.html`)).toContain("isn't where scenes go");
+    expect(await stat(join(root, ORG, "assets/page.html")).catch(() => null)).toBeNull();
+    // A folder in templates/ without a pack.json isn't a set: the switcher wouldn't list the scene.
+    expect(await refused(`${ORG}/templates/lower-thirds/intro.html`)).toContain("isn't a template set");
+    // A page that's there already is left as it is, even with an upper-case .HTML.
+    await writeFile(join(root, ORG, "templates/Intro.HTML"), "<title>Intro</title>");
+    const intro = await data("read_file", { path: `${ORG}/templates/Intro.HTML` });
+    expect((await call("write_file", { path: `${ORG}/templates/Intro.HTML`, text: "<title>Intro 2</title>", hash: intro.hash })).isError).toBe(false);
+    const { projectId } = await data("create_project", { org: ORG, name: "Pages" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Ep 1", date: "2026-12-07" });
+    for (const path of [
+      `${ORG}/templates/lower-third.html`,
+      `${ORG}/projects/${projectId}/scenes/intro-2.html`,
+      `${ORG}/projects/${projectId}/streams/${streamId}/halftime.html`,
+      `${ORG}/projects/${projectId}/transition.html`,
+    ]) expect({ path, err: (await call("write_file", { path, text: "<title>X</title>" })).isError }).toEqual({ path, err: false });
+    // A page that's there already keeps its name: only where new ones go is decided here.
+    await writeFile(join(root, ORG, "templates/Old Name.html"), "<title>Old</title>");
+    const { hash } = await data("read_file", { path: `${ORG}/templates/Old Name.html` });
+    expect((await call("write_file", { path: `${ORG}/templates/Old Name.html`, text: "<title>New</title>", hash })).isError).toBe(false);
+  });
+  test("never outside an existing org, in dot-folders or through links out of the library", async () => {
+    await symlink(outside, join(root, ORG, "out"));
+    for (const p of ["CLAUDE.md", ".viewswitcher/settings.json", `${ORG}/.git/config`, `${ORG}/templates/.hidden.css`, "nope/x.css", `${ORG}/../x.css`, `/${ORG}/x.css`, `${ORG}/out/x.css`, `${ORG}//x.css`]) {
+      expect({ p, err: (await call("write_file", { path: p, text: "x" })).isError }).toEqual({ p, err: true });
+    }
+    expect(await stat(join(outside, "x.css")).catch(() => null)).toBeNull();
+    expect(await stat(join(root, "nope")).catch(() => null)).toBeNull();
+  });
+});
+
+describe("structural tools", () => {
+  test("project, stream, scene from a template, stream copy, revert", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Live Demo", templates: ["teaching"] });
+    expect(projectId).toBe("live-demo");
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "First", date: "2026-12-04" });
+    expect(streamId).toBe("12-04-first");
+    expect(await data("scene_from_template", { org: ORG, template: "brb", projectId })).toEqual({ name: "brb", path: `${ORG}/projects/live-demo/scenes/brb.html` });
+    expect(await data("scene_from_template", { org: ORG, template: "brb", projectId, streamId })).toEqual({ name: "brb", path: `${ORG}/projects/live-demo/streams/12-04-first/brb.html` });
+    expect(await data("customize_scene", { org: ORG, projectId, streamId, name: "teaching" })).toEqual({ name: "teaching", path: `${ORG}/projects/live-demo/streams/12-04-first/teaching.html` });
+    expect(await data("revert_scene", { org: ORG, projectId, streamId, name: "teaching" })).toEqual({ ok: true });
+    expect(await stat(join(root, ORG, "projects/live-demo/streams/12-04-first/teaching.html")).catch(() => null)).toBeNull();
+    await data("scene_from_template", { org: ORG, template: "ending", projectId, streamId });
+    expect((await call("revert_scene", { org: ORG, projectId, streamId, name: "ending" })).text).toContain("Only an override");
+    expect((await call("scene_from_template", { org: ORG, template: "nope", projectId })).text).toContain("no template");
+    expect((await call("create_stream", { org: ORG, projectId: "nope", name: "x" })).text).toContain("no project");
+    expect((await call("customize_scene", { org: ORG, projectId, streamId: "nope", name: "teaching" })).text).toContain("no stream");
+  });
+  test("create_stream defaults to today", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Dated" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Now" });
+    const d = new Date();
+    expect(streamId).toBe(`${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}-now`);
+  });
+  test("duplicate and rename (with the hash rule)", async () => {
+    const dup = await data("duplicate_scene", { path: `${ORG}/templates/brb.html` });
+    expect(dup).toEqual({ name: "brb-copy", path: `${ORG}/templates/brb-copy.html` });
+    const { hash } = await data("read_file", { path: dup.path });
+    expect((await call("rename_scene", { path: dup.path, hash: "stale", name: "Back Soon" })).text).toContain(`current hash: ${hash}`);
+    const r = await data("rename_scene", { path: dup.path, hash, name: "Back Soon" });
+    expect(r.path).toBe(dup.path); // templates keep their file name
+    expect(r.hash).toBe((await data("read_file", { path: dup.path })).hash);
+    expect(await readFile(join(root, dup.path), "utf8")).toContain("<title>Back Soon</title>");
+  });
+  test("rename of a stream's own scene renames the file, and the on-air record follows", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Rename Show" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Ep", date: "2026-12-05" });
+    const { path } = await data("scene_from_template", { org: ORG, template: "brb", projectId, streamId });
+    await data("go_on_air", { path });
+    const { hash } = await data("read_file", { path });
+    const r = await data("rename_scene", { path, hash, name: "Coffee Break" });
+    expect(r.path).toBe(`${ORG}/projects/${projectId}/streams/${streamId}/coffee-break.html`);
+    expect(state.onAir).toMatchObject({ path: r.path, label: "Coffee Break · Ep", renamedFrom: path });
+  });
+  test("customize and revert a project's transition", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Trans" });
+    expect(await data("customize_transition", { org: ORG, projectId })).toEqual({ path: `${ORG}/projects/trans/transition.html` });
+    expect(await stat(join(root, ORG, "projects/trans/transition.html")).then((s) => s.isFile())).toBe(true);
+    expect(await data("revert_transition", { org: ORG, projectId })).toEqual({ ok: true });
+    expect(await stat(join(root, ORG, "projects/trans/transition.html")).catch(() => null)).toBeNull();
+  });
+  test("add_asset saves base64 into assets/, 15 MB at most", async () => {
+    const r = await data("add_asset", { org: ORG, name: "photo.png", base64: Buffer.from(png).toString("base64") });
+    expect(r).toEqual({ path: `${ORG}/assets/photo.png` });
+    expect(new Uint8Array(await readFile(join(root, r.path)))).toEqual(png);
+    expect((await data("add_asset", { org: ORG, name: "photo.png", base64: Buffer.from(png).toString("base64") })).path).toBe(`${ORG}/assets/photo-2.png`);
+    expect((await call("add_asset", { org: ORG, name: "big.png", base64: "A".repeat(21 * 1024 * 1024) })).text).toContain("over 15 MB");
+    expect((await call("add_asset", { org: ORG, name: "x.png", base64: "" })).isError).toBe(true);
+    expect((await call("add_asset", { org: "nope", name: "x.png", base64: "AAAA" })).text).toContain("no org");
+  });
+  test("structural tools never make a new org", async () => {
+    expect((await call("create_project", { org: "brand-new", name: "X" })).text).toContain("no org");
+    expect(await stat(join(root, "brand-new")).catch(() => null)).toBeNull();
+  });
+});
+
+describe("go_on_air and the agent guard", () => {
+  const brb = `${ORG}/templates/brb.html`;
+  test("not-live: goes on air when OBS isn't live, with the scene's label", async () => {
+    const s = await data("go_on_air", { path: brb });
+    expect(s.onAir).toMatchObject({ path: brb, org: ORG });
+    expect(state.onAir?.label).toBeTruthy();
+    expect(state.onAir?.label).not.toBe(brb);
+  });
+  test("not-live: refused while streaming or recording", async () => {
+    live();
+    const r = await call("go_on_air", { path: brb });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("streaming or recording");
+    expect(state.onAir).toBeNull();
+    state.obs = { connected: true, streaming: false, recording: true };
+    expect((await call("go_on_air", { path: brb })).isError).toBe(true);
+  });
+  test("never: always refused; always: allowed while live", async () => {
+    state.agent.onAir = "never";
+    expect((await call("go_on_air", { path: brb })).text).toContain("never put scenes on air");
+    state.agent.onAir = "always";
+    live();
+    expect((await call("go_on_air", { path: brb })).isError).toBe(false);
+  });
+  test("only scenes in the library's scene folders go on air", async () => {
+    expect((await call("go_on_air", { path: `${ORG}/templates/nope.html` })).isError).toBe(true);
+    await writeFile(join(root, ORG, "assets", "page.html"), "<title>x</title>");
+    expect((await call("go_on_air", { path: `${ORG}/assets/page.html` })).text).toContain("Only an org's templates");
+  });
+  test("while live, writes to the on-air scene, its transitions and _shared are refused with a way around", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Guarded", templates: ["teaching"] });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Live", date: "2026-12-06" });
+    const copy = await data("customize_scene", { org: ORG, projectId, streamId, name: "teaching" });
+    await data("go_on_air", { path: copy.path });
+    const { hash } = await data("read_file", { path: copy.path });
+    const shared = await data("read_file", { path: `${ORG}/templates/_shared/transition.html` });
+    live();
+    const refusals = [
+      await call("write_file", { path: copy.path, text: "x", hash }),
+      await call("rename_scene", { path: copy.path, hash, name: "Other" }),
+      await call("revert_scene", { org: ORG, projectId, streamId, name: "teaching" }),
+      await call("customize_transition", { org: ORG, projectId }),
+      await call("write_file", { path: `${ORG}/templates/_shared/transition.html`, text: "x", hash: shared.hash }),
+      await call("write_file", { path: `${ORG}/templates/_shared/new.css`, text: "x" }),
+    ];
+    // The same file by another spelling (the Mac's disk ignores case) or through a link.
+    await symlink(join(root, copy.path), join(root, ORG, "templates", "alias.html"));
+    refusals.push(await call("write_file", { path: copy.path.replace("teaching", "Teaching"), text: "x", hash }));
+    refusals.push(await call("write_file", { path: `${ORG}/templates/alias.html`, text: "x", hash }));
+    for (const r of refusals) expect({ err: r.isError, why: /you're live/.test(r.text), instead: /customize_scene|Wait until the stream ends|wait until the stream ends/.test(r.text) }).toEqual({ err: true, why: true, instead: true });
+    expect(refusals[0]!.text).toBe("That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.");
+    expect(await readFile(join(root, copy.path), "utf8")).not.toBe("x");
+    expect(await stat(join(root, ORG, `projects/${projectId}/transition.html`)).catch(() => null)).toBeNull();
+    // Everything else is fine while live.
+    expect((await call("duplicate_scene", { path: copy.path })).isError).toBe(false);
+    expect((await call("write_file", { path: `${ORG}/templates/teaching.html`, text: "x", hash: (await data("read_file", { path: `${ORG}/templates/teaching.html` })).hash })).isError).toBe(false);
+    // Off air again, the same writes go through.
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await call("write_file", { path: copy.path, text: "<title>T</title>", hash })).isError).toBe(false);
+  });
+});
+
+describe("structural tools stay inside the library (CodeRabbit)", () => {
+  test("duplicate_scene of a link to a file outside is refused; a link inside still copies", async () => {
+    await writeFile(join(outside, "elsewhere.html"), "<title>Secret</title>");
+    await symlink(join(outside, "elsewhere.html"), join(root, ORG, "templates", "linked-out.html"));
+    const r = await call("duplicate_scene", { path: `${ORG}/templates/linked-out.html` });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+    expect(await stat(join(root, ORG, "templates/linked-out-copy.html")).catch(() => null)).toBeNull();
+    await symlink(join(root, ORG, "templates/brb.html"), join(root, ORG, "templates", "linked-in.html"));
+    expect((await data("duplicate_scene", { path: `${ORG}/templates/linked-in.html` })).path).toBe(`${ORG}/templates/linked-in-copy.html`);
+    // A leading slash isn't an org path.
+    expect((await call("duplicate_scene", { path: `/${ORG}/templates/brb.html` })).isError).toBe(true);
+  });
+  test("a destination folder linked outside the library is refused", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Linked", templates: [] });
+    await rm(join(root, ORG, "projects", projectId, "streams"), { recursive: true, force: true });
+    await symlink(outside, join(root, ORG, "projects", projectId, "streams"));
+    const r = await call("create_stream", { org: ORG, projectId, name: "Out", date: "2026-12-08" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+  });
+  test("create_project won't copy a template linked outside; add_asset won't write into an assets folder linked outside", async () => {
+    await writeFile(join(outside, "tpl.html"), "<title>Outside</title>");
+    await symlink(join(outside, "tpl.html"), join(root, ORG, "templates", "linked-tpl.html"));
+    const r = await call("create_project", { org: ORG, name: "From linked", templates: ["linked-tpl"] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+    // An org whose assets/ is a link out of the library (made by hand, or a pack).
+    const { mkdir, cp } = await import("node:fs/promises");
+    await mkdir(join(root, "linked-org"), { recursive: true });
+    await cp(join(root, ORG, "org.json"), join(root, "linked-org", "org.json"));
+    await symlink(outside, join(root, "linked-org", "assets"));
+    const before = (await readdir(outside)).length;
+    const a = await call("add_asset", { org: "linked-org", name: "x.svg", base64: Buffer.from("<svg/>").toString("base64") });
+    expect(a.isError).toBe(true);
+    expect((await readdir(outside)).length).toBe(before);
+  });
+  test("the switcher's own Duplicate (library-actions) won't copy a scene linked outside either", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    await expect(duplicateScene(root, `${ORG}/templates/linked-out.html`)).rejects.toThrow("outside the library");
+  });
+  test("two add_asset uploads with the same name at once get two files", async () => {
+    const b64 = (t: string) => Buffer.from(t).toString("base64");
+    const [a, b] = await Promise.all([data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>a</svg>") }), data("add_asset", { org: ORG, name: "twin.svg", base64: b64("<svg>b</svg>") })]);
+    expect(a.path).not.toBe(b.path);
+    const texts = [await readFile(join(root, a.path), "utf8"), await readFile(join(root, b.path), "utf8")].sort();
+    expect(texts).toEqual(["<svg>a</svg>", "<svg>b</svg>"]);
+  });
+});
+
+describe("template sets (installed template packs)", () => {
+  test("scene_from_template, create_project and go_on_air take a set's template as <set>/<view>", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "templates", "neon"), { recursive: true });
+    await writeFile(join(root, ORG, "templates/neon/pack.json"), JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "x", views: ["glow"] }));
+    await writeFile(join(root, ORG, "templates/neon/glow.html"), "<title>Glow</title>");
+    const lib = await data("scan_library", { org: ORG });
+    expect(lib.sets.map((x: { id: string }) => x.id)).toContain("neon");
+    const { projectId } = await data("create_project", { org: ORG, name: "Neon show", templates: ["neon/glow"] });
+    const made = await data("scene_from_template", { org: ORG, template: "neon/glow", projectId });
+    expect(made.path).toStartWith(`${ORG}/projects/${projectId}/scenes/glow`);
+    expect((await call("scene_from_template", { org: ORG, template: "neon/nope", projectId })).text).toContain('no template "neon/nope"');
+    await data("go_on_air", { path: `${ORG}/templates/neon/glow.html` });
+    expect(state.onAir).toMatchObject({ path: `${ORG}/templates/neon/glow.html`, label: "Glow" });
+  });
+});
+
+describe("built-in template sets (the switcher's Add templates)", () => {
+  test("list, add by name, then a scene from one of its views in a stream", async () => {
+    const sets = await data("list_template_sets");
+    const grace = sets.find((s: { id: string }) => s.id === "grace");
+    expect(grace).toMatchObject({ name: "Grace Community" });
+    expect(grace.views.length).toBeGreaterThan(2);
+    expect(sets.map((s: { id: string }) => s.id)).toContain("starter");
+    const added = await data("add_template_set", { org: ORG, set: "Grace Community" });
+    expect(added.set).toBe("grace");
+    expect(added.templates).toContain(`grace/${grace.views[0]}`);
+    // Installed as the switcher installs it: its own set, filled in with the org's name.
+    const lib = await data("scan_library", { org: ORG });
+    expect(lib.sets.map((x: { id: string }) => x.id)).toContain("grace");
+    const html = await readFile(join(root, ORG, `templates/grace/${grace.views[0]}.html`), "utf8");
+    expect(html).not.toContain("{{");
+    // Nothing left in staging.
+    expect(await readdir(join(root, ORG, ".viewswitcher/staging")).catch(() => [])).toEqual([]);
+    // Again: a second copy, never over the first.
+    expect((await data("add_template_set", { org: ORG, set: "grace" })).set).toBe("grace-2");
+    expect((await data("list_template_sets", { org: ORG })).find((s: { id: string }) => s.id === "grace").added).toEqual(["grace", "grace-2"]);
+    const { projectId } = await data("create_project", { org: ORG, name: "Sunday service" });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Advent 1", date: "2026-11-29" });
+    const made = await data("scene_from_template", { org: ORG, template: `grace/${grace.views[0]}`, projectId, streamId });
+    expect(made.path).toStartWith(`${ORG}/projects/${projectId}/streams/${streamId}/`);
+    expect((await call("add_template_set", { org: ORG, set: "nope" })).text).toContain("list_template_sets shows them");
+    expect((await call("add_template_set", { org: "nope", set: "grace" })).isError).toBe(true);
+  });
+  test("under the agent on-air guard like every write: refused while live when what's on air can't all be checked", async () => {
+    const scene = `${ORG}/templates/busy.html`;
+    await writeFile(join(root, scene), `<title>Busy</title>${Array.from({ length: 201 }, (_, i) => `<img src="../assets/p${i}.png">`).join("")}`);
+    await data("go_on_air", { path: scene });
+    live();
+    const r = await call("add_template_set", { org: ORG, set: "nova" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("loads more files than ViewSwitcher checks");
+    expect(await stat(join(root, ORG, "templates/nova")).catch(() => null)).toBeNull();
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await data("add_template_set", { org: ORG, set: "nova" })).set).toBe("nova");
+  });
+});
+
+describe("go_on_air for a stream", () => {
+  test("a project scene a stream shares goes on air for that stream, as the stream page does", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Shared", templates: ["teaching", "brb"] });
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Sunday", date: "2026-12-07" });
+    const teaching = `${ORG}/projects/${projectId}/scenes/teaching.html`;
+    await data("go_on_air", { path: teaching, streamId });
+    expect(state.onAir).toMatchObject({ path: teaching, projectId, streamId });
+    expect(state.onAir!.label).toEndWith(" · Sunday");
+    // Without streamId it's the project's scene, as before.
+    await data("go_on_air", { path: teaching });
+    expect(state.onAir!.streamId).toBeUndefined();
+    // A stream with its own copy: that copy goes on air, not the project's.
+    const copy = await data("customize_scene", { org: ORG, projectId, streamId, name: "teaching" });
+    const r = await call("go_on_air", { path: teaching, streamId });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain(copy.path);
+    expect((await call("go_on_air", { path: teaching, streamId: "nope" })).text).toContain('no stream "nope"');
+  });
+});
+
+describe("the guard covers what the scene on air loads, and is checked again as a change commits", () => {
+  test("while live, files the on-air scene loads (pictures, stylesheets, through its theme) are refused; others aren't", async () => {
+    await writeFile(join(root, ORG, "assets/live-logo.svg"), "<svg/>");
+    await writeFile(join(root, ORG, "assets/spare.svg"), "<svg/>");
+    await writeFile(join(root, ORG, "assets/live.css"), ".x { background: url(tex.svg) }");
+    await writeFile(join(root, ORG, "assets/tex.svg"), "<svg/>");
+    const scene = `${ORG}/templates/live-scene.html`;
+    await writeFile(join(root, scene), `<title>Live</title><link rel="stylesheet" href="/library/${ORG}/assets/live.css"><img src="../assets/live-logo.svg"><img src="/library/${ORG}/assets/soon.png">`);
+    await data("go_on_air", { path: scene });
+    const hashOf = async (p: string) => (await data("read_file", { path: p })).hash;
+    const [logo, css, tex, spare] = [await hashOf(`${ORG}/assets/live-logo.svg`), await hashOf(`${ORG}/assets/live.css`), await hashOf(`${ORG}/assets/tex.svg`), await hashOf(`${ORG}/assets/spare.svg`)];
+    live();
+    for (const [path, hash] of [[`${ORG}/assets/live-logo.svg`, logo], [`${ORG}/assets/live.css`, css], [`${ORG}/assets/tex.svg`, tex]] as const) {
+      const r = await call("write_file", { path, text: "<svg>new</svg>", hash });
+      expect({ path, err: r.isError, text: r.text }).toEqual({ path, err: true, text: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends." });
+    }
+    expect(await readFile(join(root, ORG, "assets/live-logo.svg"), "utf8")).toBe("<svg/>");
+    // A picture the scene asks for but that isn't there yet would show the moment it's created.
+    expect((await call("add_asset", { org: ORG, name: "soon.png", base64: Buffer.from("png").toString("base64") })).isError).toBe(true);
+    // An upload whose name is taken gets a free name, so it never replaces what's on air.
+    expect((await data("add_asset", { org: ORG, name: "live-logo.svg", base64: Buffer.from("<svg/>").toString("base64") })).path).not.toBe(`${ORG}/assets/live-logo.svg`);
+    expect((await call("write_file", { path: `${ORG}/assets/spare.svg`, text: "<svg>new</svg>", hash: spare })).isError).toBe(false);
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await call("write_file", { path: `${ORG}/assets/live-logo.svg`, text: "<svg>new</svg>", hash: logo })).isError).toBe(false);
+  });
+  test("go_on_air: OBS going live while the scene is looked up stops it", async () => {
+    beforeCommit = live;
+    const r = await call("go_on_air", { path: `${ORG}/templates/brb.html` });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("streaming or recording");
+    expect(state.onAir).toBeNull();
+  });
+  test("go_on_air: the setting changed to never in the meantime stops it", async () => {
+    beforeCommit = () => (state.agent.onAir = "never");
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("never put scenes on air");
+    expect(state.onAir).toBeNull();
+  });
+  test("writeText runs beforeWrite in turn, after the hash check and before writing; a throw writes nothing", async () => {
+    const p = `${ORG}/templates/queued.html`;
+    await writeFile(join(root, p), "<title>A</title>");
+    const order: string[] = [];
+    const refuse = () => {
+      order.push("check");
+      throw new Error("live now");
+    };
+    expect(writeText(root, p, "<title>B</title>", sceneHash("<title>A</title>"), { beforeWrite: refuse })).rejects.toThrow("live now");
+    expect(writeText(root, `${ORG}/templates/queued-new.html`, "x", undefined, { beforeWrite: refuse })).rejects.toThrow("live now");
+    await Bun.sleep(10);
+    expect(order).toEqual(["check", "check"]);
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>A</title>");
+    expect(await stat(join(root, ORG, "templates/queued-new.html")).catch(() => null)).toBeNull();
+    // A stale hash is refused before the check runs.
+    expect((await writeText(root, p, "x", "stale", { beforeWrite: refuse })).ok).toBe(false);
+    expect(order.length).toBe(2);
+  });
+  test("atCommit runs after beforeWrite and the staging, right before the rename: going live in between still refuses", async () => {
+    const p = `${ORG}/templates/race.html`;
+    await writeFile(join(root, p), "<title>A</title>");
+    let live = false;
+    const r = writeText(root, p, "<title>B</title>", sceneHash("<title>A</title>"), {
+      beforeWrite: () => void (live = true), // OBS goes live during the replacement
+      atCommit: () => {
+        if (live) throw new Error("live at commit");
+      },
+    });
+    await expect(r).rejects.toThrow("live at commit");
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>A</title>");
+    // No staged copy is left beside it.
+    expect((await readdir(join(root, ORG, "templates"))).filter((f) => f.startsWith(".race.html"))).toEqual([]);
+  });
+  test("write_file: the scene going on air while live during the write is refused at commit", async () => {
+    const p = `${ORG}/templates/late.html`;
+    await writeFile(join(root, p), "<title>Late</title>");
+    const { hash } = await data("read_file", { path: p });
+    // The scene goes on air and OBS goes live after write_file's first check, before the rename.
+    let flips = 0;
+    const realState = state;
+    const onAir = await onAirFor(root, { path: p, label: "Late" });
+    const proxy = new Proxy(realState, {
+      get(t, k) {
+        if (k === "onAir" && ++flips > 1) {
+          t.onAir = onAir;
+          t.obs = { connected: true, streaming: true, recording: false };
+        }
+        return Reflect.get(t, k);
+      },
+    });
+    state = proxy;
+    const res = await call("write_file", { path: p, text: "<title>Changed</title>", hash });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain("on air and you're live");
+    expect(await readFile(join(root, p), "utf8")).toBe("<title>Late</title>");
+  });
+});
+
+describe("CodeRabbit follow-ups", () => {
+  test("write_file: a file the scene on air loads, with OBS going live between the in-turn check and the commit, is refused", async () => {
+    await writeFile(join(root, ORG, "assets/race.css"), ".a{}");
+    const scene = `${ORG}/templates/race-scene.html`;
+    await writeFile(join(root, scene), `<title>R</title><link rel="stylesheet" href="/library/${ORG}/assets/race.css">`);
+    await data("go_on_air", { path: scene });
+    const { hash } = await data("read_file", { path: `${ORG}/assets/race.css` });
+    atCommit = live; // OBS goes live at the commit instant, after the in-turn check passed while idle
+    const r = await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:blue}", hash });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("The scene on air uses that file");
+    expect(await readFile(join(root, ORG, "assets/race.css"), "utf8")).toBe(".a{}");
+  });
+  test("write_file: at the commit, while live, a change to what's on air, to the on-air scene's text, or to the setting refuses the write", async () => {
+    await writeFile(join(root, ORG, "assets/late.css"), ".b{}");
+    await writeFile(join(root, ORG, "templates/stamp-a.html"), "<title>A</title>");
+    await writeFile(join(root, ORG, "templates/stamp-b.html"), "<title>B</title>");
+    const write = async () => {
+      const { hash } = await data("read_file", { path: `${ORG}/assets/late.css` });
+      return call("write_file", { path: `${ORG}/assets/late.css`, text: `.b{x:${Math.random()}}`, hash });
+    };
+    // Something else goes on air at the commit instant.
+    await data("go_on_air", { path: `${ORG}/templates/stamp-a.html` });
+    live();
+    const b = await onAirFor(root, { path: `${ORG}/templates/stamp-b.html`, label: "B" });
+    atCommit = () => (state.onAir = b);
+    expect((await write()).text).toContain("What's on air changed while this was being written");
+    // The scene on air is saved so it now loads late.css, at the commit instant.
+    atCommit = () => void writeFileSync(join(root, ORG, "templates/stamp-b.html"), `<title>B</title><link rel="stylesheet" href="/library/${ORG}/assets/late.css">`);
+    expect((await write()).text).toContain("What's on air changed while this was being written");
+    // The setting changes from Always to When not live at the commit instant.
+    state.agent.onAir = "always";
+    atCommit = () => (state.agent.onAir = "not-live");
+    expect((await write()).text).toContain("The agent on-air setting changed while this was being written");
+    expect(await readFile(join(root, ORG, "assets/late.css"), "utf8")).toBe(".b{}");
+    // With Always, and nothing changing at the commit, the write goes through while live.
+    atCommit = null;
+    state.agent.onAir = "always";
+    expect((await write()).isError).toBe(false);
+  });
+  test("the switcher's Duplicate: a copy never lands in a folder linked outside, and a leading slash is refused", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    const { mkdir } = await import("node:fs/promises");
+    // A folder that links outside, holding a link back to a scene inside the library.
+    await mkdir(join(outside, "escape"), { recursive: true });
+    await symlink(join(outside, "escape"), join(root, ORG, "templates", "escape"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(outside, "escape", "back.html"));
+    await expect(duplicateScene(root, `${ORG}/templates/escape/back.html`)).rejects.toThrow("outside the library");
+    expect((await readdir(join(outside, "escape"))).sort()).toEqual(["back.html"]);
+    await expect(duplicateScene(root, `/${ORG}/templates/brb.html`)).rejects.toThrow("Paths start with the org id");
+  });
+});
+
+describe("dangling links where a new file would go (CodeRabbit)", () => {
+  test("Duplicate (MCP and the switcher's), New scene from a template and a stream copy never write through one", async () => {
+    const { duplicateScene } = await import("../library-actions");
+    const nowhere = (name: string) => join(outside, `dangling-${name}`);
+    // x-copy.html is a link to a file outside the library that doesn't exist yet.
+    await writeFile(join(root, ORG, "templates/dang.html"), "<title>Dang</title>");
+    await symlink(nowhere("copy.html"), join(root, ORG, "templates/dang-copy.html"));
+    const viaMcp = await data("duplicate_scene", { path: `${ORG}/templates/dang.html` });
+    expect(viaMcp.path).toBe(`${ORG}/templates/dang-copy-2.html`);
+    expect((await duplicateScene(root, `${ORG}/templates/dang.html`)).path).toBe(`${ORG}/templates/dang-copy-3.html`);
+    // A template copied where a dangling link has its name.
+    const { projectId } = await data("create_project", { org: ORG, name: "Dangling", templates: [] });
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "projects", projectId, "scenes"), { recursive: true });
+    await symlink(nowhere("brb.html"), join(root, ORG, "projects", projectId, "scenes/brb.html"));
+    expect((await data("scene_from_template", { org: ORG, template: "brb", projectId })).path).toBe(`${ORG}/projects/${projectId}/scenes/brb-2.html`);
+    // A stream copy where a dangling link has the copy's name: refused, nothing written outside.
+    await writeFile(join(root, ORG, "projects", projectId, "scenes/teach.html"), "<title>T</title>");
+    const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Dangle", date: "2026-12-09" });
+    await symlink(nowhere("teach.html"), join(root, ORG, "projects", projectId, "streams", streamId, "teach.html"));
+    expect((await call("customize_scene", { org: ORG, projectId, streamId, name: "teach" })).isError).toBe(true);
+    for (const n of ["copy.html", "brb.html", "teach.html"]) expect(await stat(nowhere(n)).catch(() => null)).toBeNull();
+  });
+});
+
+describe("destination folders linked outside, with a name that links back in (CodeRabbit)", () => {
+  test("add_asset, scene_from_template and create_project refuse; nothing is written outside", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const away = join(outside, "away");
+    await mkdir(join(away, "assets"), { recursive: true });
+    await mkdir(join(away, "scenes"), { recursive: true });
+    // An org whose assets/ links outside, holding a name that links back into the library.
+    await mkdir(join(root, "away-org"), { recursive: true });
+    await writeFile(join(root, "away-org/org.json"), await readFile(join(root, ORG, "org.json"), "utf8"));
+    await symlink(join(away, "assets"), join(root, "away-org/assets"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(away, "assets/back.svg"));
+    expect((await call("add_asset", { org: "away-org", name: "back.svg", base64: Buffer.from("<svg/>").toString("base64") })).isError).toBe(true);
+    // A project whose scenes/ links outside, with brb.html in it linking back in.
+    const { projectId } = await data("create_project", { org: ORG, name: "Away", templates: [] });
+    await rm(join(root, ORG, "projects", projectId, "scenes"), { recursive: true, force: true });
+    await symlink(join(away, "scenes"), join(root, ORG, "projects", projectId, "scenes"));
+    await symlink(join(root, ORG, "templates/brb.html"), join(away, "scenes/brb.html"));
+    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).isError).toBe(true);
+    expect((await readdir(join(away, "assets"))).sort()).toEqual(["back.svg"]);
+    expect((await readdir(join(away, "scenes"))).sort()).toEqual(["brb.html"]);
+  });
+  test("create_project and create_stream: a projects/ or streams/ folder linked outside, with the new name linking back in, is refused", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const away = join(outside, "away-projects");
+    await mkdir(away, { recursive: true });
+    // An org whose projects/ links outside, holding "show" that links back to a folder in the library.
+    await mkdir(join(root, "proj-org"), { recursive: true });
+    await writeFile(join(root, "proj-org/org.json"), await readFile(join(root, ORG, "org.json"), "utf8"));
+    await mkdir(join(root, "proj-org/templates"), { recursive: true });
+    await symlink(away, join(root, "proj-org/projects"));
+    await symlink(join(root, ORG, "templates"), join(away, "show"));
+    expect((await call("create_project", { org: "proj-org", name: "Show", templates: [] })).isError).toBe(true);
+    expect((await readdir(away)).sort()).toEqual(["show"]);
+    // A project whose streams/ links outside.
+    const { projectId } = await data("create_project", { org: ORG, name: "Streams away", templates: [] });
+    const awayStreams = join(outside, "away-streams");
+    await mkdir(awayStreams, { recursive: true });
+    await rm(join(root, ORG, "projects", projectId, "streams"), { recursive: true, force: true });
+    await symlink(awayStreams, join(root, ORG, "projects", projectId, "streams"));
+    expect((await call("create_stream", { org: ORG, projectId, name: "Out", date: "2026-12-10" })).isError).toBe(true);
+    expect(await readdir(awayStreams)).toEqual([]);
+  });
+  test("a template set's template linked outside the library isn't copied", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(root, ORG, "templates", "far"), { recursive: true });
+    await writeFile(join(root, ORG, "templates/far/pack.json"), JSON.stringify({ format: 1, id: "far", name: "Far", version: "1.0.0", description: "x", views: ["v"] }));
+    await writeFile(join(outside, "far-v.html"), "<title>Outside</title>");
+    await symlink(join(outside, "far-v.html"), join(root, ORG, "templates/far/v.html"));
+    const r = await call("create_project", { org: ORG, name: "Far show", templates: ["far/v"] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("outside the library");
+  });
+});
+
+describe("CodeRabbit pass 3: the guard sees the file really made, a changed dependency, a cut-short scan, and unknown OBS status", () => {
+  const onAirWith = async (name: string, html: string) => {
+    await writeFile(join(root, ORG, `templates/${name}.html`), html);
+    await data("go_on_air", { path: `${ORG}/templates/${name}.html` });
+  };
+  test("add_asset: a taken name gets a free one, and that one is guarded (the scene on air asks for it); an unasked-for one is fine", async () => {
+    await writeFile(join(root, ORG, "assets/pick.png"), "png");
+    await onAirWith("asks-pick2", `<title>P</title><img src="/library/${ORG}/assets/pick-2.png">`);
+    live();
+    const b64 = Buffer.from("png").toString("base64");
+    const r = await call("add_asset", { org: ORG, name: "pick.png", base64: b64 });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("The scene on air uses that file");
+    expect(await stat(join(root, ORG, "assets/pick-2.png")).catch(() => null)).toBeNull();
+    expect((await data("add_asset", { org: ORG, name: "other.png", base64: b64 })).path).toBe(`${ORG}/assets/other.png`);
+  });
+  test("scene_from_template and duplicate_scene: the free name they pick is guarded", async () => {
+    const { projectId } = await data("create_project", { org: ORG, name: "Picks", templates: ["brb"] }); // scenes/brb.html now exists
+    await writeFile(join(root, ORG, "templates/intro.html"), "<title>I</title>");
+    await writeFile(join(root, ORG, "templates/intro-copy.html"), "<title>I copy</title>");
+    await onAirWith("asks-copies", `<title>C</title><iframe src="/library/${ORG}/projects/${projectId}/scenes/brb-2.html"></iframe><iframe src="intro-copy-2.html"></iframe>`);
+    live();
+    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).text).toContain("The scene on air uses that file");
+    expect((await call("duplicate_scene", { path: `${ORG}/templates/intro.html` })).text).toContain("The scene on air uses that file");
+    expect(await stat(join(root, ORG, `projects/${projectId}/scenes/brb-2.html`)).catch(() => null)).toBeNull();
+    expect(await stat(join(root, ORG, "templates/intro-copy-2.html")).catch(() => null)).toBeNull();
+  });
+  test("write_file: a stylesheet the scene loads changing mid-write (so it now uses the file) refuses the live write", async () => {
+    await writeFile(join(root, ORG, "assets/dep.css"), ".a{}");
+    await writeFile(join(root, ORG, "assets/dep-logo.svg"), "<svg/>");
+    await onAirWith("dep-scene", `<title>D</title><link rel="stylesheet" href="/library/${ORG}/assets/dep.css">`);
+    live();
+    const { hash } = await data("read_file", { path: `${ORG}/assets/dep-logo.svg` });
+    atCommit = () => void writeFileSync(join(root, ORG, "assets/dep.css"), ".a{background:url(dep-logo.svg)}");
+    const r = await call("write_file", { path: `${ORG}/assets/dep-logo.svg`, text: "<svg>new</svg>", hash });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("What's on air changed while this was being written");
+    expect(await readFile(join(root, ORG, "assets/dep-logo.svg"), "utf8")).toBe("<svg/>");
+    // Nothing changing: an unrelated file is fine while live.
+    atCommit = null;
+    await writeFile(join(root, ORG, "assets/unrelated.svg"), "<svg/>");
+    const u = await data("read_file", { path: `${ORG}/assets/unrelated.svg` });
+    expect((await call("write_file", { path: `${ORG}/assets/unrelated.svg`, text: "<svg>x</svg>", hash: u.hash })).isError).toBe(false);
+  });
+  test("a scene that loads more than the scan follows: every live write is refused", async () => {
+    const many = Array.from({ length: 205 }, (_, i) => `<img src="/library/${ORG}/assets/m${i}.png">`).join("");
+    await onAirWith("too-many", `<title>M</title>${many}`);
+    live();
+    await writeFile(join(root, ORG, "assets/free.svg"), "<svg/>");
+    const { hash } = await data("read_file", { path: `${ORG}/assets/free.svg` });
+    const r = await call("write_file", { path: `${ORG}/assets/free.svg`, text: "<svg>x</svg>", hash });
+    expect(r.text).toContain("loads more files than ViewSwitcher checks");
+    state.obs = { connected: true, streaming: false, recording: false };
+    expect((await call("write_file", { path: `${ORG}/assets/free.svg`, text: "<svg>x</svg>", hash })).isError).toBe(false);
+  });
+  test("OBS connected but not yet saying whether it's live counts as live for agents", async () => {
+    state.obs = { connected: true, streaming: false, recording: false };
+    outputsKnown = false;
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("streaming or recording");
+    outputsKnown = true;
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).isError).toBe(false);
+  });
+});
+
+describe("no absolute paths", () => {
+  test("no result, refusal or error has the library's path in it", async () => {
+    await call("read_file", { path: `${ORG}/templates/missing.html` });
+    await call("customize_transition", { org: ORG, projectId: "nope" });
+    await call("list_files", { path: `${ORG}/nope` });
+    expect(seen.length).toBeGreaterThan(50);
+    for (const s of seen) {
+      expect(s.includes(root)).toBe(false);
+      expect(s.includes(realRoot)).toBe(false);
+      expect(s.includes(outside)).toBe(false);
+    }
+  });
+});
+

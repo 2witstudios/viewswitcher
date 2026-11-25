@@ -220,4 +220,20 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
       expect(String(r.headers["content-security-policy"])).toContain("sandbox");
     }
   });
+
+  test("a paired phone still can't reach the agents' /mcp, /api/info, /api/agent/clients or the .mcpb (MCP-2)", async () => {
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const cookie = cookieOf(await pairWith(code.code));
+    expect((await lan("/api/state", { headers: { cookie } })).status).toBe(200); // paired: the switcher works
+    const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "phone", version: "1" } } });
+    const r = await lan("/mcp", { method: "POST", headers: { cookie, "content-type": "application/json", accept: "application/json, text/event-stream", origin: `http://${ip}:${port}` }, body: init });
+    expect(r.status).toBe(404);
+    expect(r.body).not.toContain("serverInfo");
+    for (const path of ["/api/info", "/api/agent/clients", "/api/agent/viewswitcher.mcpb"]) {
+      const res = await lan(path, { headers: { cookie } });
+      expect({ path, status: res.status }).toEqual({ path, status: 404 });
+      expect(res.body).not.toContain(library);
+    }
+  });
 });
+

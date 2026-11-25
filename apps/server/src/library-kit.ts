@@ -1,6 +1,6 @@
-// First run and upkeep of the library folder: the library kit (agent skill, CLAUDE.md, .gitignore),
-// a git repo for a brand-new library, and a first org. Safe on every start: a library that already
-// has everything is left exactly as it is. See library-kit/README.md.
+// First run and upkeep of the library folder: the library kit (agent skill, CLAUDE.md, AGENTS.md,
+// MCP configs, .gitignore), a git repo for a brand-new library, and a first org. Safe on every start:
+// a library that already has everything is left exactly as it is. See library-kit/README.md.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
@@ -12,6 +12,11 @@ export const KIT_FILES: { from: string; to: string }[] = [
   { from: "library-CLAUDE.md", to: "CLAUDE.md" },
   { from: "library-gitignore", to: ".gitignore" },
   { from: "skills/viewswitcher-scenes/SKILL.md", to: ".claude/skills/viewswitcher-scenes/SKILL.md" },
+  // Agents other than Claude Code read AGENTS.md; the MCP configs connect Claude Code and Cursor
+  // to the switcher when they're opened in the library.
+  { from: "library-AGENTS.md", to: "AGENTS.md" },
+  { from: "library-mcp.json", to: ".mcp.json" },
+  { from: "library-cursor-mcp.json", to: ".cursor/mcp.json" },
 ];
 
 export const FIRST_ORG = "My channel";

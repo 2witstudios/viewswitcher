@@ -195,6 +195,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switcher?.show()
     }
 
+    /// The switcher's Edit with AI sheet (MCP-10): connect an agent, the agent on-air setting.
+    @objc func editWithAI() {
+        openWindow()
+        switcher?.openAgentSheet()
+    }
+
     // ------------------------------------------------------------ menu bar (MAC-12)
 
     var status: MenuStatus { MenuStatus(server == nil ? nil : live) }
@@ -229,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for line in [s.onAir, s.obs, s.ipad] { m.addItem(item(line, nil, enabled: false)) }
         m.addItem(.separator())
         m.addItem(item("Open ViewSwitcher", #selector(openWindow)))
+        m.addItem(item("Edit with AI…", #selector(editWithAI), enabled: server != nil))
         m.addItem(item("Open in Browser", #selector(openInBrowser), enabled: server != nil))
         m.addItem(item("Open Library Folder", #selector(openLibrary), enabled: server != nil))
         m.addItem(item(s.obsReady ? "Set Up OBS Again" : "Set Up OBS…", #selector(setUpObs), enabled: live?.obs.connected == true && server != nil))

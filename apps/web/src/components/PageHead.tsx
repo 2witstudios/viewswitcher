@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { api } from "../lib/api";
 import { appLink, useLive } from "../lib/live";
+import { openAgentSheet, SparkleIcon } from "./AgentSheet";
 import { PencilIcon, useOpenEditor } from "./SceneTile";
 import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
@@ -22,6 +23,9 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
             <span className="dot" />
             {connected ? (onAir ? `On air: ${onAir.label}` : "Nothing on air") : "Reconnecting…"}
           </span>
+          <button type="button" className="out-btn ai-btn" onClick={openAgentSheet}>
+            <SparkleIcon />EDIT WITH AI
+          </button>
           {onAir && connected && (
             <button type="button" className="out-btn edit-onair" aria-label={`Edit ${onAir.label}, on air`} onClick={() => openEditor(onAir.path)}>
               <PencilIcon />EDIT

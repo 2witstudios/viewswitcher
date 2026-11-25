@@ -1,0 +1,21 @@
+---
+// Free on the Mac: price and download in one place (#download, which the header and other pages link to).
+import Cta from "./Cta.astro";
+import { site } from "../site.config";
+import { IPAD_PRICE } from "../lib/cta";
+---
+<section class="section" id="download" aria-labelledby="download-title">
+  <div class="wrap row">
+    <div class="copy">
+      <h2 id="download-title">Free on the Mac</h2>
+      <p class="lede">No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later, OBS (free) and a camera. <a href="/ipad">The iPad app</a> is {IPAD_PRICE} once, if you want one.</p>
+      <p class="quiet">Version {site.mac.version} · Apple silicon and Intel · <a href="/download">Install steps and what's new</a></p>
+    </div>
+    <Cta />
+  </div>
+</section>
+<style>
+  .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2rem; }
+  .copy { display: grid; gap: 0.8rem; max-width: 40rem; }
+  .copy a { color: var(--ink); }
+</style>

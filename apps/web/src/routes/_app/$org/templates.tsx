@@ -1,5 +1,6 @@
 import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
+import { AskAgent } from "../../../components/AgentSheet";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
@@ -136,7 +137,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
                 { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
               ]} />
             ) : (
-              <p className="empty">None. Scenes fade through the ground color.</p>
+              <p className="empty">None. Scenes fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
             )}
           </div>
         </section>

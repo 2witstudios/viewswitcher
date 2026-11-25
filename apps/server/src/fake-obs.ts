@@ -1,21 +1,36 @@
 // An in-memory OBS for tests and local demos (no real OBS needed): answers the obs-websocket v5
-// requests that setup and placement use, with OBS's error codes.
+// requests that setup, placement and previews use, with OBS's error codes. It records every request.
 import { OBSRequestError } from "./obs";
 import type { ObsRequester } from "./obs-setup";
+import { solidPng } from "./png";
+
+type FakeInput = { kind: string; settings: Record<string, unknown>; muted?: boolean };
+
+export type FakeObsInit = {
+  scenes?: Record<string, string[]>;
+  inputs?: Record<string, FakeInput>;
+  /**
+   * The PNG GetSourceScreenshot returns for a source (a scene or an input) at the size asked for.
+   * Called once per screenshot, so it can change from frame to frame. Defaults to an empty frame.
+   */
+  screenshot?: (sourceName: string, size: { width: number; height: number }) => Uint8Array | Promise<Uint8Array>;
+};
 
 /** An in-memory OBS that answers the obs-websocket v5 requests setup uses, with OBS's error codes. */
-export function fakeObs(init: { scenes?: Record<string, string[]>; inputs?: Record<string, { kind: string; settings: Record<string, unknown> }> } = {}) {
+export function fakeObs(init: FakeObsInit = {}) {
   const scenes = new Map(Object.entries(init.scenes ?? {}).map(([k, v]) => [k, v.map((sourceName, i) => ({ sourceName, sceneItemId: i + 1 }))]));
-  const inputs = new Map(Object.entries(init.inputs ?? {}));
+  const inputs = new Map<string, FakeInput>(Object.entries(init.inputs ?? {}));
+  const requests: { type: string; data: any }[] = [];
   let nextId = 100;
   let program = "";
   const fail = (type: string, code: number): never => {
     throw new OBSRequestError(type, code, `fake ${code}`);
   };
   const items = (scene: string) => scenes.get(scene) ?? fail("scene", 600);
-  const obs: ObsRequester & { scenes: typeof scenes; inputs: typeof inputs; program: () => string } = {
-    scenes, inputs, program: () => program,
+  const obs: ObsRequester & { scenes: typeof scenes; inputs: typeof inputs; program: () => string; requests: typeof requests } = {
+    scenes, inputs, requests, program: () => program,
     async request(type: string, d: any = {}): Promise<any> {
+      requests.push({ type, data: structuredClone(d) });
       switch (type) {
         case "SetSceneName": {
           if (!scenes.has(d.sceneName)) fail(type, 600);
@@ -49,6 +64,24 @@ export function fakeObs(init: { scenes?: Record<string, string[]>; inputs?: Reco
           items(d.sceneName).push(it);
           return { sceneItemId: it.sceneItemId };
         }
+        case "CreateSceneItem": {
+          if (!inputs.has(d.sourceName) && !scenes.has(d.sourceName)) fail(type, 600);
+          const it = { sourceName: d.sourceName, sceneItemId: nextId++ };
+          items(d.sceneName).push(it);
+          return { sceneItemId: it.sceneItemId };
+        }
+        case "GetInputList":
+          return { inputs: [...inputs].map(([inputName, i]) => ({ inputName, inputKind: i.kind })) };
+        case "SetInputMute":
+          (inputs.get(d.inputName) ?? fail(type, 600)).muted = !!d.inputMuted;
+          return {};
+        case "GetSourceScreenshot": {
+          if (!inputs.has(d.sourceName) && !scenes.has(d.sourceName)) fail(type, 600);
+          if (d.imageFormat !== "png") fail(type, 400);
+          const size = { width: d.imageWidth ?? 1920, height: d.imageHeight ?? 1080 };
+          const png = init.screenshot ? await init.screenshot(d.sourceName, size) : solidPng(size.width, size.height, [0, 0, 0, 0]);
+          return { imageData: `data:image/png;base64,${Buffer.from(png).toString("base64")}` };
+        }
         case "GetInputSettings":
           return { inputSettings: (inputs.get(d.inputName) ?? fail(type, 600)).settings };
         case "SetInputSettings": {
@@ -65,6 +98,8 @@ export function fakeObs(init: { scenes?: Record<string, string[]>; inputs?: Reco
           list.splice(d.sceneItemIndex, 0, it!);
           return {};
         }
+        case "GetCurrentProgramScene":
+          return { currentProgramSceneName: program, sceneName: program } as never;
         case "SetCurrentProgramScene":
           items(d.sceneName);
           program = d.sceneName;

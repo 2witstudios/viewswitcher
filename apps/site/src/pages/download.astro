@@ -38,7 +38,7 @@ const v = site.mac.version;
     <ul>
       <li><strong>OBS</strong>, the free streaming app, from <a href="https://obsproject.com">obsproject.com</a>. OBS does the streaming; ViewSwitcher tells it what to show.</li>
       <li><strong>A camera</strong> OBS can see: the Mac's own camera, a USB webcam, or a camera through a capture card.</li>
-      <li>Optional: a second camera, a screen to share, and an iPad to switch from.</li>
+      <li>Optional: a second camera, a screen to share, and a phone or iPad to switch from.</li>
     </ul>
 
     <h2 id="after-you-open-it">After you open it</h2>
@@ -50,8 +50,28 @@ const v = site.mac.version;
       <li>Add your camera to that scene as a source named <strong>Camera</strong> (and your screen as <strong>Screen</strong>), then press <strong>Set up OBS again</strong>.</li>
       <li>Click a view. It's on air.</li>
     </ol>
+    {site.aiConnect && <p><strong>Edit with AI:</strong> connect Claude, Cursor or any app that supports MCP from ViewSwitcher in one click, and ask it for custom overlays and slides. <a href="/ai">How to connect your AI</a></p>}
     <p>Each step, with screenshots and what to do if something doesn't show up: <a href="/setup">how to set up OBS with ViewSwitcher</a>.</p>
     <p>Closing the window keeps ViewSwitcher running in the menu bar, so OBS and the iPad stay connected. Quit it from the menu bar icon or with ⌘Q.</p>
+
+    <h2 id="whats-new">What's new in {v}</h2>
+    <ul>
+      <li><strong>Edit with AI.</strong> Open it from the menu bar or the switcher. Connect Claude Desktop, Claude Code or Cursor in one click; any other app that supports MCP gets a setup line to paste. <a href="/ai">More about connecting your AI</a></li>
+      <li><strong>Then just ask.</strong> "Add the Full Count templates and make a halftime screen with a 4-minute countdown." Your AI sees your shows and templates, makes the view in your colors, checks a preview and fixes what's off. Everything it makes is a normal view you can edit on screen.</li>
+      <li><strong>Nothing surprises you on air.</strong> You choose whether your AI can put views on air: never, only when you're not live (the default), or always. While you're live, it can't change the view that's on air.</li>
+      <li><strong>Stays on your Mac.</strong> AI apps connect only on this Mac, never from the network, and only to your show's folder.</li>
+    </ul>
+    <p>Already on 1.1? ViewSwitcher offers this update by itself. <a href={`${releases}/tag/v${v}`}>Full release notes</a></p>
+
+    <h3 id="new-in-1-1">Also new since 1.0 (1.1)</h3>
+    <ul>
+      <li><strong>Pair your phone or iPad over Wi-Fi.</strong> In the menu bar, turn on Let Phones and Tablets on This Wi-Fi Connect, then scan the QR code. Only devices you pair can switch scenes, and you can remove one any time. Use it on Wi-Fi you trust, like home or church Wi-Fi.</li>
+      <li><strong>Built-in template sets.</strong> Full Count, NOVA_PLAYS, Grace Community, Roam with Remi, Riverside Live and Saltwater Kitchen come with ViewSwitcher, in your show's name and colors. Pick one for a new show, or use Templates → Add templates.</li>
+      <li><strong>Install template packs.</strong> Download one from <a href="/templates">viewswitcher.com/templates</a> and drop the .zip on the Templates page.</li>
+      <li><strong>Drop a picture onto a scene</strong> in the editor to add it, or onto an image to replace it.</li>
+      <li><strong>Safer scenes.</strong> Templates from anyone run sandboxed, so they can't control the switcher.</li>
+    </ul>
+    <p><a href={`${releases}/tag/v1.1.0`}>1.1 release notes</a></p>
 
     <h2 id="release-notes">Release notes and updates</h2>
     <p>Every version is published on GitHub with its notes: <a href={releases}>all releases</a>. ViewSwitcher installs updates from there, so there's nothing to download again by hand.</p>

@@ -1,4 +1,4 @@
-import { ctas, ipadApp, macAppFlag } from "./lib/cta";
+import { ctas, flag, ipadApp, macAppFlag } from "./lib/cta";
 import { softwareApp } from "./lib/seo";
 
 // THE SWITCH: set to true when the Mac app's first release (MAC-8) is out.
@@ -17,7 +17,12 @@ const TEMPLATE_DOWNLOADS_URL: string | null = "/templates";
 
 // THE PACK INSTALL SWITCH: the first ViewSwitcher release that installs template packs (EDIT-24 shipped after 1.0.0).
 // Null: the template pages say installing packs comes with the next update. Set (e.g. "1.1.0"): "Needs ViewSwitcher 1.1.0 or later."
-const PACK_INSTALL_VERSION: string | null = null;
+const PACK_INSTALL_VERSION: string | null = "1.1.0";
+
+// THE AI SWITCH: true once Edit with AI (MCP, PR #8) ships, in v1.2.0. How it works step 1 then says
+// you can connect your favorite AI in one click, with the Edit with AI sheet as its picture, and /download
+// gets a line. False: today's step 1. A build can override it with SITE_AI_CONNECT_RELEASED=1 or 0.
+const AI_CONNECT_RELEASED = true;
 
 export const site = {
   url: "https://viewswitcher.com",
@@ -26,12 +31,13 @@ export const site = {
   /** MAC-8 must publish a release asset with exactly this name for this link to resolve. */
   dmgUrl: "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg",
   /** The Mac app's current release (SITE-20). Update with each release: the version that /download and the structured data state. */
-  mac: { version: "1.0.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
+  mac: { version: "1.2.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
   /** Drop SITE-11's recording here (public/demo/viewswitcher-demo.mp4) and the hero plays it. */
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),
   ipadApp: ipadApp(process.env.SITE_IPAD_APP_URL || IPAD_APP_URL),
   templateDownloads: process.env.SITE_TEMPLATE_DOWNLOADS_URL || TEMPLATE_DOWNLOADS_URL,
+  aiConnect: flag("SITE_AI_CONNECT_RELEASED", AI_CONNECT_RELEASED, process.env.SITE_AI_CONNECT_RELEASED),
   packInstallVersion: process.env.SITE_PACK_INSTALL_VERSION || PACK_INSTALL_VERSION,
 };
 

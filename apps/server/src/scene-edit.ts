@@ -1,5 +1,6 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
+import type { Stats } from "node:fs";
 import { chmod, lstat, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
@@ -92,7 +93,9 @@ let queue: Promise<unknown> = Promise.resolve();
  * Write `next` over `real` (read as `text`, stat'd as `read`) only if it's still that version.
  * Returns false (writing nothing) when someone else saved meanwhile.
  */
-async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat>>, current: string, next: string, hooks: { beforeReplace?: () => Promise<void> }) {
+// `read` is a plain Stats: Awaited<ReturnType<typeof stat>> is the last overload's, which newer
+// @types/node types as possibly undefined (stat with throwIfNoEntry: false), ISSUE-11.
+export async function replaceChecked(real: string, read: Stats, current: string, next: string, hooks: { beforeReplace?: () => Promise<void>; atRename?: () => void }) {
   // A linked scene is written where it really lives (so the link stays a link), never outside the library.
   // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.
   // The watcher ignores dot-files.
@@ -113,6 +116,7 @@ async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat
       const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
       return { ok: false as const, hash: sceneHash(latest) };
     }
+    hooks.atRename?.(); // synchronously, in the same tick as the rename: a last refusal (the MCP guard)
     await rename(tmp, real);
     replaced = true;
     return { ok: true as const };
@@ -123,7 +127,7 @@ async function replaceChecked(real: string, read: Awaited<ReturnType<typeof stat
 }
 
 /** Run one library change at a time. */
-function serial<T>(run: () => Promise<T>): Promise<T> {
+export function serial<T>(run: () => Promise<T>): Promise<T> {
   const result = queue.then(run, run);
   queue = result.catch(() => {});
   return result;

@@ -1,0 +1,43 @@
+---
+// Free templates to start from: three covers linking to their template sets, and the rest at /templates.
+import ViewFrame from "./ViewFrame.astro";
+import { SHOWS } from "../data/shows";
+import { setPath } from "../lib/templates";
+const picks: [string, string][] = [["fullcount", "live"], ["grace", "main"], ["nova", "main"]];
+---
+<section class="section" id="templates" aria-labelledby="templates-title">
+  <div class="wrap">
+    <div class="top">
+      <div class="section-head">
+        <h2 id="templates-title">Free templates to start from</h2>
+        <p class="lede">Built in, or download more. Your show's name and colors fill in.</p>
+      </div>
+      <a class="all" href="/templates">All templates</a>
+    </div>
+    <ul class="covers">
+      {picks.map(([id, file]) => {
+        const s = SHOWS.find((x) => x.id === id)!;
+        return (
+          <li>
+            <a href={setPath(s)}>
+              <ViewFrame show={id} file={file} alt="" sizes="(min-width: 64rem) 24rem, (min-width: 40rem) 45vw, calc(100vw - 2.5rem)" widths={[480, 720, 960]} />
+              <span class="cap"><b>{s.name}</b> <span>{s.kind}</span></span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </div>
+</section>
+<style>
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 2rem; }
+  .top .section-head { margin-bottom: 0; }
+  .all { font-weight: 600; text-underline-offset: 5px; }
+  .covers { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr)); }
+  .covers a { display: grid; gap: 0.65rem; text-decoration: none; }
+  .covers :global(.frame) { border-radius: 10px; }
+  .cap { font-size: 0.9375rem; }
+  .cap b { font-weight: 600; }
+  .cap span { color: var(--ink-3); }
+  .covers a:hover b { text-decoration: underline; }
+</style>

@@ -1,5 +1,6 @@
-import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { constants as fsConstants } from "node:fs";
+import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { inside, PathError, plainName } from "./paths";
@@ -183,7 +184,9 @@ export async function customizeTransition(root: string, projectId: string) {
   if (await exists(dest)) return;
   const src = join(root, ORG_TRANSITION);
   if (!(await exists(src))) throw new PathError("This org has no transition to start from yet");
-  await copyFile(src, dest);
+  await inLibrary(root, src);
+  await inLibrary(root, dest);
+  await copyNew(src, dest);
 }
 
 /** Back to the org's transition: deletes the project's own. */
@@ -197,11 +200,65 @@ export async function exists(path: string) {
   return stat(path).then(() => true, () => false);
 }
 
-/** "teaching" in a folder that already has it → "teaching-2". */
+/**
+ * Refuses (PathError) when `abs`, or any folder between the org folder `root` and it, is really
+ * somewhere outside the library through a link (the library is the org folder's parent). Only what
+ * exists is checked: a folder that isn't there yet is made inside. Links that stay in the library are
+ * fine. Every change that makes a file or folder calls this for where it writes and what it reads, so
+ * the switcher's routes and the agents' tools get the same rule.
+ */
+export async function inLibrary(root: string, abs: string): Promise<void> {
+  const library = await realpath(dirname(root)).catch(() => dirname(root));
+  for (let p = abs; ; p = dirname(p)) {
+    const here = await lstat(p).then(() => true, () => false);
+    if (here) {
+      const real = await realpath(p).catch(() => null); // null: a link that points nowhere
+      const back = real === null ? ".." : relative(library, real);
+      if (back.startsWith("..") || isAbsolute(back)) throw new PathError("That path is a link to somewhere outside the library");
+    }
+    if (p === root || p === dirname(p) || !p.startsWith(root)) break;
+  }
+}
+
+/** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
+async function copyNew(src: string, dest: string) {
+  try {
+    await copyFile(src, dest, fsConstants.COPYFILE_EXCL);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PathError("Something is already there (a link to somewhere else?). Remove it, then try again.");
+    throw e;
+  }
+}
+
+/** Whether anything at all is at `path`, a link included, even one that points nowhere (lstat, not stat). */
+const taken = (path: string) => lstat(path).then(() => true, () => false);
+
+/** "teaching" in a folder that already has it → "teaching-2". A dangling link counts as taken. */
 export async function freeName(dir: string, base: string, ext: string) {
   let name = base, n = 2;
-  while (await exists(join(dir, name + ext))) name = `${base}-${n++}`;
+  while (await taken(join(dir, name + ext))) name = `${base}-${n++}`;
   return name;
+}
+
+/**
+ * Write a new file named `base` (or the next free name) in `dir`, claiming the name as it's written:
+ * an exclusive create never follows a link that's already there (a dangling one could point outside
+ * the library) and never overwrites a file someone else made a moment ago. Returns the name used.
+ */
+/** A last check on a file about to be made, by its absolute path, that throws to refuse it (the agents' on-air guard). */
+export type BeforeCreate = (abs: string) => void;
+
+export async function writeFresh(dir: string, base: string, ext: string, data: string | Uint8Array, check?: BeforeCreate): Promise<string> {
+  for (;;) {
+    const name = await freeName(dir, base, ext);
+    check?.(join(dir, name + ext)); // the name really used, which may not be the one asked for
+    try {
+      await writeFile(join(dir, name + ext), data, { flag: "wx" });
+      return name;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+  }
 }
 
 function projectDir(root: string, projectId: string) {
@@ -212,24 +269,24 @@ function streamDir(root: string, projectId: string, streamId: string) {
   return inside(root, `projects/${plainName(projectId)}/streams/${plainName(streamId)}`);
 }
 
-export async function createProject(root: string, name: string, templates: string[]) {
+export async function createProject(root: string, name: string, templates: string[], check?: BeforeCreate) {
   if (!name?.trim()) throw new PathError("A project needs a name");
   const base = slugify(name);
   const parent = inside(root, "projects");
+  await inLibrary(root, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
-  while (await exists(join(parent, id))) id = `${base}-${n++}`;
+  while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
   const dir = join(parent, id);
+  const sources = templates.map((t) => templateFile(root, t));
+  for (const { file } of sources) if (await exists(file)) await inLibrary(root, file);
   await mkdir(join(dir, "scenes"), { recursive: true });
   await mkdir(join(dir, "streams"), { recursive: true });
   // Templates from sets ("neon/teaching") become scenes named by their view ("teaching", "teaching-2"…).
   const order: string[] = [];
-  for (const t of templates) {
-    const { file, name: view } = templateFile(root, t);
+  for (const { file, name: view } of sources) {
     if (!(await exists(file))) continue;
-    const scene = await freeName(join(dir, "scenes"), view, ".html");
-    await copyFile(file, join(dir, "scenes", `${scene}.html`));
-    order.push(scene);
+    order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readFile(file, "utf8"), check));
   }
   await writeFile(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
   return { projectId: id };
@@ -240,22 +297,23 @@ export async function createStream(root: string, projectId: string, name: string
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new PathError("Date must be YYYY-MM-DD");
   const base = `${date.slice(5, 7)}-${date.slice(8, 10)}-${slugify(name)}`;
   const parent = join(projectDir(root, projectId), "streams");
+  await inLibrary(root, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
-  while (await exists(join(parent, id))) id = `${base}-${n++}`;
+  while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
   await mkdir(join(parent, id));
   await writeFile(join(parent, id, "stream.json"), JSON.stringify({ name: name.trim(), date }, null, 2) + "\n");
   return { projectId, streamId: id };
 }
 
 /** Copy a template into a project's shared scenes, or into one stream. */
-export async function addFromTemplate(root: string, template: string, projectId: string, streamId?: string) {
+export async function addFromTemplate(root: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
   const { file: src, name: view } = templateFile(root, template);
   const dir = streamId ? streamDir(root, projectId, streamId) : join(projectDir(root, projectId), "scenes");
+  await inLibrary(root, src);
+  await inLibrary(root, dir);
   await mkdir(dir, { recursive: true });
-  const name = await freeName(dir, view, ".html");
-  await copyFile(src, join(dir, `${name}.html`));
-  return { name };
+  return { name: await writeFresh(dir, view, ".html", await readFile(src, "utf8"), check) };
 }
 
 /** Copy a project scene into a stream so the stream can change it on its own. */
@@ -263,7 +321,9 @@ export async function customize(root: string, projectId: string, streamId: strin
   const src = join(projectDir(root, projectId), "scenes", `${plainName(name)}.html`);
   const dest = join(streamDir(root, projectId, streamId), `${name}.html`);
   if (await exists(dest)) return { name };
-  await copyFile(src, dest);
+  await inLibrary(root, src);
+  await inLibrary(root, dirname(dest));
+  await copyNew(src, dest);
   return { name };
 }
 
@@ -274,23 +334,23 @@ export async function revert(root: string, projectId: string, streamId: string, 
   await rm(join(streamDir(root, projectId, streamId), `${name}.html`));
 }
 
-export async function duplicate(root: string, path: string) {
+export async function duplicate(root: string, path: string, check?: BeforeCreate) {
   if (!path.endsWith(".html")) throw new PathError("Only scenes can be duplicated");
   const src = inside(root, path);
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
-  const name = await freeName(dir, `${base}-copy`, ".html");
   const html = await readFile(src, "utf8");
-  await writeFile(join(dir, `${name}.html`), html.replace(/<title>([^<]*)<\/title>/i, (_m, t) => `<title>${t} copy</title>`));
-  return { name };
+  return { name: await writeFresh(dir, `${base}-copy`, ".html", html.replace(/<title>([^<]*)<\/title>/i, (_m, t) => `<title>${t} copy</title>`), check) };
 }
 
-export async function saveAsset(root: string, file: File) {
+export async function saveAsset(root: string, file: File, check?: BeforeCreate) {
   const dir = inside(root, "assets");
+  await inLibrary(root, dir);
   await mkdir(dir, { recursive: true });
   const clean = file.name.replace(/[^A-Za-z0-9._ -]/g, "-").replace(/^[.\-]+/, "") || "upload";
   const ext = extname(clean);
-  const name = await freeName(dir, plainName(clean.slice(0, clean.length - ext.length) || "upload"), ext);
-  await Bun.write(join(dir, name + ext), file);
-  return { path: `assets/${name}${ext}` };
+  const base = plainName(clean.slice(0, clean.length - ext.length) || "upload");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Two uploads of logo.png at once get logo.png and logo-2.png, never one overwriting the other.
+  return { path: `assets/${await writeFresh(dir, base, ext, bytes, check)}${ext}` };
 }

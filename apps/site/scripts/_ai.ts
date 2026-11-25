@@ -1,0 +1,11 @@
+import { chromium } from "playwright-core";
+const out = "/private/tmp/claude-501/-Users-jono-Projects-viewswitcher/c7ed0ce6-4aba-43c9-87b6-e3898d5cf407/scratchpad/v12";
+const b = await chromium.launch({ channel: "chrome" });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) ViewSwitcher-Mac/1.2.0" });
+await p.goto("http://127.0.0.1:7434/fullcount/templates?ai", { waitUntil: "networkidle" });
+await p.waitForTimeout(2500);
+await p.screenshot({ path: `${out}/_ai-sheet-full.png` });
+const sheet = p.locator('[role="dialog"]').first();
+console.log(await sheet.count(), await sheet.boundingBox());
+if (await sheet.count()) await sheet.screenshot({ path: `${out}/_ai-sheet.png` });
+await b.close();
