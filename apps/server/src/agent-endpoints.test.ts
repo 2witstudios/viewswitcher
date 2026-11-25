@@ -33,7 +33,7 @@ beforeAll(async () => {
     });
   });
   proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" },
+    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "", VIEWSWITCHER_PARENT_PID: "" },
     stdout: "ignore",
     stderr: "ignore",
   });
@@ -59,6 +59,12 @@ describe("from this Mac", () => {
     expect(info.claudeCode).toContain(library.split("/").pop()!);
     // From source: bun with index.ts.
     expect(info.stdio).toBe(`${process.execPath} ${join(import.meta.dir, "index.ts")} --mcp-stdio --port ${port}`);
+  });
+
+  test("/api/info says whether the Mac app started this server, and which process it is", async () => {
+    const info = JSON.parse(new TextDecoder().decode((await request("/api/info")).body));
+    // Started from source by this test, not by the app: not a sidecar, so a relaunched app attaches to it.
+    expect(info).toMatchObject({ sidecar: false, parentPid: null, pid: proc.pid });
   });
 
   test("/api/agent/clients is the five booleans", async () => {
