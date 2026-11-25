@@ -16,12 +16,17 @@ export type GuardInput = {
 
 export type GuardResult = { ok: true } | { ok: false; reason: string };
 
-/** Library files whose change would show on stream right now: the on-air scene, its transitions, its org's shared files. */
+/**
+ * Library files whose change would show on stream right now: the on-air scene, its transitions, its
+ * org's shared files. Compared without case, as the Mac's disk does ("Templates/_Shared" is the same folder).
+ */
 function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene" | "transition" | "shared" | null {
-  if (path === onAir.path) return "scene";
+  const p = path.toLowerCase();
+  const scene = onAir.path.toLowerCase();
+  if (p === scene) return "scene";
   // The resolved transition, and the project's own one that would take over from the org's if it were created.
-  if (path === onAir.transition || transitionCandidates(onAir.path).includes(path)) return "transition";
-  if (path.startsWith(`${orgOf(onAir.path)}/templates/_shared/`)) return "shared";
+  if (p === onAir.transition?.toLowerCase() || transitionCandidates(scene).includes(p)) return "transition";
+  if (p.startsWith(`${orgOf(scene)}/templates/_shared/`)) return "shared";
   return null;
 }
 

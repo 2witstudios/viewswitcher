@@ -365,6 +365,10 @@ describe("go_on_air and the agent guard", () => {
       await call("write_file", { path: `${ORG}/templates/_shared/transition.html`, text: "x", hash: shared.hash }),
       await call("write_file", { path: `${ORG}/templates/_shared/new.css`, text: "x" }),
     ];
+    // The same file by another spelling (the Mac's disk ignores case) or through a link.
+    await symlink(join(root, copy.path), join(root, ORG, "templates", "alias.html"));
+    refusals.push(await call("write_file", { path: copy.path.replace("teaching", "Teaching"), text: "x", hash }));
+    refusals.push(await call("write_file", { path: `${ORG}/templates/alias.html`, text: "x", hash }));
     for (const r of refusals) expect({ err: r.isError, why: /you're live/.test(r.text), instead: /customize_scene|Wait until the stream ends|wait until the stream ends/.test(r.text) }).toEqual({ err: true, why: true, instead: true });
     expect(refusals[0]!.text).toBe("That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.");
     expect(await readFile(join(root, copy.path), "utf8")).not.toBe("x");

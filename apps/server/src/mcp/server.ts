@@ -2,9 +2,9 @@
 // library, change scenes under the switcher's own rules, look at its work, and go on air when that's
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
@@ -91,9 +91,27 @@ export function createMcpServer(deps: McpDeps): McpServer {
     }
   };
 
+  /** Where a library path really is (through links), as a library path; the path itself when that can't be told. */
+  const realRel = (path: string) => {
+    try {
+      let probe = inside(root, path);
+      let rest = "";
+      while (!existsSync(probe)) {
+        rest = `/${basename(probe)}${rest}`;
+        probe = dirname(probe);
+      }
+      const back = relative(realRoot, realpathSync(probe)) + rest;
+      return back.startsWith("..") || isAbsolute(back) ? path : back;
+    } catch {
+      return path;
+    }
+  };
   const guard = (action: GuardAction) => {
     const s = deps.state();
-    const g = agentGuard({ setting: s.agent.onAir, live: s.obs.streaming || s.obs.recording, onAir: s.onAir, action });
+    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition) };
+    // A link to the scene on air is the scene on air.
+    const checked: GuardAction = action.kind === "write" ? { kind: "write", paths: action.paths.flatMap((p) => [p, realRel(p)]) } : action;
+    const g = agentGuard({ setting: s.agent.onAir, live: s.obs.streaming || s.obs.recording, onAir, action: checked });
     if (!g.ok) throw new Refusal(g.reason);
   };
   const writes = (...paths: string[]) => guard({ kind: "write", paths });

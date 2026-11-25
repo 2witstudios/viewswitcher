@@ -19,6 +19,8 @@ const rows: [AgentOnAir, boolean, GuardAction, boolean][] = [
   ["not-live", true, write("daisy/templates/_shared/transition.html"), false],
   ["not-live", true, write("daisy/projects/ld/transition.html"), false], // would take over as the scene's transition
   ["not-live", true, write("daisy/templates/_shared/theme.css"), false],
+  ["not-live", true, write("Daisy/Projects/LD/streams/12-04-x/Teaching.html"), false], // the same file on the Mac's disk
+  ["not-live", true, write("daisy/Templates/_Shared/theme.css"), false],
   ["not-live", true, write("daisy/projects/ld/streams/12-04-x/brb.html", onAir.path), false], // any path in the list
   ["not-live", true, write("daisy/projects/ld/streams/12-04-x/brb.html"), true],
   ["not-live", true, write("daisy/templates/teaching.html"), true],
