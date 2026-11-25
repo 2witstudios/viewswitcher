@@ -1,11 +1,10 @@
-// Real screenshots of the switcher for the site's guides (/setup, /ipad, /church-livestream) and How it works.
+// Real screenshots of the switcher for the site's guides (/setup, /ipad, /church-livestream).
 //
 //   bun scripts/app-shots.ts            (from apps/site)
 //
 // Starts the switcher on SHOTS_PORT (default 7434) with OBS offline and no USB bridge, against the
 // site's scratch library (scripts/library.ts, outside the repo). Makes Grace Community a "Sunday Live"
-// project with a dated stream, puts the sermon on air, does the same for a Full Count episode, and saves
-// the screens to src/assets/app/*.webp.
+// project with a dated stream, puts the sermon on air, and saves the screens to src/assets/app/*.webp.
 // Nothing is staged: what's shown is the app as it runs with OBS closed (camera boxes stay empty).
 import { chromium } from "playwright-core";
 import sharp from "sharp";
@@ -21,7 +20,7 @@ if (port === 7420) throw new Error("7420 is the live switcher; use another port"
 const up = async () => { try { await fetch(base, { signal: AbortSignal.timeout(1000) }); return true; } catch { return false; } };
 if (await up()) throw new Error(`something already answers on ${port}; stop it or set SHOTS_PORT`);
 
-const library = await buildLibrary(["grace", "fullcount"]);
+const library = await buildLibrary(["grace"]);
 const server = Bun.spawn(["bun", join(repo, "apps/server/src/index.ts")], {
   env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
   stdout: "ignore", stderr: "inherit",
@@ -61,14 +60,6 @@ try {
   await save("switcher");
   await page.goto(`${base}/grace/edit?path=${encodeURIComponent(sermon)}`, { waitUntil: "networkidle" });
   await save("editor");
-
-  // How it works, step 2: this week's Full Count stream, with the both-hosts view on air.
-  const fc = await post("/api/projects", { org: "fullcount", name: "Full Count", templates: ["starting-soon", "live", "main", "brb", "ending"] });
-  const ep = await post("/api/streams", { org: "fullcount", projectId: fc.projectId, name: "Ep. 112 · Trade deadline", date: "2026-11-27" });
-  await post("/api/onair", { path: `fullcount/projects/${fc.projectId}/scenes/main.html`, label: "Both hosts", projectId: fc.projectId, streamId: ep.streamId });
-  await page.goto(`${base}/fullcount/p/${fc.projectId}/${ep.streamId}`, { waitUntil: "networkidle" });
-  if (await page.getByRole("button", { name: "Not now" }).count()) await page.getByRole("button", { name: "Not now" }).click();
-  await save("stream-fullcount");
 } finally {
   await browser?.close();
   server.kill();
