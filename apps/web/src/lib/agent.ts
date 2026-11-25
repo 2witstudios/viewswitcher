@@ -89,17 +89,36 @@ export function inOrder() {
   };
 }
 
-/** A choice the person made whose request hasn't been answered yet; `id` tells requests apart. */
-export type PendingChoice = { value: AgentOnAir; id: number } | null;
+/** A choice the person made that the switcher hasn't published yet; `id` tells requests apart. */
+export type PendingChoice = { value: AgentOnAir; id: number; answered: boolean } | null;
+
+export type PendingEvent =
+  | { t: "pick"; value: AgentOnAir; id: number }
+  /** The request came back: `ok` false (refused, or no answer) drops the choice. */
+  | { t: "answered"; id: number; ok: boolean }
+  /** The switcher's state said this (it comes over the live socket, maybe after the HTTP answer). */
+  | { t: "published"; value: AgentOnAir | undefined }
+  /** A while after its answer: give up waiting (another device may have changed it meanwhile). */
+  | { t: "expire"; id: number };
 
 /**
- * The on-air radios' pending choice. While a request is on its way the radios show what was clicked,
- * not what the server last published (so clicking back to the old choice is a real change, and is
- * sent); once the latest request is answered, the published value shows again.
+ * The on-air radios' pending choice. From the click until the switcher publishes that value, the
+ * radios show what was clicked, not the last published value: clicking back to the old choice is then
+ * a real change, and is sent; and the radios never flick back to the old value between the HTTP answer
+ * and the state arriving over the socket.
  */
-export function pendingChoice(p: PendingChoice, e: { t: "pick"; value: AgentOnAir; id: number } | { t: "done"; id: number }): PendingChoice {
-  if (e.t === "pick") return { value: e.value, id: e.id };
-  return p && p.id === e.id ? null : p;
+export function pendingChoice(p: PendingChoice, e: PendingEvent): PendingChoice {
+  switch (e.t) {
+    case "pick":
+      return { value: e.value, id: e.id, answered: false };
+    case "answered":
+      if (!p || p.id !== e.id) return p;
+      return e.ok ? { ...p, answered: true } : null;
+    case "published":
+      return p && p.answered && e.value === p.value ? null : p;
+    case "expire":
+      return p && p.id === e.id ? null : p;
+  }
 }
 
 /** What the radios show. */

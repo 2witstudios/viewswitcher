@@ -1,7 +1,7 @@
 // The MCP tools through a real SDK Client on the in-memory transport, against a temp library made
 // the way a new one is (ensureLibrary: the kit and a first org from the starter).
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,6 +35,8 @@ let state = fresh();
 let beforeCommit: (() => void) | null = null;
 /** Runs on every read of the switcher state by the tools (a test counts reads to pick an instant). */
 let onStateRead: (() => void) | null = null;
+/** Runs at write_file's commit instant (McpDeps.onCommit), so a test can change the state exactly then. */
+let atCommit: (() => void) | null = null;
 let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -63,6 +65,7 @@ beforeAll(async () => {
       if (state.onAir?.path === from) state.onAir = renamedOnAir(state.onAir, from, name, r);
     },
     previewer: { scene: async () => previews.scene, program: async () => previews.program },
+    onCommit: () => atCommit?.(),
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await server.connect(a);
@@ -77,6 +80,7 @@ beforeEach(() => {
   state = fresh();
   beforeCommit = null;
   onStateRead = null;
+  atCommit = null;
   previews = { scene: { ok: true, png, width: 960, height: 540 }, program: { ok: false, reason: "Previews need OBS", url: `http://127.0.0.1:${PORT}/program` } };
 });
 
@@ -590,24 +594,39 @@ describe("CodeRabbit follow-ups", () => {
     const scene = `${ORG}/templates/race-scene.html`;
     await writeFile(join(root, scene), `<title>R</title><link rel="stylesheet" href="/library/${ORG}/assets/race.css">`);
     await data("go_on_air", { path: scene });
-    // A dry run while idle counts how often the tool reads the state; the commit check is the last three reads.
-    let reads = 0;
-    onStateRead = () => void reads++;
-    const first = await data("read_file", { path: `${ORG}/assets/race.css` });
-    reads = 0;
-    expect((await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:red}", hash: first.hash })).isError).toBe(false);
-    const total = reads;
-    // Again, going live just as the commit check starts.
-    const second = await data("read_file", { path: `${ORG}/assets/race.css` });
-    reads = 0;
-    onStateRead = () => {
-      if (++reads === total - 2) live();
-    };
-    const r = await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:blue}", hash: second.hash });
-    onStateRead = null;
+    const { hash } = await data("read_file", { path: `${ORG}/assets/race.css` });
+    atCommit = live; // OBS goes live at the commit instant, after the in-turn check passed while idle
+    const r = await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:blue}", hash });
     expect(r.isError).toBe(true);
     expect(r.text).toContain("The scene on air uses that file");
-    expect(await readFile(join(root, ORG, "assets/race.css"), "utf8")).toBe(".a{color:red}");
+    expect(await readFile(join(root, ORG, "assets/race.css"), "utf8")).toBe(".a{}");
+  });
+  test("write_file: at the commit, while live, a change to what's on air, to the on-air scene's text, or to the setting refuses the write", async () => {
+    await writeFile(join(root, ORG, "assets/late.css"), ".b{}");
+    await writeFile(join(root, ORG, "templates/stamp-a.html"), "<title>A</title>");
+    await writeFile(join(root, ORG, "templates/stamp-b.html"), "<title>B</title>");
+    const write = async () => {
+      const { hash } = await data("read_file", { path: `${ORG}/assets/late.css` });
+      return call("write_file", { path: `${ORG}/assets/late.css`, text: `.b{x:${Math.random()}}`, hash });
+    };
+    // Something else goes on air at the commit instant.
+    await data("go_on_air", { path: `${ORG}/templates/stamp-a.html` });
+    live();
+    const b = await onAirFor(root, { path: `${ORG}/templates/stamp-b.html`, label: "B" });
+    atCommit = () => (state.onAir = b);
+    expect((await write()).text).toContain("What's on air changed while this was being written");
+    // The scene on air is saved so it now loads late.css, at the commit instant.
+    atCommit = () => void writeFileSync(join(root, ORG, "templates/stamp-b.html"), `<title>B</title><link rel="stylesheet" href="/library/${ORG}/assets/late.css">`);
+    expect((await write()).text).toContain("What's on air changed while this was being written");
+    // The setting changes from Always to When not live at the commit instant.
+    state.agent.onAir = "always";
+    atCommit = () => (state.agent.onAir = "not-live");
+    expect((await write()).text).toContain("The agent on-air setting changed while this was being written");
+    expect(await readFile(join(root, ORG, "assets/late.css"), "utf8")).toBe(".b{}");
+    // With Always, and nothing changing at the commit, the write goes through while live.
+    atCommit = null;
+    state.agent.onAir = "always";
+    expect((await write()).isError).toBe(false);
   });
   test("the switcher's Duplicate: a copy never lands in a folder linked outside, and a leading slash is refused", async () => {
     const { duplicateScene } = await import("../library-actions");

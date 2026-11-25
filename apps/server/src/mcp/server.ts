@@ -2,7 +2,7 @@
 // library, change scenes under the switcher's own rules, look at its work, and go on air when that's
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -16,7 +16,7 @@ import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFr
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
-import { renameScene, scenePath, type RenameResult } from "../scene-edit";
+import { renameScene, sceneHash, scenePath, type RenameResult } from "../scene-edit";
 import { loadedFiles } from "../scene-refs";
 
 export type McpDeps = {
@@ -34,6 +34,8 @@ export type McpDeps = {
   /** After a scene was renamed: keeps the on-air record pointing at it, as the switcher's rename does. */
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
+  /** Tests only: runs at write_file's commit instant, before its last check (to change the state right then). */
+  onCommit?: () => void;
 };
 
 export const INSTRUCTIONS = [
@@ -128,11 +130,23 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const s = deps.state();
     if (!s.onAir || s.agent.onAir === "always" || (!evenIfIdle && !(s.obs.streaming || s.obs.recording))) return undefined;
     const pages = [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p);
-    return { pages: pages.join("\n"), files: (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]) };
+    return (await loadedFiles(root, pages)).flatMap((p) => [p, realRel(p)]);
   };
-  const pagesOnAir = () => {
+  /**
+   * What a list of loaded files depends on, read synchronously so it can be compared at the commit
+   * instant: the agent setting, the scene and transition on air, and those pages' text.
+   */
+  const onAirStamp = () => {
     const s = deps.state();
-    return s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p).join("\n") : "";
+    const pages = s.onAir ? [s.onAir.path, s.onAir.transition].filter((p): p is string => !!p) : [];
+    const texts = pages.map((p) => {
+      try {
+        return sceneHash(readFileSync(inside(root, p), "utf8"));
+      } catch {
+        return "-";
+      }
+    });
+    return { setting: s.agent.onAir, rest: [...pages, ...texts].join("\n") };
   };
   /**
    * Files a tool reads or writes: each really inside the library, through links too (library-files.ts
@@ -149,7 +163,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   /** Refuses (throws) a change to `paths` outside the library, or one the agent on-air setting doesn't allow right now. */
   const writes = async (...paths: string[]) => {
     await contained(...paths);
-    guardNow({ kind: "write", paths }, (await onAirLoads())?.files);
+    guardNow({ kind: "write", paths }, await onAirLoads());
   };
 
   const exists = (abs: string) => stat(abs).then(() => true, () => false);
@@ -274,22 +288,31 @@ export function createMcpServer(deps: McpDeps): McpServer {
     await writes(target);
     // Checked again in turn (OBS may have gone live while it waited), and once more in the same tick
     // as the rename, against the state at that instant. The files the scene on air loads are read in
-    // turn even while idle, so the last check has them if OBS goes live in between; if what's on air
-    // changed meanwhile, that list is stale and the write is refused rather than guessed.
-    let loads: Awaited<ReturnType<typeof onAirLoads>>;
+    // turn even while idle, so the last check has them if OBS goes live in between. If what that list
+    // depends on changed meanwhile (the setting, what's on air, or the on-air pages' text), the list
+    // may be stale, so a live write is refused rather than guessed.
+    let loads: string[] | undefined;
+    let stamp: ReturnType<typeof onAirStamp> | undefined;
     const r = await writeText(root, path, body, hash, {
       beforeWrite: async () => {
         await contained(target);
+        stamp = onAirStamp();
         loads = await onAirLoads(true);
-        guardNow({ kind: "write", paths: [target] }, loads?.files);
+        guardNow({ kind: "write", paths: [target] }, loads);
       },
       atCommit: () => {
+        deps.onCommit?.();
         const s = deps.state();
-        const live = s.obs.streaming || s.obs.recording;
-        if (live && s.agent.onAir !== "always" && (loads?.pages ?? "") !== pagesOnAir()) {
-          throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the scene on air.");
+        const now = onAirStamp();
+        if ((s.obs.streaming || s.obs.recording) && s.agent.onAir !== "always" && stamp) {
+          if (now.setting !== stamp.setting) {
+            throw new Refusal("The agent on-air setting changed while this was being written, and you're live. Check get_state, then read_file and redo the change if it's still allowed.");
+          }
+          if (now.rest !== stamp.rest) {
+            throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the scene on air.");
+          }
         }
-        guardNow({ kind: "write", paths: [target] }, loads?.files);
+        guardNow({ kind: "write", paths: [target] }, loads);
       },
     });
     if (!r.ok) return refusal(r.hash ? `${r.reason} (current hash: ${r.hash})` : r.reason);

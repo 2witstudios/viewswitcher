@@ -76,41 +76,76 @@ describe("the on-air setting's requests (CodeRabbit)", () => {
 });
 
 describe("the radios while a change is on its way (CodeRabbit)", () => {
-  test("Never → click Always → click Never before Always is published: the second click is a change, it's sent, and Never wins", async () => {
-    // The sheet's flow without React: the radios show shownChoice; a click on a radio that isn't
-    // shown fires onChange, which picks, sends in order, and marks its request done.
+  // The sheet's flow without React: the radios show shownChoice; a click on a radio that isn't shown
+  // fires onChange, which picks, sends in order, and reports the answer; the published value arrives
+  // separately (the live socket), here after the HTTP answer.
+  function sheet() {
     let published: "never" | "not-live" | "always" = "never";
     let pending: PendingChoice = null;
     let id = 0;
     const run = inOrder();
     const server: string[] = [];
     const sent: Promise<void>[] = [];
-    const click = (v: typeof published) => {
+    const publish = (v: typeof published) => {
+      published = v;
+      pending = pendingChoice(pending, { t: "published", value: v });
+    };
+    const click = (v: typeof published, fail = false) => {
       if (shownChoice(pending, published) === v) return; // a radio that's already shown fires no onChange
       const mine = ++id;
       pending = pendingChoice(pending, { t: "pick", value: v, id: mine });
-      sent.push(run(async () => {
-        await Bun.sleep(v === "always" ? 20 : 1);
-        server.push(v);
-        published = v; // the server publishes what it wrote
-      }).finally(() => (pending = pendingChoice(pending, { t: "done", id: mine }))));
+      sent.push(
+        run(async () => {
+          await Bun.sleep(v === "always" ? 20 : 1);
+          if (fail) throw new Error("refused");
+          server.push(v);
+        }).then(
+          () => {
+            pending = pendingChoice(pending, { t: "answered", id: mine, ok: true });
+            setTimeout(() => publish(v), 5); // the socket's state lands after the HTTP answer
+          },
+          () => void (pending = pendingChoice(pending, { t: "answered", id: mine, ok: false })),
+        ),
+      );
     };
-    click("always");
-    expect(shownChoice(pending, published)).toBe("always");
-    click("never"); // before Always is published: the radios show Always, so this is a change
-    expect(shownChoice(pending, published)).toBe("never");
-    await Promise.all(sent);
-    expect(server).toEqual(["always", "never"]);
-    expect(published).toBe("never");
-    expect(pending).toBeNull();
-    expect(shownChoice(pending, published)).toBe("never");
+    return { click, shown: () => shownChoice(pending, published), done: () => Promise.all(sent).then(() => Bun.sleep(15)), server, pending: () => pending };
+  }
+  test("Never → click Always → click Never before Always is published: the second click is sent, and Never wins", async () => {
+    const s = sheet();
+    s.click("always");
+    expect(s.shown()).toBe("always");
+    s.click("never"); // the radios show Always, so this is a change
+    expect(s.shown()).toBe("never");
+    await s.done();
+    expect(s.server).toEqual(["always", "never"]);
+    expect(s.shown()).toBe("never");
+    expect(s.pending()).toBeNull();
   });
-  test("an earlier request finishing doesn't clear a later pick", () => {
+  test("between the HTTP answer and the published state, the radios keep the new choice (no flick back)", async () => {
+    const s = sheet();
+    s.click("not-live");
+    const seen: string[] = [];
+    const watch = setInterval(() => seen.push(String(s.shown())), 1);
+    await s.done();
+    clearInterval(watch);
+    expect(seen.filter((v, i) => v !== seen[i - 1])).toEqual(["not-live"]);
+  });
+  test("a refused change drops the pending choice: the radios show what's published", async () => {
+    const s = sheet();
+    s.click("always", true);
+    await s.done();
+    expect(s.pending()).toBeNull();
+    expect(s.shown()).toBe("never");
+  });
+  test("an earlier answer doesn't clear a later pick; expire gives up waiting", () => {
     let p = pendingChoice(null, { t: "pick", value: "always", id: 1 });
     p = pendingChoice(p, { t: "pick", value: "never", id: 2 });
-    p = pendingChoice(p, { t: "done", id: 1 });
+    p = pendingChoice(p, { t: "answered", id: 1, ok: true });
     expect(shownChoice(p, "always")).toBe("never");
-    expect(pendingChoice(p, { t: "done", id: 2 })).toBeNull();
+    p = pendingChoice(p, { t: "answered", id: 2, ok: true });
+    expect(pendingChoice(p, { t: "published", value: "always" })).toEqual(p); // not what was asked: keep waiting
+    expect(pendingChoice(p, { t: "expire", id: 2 })).toBeNull();
+    expect(pendingChoice(p, { t: "published", value: "never" })).toBeNull();
   });
 });
 

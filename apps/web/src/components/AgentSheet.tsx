@@ -99,16 +99,19 @@ function Sheet({ onClose }: { onClose: () => void }) {
   const [pending, dispatch] = useReducer(pendingChoice, null);
   const picks = useRef(0);
   const shown = shownChoice(pending, agent?.onAir);
+  useEffect(() => dispatch({ t: "published", value: agent?.onAir }), [agent?.onAir]);
   const setOnAir = async (v: AgentOnAir) => {
     const id = ++picks.current;
     dispatch({ t: "pick", value: v, id });
+    let ok = true;
     try {
       await settingsInOrder(() => api.agentSettings(v));
     } catch (e) {
+      ok = false;
       toast((e as Error).message);
-    } finally {
-      dispatch({ t: "done", id });
     }
+    dispatch({ t: "answered", id, ok });
+    setTimeout(() => dispatch({ t: "expire", id }), 3000);
   };
 
   return (
