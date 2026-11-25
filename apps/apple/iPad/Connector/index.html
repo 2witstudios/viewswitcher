@@ -35,7 +35,8 @@
   @media (max-height: 500px) and (min-width: 560px) {
     main { width: min(720px, 100%); display: grid; grid-template-columns: 1fr 1fr; align-content: center; column-gap: 28px; }
     header, #status { grid-column: 1; }
-    .actions, .usb, .macs, form, .link { grid-column: 2; }
+    .actions, .usb, .macs, form, .link, #demo { grid-column: 2; }
+    .link { justify-self: start; }
     header { grid-row: 1; } #status { grid-row: 2; }
   }
 </style>
