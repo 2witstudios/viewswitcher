@@ -44,7 +44,8 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
   })().catch(() => {});
   const fail = async (why: string) => {
     proc.kill();
-    await Promise.race([drained, Bun.sleep(500)]);
+    // Let it exit (and flush its stderr) before the caller's afterAll removes its library.
+    await Promise.race([Promise.all([proc.exited, drained]), Bun.sleep(2_000)]);
     const tail = stderr.trim();
     return new Error(tail ? `${why}; its stderr ended:\n${tail}` : why);
   };
@@ -62,5 +63,7 @@ export async function startServer(env: Record<string, string>, ready: () => Prom
     if (ok) return proc;
     await Bun.sleep(50);
   }
+  // It may have exited during the last check: say so rather than calling it slow.
+  if (exited !== null) throw await fail(`server exited with code ${exited} before it was ready`);
   throw await fail(`server wasn't ready within ${readyMs / 1000} s`);
 }

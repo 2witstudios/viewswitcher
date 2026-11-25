@@ -1,6 +1,7 @@
 # shellcheck shell=bash
 # Checks a release build runs before anything slow: sourced by build.sh (--release, --publish) and
-# ipad-release.sh; never run on its own. A release must be rebuildable from a commit everyone has.
+# ipad-release.sh; never run on its own. A release must be rebuildable from a commit everyone has:
+# a build that ships (--publish, the iPad upload) needs a clean tree and HEAD on origin/main.
 # ALLOW_DIRTY=1 skips the clean-tree check for a one-off local test build (it says so, loudly), but
 # never for a build that ships: mac:release --publish, or ipad:release's upload.
 

@@ -9,8 +9,8 @@
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
 # --release and --publish need a clean tree and the Bun in .bun-version; --publish also needs HEAD on
-# origin/main, and tags the draft on HEAD (scripts/release-guard.sh). ALLOW_DIRTY=1 lets --release build
-# from a dirty tree for a local test; never --publish.
+# origin/main, and tags the draft on the commit it built (scripts/release-guard.sh). Both install exactly
+# bun.lock first. ALLOW_DIRTY=1 lets --release build from a dirty tree for a local test; never --publish.
 #
 # Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary),
 # and when that profile doesn't exist, the App Store Connect API key: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
@@ -44,6 +44,10 @@ if [ "$RELEASE" = 1 ]; then
   else
     require_clean_tree "$REPO"
   fi
+  # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
+  BUILT="$(git -C "$REPO" rev-parse HEAD)"
+  # node_modules is gitignored, so the clean tree says nothing about it: install exactly bun.lock.
+  (cd "$REPO" && bun install --frozen-lockfile)
 fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 BUILD="$APPLE/build"
@@ -219,7 +223,7 @@ if [ "$PUBLISH" = 1 ]; then
   # The dmg the site links to (releases/latest/download/ViewSwitcher.dmg) and the appcast Sparkle
   # reads. A draft: nobody gets it until a person publishes the release.
   # The tag is made on the commit that was built (gh's default is main's tip when the draft is published).
-  gh release create "v$VERSION" --repo 2witstudios/viewswitcher --draft --target "$(git -C "$REPO" rev-parse HEAD)" \
+  gh release create "v$VERSION" --repo 2witstudios/viewswitcher --draft --target "$BUILT" \
     --title "ViewSwitcher $VERSION" --notes "ViewSwitcher $VERSION for macOS (Apple silicon and Intel)." "$DMG" "$BUILD/appcast/appcast.xml"
 fi
 

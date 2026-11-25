@@ -8,7 +8,8 @@ import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 const library = mkdtempSync(join(tmpdir(), "vs-start-"));
 const env = (port: number) => ({ PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_LAN: "" });
-const listening = (port: number) => new Promise<Server>((resolve) => { const s = createServer().listen(port, "127.0.0.1", () => resolve(s)); });
+const listening = (port: number) =>
+  new Promise<Server>((resolve, reject) => { const s = createServer().once("error", reject).listen(port, "127.0.0.1", () => resolve(s)); });
 afterAll(() => rmSync(library, { recursive: true, force: true }));
 
 describe("startServer", () => {
@@ -19,6 +20,17 @@ describe("startServer", () => {
       const err = await startServer(env(port), async () => false).then(() => null, (e: Error) => e);
       expect(err?.message).toMatch(/^server exited with code \d+ before it was ready; its stderr ended:\n/);
       expect(err?.message).toMatch(/EADDRINUSE|in use/i);
+    } finally {
+      taken.close();
+    }
+  }, SERVER_START_MS);
+
+  test("a server that exits while the last check hangs is named as exited, not slow", async () => {
+    const port = await freePort();
+    const taken = await listening(port);
+    try {
+      const err = await startServer(env(port), () => new Promise<boolean>(() => {}), 1_500).then(() => null, (e: Error) => e);
+      expect(err?.message).toStartWith("server exited with code");
     } finally {
       taken.close();
     }

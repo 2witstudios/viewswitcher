@@ -9,7 +9,7 @@
 # ASC_KEY_PATH from the environment or the gitignored apps/apple/.release.env. --export uses the key when
 # it's complete, else the Apple account signed in to Xcode (Settings → Accounts).
 # Both need a clean tree (scripts/release-guard.sh); ALLOW_DIRTY=1 lets --export build from a dirty one
-# for a local check, never the upload.
+# for a local check, never the upload. The upload also needs HEAD on origin/main.
 # Env: TEAM (default M96WTV3CKX), BUILD_NUMBER (default the UTC time, YYYYMMDDHHMM: always increasing).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,7 +25,12 @@ done
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 
 source "$APPLE/scripts/release-guard.sh"
-if [ "$UPLOAD" = 1 ]; then require_clean_tree "$APPLE/../.." ship; else require_clean_tree "$APPLE/../.."; fi
+if [ "$UPLOAD" = 1 ]; then
+  require_clean_tree "$APPLE/../.." ship
+  require_head_on_main "$APPLE/../.."
+else
+  require_clean_tree "$APPLE/../.."
+fi
 
 source "$APPLE/scripts/release-env.sh"
 load_release_env "$APPLE"

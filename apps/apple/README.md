@@ -211,6 +211,7 @@ With a value missing, `mac:release` and `ipad:release` stop before building and 
    (`YYYYMMDDHHMM`, or `BUILD_NUMBER`), exports it for App Store Connect, runs `scripts/ipad-check.sh`,
    and uploads it with the API key. `--export` stops before the upload (build/ipad/export/ViewSwitcher.ipa)
    and signs with the Xcode account when the API key isn't complete. Both need a clean tree
-   (`ALLOW_DIRTY=1` lets `--export` build from uncommitted changes for a local check; the upload never).
+   (`ALLOW_DIRTY=1` lets `--export` build from uncommitted changes for a local check; the upload never),
+   and the upload needs HEAD on origin/main, so run it from main after the change merges.
 2. In App Store Connect: pick the build, fill the version from `AppStore/listing.md`, add the screenshots
    from `scripts/ipad-shots.sh`, and submit for review.
