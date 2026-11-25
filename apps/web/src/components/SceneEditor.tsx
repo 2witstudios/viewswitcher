@@ -540,7 +540,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     const slots = slotsIn(b);
     const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {
-      if (done && slot && onAirRef.current) toast(`Added · OBS source "${slot}"`);
+      if (done && slot && onAirRef.current) toast(`On air · OBS source "${slot}"`);
       else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`OBS source "${slot}"`);
     });
   };
@@ -1184,7 +1184,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       if (!(await settle())) return;
       const { name } = await api.duplicate(path);
       const copyPath = `${path.slice(0, path.lastIndexOf("/"))}/${name}.html`;
-      toast("Editing a copy");
+      toast("Editing a copy, not on air");
       navigate({ to: "/$org/edit", params: { org }, search: { path: copyPath }, replace: true });
     });
 

@@ -38,7 +38,7 @@ export function SetupCard() {
     try {
       const r = await api.setupObs();
       const next = r.missing.length ? ` Add ${r.missing.join(", ")} next.` : "";
-      toast(r.switched ? `OBS is set up.${next}` : `ViewSwitcher scene ready.${next}`);
+      toast(r.switched ? `OBS is set up.${next}` : `ViewSwitcher scene ready. OBS is live, so switch to it when you're ready.${next}`);
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -57,13 +57,13 @@ export function SetupCard() {
       {card.kind === "setup" && (
         <div className="setup-text">
           <h2>Set up OBS</h2>
-          <p>Adds a ViewSwitcher scene to OBS and switches to it.</p>
+          <p>Adds a ViewSwitcher scene to OBS and switches to it, unless OBS is live.</p>
         </div>
       )}
       {card.kind === "devices" && (
         <div className="setup-text">
           <h2>Add your devices in OBS</h2>
-          <p>Add these sources to the ViewSwitcher scene, named exactly:</p>
+          <p>Add these sources to the ViewSwitcher scene, named exactly, then press Set up OBS again:</p>
           <ul>
             {card.missing.map((d) => <li key={d}><b>{d}</b>{DEVICE_KIND[d] ? `: ${DEVICE_KIND[d]}` : ""}</li>)}
           </ul>
