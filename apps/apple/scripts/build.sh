@@ -9,7 +9,8 @@
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
 # --release and --publish need a clean tree and the Bun in .bun-version; --publish also needs HEAD on
-# origin/main, and tags the draft on HEAD (scripts/release-guard.sh).
+# origin/main, and tags the draft on HEAD (scripts/release-guard.sh). ALLOW_DIRTY=1 lets --release build
+# from a dirty tree for a local test; never --publish.
 #
 # Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary),
 # and when that profile doesn't exist, the App Store Connect API key: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
@@ -37,8 +38,12 @@ VERSION="$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml | head -1
 if [ "$RELEASE" = 1 ]; then
   source "$APPLE/scripts/release-guard.sh"
   require_pinned_bun "$REPO"
-  require_clean_tree "$REPO"
-  [ "$PUBLISH" = 0 ] || require_head_on_main "$REPO"
+  if [ "$PUBLISH" = 1 ]; then
+    require_clean_tree "$REPO" ship
+    require_head_on_main "$REPO"
+  else
+    require_clean_tree "$REPO"
+  fi
 fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 BUILD="$APPLE/build"

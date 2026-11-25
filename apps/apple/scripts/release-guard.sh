@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 # Checks a release build runs before anything slow: sourced by build.sh (--release, --publish) and
 # ipad-release.sh; never run on its own. A release must be rebuildable from a commit everyone has.
-# ALLOW_DIRTY=1 skips the clean-tree check for a one-off local test build (it says so, loudly).
+# ALLOW_DIRTY=1 skips the clean-tree check for a one-off local test build (it says so, loudly), but
+# never for a build that ships: mac:release --publish, or ipad:release's upload.
 
 # The Bun in .bun-version: it compiles the server sidecar into the app.
 require_pinned_bun() {
@@ -15,17 +16,24 @@ require_pinned_bun() {
 }
 
 # Nothing changed or untracked in the repo, so the build is exactly a commit.
+# require_clean_tree <repo> [ship]: with "ship", the build leaves this Mac, so ALLOW_DIRTY doesn't apply.
 require_clean_tree() {
   local dirty
   dirty="$(git -C "$1" status --porcelain)"
   [ -z "$dirty" ] && return 0
-  if [ "${ALLOW_DIRTY:-}" = 1 ]; then
+  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "${2:-}" != ship ]; then
     echo "⚠ ALLOW_DIRTY=1: building from a working tree with changes. Don't ship this build." >&2
     return 0
   fi
   echo "✗ The working tree has changes, so this build wouldn't match any commit:" >&2
-  echo "$dirty" | head -20 | sed 's/^/    /' >&2
-  echo "  Commit or remove them (or ALLOW_DIRTY=1 for a local test build you won't ship)." >&2
+  # A here-string, not echo | head: under pipefail, head closing early on a long list would fail the guard
+  # with SIGPIPE before the hint below.
+  head -20 <<<"$dirty" | sed 's/^/    /' >&2
+  if [ "${2:-}" = ship ]; then
+    echo "  Commit or remove them: a build that ships must match a commit (ALLOW_DIRTY doesn't apply)." >&2
+  else
+    echo "  Commit or remove them (or ALLOW_DIRTY=1 for a local test build you won't ship)." >&2
+  fi
   return 1
 }
 

@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report it privately: open this repository's **Security** tab and choose **Report a vulnerability**. Please don't open a public issue for it. Say whether you'd like credit in the release notes.
+Please report it privately: open this repository's **Security** tab and choose **Report a vulnerability**. Please don't put the details in a public issue. If that button isn't there, open an issue that only asks for a private contact, and we'll reply with one. Say whether you'd like credit in the release notes.
 
 ## What ViewSwitcher protects
 

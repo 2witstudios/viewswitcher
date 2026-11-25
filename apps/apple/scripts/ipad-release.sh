@@ -8,6 +8,8 @@
 # Upload needs the App Store Connect API key (scripts/release-env.sh): ASC_KEY_ID, ASC_ISSUER_ID and
 # ASC_KEY_PATH from the environment or the gitignored apps/apple/.release.env. --export uses the key when
 # it's complete, else the Apple account signed in to Xcode (Settings → Accounts).
+# Both need a clean tree (scripts/release-guard.sh); ALLOW_DIRTY=1 lets --export build from a dirty one
+# for a local check, never the upload.
 # Env: TEAM (default M96WTV3CKX), BUILD_NUMBER (default the UTC time, YYYYMMDDHHMM: always increasing).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -23,7 +25,7 @@ done
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 
 source "$APPLE/scripts/release-guard.sh"
-require_clean_tree "$APPLE/../.."
+if [ "$UPLOAD" = 1 ]; then require_clean_tree "$APPLE/../.." ship; else require_clean_tree "$APPLE/../.."; fi
 
 source "$APPLE/scripts/release-env.sh"
 load_release_env "$APPLE"

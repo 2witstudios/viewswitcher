@@ -1,5 +1,6 @@
 {
-  // packages/shared and its tests (run by `bun test`): cd packages/shared && bunx tsc -p .
+  // packages/shared's source, which the browser (apps/web) and Bun (apps/server) both run: no Bun,
+  // Node or DOM types, so code that only one of them has doesn't typecheck here. Its tests: tsconfig.test.json.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -9,7 +10,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["bun"]
+    "types": []
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -21,7 +21,7 @@ bun run typecheck   # apps/web, apps/server, packages/shared
 cd apps/site && bun run check
 ```
 
-CI runs the same checks, the switcher build and ViewSwitcherKit's `swift test` on every pull request; a PR merges once they pass. Use the Bun version in `.bun-version`.
+CI runs the same checks, the switcher build and ViewSwitcherKit's `swift test` on every pull request, and they should pass before a PR merges. Use the Bun version in `.bun-version`.
 
 Keep `packages/shared` dependency-free and tested. The Apple apps have XCTest; see [apps/apple/README.md](apps/apple/README.md).
 

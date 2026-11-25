@@ -189,7 +189,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     await proc.exited;
     await start();
     expect((await lan("/api/state", { headers: { cookie: lost } })).status).toBe(401);
-  }, SERVER_START_MS);
+  }, SERVER_START_MS + 10_000); // the restart alone may take startServer's whole budget
 
   test("a website open on a paired phone can't read the live socket", async () => {
     const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };

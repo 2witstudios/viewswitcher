@@ -6,6 +6,9 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # @types/bun describes the runtime, so it moves with .bun-version (by hand), never ahead of it.
+    ignore:
+      - dependency-name: "@types/bun"
     groups:
       minor-and-patch:
         update-types: [minor, patch]

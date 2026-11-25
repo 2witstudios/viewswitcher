@@ -192,17 +192,25 @@ With a value missing, `mac:release` and `ipad:release` stop before building and 
 
 ### Mac (free, GitHub Releases)
 
-1. Bump `MARKETING_VERSION` in `project.yml`.
-2. `bun run mac:release --publish`. It signs, notarizes and staples the app and the dmg, writes the
-   appcast, and uploads `ViewSwitcher.dmg` and `appcast.xml` to a draft release `v<version>`. It
-   notarizes with the keychain profile `viewswitcher-notary` when it exists (MAC-7a), else with the API key.
-3. A person checks the draft and publishes it.
+1. Bump `MARKETING_VERSION` in `project.yml` on a branch, and merge it to main through a PR.
+2. Check out main at that commit (`git switch main && git pull`), with a clean tree and the Bun in
+   `.bun-version`.
+3. `bun run mac:release --publish`. It signs, notarizes and staples the app and the dmg, writes the
+   appcast, and uploads `ViewSwitcher.dmg` and `appcast.xml` to a draft release `v<version>`, tagged on
+   the commit it built. It notarizes with the keychain profile `viewswitcher-notary` when it exists
+   (MAC-7a), else with the API key. It refuses a dirty tree, another Bun, or a HEAD that isn't on
+   origin/main (`scripts/release-guard.sh`).
+4. A person checks the draft and publishes it.
+
+`bun run mac:release` without `--publish` makes the same signed, notarized dmg and uploads nothing.
+`ALLOW_DIRTY=1` lets it build from uncommitted changes for a local test; `--publish` never does.
 
 ### iPad ($9.99, App Store)
 
 1. `bun run ipad:release`. It archives the Release build with the build number set to the UTC time
    (`YYYYMMDDHHMM`, or `BUILD_NUMBER`), exports it for App Store Connect, runs `scripts/ipad-check.sh`,
    and uploads it with the API key. `--export` stops before the upload (build/ipad/export/ViewSwitcher.ipa)
-   and signs with the Xcode account when the API key isn't complete.
+   and signs with the Xcode account when the API key isn't complete. Both need a clean tree
+   (`ALLOW_DIRTY=1` lets `--export` build from uncommitted changes for a local check; the upload never).
 2. In App Store Connect: pick the build, fill the version from `AppStore/listing.md`, add the screenshots
    from `scripts/ipad-shots.sh`, and submit for review.

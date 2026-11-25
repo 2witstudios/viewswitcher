@@ -9,6 +9,12 @@ import type { Subprocess } from "bun";
  */
 export const SERVER_START_MS = 30_000;
 
+/** startServer gives up this long before SERVER_START_MS, so its own error wins over the hook timeout. */
+export const READY_MS = SERVER_START_MS - 2_000;
+
+/** How much of the server's stderr a startup error quotes. */
+const STDERR_TAIL = 2_000;
+
 /** A port nothing is listening on right now. */
 export function freePort(): Promise<number> {
   return new Promise((resolve) => {
@@ -21,23 +27,40 @@ export function freePort(): Promise<number> {
 
 /**
  * Runs apps/server/src/index.ts with `env` on top of this process's environment and resolves once
- * `ready()` is true. Throws if the server exits first, or isn't ready a little before SERVER_START_MS
- * (so the error names the cause instead of the hook timing out).
+ * `ready()` is true. Throws if the server exits first, or isn't ready within `readyMs` (even when a
+ * check hangs), with the tail of its stderr, so the error names the cause instead of the hook timing out.
  */
-export async function startServer(env: Record<string, string>, ready: () => Promise<boolean>): Promise<Subprocess> {
+export async function startServer(env: Record<string, string>, ready: () => Promise<boolean>, readyMs = READY_MS): Promise<Subprocess> {
   const proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
     env: { ...process.env, ...env },
     stdout: "ignore",
-    stderr: "ignore",
+    stderr: "pipe",
   });
+  // Read stderr as it comes, so a chatty server never blocks on a full pipe; keep only the tail.
+  let stderr = "";
+  const drained = (async () => {
+    const decoder = new TextDecoder();
+    for await (const chunk of proc.stderr) stderr = (stderr + decoder.decode(chunk, { stream: true })).slice(-STDERR_TAIL);
+  })().catch(() => {});
+  const fail = async (why: string) => {
+    proc.kill();
+    await Promise.race([drained, Bun.sleep(500)]);
+    const tail = stderr.trim();
+    return new Error(tail ? `${why}; its stderr ended:\n${tail}` : why);
+  };
+
   let exited: number | null = null;
   void proc.exited.then((code) => (exited = code));
-  const deadline = Date.now() + SERVER_START_MS - 2_000;
+  const deadline = Date.now() + readyMs;
   while (Date.now() < deadline) {
-    if (exited !== null) throw new Error(`server exited with code ${exited} before it was ready`);
-    if (await ready().catch(() => false)) return proc;
+    if (exited !== null) throw await fail(`server exited with code ${exited} before it was ready`);
+    // A server that accepts the connection but never answers mustn't hang past the deadline.
+    let timer: Timer | undefined;
+    const left = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), Math.max(0, deadline - Date.now()))));
+    const ok = await Promise.race([ready().catch(() => false), left]);
+    clearTimeout(timer);
+    if (ok) return proc;
     await Bun.sleep(50);
   }
-  proc.kill();
-  throw new Error(`server wasn't ready within ${(SERVER_START_MS - 2_000) / 1000} s`);
+  throw await fail(`server wasn't ready within ${readyMs / 1000} s`);
 }
