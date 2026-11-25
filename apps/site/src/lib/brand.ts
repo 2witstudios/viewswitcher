@@ -1,6 +1,7 @@
 // The ViewSwitcher logo: a V of five screens stepping down to the one on air (red), then
 // "iewSwitcher" in Archivo Bold at 125% width, outlined so the logo never depends on a font.
-// One source for the header, the footer, the icons and every generated image (scripts/og.ts).
+// One source for the header, the footer, the icons and every generated image: the site's (scripts/og.ts)
+// and the apps' (scripts/brand/icons.ts: the Mac and iPad icons, the menu bar, the switcher's icons).
 // Regenerate the outline only if the lettering changes; colours and layout live here.
 
 export const LIVE = "#ff4d4f";
@@ -10,10 +11,10 @@ const LETTERS = "M1085 -608L1085 -724L1242 -724L1242 -608ZM1085 0L1085 -527L1242
 
 /** The V of screens on a 30×21.2 grid: 10×6 screens, two rows stepping in, the live one at the point.
  *  The rows overlap sideways so the two diagonals read as the strokes of a V, not as separate dashes. */
-const V = { w: 30, h: 21.2 } as const;
+export const V = { w: 30, h: 21.2 } as const;
 const V_SCREENS = [[0, 0], [20, 0], [4.2, 7.6], [15.8, 7.6]] as const;
 const V_LIVE = [10, 15.2] as const;
-const vRects = (ink: string, live: string) =>
+export const vRects = (ink: string, live: string) =>
   V_SCREENS.map(([x, y]) => `<rect x="${x}" y="${y}" width="10" height="6" rx="1.2" fill="${ink}"/>`).join("") +
   `<rect x="${V_LIVE[0]}" y="${V_LIVE[1]}" width="10" height="6" rx="1.2" fill="${live}"/>`;
 
