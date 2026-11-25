@@ -54,9 +54,16 @@ if [ "$RELEASE" = 1 ]; then
   if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain)" ]; then
     (cd "$REPO" && bun install)
   else
-    # The workspaces' folders only: $REPO can hold other checkouts (.pu/worktrees) with their own.
-    rm -rf "$REPO/node_modules" "$REPO"/apps/*/node_modules "$REPO"/packages/*/node_modules
-    (cd "$REPO" && bun install --frozen-lockfile)
+    # The root's and each workspace's folder (package.json's "workspaces"), never a wider search: $REPO
+    # can hold other checkouts (.pu/worktrees) with their own.
+    rm -rf "${REPO:?}/node_modules"
+    for ws in $(cd "$REPO" && bun -e 'console.log(require("./package.json").workspaces.join("\n"))'); do
+      # shellcheck disable=SC2086 # $ws is a glob such as apps/*, expanded on purpose
+      rm -rf "${REPO:?}"/${ws:?}/node_modules
+    done
+    # clonefile (copy-on-write) copies, never hardlinks into Bun's cache that an edit could have changed.
+    (cd "$REPO" && bun install --frozen-lockfile --backend=clonefile) || {
+      echo "✗ bun install --frozen-lockfile failed, and node_modules was emptied for it: run bun install." >&2; exit 1; }
   fi
 fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
