@@ -24,6 +24,7 @@ final class RemotesTests: XCTestCase {
         XCTAssertEqual(RemoteText.code("K7PQ2MXA"), "K7PQ-2MXA")
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         XCTAssertEqual(RemoteText.expiry(1_700_000_300_000, now: now), "Expires in 5:00")
+        XCTAssertEqual(RemoteText.expiry(1_700_000_300_400, now: now), "Expires in 5:00")
         XCTAssertEqual(RemoteText.expiry(1_700_000_059_500, now: now), "Expires in 1:00")
         XCTAssertEqual(RemoteText.expiry(1_700_000_000_000, now: now), "Expired")
         let d = RemoteDevice(id: "a", name: "iPad", pairedAt: 0, lastSeen: 1_699_999_820_000, connected: 0)

@@ -61,7 +61,8 @@ public enum RemoteText {
 
     /// "Expires in 4:59", "Expired".
     public static func expiry(_ expiresAt: Double, now: Date = Date()) -> String {
-        let left = Int((expiresAt / 1000 - now.timeIntervalSince1970).rounded(.up))
+        // Never more than the 5 minutes a code lives (the Mac's clock and the server's round differently).
+        let left = min(300, Int((expiresAt / 1000 - now.timeIntervalSince1970).rounded(.up)))
         guard left > 0 else { return "Expired" }
         return String(format: "Expires in %d:%02d", left / 60, left % 60)
     }
