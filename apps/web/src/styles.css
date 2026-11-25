@@ -194,10 +194,9 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .agent-choice span { display: flex; flex-direction: column; gap: 2px; }
 .agent-choice b { font-size: 14px; font-weight: 600; }
 .agent-choice small { font-size: 13px; line-height: 1.4; color: var(--sage); }
-.agent-builtin { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-top: 1px solid var(--line); color: var(--sage); }
-.agent-builtin b { font-size: 13px; font-weight: 600; color: var(--ink-muted); }
-.agent-builtin small { font-size: 12px; color: var(--sage-deep); }
-.agent-builtin:hover b { color: var(--cream); }
+.agent-scope { display: block; padding: 4px 10px 0; font-size: 12px; color: var(--sage-deep); }
+.agent-guide { align-self: flex-start; font-size: 12px; color: var(--sage); text-decoration: underline; text-underline-offset: 2px; }
+.agent-guide:hover { color: var(--cream); }
 
 /* ---------------------------------------------------------------- assets */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; }

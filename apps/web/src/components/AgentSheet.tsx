@@ -5,7 +5,7 @@ import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
-  agentStatusText, BUILT_IN_URL, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, sheetParts, type Way, waysIn,
+  agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
   wantsAgentSheet, withoutAgentSheet,
 } from "../lib/agent";
 import { clientKind } from "../lib/client-kind";
@@ -107,15 +107,13 @@ function Sheet({ onClose }: { onClose: () => void }) {
                 <span><b>{c.label}</b><small>{c.hint}</small></span>
               </label>
             ))}
+            <small className="agent-scope">{ON_AIR_SCOPE}</small>
           </fieldset>
         )}
 
-        {parts.builtIn && (
-          // A plain link out (the Mac app opens it in the browser): nothing is sent or kept from here.
-          <a className="agent-builtin" href={BUILT_IN_URL} target="_blank" rel="noopener noreferrer">
-            <b>Built-in AI — coming soon</b>
-            <small>An agent built into ViewSwitcher, no setup. Tell us you'd use it.</small>
-          </a>
+        {parts.setupGuide && (
+          // A plain link out: the Mac app opens it in the browser (NavigationPolicy), like any web link.
+          <a className="agent-guide" href={SETUP_GUIDE_URL} target="_blank" rel="noopener noreferrer">Setup guide</a>
         )}
       </section>
     </div>

@@ -203,7 +203,7 @@ try {
   await cmd("menu", { item: "Edit with AI…" });
   check(await until(() => evalJs("return !!document.querySelector('.agent-sheet') && !location.search.includes('ai') && location.hash !== '#ai'"), 8000), "Edit with AI… opens the window on the sheet");
   const rows = await evalJs<string[]>("return [...document.querySelectorAll('.agent-way h3')].map((h) => h.firstChild.textContent)");
-  check(["Claude Code", "Claude Desktop", "Cursor", "Codex, VS Code and other agents"].every((r) => rows.includes(r)) && (await evalJs("return !!document.querySelector('.agent-builtin')")), `the sheet in the Mac window: every way in and the built-in AI row (${JSON.stringify(rows)})`);
+  check(["Claude Code", "Claude Desktop", "Cursor", "Codex, VS Code and other agents"].every((r) => rows.includes(r)) && (await evalJs("return !!document.querySelector('.agent-guide') && !document.querySelector('.agent-builtin')")), `the sheet in the Mac window: every way in and the Setup guide link, no built-in AI row (${JSON.stringify(rows)})`);
   const before = (await state()).opened.length;
   await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Claude Desktop").click(); return true`);
   check(await until(async () => (await state()).opened.slice(before).some((p) => p.endsWith("/ViewSwitcher.mcpb")), 8000), "Add to Claude Desktop saves the extension and opens it");
@@ -217,8 +217,8 @@ try {
   }
   await evalJs(`[...document.querySelectorAll(".agent-way a")].find((a) => a.textContent === "Add to Cursor").click(); return true`);
   check(await until(async () => (await state()).opened.some((u) => u.startsWith("cursor://anysphere.cursor-deeplink/mcp/install?")), 5000), "Add to Cursor opens Cursor's install link (the one app URL the window opens)");
-  await evalJs(`document.querySelector(".agent-builtin").click(); return true`);
-  check(await until(async () => (await state()).opened.includes("https://viewswitcher.com/ai"), 5000), "Built-in AI opens viewswitcher.com/ai in the browser");
+  await evalJs(`document.querySelector(".agent-guide").click(); return true`);
+  check(await until(async () => (await state()).opened.includes("https://viewswitcher.com/ai"), 5000), "Setup guide opens viewswitcher.com/ai in the browser");
   await evalJs(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); return true`);
 
   // ------------------------------------------------------------ permissions and navigation (MAC-13)

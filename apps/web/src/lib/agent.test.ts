@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentClients, AgentStatus } from "@viewswitcher/shared";
-import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
+import { agentStatusText, codexToml, cursorDeeplink, defaultStdio, mcpUrl, ON_AIR_CHOICES, otherPortNote, SETUP_GUIDE_URL, sheetParts, waysIn, wantsAgentSheet, withoutAgentSheet } from "./agent";
 
 const NOW = 1_800_000_000_000;
 const agent = (lastSeen: number | null, client: string | null = "claude-code"): AgentStatus => ({ onAir: "not-live", lastSeen, client });
@@ -54,12 +54,14 @@ describe("ports (the kit's configs name 7420)", () => {
 });
 
 describe("per client", () => {
-  test("the iPad gets status and a pointer to the Mac only: no installs, no on-air setting, no built-in row", () => {
-    expect(sheetParts("ipad")).toEqual({ waysIn: false, connectOnMac: true, onAirSetting: false, builtIn: false });
+  test("the iPad gets status and a pointer to the Mac only: no installs, no on-air setting, no setup guide link", () => {
+    expect(sheetParts("ipad")).toEqual({ waysIn: false, connectOnMac: true, onAirSetting: false, setupGuide: false });
+    expect(sheetParts("ipad").setupGuide).toBe(false);
   });
-  test("the Mac app and browsers get the ways in and the built-in row", () => {
-    expect(sheetParts("mac")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, builtIn: true });
-    expect(sheetParts("browser")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, builtIn: true });
+  test("the Mac app and browsers get the ways in, the setting and the setup guide link (viewswitcher.com/ai)", () => {
+    expect(sheetParts("mac")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, setupGuide: true });
+    expect(sheetParts("browser")).toEqual({ waysIn: true, connectOnMac: false, onAirSetting: true, setupGuide: true });
+    expect(SETUP_GUIDE_URL).toBe("https://viewswitcher.com/ai");
   });
   test("three on-air choices, each with one line", () => {
     expect(ON_AIR_CHOICES.map((c) => [c.value, c.label])).toEqual([["never", "Never"], ["not-live", "When not live"], ["always", "Always"]]);

@@ -64,17 +64,21 @@ export function waysIn(clients: AgentClients | null): { way: Way; installed: boo
 
 /**
  * What the sheet shows in each client. The iPad can't run an agent or install anything: status and a
- * pointer to the Mac only (the on-air setting is set on the Mac too). The built-in AI row is for the
+ * pointer to the Mac only (the on-air setting is set on the Mac too). The setup guide link is for the
  * Mac app and desktop browsers.
  */
 export function sheetParts(kind: ClientKind) {
   const ipad = kind === "ipad";
-  return { waysIn: !ipad, connectOnMac: ipad, onAirSetting: !ipad, builtIn: !ipad };
+  return { waysIn: !ipad, connectOnMac: ipad, onAirSetting: !ipad, setupGuide: !ipad };
 }
 
-export const BUILT_IN_URL = "https://viewswitcher.com/ai";
+/** The setup guide on the site (MCP-11): how to connect each agent, step by step. */
+export const SETUP_GUIDE_URL = "https://viewswitcher.com/ai";
 
 // What agents may do to the show (apps/server/src/agent-guard.ts); people in the switcher are never limited.
+/** What the setting covers (Decisions: it steers agents through the tools; it isn't a lock on the files). */
+export const ON_AIR_SCOPE = "This applies to agents working through ViewSwitcher's tools. An agent that edits the library's files directly isn't held to it.";
+
 export const ON_AIR_CHOICES: { value: AgentOnAir; label: string; hint: string }[] = [
   { value: "never", label: "Never", hint: "Agents never put scenes on air, and can't change what's on air while you're live." },
   { value: "not-live", label: "When not live", hint: "Agents put scenes on air only while OBS isn't streaming or recording." },
