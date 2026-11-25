@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Daisy Debate video pipeline. Run ./dv --help
-cd "$(dirname "$0")" && exec python3 -m daisyvid.cli "$@"

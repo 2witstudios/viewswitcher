@@ -222,27 +222,24 @@ apps/server/library-kit  what a new library starts with: the agent skill, CLAUDE
 apps/web               Vite + React + TanStack Router/Query SPA: the switcher, the editor and /program
 apps/apple             one Xcode project (XcodeGen): the Mac app, the iPhone and iPad app, ViewSwitcherKit
 apps/site              viewswitcher.com (Astro); see apps/site/README.md
-packages/shared        types and pure logic both sides use: resolveStream, coverTransform, obsColor, the template pack validator
+packages/shared        types and pure, dependency-free logic (resolveStream, coverTransform, obsColor, the scene scanner, the template pack validator)
 docs                   template-packs.md, screenshots
-ios/inkcast            parked Swift Pencil app (InkCast); its drawing moves into the iPad app later
-post/                  YouTube post pipeline; see post/README.md
+.github                CI (tests, typechecks, swift test), Dependabot, the PR template
 ```
 
 ### Tests and typechecks
 
 ```sh
 bun test                                                         # shared logic, server, usbmux, path safety, library kit, template packs, OBS setup, the site
-cd apps/web && bunx tsc --noEmit && bunx tsc -p tsconfig.test.json
-cd apps/server && bunx tsc -p .
+bun run typecheck                                                # apps/web (app and tests), apps/server, packages/shared (with its tests)
 cd apps/site && bun run check                                    # astro check
 ```
 
-The Apple apps have XCTest (`xcodebuild test`, see [apps/apple/README.md](apps/apple/README.md)); `bun run mac:e2e` drives the built Mac app.
+CI (`.github/workflows/ci.yml`) runs all of these, plus the switcher build and ViewSwitcherKit's `swift test`, on every pull request and push to main, with the Bun version in `.bun-version`. The Apple apps have XCTest (`xcodebuild test`, see [apps/apple/README.md](apps/apple/README.md)); `bun run mac:e2e` drives the built Mac app.
 
 ### What's next
 
 - An ink layer: Pencil drawing from the iPad as a layer in `/program`.
-- The post pipeline per org.
 
 ### Contributing
 

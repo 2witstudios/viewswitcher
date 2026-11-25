@@ -3,10 +3,7 @@ dist/
 .DS_Store
 *.log
 .env
-ios/inkcast/InkCast.xcodeproj/
 xcuserdata/
-post/build/
-__pycache__/
 .pu/
 .scratch/
 apps/apple/*.xcodeproj/

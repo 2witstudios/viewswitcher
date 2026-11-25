@@ -8,6 +8,10 @@
 # Every dmg build also writes build/appcast/appcast.xml (Sparkle, EdDSA-signed).
 #   bun run mac:release --publish     ...then uploads ViewSwitcher.dmg and appcast.xml to a DRAFT GitHub
 #                                     release v<version> (needs gh); publishing the draft is a person's call
+# --release and --publish need a clean tree and the Bun in .bun-version; --publish also needs HEAD on
+# origin/main, and tags the draft on the commit it built (scripts/release-guard.sh). Both install
+# bun.lock into empty node_modules first. ALLOW_DIRTY=1 lets --release build from a dirty tree for a
+# local test (installing what package.json says); never --publish.
 #
 # Env: TEAM (default M96WTV3CKX), APPLE_KEYCHAIN_PROFILE (notarytool profile, default viewswitcher-notary),
 # and when that profile doesn't exist, the App Store Connect API key: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH
@@ -32,6 +36,35 @@ for arg in "$@"; do
   esac
 done
 VERSION="$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml | head -1)"
+if [ "$RELEASE" = 1 ]; then
+  source "$APPLE/scripts/release-guard.sh"
+  require_pinned_bun "$REPO"
+  if [ "$PUBLISH" = 1 ]; then
+    require_clean_tree "$REPO" ship
+    require_head_on_main "$REPO"
+  else
+    require_clean_tree "$REPO"
+  fi
+  # The commit the guards passed: the release is tagged on it even if HEAD moves during the build.
+  BUILT="$(git -C "$REPO" rev-parse HEAD)"
+  # node_modules is gitignored, so the clean tree says nothing about it: install bun.lock into empty
+  # node_modules folders, so no stale or extra package reaches the build (a file patched by hand can come
+  # back only through a hardlinked cache; see below). A local test build from a dirty tree (ALLOW_DIRTY) installs what package.json says now
+  # instead, since its bun.lock may have changed.
+  if [ "${ALLOW_DIRTY:-}" = 1 ] && [ "$PUBLISH" = 0 ] && [ -n "$(git -C "$REPO" status --porcelain --untracked-files=all)" ]; then
+    (cd "$REPO" && bun install)
+  else
+    # The root's and each workspace's folder, found as Bun finds workspaces (scripts/node-modules-dirs.ts),
+    # never a wider search: $REPO can hold other checkouts (.pu/worktrees) with their own. An assignment,
+    # so a failed lookup stops the build instead of skipping the cleanup.
+    NM_DIRS="$(bun "$APPLE/scripts/node-modules-dirs.ts" "$REPO")"
+    while IFS= read -r dir; do rm -rf "${REPO:?}/${dir:?}"; done <<<"$NM_DIRS"
+    # clonefile: this install adds no hardlinks into Bun's cache. It doesn't re-check the cache, which a hand
+    # edit reaches only through a hardlink backend configured elsewhere (bunfig, BUN_INSTALL_BACKEND).
+    (cd "$REPO" && bun install --frozen-lockfile --backend=clonefile) || {
+      echo "✗ bun install --frozen-lockfile failed, and node_modules was emptied for it: run bun install." >&2; exit 1; }
+  fi
+fi
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$*"; }
 BUILD="$APPLE/build"
 DD="$BUILD/dd"
@@ -80,6 +113,11 @@ if [ "$PUBLISH" = 1 ]; then
   gh auth status >/dev/null 2>&1 || { echo "✗ --publish needs the GitHub CLI signed in (gh auth login)." >&2; exit 1; }
   ! gh release view "v$VERSION" --repo 2witstudios/viewswitcher >/dev/null 2>&1 || {
     echo "✗ A release v$VERSION already exists: bump MARKETING_VERSION in project.yml first." >&2; exit 1; }
+  # A tag left without a release: gh would reuse it (--target doesn't move a tag), so the draft would
+  # name that commit while carrying this build. ^{} dereferences an annotated tag.
+  TAGGED="$(git -C "$REPO" ls-remote origin "refs/tags/v$VERSION^{}" "refs/tags/v$VERSION" | awk 'NR==1 || /\^\{\}$/ {c=$1} END {print c}')"
+  [ -z "$TAGGED" ] || [ "$TAGGED" = "$BUILT" ] || {
+    echo "✗ Tag v$VERSION already exists on origin at ${TAGGED:0:7}, not ${BUILT:0:7}: bump MARKETING_VERSION or delete that tag." >&2; exit 1; }
 fi
 sign() { # sign <path> [entitlements]: Developer ID + hardened runtime + timestamp, or ad hoc
   local ent=()
@@ -205,8 +243,12 @@ if [ "$PUBLISH" = 1 ]; then
   step "Draft GitHub release v$VERSION"
   # The dmg the site links to (releases/latest/download/ViewSwitcher.dmg) and the appcast Sparkle
   # reads. A draft: nobody gets it until a person publishes the release.
-  gh release create "v$VERSION" --repo 2witstudios/viewswitcher --draft --title "ViewSwitcher $VERSION" \
-    --notes "ViewSwitcher $VERSION for macOS (Apple silicon and Intel)." "$DMG" "$BUILD/appcast/appcast.xml"
+  # The tag is made on the commit that was built (gh's default is main's tip when the draft is published),
+  # so the tree must still be that commit: nothing pulled, switched or edited during the build.
+  [ "$(git -C "$REPO" rev-parse HEAD)" = "$BUILT" ] || { echo "✗ HEAD moved during the build (it was ${BUILT:0:7}): not publishing." >&2; exit 1; }
+  require_clean_tree "$REPO" ship
+  gh release create "v$VERSION" --repo 2witstudios/viewswitcher --draft --target "$BUILT" \
+    --title "ViewSwitcher $VERSION" --notes "ViewSwitcher $VERSION for macOS (Apple silicon and Intel)." "$DMG" "$BUILD/appcast/appcast.xml"
 fi
 
 step "Done"

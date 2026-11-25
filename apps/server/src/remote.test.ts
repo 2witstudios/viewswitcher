@@ -3,12 +3,13 @@
 // that really arrive from that address, so the server sees a non-loopback peer like a phone's.
 // Skipped on a machine with no LAN address.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { Subprocess } from "bun";
 import { mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lanAddresses, pairingOrder, vpnAddresses } from "./lan";
+import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 // The address the server puts in the QR code (its own pairingOrder), and the one this test connects to.
 const advertised = pairingOrder(lanAddresses(), vpnAddresses())[0];
@@ -16,7 +17,7 @@ const ip = process.env.VIEWSWITCHER_TEST_LAN_IP ?? advertised;
 const ADMIN = "test-admin-secret-" + "x".repeat(32);
 const TTL = 1500;
 let port = 0;
-let proc: ReturnType<typeof Bun.spawn>;
+let proc: Subprocess;
 const library = mkdtempSync(join(tmpdir(), "vs-remote-"));
 
 type Res = { status: number; body: string; headers: http.IncomingHttpHeaders };
@@ -55,31 +56,20 @@ function socket(headers: Record<string, string>) {
 }
 
 async function start() {
-  proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-    env: {
-      ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "",
+  proc = await startServer(
+    {
+      PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "",
       VIEWSWITCHER_LAN: "1", VIEWSWITCHER_LAN_HOST: ip!, VIEWSWITCHER_ADMIN_TOKEN: ADMIN, VIEWSWITCHER_PAIR_TTL_MS: String(TTL), VIEWSWITCHER_LOCAL_NAME: "test-mac",
     },
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  for (let i = 0; i < 100; i++) {
-    if (await lan("/").then((r) => r.status === 401, () => false)) return;
-    await Bun.sleep(50);
-  }
-  throw new Error("server didn't start");
+    () => lan("/").then((r) => r.status === 401),
+  );
 }
 
 describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
   beforeAll(async () => {
-    port = await new Promise<number>((r) => {
-      const s = createServer().listen(0, "127.0.0.1", () => {
-        const p = (s.address() as { port: number }).port;
-        s.close(() => r(p));
-      });
-    });
+    port = await freePort();
     await start();
-  });
+  }, SERVER_START_MS);
   afterAll(() => {
     proc?.kill();
     rmSync(library, { recursive: true, force: true });
@@ -199,7 +189,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     await proc.exited;
     await start();
     expect((await lan("/api/state", { headers: { cookie: lost } })).status).toBe(401);
-  });
+  }, SERVER_START_MS + 10_000); // the restart alone may take startServer's whole budget
 
   test("a website open on a paired phone can't read the live socket", async () => {
     const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
