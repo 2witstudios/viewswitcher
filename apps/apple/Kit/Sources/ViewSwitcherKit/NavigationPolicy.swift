@@ -32,6 +32,15 @@ public enum NavigationPolicy {
     /// What may leave the window for another app: web pages, and Cursor's install link.
     public static func opensOutside(_ url: URL) -> Bool { isWeb(url) || isCursorInstall(url) }
 
+    /// A navigation the switcher itself started: from the main frame while it shows the switcher's own
+    /// pages, never a scene. (Scenes are sandboxed frames without allow-top-navigation, so they can't
+    /// navigate the window anyway; a scene opened on its own in the window is under /library/.)
+    /// `source` is the URL of the frame the navigation came from, nil when unknown.
+    public static func startedBySwitcher(source: URL?, sourceMainFrame: Bool, server: URL) -> Bool {
+        guard sourceMainFrame, let s = source, sameOrigin(s, server) else { return false }
+        return !s.path.lowercased().hasPrefix("/library/")
+    }
+
     /// Edit with AI's "Add to Claude Desktop": the server's extension for this install, which the Mac
     /// window saves to Downloads and opens (Claude Desktop shows its install dialog). Nothing else downloads.
     public static func isExtensionDownload(_ url: URL, server: URL) -> Bool {
@@ -44,14 +53,16 @@ public enum NavigationPolicy {
     }
 
     /// The Mac window: the main frame stays on the server; other web pages go to the browser.
-    /// `newWindow` is window.open / target=_blank, which never opens inside the app.
-    public static func mac(_ url: URL, server: URL, mainFrame: Bool, newWindow: Bool = false) -> NavigationDecision {
-        if newWindow { return opensOutside(url) ? .openInBrowser(url) : .deny }
+    /// `newWindow` is window.open / target=_blank, which never opens inside the app. Cursor's install
+    /// link opens only when `fromSwitcher` (startedBySwitcher): Edit with AI's own button, never a scene.
+    public static func mac(_ url: URL, server: URL, mainFrame: Bool, newWindow: Bool = false, fromSwitcher: Bool = false) -> NavigationDecision {
+        let outside = isWeb(url) || (fromSwitcher && isCursorInstall(url))
+        if newWindow { return outside ? .openInBrowser(url) : .deny }
         if !mainFrame { return frameAllowed(url) ? .allow : .deny }
         if sameOrigin(url, server) { return .allow }
         // about:blank and the like while the page sets itself up are harmless; everything else leaves.
         if url.scheme?.lowercased() == "about" { return .allow }
-        return opensOutside(url) ? .openInBrowser(url) : .deny
+        return outside ? .openInBrowser(url) : .deny
     }
 
     /// The scheme of the iPad app's bundled connector page (viewswitcher://connector/).

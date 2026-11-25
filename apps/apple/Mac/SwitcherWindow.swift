@@ -222,7 +222,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
             saveAndOpen(url)
             return decisionHandler(.cancel)
         }
-        switch NavigationPolicy.mac(url, server: base, mainFrame: mainFrame, newWindow: action.targetFrame == nil) {
+        switch NavigationPolicy.mac(url, server: base, mainFrame: mainFrame, newWindow: action.targetFrame == nil, fromSwitcher: startedBySwitcher(action)) {
         case .allow:
             decisionHandler(action.shouldPerformDownload ? .cancel : .allow)
         case .openInBrowser(let u):
@@ -234,6 +234,14 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         }
     }
 
+    /// Whether the switcher's own page started this navigation (NavigationPolicy.startedBySwitcher).
+    /// sourceFrame through KVC: WebKit can leave it nil (a load the app started), which the Swift
+    /// signature doesn't admit.
+    private func startedBySwitcher(_ action: WKNavigationAction) -> Bool {
+        let source = action.value(forKey: "sourceFrame") as? WKFrameInfo
+        return NavigationPolicy.startedBySwitcher(source: source?.request.url, sourceMainFrame: source?.isMainFrame ?? false, server: base)
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
         // Nothing downloads into the app.
         decisionHandler(response.canShowMIMEType ? .allow : .cancel)
@@ -241,7 +249,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
 
     /// window.open and target=_blank: never a second window; web pages go to the browser.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url, case .openInBrowser(let u) = NavigationPolicy.mac(url, server: base, mainFrame: true, newWindow: true) {
+        if let url = action.request.url, case .openInBrowser(let u) = NavigationPolicy.mac(url, server: base, mainFrame: true, newWindow: true, fromSwitcher: startedBySwitcher(action)) {
             Outside.openInBrowser(u)
         } else {
             events.append("denied window \(action.request.url?.absoluteString ?? "")")
