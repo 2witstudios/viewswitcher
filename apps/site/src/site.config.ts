@@ -31,7 +31,7 @@ export const site = {
   /** MAC-8 must publish a release asset with exactly this name for this link to resolve. */
   dmgUrl: "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg",
   /** The Mac app's current release (SITE-20). Update with each release: the version that /download and the structured data state. */
-  mac: { version: "1.1.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
+  mac: { version: "1.2.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
   /** Drop SITE-11's recording here (public/demo/viewswitcher-demo.mp4) and the hero plays it. */
   demoVideo: "/demo/viewswitcher-demo.mp4",
   macAppReleased: macAppFlag(MAC_APP_RELEASED, process.env.SITE_MAC_APP),

@@ -5,12 +5,12 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import { github } from "../site.config";
 ---
-<Base title="Privacy policy · ViewSwitcher" description="ViewSwitcher collects nothing: no accounts, no analytics, no tracking. Your shows stay on your Mac." path="/privacy">
+<Base title="Privacy policy · ViewSwitcher" description="ViewSwitcher's apps collect nothing: no accounts, no analytics, no tracking. Your shows stay on your Mac. The site keeps an email only if you join the iPad beta." path="/privacy">
   <Header />
   <main id="main" class="wrap prose">
     <h1>Privacy</h1>
-    <p class="lede">The short version: ViewSwitcher collects nothing. No accounts, no analytics, no ads, no tracking. Your shows stay on your Mac.</p>
-    <p class="quiet">Updated 24 November 2026. This covers ViewSwitcher for Mac, ViewSwitcher for iPad and this website.</p>
+    <p class="lede">The short version: the ViewSwitcher apps collect nothing. No accounts, no analytics, no ads, no tracking. Your shows stay on your Mac. This website keeps an email address only if you sign up for the iPad beta.</p>
+    <p class="quiet">Updated 25 November 2026. This covers ViewSwitcher for Mac, ViewSwitcher for iPad and this website.</p>
 
     <h2>ViewSwitcher for Mac</h2>
     <p>The app runs entirely on your Mac. Your shows, views, titles and settings are saved in a folder on your Mac, and the app talks to OBS on the same Mac. When you switch from a browser on the Mac or from the iPad app, it connects to ViewSwitcher on your Mac directly; nothing passes through us. We don't run a server that your data could go to.</p>
@@ -18,6 +18,7 @@ import { github } from "../site.config";
     <ul>
       <li><strong>Updates.</strong> It checks GitHub, where ViewSwitcher is published, for a newer version and downloads it from there. GitHub sees your IP address, as with any download (<a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>).</li>
       <li><strong>Fonts in the starter views.</strong> The views ViewSwitcher starts you with load their fonts from Google Fonts when they're shown, so Google sees your IP address (<a href="https://policies.google.com/privacy">Google's privacy policy</a>). You can change a view's fonts to ones on your Mac.</li>
+      <li><strong>An AI app you connect</strong> (Edit with AI). AI apps connect only on this Mac, and only to your show's folder. The app you connect, such as Claude or Cursor, reads your shows and views to work on them, and sends what it needs to its own service; that's covered by that app's privacy policy, not by us.</li>
       <li><strong>Anything you add to a view yourself</strong>, such as an image or a web page from the internet, loads from wherever it's hosted.</li>
     </ul>
 
@@ -29,7 +30,7 @@ import { github } from "../site.config";
     <p>No cookies, no analytics, no tracking scripts, and the fonts are served from this site, not a font service. The site is hosted on Vercel, which handles requests to it (including your IP address) to serve and protect the site (<a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>). Links to GitHub take you to GitHub. The <a href="/ai#beta">iPad beta signup</a> keeps only the email you type. It's stored with our email provider, Resend (<a href="https://resend.com/legal/privacy-policy">Resend's privacy policy</a>), and used only to send you the TestFlight invite and notes about the beta. To have it removed, reply to any beta email and ask; we delete it from Resend.</p>
 
     <h2>Children</h2>
-    <p>ViewSwitcher doesn't collect personal information from anyone, including children.</p>
+    <p>The ViewSwitcher apps don't collect personal information from anyone, including children. The iPad beta signup is meant for adults; if a child has signed up, ask and we'll remove the address.</p>
 
     <h2>Changes</h2>
     <p>If this ever changes, this page changes first, with a new date at the top.</p>
