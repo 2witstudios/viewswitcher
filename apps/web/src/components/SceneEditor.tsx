@@ -12,7 +12,7 @@ import {
 } from "@viewswitcher/shared";
 import type { AddKind, InsertEdit, Library, RemoveEdit, SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api, SceneConflict } from "../lib/api";
 import { useLibrary } from "../lib/library";
 import { libraryUrl, useLive } from "../lib/live";
@@ -28,30 +28,19 @@ import {
   applyEdit, applyStructure, beginTyping, endTyping, frameDoc, type Hit, hitAt, type IdBaseline, idBaseline, idsMatch, listenKeys, listenWhileTyping, nodeOf, prepareFrame,
   rectIn, setShownText, shownPos, shownSize, shownVersion, textShown,
 } from "./editor/frame-dom";
-import {
-  clampSize, type Corner, dragTo, type DragStart, isArrow, nudge as nudged, type Pos, resizeEdit, type ResizeStart, resizeTo, samePos, sameSize, SCENE_H, SCENE_W, type Size,
-} from "./editor/geometry";
+import { clampSize, isArrow, nudge as nudged, type Pos, samePos, SCENE_H, SCENE_W, type Size, sameSize } from "./editor/geometry";
 import { canStart, canUndo } from "./editor/mode";
 import { PositionBar } from "./editor/PositionBar";
 import { useLivePreview } from "./editor/useLivePreview";
+import { useGestures } from "./editor/useGestures";
 import { useMode } from "./editor/useMode";
 import { usePictureDrop } from "./editor/usePictureDrop";
 import { useSceneDocument } from "./editor/useSceneDocument";
 import { type UndoEntry, useUndo } from "./editor/useUndo";
 import { attempt, toast } from "./ui";
 
-const LONG_PRESS_MS = 550;
-const DOUBLE_TAP_MS = 350;
-const DRAG_START_PX = 6; // screen px before a press becomes a drag
-const SNAP_PX = 7; // screen px
 const NUDGE_SAVE_MS = 500;
 
-/** A press on the scene, from pointerdown to pointerup: a tap, a long-press, or (once it moves) a drag or resize. */
-type Gesture = {
-  pointerId: number; cx: number; cy: number; hit: Hit; moved: boolean; long: boolean; timer?: ReturnType<typeof setTimeout>;
-  drag?: DragStart & { id: number; last: Pos; gen: number };
-  resize?: ResizeStart & { id: number; last: Pos & Size; gen: number };
-};
 /** Arrow-key moves of one box, saved together once the keys stop. */
 type Nudge = { id: number; before: SceneEdit; last: Pos; gen: number; timer?: ReturnType<typeof setTimeout> };
 
@@ -119,8 +108,6 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const frameMismatches = useRef(0);
   /** How the frame's ids lined up with the file when it loaded; checked after every add or delete. */
   const ids0 = useRef<IdBaseline | null>(null);
-  const gesture = useRef<Gesture | null>(null);
-  const lastTap = useRef<{ t: number; cx: number; cy: number; leaf: number | null } | null>(null);
   const nudge = useRef<Nudge | null>(null);
 
   const reloadFrame = () => {
@@ -141,8 +128,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       setMenu(null);
       setSelected(null);
       setHover(null);
-      clearTimeout(gesture.current?.timer);
-      gesture.current = null;
+      gestures.drop();
       clearTimeout(nudge.current?.timer);
       nudge.current = null;
       undo.clear();
@@ -412,7 +398,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     });
   }, [typing?.id, typing?.gen]);
 
-  // ------------------------------------------------------------ pointer: select, drag, long-press, double-tap
+  // ------------------------------------------------------------ pointer: select, drag, long-press, double-tap (useGestures)
 
   const toScene = (e: { clientX: number; clientY: number }) => {
     const r = overlay.current!.getBoundingClientRect();
@@ -429,154 +415,31 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     if (h.move !== null) setSelected(h.move);
   };
 
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!canStart(modes.now()) || !ready || e.button > 0) return;
-    setMenu(null);
-    const p = toScene(e);
-    // A corner handle of the selected box: resize it.
-    const corner = (e.target as HTMLElement).closest?.("[data-corner]")?.getAttribute("data-corner") as Corner | null;
-    const b = baseRef.current;
-    if (corner && selected !== null && b) {
-      const pos = posNow(selected), size = sizeNow(selected);
-      if (pos && size) {
-        e.preventDefault();
-        flushNudge();
-        overlay.current!.setPointerCapture(e.pointerId);
-        const start = { ...pos, ...size };
-        gesture.current = {
-          pointerId: e.pointerId, cx: e.clientX, cy: e.clientY, hit: { leaf: null, move: selected, image: null }, moved: true, long: false,
-          resize: { id: selected, corner, start, x0: p.x, y0: p.y, last: start, slot: isSlot(b, selected), gen: generation.current },
-        };
-        dispatch({ t: "resize", id: selected, ...size });
-        return;
-      }
-    }
-    const h = hit(p.x, p.y);
-    overlay.current!.setPointerCapture(e.pointerId);
-    const g: Gesture = { pointerId: e.pointerId, cx: e.clientX, cy: e.clientY, hit: h, moved: false, long: false };
-    if (h.leaf !== null || h.move !== null) {
-      g.timer = setTimeout(() => {
-        g.long = true;
-        openMenu(g.cx, g.cy, h, true);
-      }, LONG_PRESS_MS);
-    }
-    gesture.current = g;
-  };
-
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
-    if (g?.resize && g.pointerId === e.pointerId) {
-      const r = g.resize;
-      const next = resizeTo(r, toScene(e), e.shiftKey);
-      if (samePos(next, r.last) && sameSize(next, r.last)) return;
-      r.last = next;
-      const edit = resizeEdit(r.id, r.corner, next);
-      applyDom(edit);
-      preview(edit, r.gen);
-      dispatch({ t: "resize", id: r.id, width: next.width, height: next.height });
-      return;
-    }
-    if (!g || g.pointerId !== e.pointerId) {
-      if (e.pointerType === "mouse" && canStart(modes.now()) && ready) {
-        const p = toScene(e);
-        setHover(hit(p.x, p.y).leaf);
-      }
-      return;
-    }
-    if (!g.moved && Math.hypot(e.clientX - g.cx, e.clientY - g.cy) < DRAG_START_PX) return;
-    if (!g.moved) {
-      g.moved = true;
-      clearTimeout(g.timer);
-      const id = g.hit.move;
-      const b = baseRef.current;
-      if (id === null || g.long || !b) return;
-      const d = fd();
-      const self = nodeOf(d, id);
-      const start = posNow(id);
-      const rect = rectOf(id);
-      if (!self || !start || !rect) return;
-      // Snap to every other movable box that isn't this one, inside it, or around it.
-      const others = b.els.filter((x) => x.id !== id && movableIn(b, x.id)).flatMap((x) => {
-        const n = nodeOf(d, x.id);
-        if (!n || n.contains(self) || self.contains(n)) return [];
-        const r = rectOf(x.id);
-        return r ? [r] : [];
-      });
-      const p = toScene({ clientX: g.cx, clientY: g.cy });
-      flushNudge();
-      if (dispatch({ t: "drag", id, ...start, guides: { x: [], y: [] } }).kind !== "dragging") return;
-      g.drag = { id, start, rect, others, x0: p.x, y0: p.y, last: start, gen: generation.current };
-      setSelected(id);
-      setHover(null);
-    }
-    const d = g.drag;
-    if (!d) return;
-    const next = dragTo(d, toScene(e), SNAP_PX / scaleRef.current);
-    if (samePos(next, d.last)) return;
-    d.last = { left: next.left, top: next.top };
-    applyDom({ id: d.id, ...d.last });
-    preview({ id: d.id, ...d.last }, d.gen);
-    dispatch({ t: "drag", id: d.id, ...next });
-  };
-
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
-    if (!g || g.pointerId !== e.pointerId) return;
-    gesture.current = null;
-    clearTimeout(g.timer);
-    if (g.resize) {
-      const { id, start, last, gen, corner } = g.resize;
-      dispatch({ t: "end", kind: "resizing" });
-      if (!sameSize(last, start)) save([resizeEdit(id, corner, last)], [{ before: resizeEdit(id, corner, start), after: resizeEdit(id, corner, last) }], gen);
-      return;
-    }
-    if (g.drag) {
-      const { id, start, last, gen } = g.drag;
-      dispatch({ t: "end", kind: "dragging" });
-      if (!samePos(last, start)) save([{ id, ...last }], [{ before: { id, ...start }, after: { id, ...last } }], gen);
-      return;
-    }
-    if (g.moved || g.long) return;
-    // A tap: a second one on the same text edits it; otherwise select what's under it.
-    const t = lastTap.current;
-    const now = performance.now();
-    if (t && now - t.t < DOUBLE_TAP_MS && Math.hypot(e.clientX - t.cx, e.clientY - t.cy) < 30 && g.hit.leaf !== null && t.leaf === g.hit.leaf) {
-      lastTap.current = null;
-      startEdit(g.hit.leaf);
-      return;
-    }
-    lastTap.current = { t: now, cx: e.clientX, cy: e.clientY, leaf: g.hit.leaf };
-    setSelected(g.hit.move);
-  };
-
-  const onPointerCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
-    if (!g || g.pointerId !== e.pointerId) return;
-    gesture.current = null;
-    clearTimeout(g.timer);
-    if (g.resize) {
-      const { id, start, gen } = g.resize;
-      applyDom({ id, ...start });
-      preview({ id, ...start }, gen);
-      dispatch({ t: "end", kind: "resizing" });
-      return;
-    }
-    if (g.drag) {
-      applyDom({ id: g.drag.id, ...g.drag.start });
-      preview({ id: g.drag.id, ...g.drag.start }, g.drag.gen);
-      dispatch({ t: "end", kind: "dragging" });
-    }
-  };
-
-  const onContextMenu = (e: ReactMouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (!canStart(modes.now())) return;
-    const g = gesture.current;
-    if (g) clearTimeout(g.timer);
-    if (g) g.long = true;
-    const p = toScene(e);
-    openMenu(e.clientX, e.clientY, hit(p.x, p.y));
-  };
+  const gestures = useGestures({
+    mode: modes,
+    overlay,
+    ready,
+    selected,
+    scale: () => scaleRef.current,
+    base: () => baseRef.current,
+    generation: () => generation.current,
+    toScene,
+    hit,
+    node: (id) => nodeOf(fd(), id),
+    rectOf,
+    posNow,
+    sizeNow,
+    applyDom,
+    preview,
+    save,
+    flushNudge: () => flushNudge(),
+    startEdit,
+    select: setSelected,
+    setHover,
+    closeMenu: () => setMenu(null),
+    openMenu,
+  });
+  const gesture = gestures.gesture;
 
   // ------------------------------------------------------------ keyboard: nudges, undo, escape
 
@@ -907,10 +770,9 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
               scale={s}
               typing={!!typing}
               handlers={{
-                onPointerDown, onPointerMove, onPointerUp, onPointerCancel,
+                ...gestures.handlers,
                 onPointerLeave: () => setHover(null),
                 onDragOver: pictures.onDragOver, onDragLeave: pictures.onDragLeave, onDrop: pictures.onDrop,
-                onContextMenu,
               }}
               hover={hoverRect}
               selected={selRect}
