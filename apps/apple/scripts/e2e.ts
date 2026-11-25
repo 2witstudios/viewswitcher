@@ -179,7 +179,7 @@ try {
   check(await until(async () => (await state()).menu.includes("OBS: not connected")), "menu bar: OBS not connected");
   const s1 = await state();
   console.log(`  menu: ${s1.menu.filter(Boolean).join(" | ")}`);
-  for (const l of ["Nothing on air", "iPad: USB link off", "Open ViewSwitcher", "Open in Browser", "Open Library Folder", "Set Up OBS…", "Check for Updates…", "Open at Login", "Show Server Log", "Quit ViewSwitcher"]) check(s1.menu.includes(l), `menu bar: "${l}"`);
+  for (const l of ["Nothing on air", "iPhone or iPad: USB link off", "Open ViewSwitcher", "Open in Browser", "Open Library Folder", "Set Up OBS…", "Check for Updates…", "Open at Login", "Show Server Log", "Quit ViewSwitcher"]) check(s1.menu.includes(l), `menu bar: "${l}"`);
   check(!s1.menuEnabled.includes("Set Up OBS…"), "menu bar: Set Up OBS waits for OBS");
   check(!s1.menu.includes("Restart Server"), "menu bar: no Restart Server while a server runs");
   const orgScene = "my-channel/templates/brb.html";
@@ -378,7 +378,8 @@ try {
     await cmd("remotes");
     check(await until(async () => !!(await state()).remotes?.code, 8000), "Phones and Tablets… shows a code");
     const r = (await state()).remotes!;
-    check(r.pairUrl === `http://${LAN_IP}:${PORT}/pair?code=${r.code}`, `the QR code links to this Mac's LAN address with the code (${r.pairUrl})`);
+    // (PHONE-4: and, when the Mac has a .local name, `&mac=<name>.local` for the iPhone and iPad app.)
+    check(new RegExp(`^http://${LAN_IP.replace(/\./g, "\\.")}:${PORT}/pair\\?code=${r.code}(&mac=[a-z0-9-]+\\.local)?$`).test(r.pairUrl), `the QR code links to this Mac's LAN address with the code (${r.pairUrl})`);
     if (shots) {
       await sleep(500);
       await cmd("remotesSnapshot", { path: join(shots, "mac-remotes-qr.png") }).then(() => console.log("  screenshot mac-remotes-qr.png"));

@@ -37,7 +37,7 @@ export function pairPage({ name }: { name: string }): string {
 <body>
 <main>
   <h1>Pair with ViewSwitcher</h1>
-  <p>Enter the code shown on the Mac: ViewSwitcher in the menu bar, then Phones and Tablets.</p>
+  <p>On the Mac: Phones and Tablets.</p>
   <form id="pair" autocomplete="off">
     <label for="code">Code</label>
     <input id="code" name="code" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="XXXX-XXXX" required>
@@ -46,7 +46,7 @@ export function pairPage({ name }: { name: string }): string {
     <button id="go" type="submit">Pair</button>
     <div id="error" role="alert"></div>
   </form>
-  <small>Only devices paired here can switch scenes. Wi-Fi traffic isn't encrypted, so pair only on networks you trust, like home or church Wi-Fi.</small>
+  <small>Wi-Fi traffic isn't encrypted: pair only on networks you trust.</small>
 </main>
 <script>
   const q = new URLSearchParams(location.search);

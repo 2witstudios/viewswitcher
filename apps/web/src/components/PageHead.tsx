@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { api } from "../lib/api";
+import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { appLink, useLive } from "../lib/live";
 import { openAgentSheet, SparkleIcon } from "./AgentSheet";
 import { PencilIcon, useOpenEditor } from "./SceneTile";
@@ -11,12 +12,18 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
   const obs = state?.obs;
   const onAir = state?.onAir;
   const openEditor = useOpenEditor();
+  const libraryOpen = useLibraryOpen();
   return (
     <>
       <header className="page-head">
         <div className="titles">
           <span className="crumb">{crumb}</span>
           <h1 className="title">{title}</h1>
+          {/* On a phone the title is the stream picker: it opens the library (PHONE-3, PHONE-12). */}
+          <button type="button" className="stream-pick" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
+            <span className="crumb">{crumb}</span>
+            <span className="title">{title}<ChevronIcon /></span>
+          </button>
         </div>
         <div className="livebar">
           <span className={`pill${onAir ? "" : " off"}`}>
@@ -42,8 +49,9 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
           {appLink && <span className="pill link" title={appLink === "USB" ? "USB-C" : "Network"}>{appLink}</span>}
           {!obs?.connected && <span className="pill off" title="Enable OBS's WebSocket server"><span className="dot" />OBS offline</span>}
           {!appLink && state?.usb.attached && (
-            <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "USB-C" : "Open ViewSwitcher on the iPad"}>
-              {state.usb.connected ? "IPAD · USB" : "IPAD · OPEN APP"}
+            // PHONE-8: named for the device plugged in (iPhone or iPad); an unknown one reads as before.
+            <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "USB-C" : `Open ViewSwitcher on the ${state.usb.device ?? "iPad"}`}>
+              {(state.usb.device ?? "iPad").toUpperCase()} · {state.usb.connected ? "USB" : "OPEN APP"}
             </span>
           )}
         </div>
@@ -57,3 +65,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
     </>
   );
 }
+
+const ChevronIcon = () => (
+  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+);

@@ -1,4 +1,4 @@
-// USB-C link to the ViewSwitcher iPad app.
+// USB-C link to the ViewSwitcher app on an iPhone or iPad.
 //
 // iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects
 // Mac → iPad. So this keeps a few idle tunnels open to the app's listener (iPad port 7421).
@@ -8,13 +8,14 @@
 import { existsSync } from "node:fs";
 import net from "node:net";
 import { bridgePorts } from "./gate";
-import { concat, connectMessage, decodeMessages, decodeOne, listenMessage, resultNumber, u8, USBMUXD_SOCKET } from "./usbmux";
+import type { UsbDevice } from "@viewswitcher/shared";
+import { concat, connectMessage, decodeMessages, decodeOne, deviceKind, listenMessage, resultNumber, u8, USBMUXD_SOCKET } from "./usbmux";
 
 const POOL = 4;
 const RETRY_MS = 1000;
 
-/** What the bridge sees: an iPad plugged in, and the ViewSwitcher app on it with tunnels ready. */
-export type BridgeStatus = { attached: boolean; connected: boolean };
+/** What the bridge sees: an iPhone or iPad plugged in (which, PHONE-8), and the ViewSwitcher app on it with tunnels ready. */
+export type BridgeStatus = { attached: boolean; connected: boolean; device?: UsbDevice };
 
 type Options = {
   serverPort: number;
@@ -31,11 +32,14 @@ export function usbAvailable() {
 }
 
 export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => console.log(`[usb] ${m}`), onStatus, socketPath = USBMUXD_SOCKET }: Options) {
-  const devices = new Map<number, { stop: () => void; ready: () => boolean | null }>();
+  const devices = new Map<number, { stop: () => void; ready: () => boolean | null; kind?: UsbDevice }>();
   let last: BridgeStatus = { attached: false, connected: false };
   const report = () => {
-    const now = { attached: devices.size > 0, connected: [...devices.values()].some((d) => d.ready() === true) };
-    if (now.attached === last.attached && now.connected === last.connected) return;
+    const all = [...devices.values()];
+    // The device to name: the one whose app is connected, else the first plugged in.
+    const named = all.find((d) => d.ready() === true) ?? all[0];
+    const now: BridgeStatus = { attached: all.length > 0, connected: all.some((d) => d.ready() === true), ...(named?.kind ? { device: named.kind } : {}) };
+    if (now.attached === last.attached && now.connected === last.connected && now.device === last.device) return;
     last = now;
     onStatus?.(now);
   };
@@ -58,7 +62,8 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
         const props = (body.Properties ?? {}) as Record<string, unknown>;
         if (body.MessageType === "Attached" && props.ConnectionType === "USB" && !devices.has(id)) {
           log(`device ${id} attached over USB`);
-          devices.set(id, device(id));
+          const kind = deviceKind(props.ProductID);
+          devices.set(id, { ...device(id), ...(kind ? { kind } : {}) });
           report();
         } else if (body.MessageType === "Detached" && devices.has(id)) {
           log(`device ${id} detached`);

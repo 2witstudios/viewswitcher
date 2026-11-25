@@ -98,14 +98,50 @@ final class AppStoreScreenshots: XCTestCase {
         app.terminate()
 
         // 5. The demo, as App Review sees it with no Mac: a view taken.
-        XCUIDevice.shared.orientation = .landscapeLeft
+        web = demo(.landscapeLeft)
+        try shot("5-demo-landscape", "landscape")
+    }
+
+    /// The demo with no Mac (the probe points at a closed port), Guest cook taken so the program and tally have moved.
+    private func demo(_ orientation: UIDeviceOrientation) -> XCUIElement {
+        XCUIDevice.shared.orientation = orientation
         app = XCUIApplication()
         app.launchEnvironment["VIEWSWITCHER_START"] = "demo"
         app.launchEnvironment["VIEWSWITCHER_PROBE"] = "http://127.0.0.1:9"
         app.launch()
-        web = app.webViews.firstMatch
+        let web = app.webViews.firstMatch
         XCTAssertTrue(web.switches["Guest cook"].waitForExistence(timeout: 20), "the demo loaded")
         web.switches["Guest cook"].tap()
-        try shot("5-demo-landscape", "landscape")
+        return web
+    }
+
+    /// The 6.9-inch iPhone set (PHONE-9): the same app on a phone, switching only.
+    func testPhoneShots() throws {
+        guard env["VIEWSWITCHER_SHOTS"] != nil, let fullCount = env["VIEWSWITCHER_FULLCOUNT"] else {
+            throw XCTSkip("run by scripts/ipad-shots.sh with IPHONE=1")
+        }
+
+        // 1. Sideways, the deck: the stream's views four across under one bar, Both hosts on air.
+        var web = try launch(.landscapeLeft, path: fullCount)
+        takeView(web, "Both hosts")
+        try shot("1-deck-landscape", "landscape")
+        app.terminate()
+
+        // 2. Upright: what's on air on top, the views below.
+        web = try launch(.portrait, path: fullCount)
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'On air: Both hosts'")).firstMatch.waitForExistence(timeout: 20), "the switcher loaded, Both hosts on air")
+        try shot("2-onair-portrait", "portrait")
+        app.terminate()
+
+        // 3. Pairing in the app: Scan the Mac's code, or Enter code (the connector, from the demo's Connect your Mac).
+        web = demo(.portrait)
+        web.buttons["Connect your Mac"].tap()
+        XCTAssertTrue(web.buttons["Enter code"].waitForExistence(timeout: 10), "the connector offers Scan and Enter code")
+        try shot("3-pair-portrait", "portrait")
+        app.terminate()
+
+        // 4. The demo, sideways.
+        web = demo(.landscapeLeft)
+        try shot("4-demo-landscape", "landscape")
     }
 }

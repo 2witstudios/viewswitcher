@@ -66,13 +66,15 @@ final class CapacitorMigration: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
-/// The iPad's one screen: a web view from edge to edge. The page keeps its controls inside the safe
+/// The app's one screen, on iPad and iPhone (PHONE-1): a web view from edge to edge. The page keeps its controls inside the safe
 /// area itself (viewport-fit=cover and env(safe-area-inset-*) in apps/web/src/styles.css, MAC-13a),
 /// so its own background reaches every edge in each orientation, Split View and Stage Manager.
 final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     static let connector = URL(string: "\(NavigationPolicy.connectorScheme)://connector/")!
     static let demo = URL(string: "\(NavigationPolicy.connectorScheme)://connector/demo/")!
     private var webView: WKWebView!
+    /// The connector's scan and Bonjour requests (PHONE-4, PHONE-5).
+    private let bridge = ConnectorBridge()
 
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
@@ -86,6 +88,8 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.addUserScript(WKUserScript(source: ShellBridge.userScript(ShellInfo(kind: .ipad)), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        bridge.host = self
+        config.userContentController.addScriptMessageHandler(bridge, contentWorld: .page, name: "vs")
         #if DEBUG
         // The simulator shares the Mac's ports, so the connector's USB-C probe (127.0.0.1:7420) would
         // find the Mac's own switcher. VIEWSWITCHER_PROBE points it somewhere else (tests, screenshots).

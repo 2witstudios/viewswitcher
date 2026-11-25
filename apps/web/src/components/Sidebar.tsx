@@ -1,9 +1,11 @@
 import { shortDate } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
+import { DECK, useMedia } from "../lib/media";
 import { queryClient, useLive } from "../lib/live";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
@@ -26,11 +28,35 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
-  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first.
+  // On a phone (MAC-27) the library folds into a button in the top bar, so the scenes come first;
+  // sideways (PHONE-12) it slides in over the deck. The page title opens it too (lib/library-sheet).
   // Wider screens never see the button and always show the library.
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryOpen = useLibraryOpen();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => setLibraryOpen(false), [pathname]);
+  // Sideways the library is a modal drawer over the deck: focus moves in, the page behind is inert (so
+  // focus stays in the drawer), Escape closes it, and focus goes back to what opened it. Upright it
+  // unfolds in place and stays a plain disclosure.
+  const deck = useMedia(DECK);
+  const modal = deck && libraryOpen;
+  const nav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!modal) return;
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const page = document.querySelector<HTMLElement>("main.main");
+    page?.setAttribute("inert", "");
+    // After the drawer has become visible (it's visibility: hidden until the open class applies).
+    const frame = requestAnimationFrame(() => nav.current?.querySelector<HTMLElement>(".side-toggle")?.focus());
+    // Escape closes the drawer, unless a dialog opened from it (New org, New project) is up: that's its Escape.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("form.modal")) setLibraryOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      cancelAnimationFrame(frame);
+      page?.removeAttribute("inert");
+      document.removeEventListener("keydown", onKey);
+      if (back?.isConnected) back.focus();
+    };
+  }, [modal]);
 
   const toggle = (id: string) => {
     const key = `${org}/${id}`;
@@ -42,7 +68,8 @@ export function Sidebar() {
   };
 
   return (
-    <nav className={`side${libraryOpen ? " open" : ""}`} aria-label="Library">
+    <>
+    <nav ref={nav} className={`side${libraryOpen ? " open" : ""}`} aria-label="Library" {...(modal ? { role: "dialog", "aria-modal": true } : {})}>
       <div className="brand" data-drag-region>
         <Mark /><span>ViewSwitcher</span>
         <button type="button" className="side-toggle" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
@@ -113,6 +140,11 @@ export function Sidebar() {
         />
       )}
     </nav>
+    {libraryOpen && <button type="button" className="side-scrim" aria-label="Close the library" tabIndex={-1} onClick={() => setLibraryOpen(false)} />}
+    {/* Sideways, on a screen with no page header to open it from (styles.css shows it only there, and
+        hides it while the library is open). Always mounted, so closing the drawer can focus it again. */}
+    <button type="button" className="deck-library" aria-controls="side-body" aria-expanded={libraryOpen} onClick={() => setLibraryOpen(true)}>Library</button>
+    </>
   );
 }
 

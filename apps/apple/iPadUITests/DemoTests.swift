@@ -1,6 +1,6 @@
 import XCTest
 
-/// MAC-18: with no Mac, a first launch opens the demo; tapping a view changes the program; the bar
+/// MAC-18, PHONE-7 (iPhone and iPad): with no Mac, a first launch opens the demo; tapping a view changes the program; the bar
 /// leads back to the connector, which offers the demo again. Runs in the regular `xcodebuild test`:
 /// VIEWSWITCHER_PROBE points the Mac probe at a closed port, since the simulator shares the Mac's
 /// ports and 127.0.0.1:7420 there is the Mac's own switcher.
@@ -20,7 +20,8 @@ final class DemoTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = launch()
         let web = app.webViews.firstMatch
-        XCTAssertTrue(web.staticTexts["Saltwater Kitchen"].waitForExistence(timeout: 20), "the demo opened by itself")
+        // (Guest cook's cover: on an iPhone held sideways the show's header is hidden, PHONE-7.)
+        XCTAssertTrue(web.switches["Guest cook"].waitForExistence(timeout: 20), "the demo opened by itself")
         XCTAssertTrue(web.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Connect your Mac to go live'")).firstMatch.exists, "the demo bar says it's a demo")
         XCTAssertTrue(web.staticTexts["On air"].firstMatch.exists, "the tally")
 
@@ -43,7 +44,7 @@ final class DemoTests: XCTestCase {
         sleep(3)
         XCTAssertTrue(again.exists, "the connector stays after leaving the demo")
         again.tap()
-        XCTAssertTrue(web.staticTexts["Saltwater Kitchen"].waitForExistence(timeout: 10))
+        XCTAssertTrue(web.switches["Guest cook"].waitForExistence(timeout: 10))
     }
 
     /// Connecting a Mac leaves the demo. Needs a server: scripts/ipad-shots.sh passes one on 7445
@@ -51,6 +52,6 @@ final class DemoTests: XCTestCase {
     func testAMacAnsweringLeavesTheDemo() throws {
         guard let mac = ProcessInfo.processInfo.environment["VIEWSWITCHER_MAC"] else { throw XCTSkip("needs VIEWSWITCHER_MAC") }
         let app = launch(["VIEWSWITCHER_START": "demo", "VIEWSWITCHER_PROBE": mac])
-        XCTAssertTrue(app.webViews.staticTexts["Templates"].firstMatch.waitForExistence(timeout: 20), "the real switcher opened")
+        XCTAssertTrue(app.webViews.switches["REC"].firstMatch.waitForExistence(timeout: 20), "the real switcher opened")
     }
 }

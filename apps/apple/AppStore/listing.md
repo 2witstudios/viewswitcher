@@ -1,8 +1,8 @@
-# ViewSwitcher for iPad: App Store listing (MAC-19)
+# ViewSwitcher for iPhone and iPad: App Store listing (MAC-19, PHONE-9)
 
 Everything App Store Connect asks for, in the order it asks. Paste each block as it is. Limits are
 Apple's; `bun apps/apple/AppStore/check.ts` checks them. The app record itself (bundle ID
-`com.twowitstudios.viewswitcher`, $9.99) is MAC-21.
+`com.twowitstudios.viewswitcher`, $9.99) is MAC-21. One universal app: one purchase covers iPhone and iPad (PHONE-1).
 
 ## App Information
 
@@ -38,7 +38,7 @@ Result: **4+**.
 
 - Price: **$9.99**, one time (no in-app purchases, no subscription).
 - Availability: all countries and regions.
-- Distribution: public, iPad only (not on Mac with Apple silicon: the Mac has its own free app).
+- Distribution: public, iPhone and iPad, one purchase for both (not on Mac with Apple silicon: the Mac has its own free app).
 
 ## App Privacy
 
@@ -46,16 +46,21 @@ Result: **4+**.
 - Data collection: **"No, we do not collect data from this app."**
   The app talks only to the ViewSwitcher server on the user's own Mac, over the USB-C cable or their own
   Wi-Fi once paired. Nothing is sent to the developer or anyone else: no accounts, analytics, crash reporting, ads
-  or tracking. `PrivacyInfo.xcprivacy` says the same (no tracking, no collected data types).
+  or tracking. `PrivacyInfo.xcprivacy` says the same (no tracking, no collected data types). The camera is
+  used only to read the Mac's pairing QR code, on the device; no image leaves it.
 - Privacy label shown on the store: **Data Not Collected**.
 
-## First version (1.2.1): iPad screenshots
+## Screenshots
 
-13-inch iPad (2752 × 2064 landscape or 2064 × 2752 portrait), made by
-`bash apps/apple/scripts/ipad-shots.sh` (into `AppStore/screenshots/`, gitignored): the real iPad app in
-the simulator, connected to a scratch switcher with a stand-in OBS that's live. Each one is there twice:
-`raw/<name>.png` is the capture, `<name>.png` the App Store version, in an iPad frame under a caption.
-Upload the framed ones, in this order:
+Made by `bash apps/apple/scripts/ipad-shots.sh` (iPad) and `IPHONE=1 bash apps/apple/scripts/ipad-shots.sh`
+(iPhone) into `AppStore/screenshots/` and `AppStore/screenshots/iphone/` (gitignored): the real app in the
+simulator, connected to a scratch switcher with a stand-in OBS that's live. Each one is there twice:
+`raw/<name>.png` is the capture, `<name>.png` the App Store version, in a device frame under a caption.
+Upload the framed ones, in these orders.
+
+### 13-inch iPad
+
+2752 × 2064 landscape or 2064 × 2752 portrait (iPad Pro 13-inch).
 
 1. `1-stream-landscape.png`, "Look professional when you go live.": Full Count's Ep. 112, Both hosts on air, OBS live
 2. `2-editor-landscape.png`, "Change titles live, right on the view.": the episode title retyped on the view that's on air
@@ -63,12 +68,21 @@ Upload the framed ones, in this order:
 4. `4-stream-portrait.png`, "Tap a view. OBS switches.": Grace Community's Sunday Live in portrait, the sermon on air
 5. `5-demo-landscape.png`, "Try it first: the demo needs no Mac.": the demo App Review sees without a Mac
 
+### 6.9-inch iPhone (PHONE-9)
+
+2868 × 1320 landscape or 1320 × 2868 portrait (iPhone 17 Pro Max). Sideways first: most people hold the phone like a deck.
+
+1. `iphone/1-deck-landscape.png`, "Tap a view. OBS switches.": the deck, Ep. 112's views four across, Both hosts on air
+2. `iphone/2-onair-portrait.png`, "Always know what's on air.": upright, what's on air on top
+3. `iphone/3-pair-portrait.png`, "Scan your Mac's code to pair.": the app's own connector, Scan the code or Enter code, or USB-C
+4. `iphone/4-demo-landscape.png`, "Try it first: the demo needs no Mac.": the demo, sideways
+
 ## First version (1.2.1): text
 
 ### Promotional text (170)
 
 ```
-Look professional when you go live. Tap a view on the iPad beside you and OBS switches: your camera, screen and titles move into place.
+Look professional when you go live. Tap a view on your iPhone or iPad and OBS switches: your camera, screen and titles move into place.
 ```
 
 ### Description (4000)
@@ -76,28 +90,30 @@ Look professional when you go live. Tap a view on the iPad beside you and OBS sw
 ```
 Look professional when you go live.
 
-ViewSwitcher is a one-click scene switcher for OBS. Set up your views once: a "starting soon", a talking head, your camera beside a screen share, an interview, a "be right back" and a goodbye, all in your show's colors with this week's title. Then run the whole show from the iPad beside you. Tap a view and the stream changes. Your camera, guest and screen share move to where the view puts them, and OBS keeps streaming the way it always does.
+ViewSwitcher is a one-click scene switcher for OBS. Set up your views once: a "starting soon", a talking head, your camera beside a screen share, an interview, a "be right back" and a goodbye, all in your show's colors with this week's title. Then run the whole show from your iPhone or the iPad beside you. Tap a view and the stream changes. Your camera, guest and screen share move to where the view puts them, and OBS keeps streaming the way it always does.
 
 Made for anyone running a recurring live show without a crew: a cooking show, a weekly class, a church service, a podcast.
 
-ON THE IPAD
-• Every view as a big cover you can hit without looking twice
+ON YOUR IPHONE AND IPAD
+• One tap switches the scene: every view is a big cover you can hit without looking twice
+• On iPhone, turn it sideways and your views fill the screen like a deck
 • The view on air marked in red, so you always know what people see
 • Go live, record, and see that OBS is connected
-• Plug the iPad into the Mac with a USB-C cable: no Wi-Fi needed
-• Or pair it over Wi-Fi: scan the QR code the Mac shows, and only devices you pair can switch scenes
-• Portrait or landscape, full screen, Split View or Stage Manager
+• Plug into the Mac with a USB-C cable: no Wi-Fi, no setup
+• Or pair over Wi-Fi in seconds: scan the code your Mac shows with the app's own camera, or type it in. Only devices you pair can switch scenes
+• Portrait or landscape; on iPad, Split View and Stage Manager too
+• One purchase for iPhone and iPad
 • The screen stays awake while you run the show
 
 TRY IT FIRST
 Open the app with no Mac nearby and it starts a demo: a sample cooking show where you can tap views and watch the program change.
 
 WHAT YOU NEED
-ViewSwitcher for iPad is the remote for ViewSwitcher on your Mac. You'll need:
+ViewSwitcher for iPhone and iPad is the remote for ViewSwitcher on your Mac. You'll need:
 • A Mac running ViewSwitcher (free from viewswitcher.com) and OBS, the free streaming app
 • A camera OBS can see: a webcam, the Mac's own camera, or any other
 
-ViewSwitcher for Mac is free and open source, and sets up OBS for you the first time. The iPad app is a one-time purchase: no subscription, no account, no ads, and it collects no data.
+ViewSwitcher for Mac is free and open source, and sets up OBS for you the first time. The iPhone and iPad app is a one-time purchase: no subscription, no account, no ads, and it collects no data.
 ```
 
 ### Keywords (100)
@@ -127,22 +143,22 @@ stream,live,streaming,scene,scenes,switcher,church,podcast,teacher,remote,contro
 ### Notes (4000)
 
 ```
-ViewSwitcher for iPad is the remote for ViewSwitcher on the Mac, which drives OBS (the free streaming app). Full use needs a Mac running ViewSwitcher and OBS, connected by a USB-C cable or paired over the same Wi-Fi.
+ViewSwitcher for iPhone and iPad is the remote for ViewSwitcher on the Mac, which drives OBS (the free streaming app). Full use needs a Mac running ViewSwitcher and OBS, connected by a USB-C cable or paired over the same Wi-Fi. The same app runs on iPhone and iPad; on iPhone, sideways shows the views as a deck.
 
 TRY IT WITHOUT A MAC: THE DEMO
 1. Open the app. With no Mac connected it opens the demo by itself: a sample cooking show, "Saltwater Kitchen", with a white bar along the top that reads "Demo · Connect your Mac to go live".
-2. Tap any view on the right (in portrait, below). The program on the left cuts to it, the camera and guest move into their new places, and the red "On air" tally moves to the view you tapped.
+2. Tap any view on the right (in portrait, below; on iPhone sideways, beside the program). The program on the left cuts to it, the camera and guest move into their new places, and the red "On air" tally moves to the view you tapped.
 3. "Connect your Mac" in the bar opens the connector, which looks for the Mac and shows how to connect. "Try the demo" there opens the demo again.
 Nothing in the demo is streamed or sent anywhere; it is all inside the app and works offline.
 
 WITH A MAC (OPTIONAL)
 1. On a Mac, install ViewSwitcher (free: https://github.com/2witstudios/viewswitcher/releases) and OBS (https://obsproject.com). ViewSwitcher sets up OBS from its first window.
-2. Plug the iPad into the Mac with a USB-C cable and open the app. It connects by itself and shows the same views as the Mac. Tapping a view switches what OBS streams.
-3. Without the cable, pair over Wi-Fi (the iPad and the Mac on the same Wi-Fi network):
-   a. On the Mac, click ViewSwitcher in the menu bar and turn on "Let Phones and Tablets on This Wi-Fi Connect", then choose "Phones and Tablets…". The window shows a QR code, a one-time code (like K7PQ-2MXA, valid for 5 minutes) and the Mac's address (like http://your-mac.local:7420).
-   b. On the iPad, open the app and tap "Connect your Mac" if the demo is showing. Enter that address in the connector and tap Save. The app asks for Local Network access only for this.
-   c. The iPad shows "Pair with ViewSwitcher": enter the code and tap Pair. The switcher opens, and the iPad appears under "Paired devices" on the Mac, where Remove disconnects it at once.
-   (Scanning the QR code with the iPad's Camera opens the same pairing page in Safari, which works too.)
+2. Plug the iPhone or iPad (a USB-C model) into the Mac with a USB-C cable and open the app. It connects by itself and shows the same views as the Mac. Tapping a view switches what OBS streams.
+3. Without the cable, pair over Wi-Fi (the device and the Mac on the same Wi-Fi network):
+   a. On the Mac, click ViewSwitcher in the menu bar and turn on "Let Phones and Tablets on This Wi-Fi Connect", then choose "Phones and Tablets…". The window shows a QR code and a one-time code (like K7PQ-2MXA, valid for 5 minutes).
+   b. In the app, tap "Connect your Mac" if the demo is showing, then "Scan the code" and point the camera at the QR code. The app asks for the camera only for this, and for Local Network access to reach the Mac.
+   c. Or tap "Enter code": the app finds the Mac on the Wi-Fi and shows "Pair with ViewSwitcher". Enter the code and tap Pair.
+   The switcher opens, and the device appears under "Paired devices" on the Mac, where Remove disconnects it at once.
 
 The app has no accounts, in-app purchases, ads or analytics, and collects no data.
 ```

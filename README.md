@@ -45,7 +45,7 @@ Make a stream for this week's show and add the views you need. Retype this episo
 
 ### 4. Click to switch and control your live
 
-Click a view on your Mac, or tap it on an iPad or a paired phone. OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.
+Click a view on your Mac, or tap it on an iPad or iPhone (held sideways, your views fill the phone like a deck). OBS cuts to it: your camera, screen share and titles move into place, and the stream keeps going.
 
 <img src="docs/screenshots/how-4.png" alt="OBS on the Mac and an iPad running ViewSwitcher: tapping a view on the iPad puts it on air in OBS" width="560">
 
@@ -63,7 +63,7 @@ In ViewSwitcher, **Edit with AI** connects Claude Desktop, Claude Code or Cursor
 
 ## Free on the Mac
 
-No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later (Apple silicon or Intel), [OBS](https://obsproject.com) (free) and a camera. ViewSwitcher for iPad is $9.99 once, if you want one: coming to the App Store.
+No subscription, no watermark, and the templates are free. You need a Mac with macOS 14 or later (Apple silicon or Intel), [OBS](https://obsproject.com) (free) and a camera. ViewSwitcher for iPhone and iPad is $9.99 once (one purchase for both), if you want one: coming to the App Store.
 
 **[Download ViewSwitcher for Mac](https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg)**: open it, drag ViewSwitcher to Applications, and it sets up OBS for you the first time. It's notarized, and it keeps itself up to date. [Install steps and what's new](https://viewswitcher.com/download) · [Support](https://viewswitcher.com/support) · [Privacy](https://viewswitcher.com/privacy)
 
@@ -193,9 +193,9 @@ The security model in short: a request counts as "this Mac" only if its socket i
 
 On a phone (≤ 600 px) the switcher is a remote: the library folds into a button, scenes come in two columns, and what's on air with EDIT, REC and GO LIVE stays at the bottom.
 
-### The Mac and iPad apps
+### The Mac, iPhone and iPad apps
 
-`apps/apple` is one Xcode project, generated from `project.yml` with XcodeGen: ViewSwitcher.app for macOS, ViewSwitcher for iPad, and the shared ViewSwitcherKit. Building, signing, entitlements and tests are in [apps/apple/README.md](apps/apple/README.md).
+`apps/apple` is one Xcode project, generated from `project.yml` with XcodeGen: ViewSwitcher.app for macOS, ViewSwitcher for iPhone and iPad (one universal app), and the shared ViewSwitcherKit. Building, signing, entitlements and tests are in [apps/apple/README.md](apps/apple/README.md).
 
 The Mac app is a native window (WKWebView) and menu-bar item around the server, which is compiled with `bun build --compile` into `Contents/Helpers/viewswitcher-server`, next to the built switcher, the starter kit, the library kit and the built-in template packs in `Contents/Resources`. If a ViewSwitcher server already answers on `PORT`, the app uses it instead of starting its own, and never stops a server it didn't start.
 
@@ -205,12 +205,12 @@ bun run mac:build --app        # just apps/apple/build/export/ViewSwitcher.app, 
 bun run mac:e2e                # drives the built app on port 7435 with OBS offline and USB off
 bun run mac:release            # signed, notarized and stapled (needs a notarytool keychain profile)
 bun run mac:release --publish  # ...and uploads it to a draft GitHub release for a person to publish
-bun run ipad:deploy            # build, sign, install and launch the iPad app on the plugged-in iPad
+bun run ipad:deploy            # build, sign, install and launch the app on the plugged-in iPad, else iPhone
 ```
 
 Updates use Sparkle: the app reads `appcast.xml` from the latest GitHub release, signed with an EdDSA key. The dmg is named `ViewSwitcher.dmg` because the site links to `releases/latest/download/ViewSwitcher.dmg`.
 
-**The iPad over USB-C:** iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects Mac → iPad. The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421, and the app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each web view connection through one of them. So the app simply loads the real switcher, served over the cable; a "USB" pill confirms it. Without the cable, the app's connector falls back to an address you save on it, normally the Mac's `http://<name>.local:7420` once Wi-Fi pairing is on. (Developer-only: a `tailscale serve` address works the same way; the user-facing copy doesn't mention it.)
+**The iPad over USB-C:** iOS gives apps no network over the cable; the only path is usbmuxd, and it only connects Mac → iPad. The server (`apps/server/src/usb-bridge.ts`) keeps a few idle tunnels open to the app on iPad port 7421, and the app (`apps/apple/iPad/UsbTunnel.swift`) serves `127.0.0.1:7420` on the iPad and pipes each web view connection through one of them. So the app simply loads the real switcher, served over the cable; a "USB" pill confirms it. Without the cable, the app pairs over Wi-Fi from its connector: Scan reads the Mac's pairing QR code with the app's own camera (the system Camera would pair Safari instead), and Enter code finds the Mac by Bonjour; the connector then remembers that address. An iPhone works the same way (iPhone 15 and later over USB-C). (Developer-only: a `tailscale serve` address works the same way; the user-facing copy doesn't mention it.)
 
 ### Repo layout
 
@@ -220,7 +220,7 @@ apps/server/src/mcp    the MCP server for agents (/mcp and --mcp-stdio)
 apps/server/starter    the starter kit copied into each new org
 apps/server/library-kit  what a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, MCP configs, .gitignore
 apps/web               Vite + React + TanStack Router/Query SPA: the switcher, the editor and /program
-apps/apple             one Xcode project (XcodeGen): the Mac app, the iPad app, ViewSwitcherKit
+apps/apple             one Xcode project (XcodeGen): the Mac app, the iPhone and iPad app, ViewSwitcherKit
 apps/site              viewswitcher.com (Astro); see apps/site/README.md
 packages/shared        types and pure logic both sides use: resolveStream, coverTransform, obsColor, the template pack validator
 docs                   template-packs.md, screenshots

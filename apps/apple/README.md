@@ -1,4 +1,4 @@
-# apps/apple: ViewSwitcher for Mac and iPad
+# apps/apple: ViewSwitcher for Mac, iPhone and iPad
 
 One Xcode project, generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 (`brew install xcodegen`; the scripts run it for you, and the `.xcodeproj` is gitignored).
@@ -6,7 +6,7 @@ One Xcode project, generated from `project.yml` with [XcodeGen](https://github.c
 | target | what |
 |---|---|
 | `ViewSwitcher` (macOS 14+) | ViewSwitcher.app: the bundled server, the switcher in a window, a menu-bar item. `com.twowitstudios.viewswitcher.mac` |
-| `ViewSwitcher iPad` (iPadOS 17+) | the switcher on the iPad over USB-C or the network. `com.twowitstudios.viewswitcher` |
+| `ViewSwitcher iPad` (iOS and iPadOS 17+) | one universal app (PHONE-1): the switcher on the iPhone or iPad over USB-C or the network. `com.twowitstudios.viewswitcher` |
 | `Kit/` (Swift package `ViewSwitcherKit`) | shared by both: live state and menu text, navigation policy, server controller (macOS), shell bridge, update feed |
 
 ```sh
@@ -15,12 +15,13 @@ bun run mac:build                # build/ViewSwitcher.dmg + build/appcast/appcas
 bun run mac:build --app          # just build/export/ViewSwitcher.app
 bun run mac:e2e                  # drives that app on port 7435 (E2E_PORT), OBS offline, USB off, a temp library
 bun run mac:release [--publish]  # + notarize and staple; --publish makes a DRAFT GitHub release
-bun run ipad:deploy              # build, install and launch on the plugged-in iPad (replaces what's there)
+bun run ipad:deploy              # build, install and launch on the plugged-in iPad, else iPhone (replaces what's there)
 bun run ipad:release [--export]  # archive, export for App Store Connect, check, upload (--export: no upload)
 
 cd apps/apple && xcodegen && xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -destination platform=macOS test
 cd apps/apple/Kit && swift test  # the same XCTest, without Xcode's project
-bash apps/apple/scripts/ipad-shots.sh [dir]   # App Store screenshots: the app on a live show (fake OBS, scratch server on 7445), framed
+bash apps/apple/scripts/ipad-shots.sh [dir]   # 13-inch iPad App Store screenshots: the app on a live show (fake OBS, scratch server on 7445), framed
+IPHONE=1 bash apps/apple/scripts/ipad-shots.sh [dir]   # 6.9-inch iPhone ones: the deck, upright, pairing, the demo (into iphone/)
 bun apps/apple/scripts/demo-assets.ts         # refresh the iPad demo's show from apps/site
 bun apps/apple/AppStore/check.ts              # App Store listing lengths
 ```
@@ -68,7 +69,19 @@ Why not a standard title bar: it adds a 28 px grey strip above an app that is gr
 the lights wouldn't line up with anything. The editor would then lose 28 px of height for a title it
 already shows.
 
-## iPad app
+## iPhone and iPad app
+
+One app for both (PHONE-1): the target keeps its name and the `ViewSwitcher-iPad` user-agent token, which
+the switcher reads as "the native app" on either. On a phone the switcher has its own layouts
+(apps/web/src/styles.css): sideways, the deck (a short touch screen: the scenes four across under one
+bar, the library behind the title, PHONE-12); upright, what's on air on top (PHONE-3). Switching only:
+editing stays on the Mac and iPad.
+
+Pairing happens in the app (PHONE-4, PHONE-5), since the system Camera would pair Safari instead:
+`ConnectorBridge.swift` gives the bundled connector page, and only it, Scan (VisionKit reads the Mac's QR
+code; ViewSwitcherKit `PairingLink` accepts only a pairing link on the local network) and Enter code
+(Bonjour finds the Mac's `ViewSwitcher` `_http._tcp` service, then its pair page takes the code). The
+QR code carries the Mac's LAN address, so private LAN addresses are allowed like `.local` names.
 
 `iPad/`: a web view from edge to edge with `ViewSwitcher-iPad/<version>` in its user agent. The bundled
 connector (`iPad/Connector/index.html`, served at `viewswitcher://connector/`) finds the server (USB-C
@@ -103,12 +116,13 @@ boxes and the red On air tally moves. A white bar says "Demo · Connect your Mac
 ### Screenshots (MAC-19)
 
 `scripts/ipad-shots.sh` makes the App Store screenshots from the real app in the 13-inch iPad Pro
-simulator. It starts a stand-in OBS (`scripts/fake-obs-server.ts`: an obs-websocket server around the
+simulator, or with `IPHONE=1` the 6.9-inch iPhone 17 (or 16) Pro Max (PHONE-9: the deck, upright, pairing
+and the demo, into `AppStore/screenshots/iphone/`). It starts a stand-in OBS (`scripts/fake-obs-server.ts`: an obs-websocket server around the
 server tests' in-memory OBS, live) and a scratch switcher on 7445 with USB off, and seeds it through the
 API (`scripts/shots-seed.ts`: Full Count and Grace Community, a project and a stream each). Then
-`iPadUITests/AppStoreScreenshots.swift` taps through each screen in the app and waits while the script
-captures it with `simctl io screenshot`, under a 9:41 status bar. `scripts/frame-shots.ts` puts each in an
-iPad frame under a caption (Space Grotesk, on white) at the same size. The upload list is in
+`iPadUITests/AppStoreScreenshots.swift` (`testShots`, `testPhoneShots`) taps through each screen in the app and waits while the script
+captures it with `simctl io screenshot`, under a 9:41 status bar. `scripts/frame-shots.ts` puts each in a
+device frame under a caption (Space Grotesk, on white) at the same size. The upload list is in
 `AppStore/listing.md`.
 
 ### App Store (MAC-19, MAC-20)

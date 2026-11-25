@@ -36,10 +36,13 @@ public struct LiveState: Decodable, Equatable, Sendable {
         public var enabled: Bool
         public var attached: Bool
         public var connected: Bool
-        public init(enabled: Bool, attached: Bool = false, connected: Bool = false) {
+        /// "iPhone" or "iPad" (PHONE-8), when the server knows which is plugged in.
+        public var device: String?
+        public init(enabled: Bool, attached: Bool = false, connected: Bool = false, device: String? = nil) {
             self.enabled = enabled
             self.attached = attached
             self.connected = connected
+            self.device = device
         }
     }
 

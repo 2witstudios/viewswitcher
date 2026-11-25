@@ -76,30 +76,37 @@ bash "$APPLE/scripts/ipad-check.sh" "$IPA" "$BUILD_NUMBER"
 
 if [ "$UPLOAD" = 1 ]; then
   step "Upload to App Store Connect"
+  rm -rf "$OUT/upload" # a summary left by an earlier upload must never be compared with this one
   xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$(options upload)" -exportPath "$OUT/upload" \
     -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"}
   # The upload is a second export of the same archive with the same options (only the destination
-  # differs). Confirm it was signed exactly like the .ipa that ipad-check.sh passed.
-  signed_with() { plutil -convert json -o - "$1/DistributionSummary.plist" | python3 -c '
+  # differs). Confirm it was signed exactly like the .ipa that ipad-check.sh passed, when xcodebuild says:
+  # it writes no DistributionSummary.plist for an upload in some versions (Xcode 26), or an empty one.
+  # Prints "<certificate SHA1> <profile UUID>", or nothing when the summary is missing or unreadable.
+  signed_with() {
+    [ -s "$1/DistributionSummary.plist" ] || return 0
+    plutil -convert json -o - "$1/DistributionSummary.plist" 2>/dev/null | python3 -c '
 import json, sys
-d = json.load(sys.stdin)
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit(0)
 for apps in d.values():
     for a in apps:
         if a.get("name", "").endswith(".app"):
             print(a.get("certificate", {}).get("SHA1", ""), a.get("profile", {}).get("UUID", ""))
-'; }
-  # xcodebuild writes no DistributionSummary.plist when the destination is upload (Xcode 26): then
-  # there's nothing to compare, and the upload used the same archive, options and signing as the export.
-  if [ ! -f "$OUT/upload/DistributionSummary.plist" ]; then
-    echo "✓ Uploaded ViewSwitcher iPad $VERSION ($BUILD_NUMBER). It appears in App Store Connect → TestFlight once processed."
-    echo "  (No DistributionSummary.plist from the upload, so its signing wasn't compared with the checked .ipa.)"
-    exit 0
-  fi
-  [ "$(signed_with "$OUT/export")" = "$(signed_with "$OUT/upload")" ] || {
-    echo "✗ The uploaded build was signed differently from the checked .ipa (certificate or profile): check App Store Connect before submitting." >&2
-    exit 1
+' || true
   }
+  checked="$(signed_with "$OUT/export")" uploaded="$(signed_with "$OUT/upload")"
   echo "✓ Uploaded ViewSwitcher iPad $VERSION ($BUILD_NUMBER). It appears in App Store Connect → TestFlight once processed."
+  if [ -z "$checked" ] || [ -z "$uploaded" ]; then
+    which=upload; [ -n "$checked" ] || which=export
+    echo "  (Signing not compared: xcodebuild wrote no readable DistributionSummary.plist for the $which."
+    echo "   The upload used the same archive, options and signing as the checked .ipa.)"
+  elif [ "$checked" != "$uploaded" ]; then
+    echo "✗ But the uploaded build was signed differently from the checked .ipa (certificate or profile): check App Store Connect before submitting." >&2
+    exit 1
+  fi
 else
   echo "✓ $IPA (not uploaded)"
 fi

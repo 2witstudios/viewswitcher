@@ -7,7 +7,7 @@
 //    Dock. A graphite tile with the V in white and the on-air screen red: it matches the switcher's dark
 //    UI, the iPad and the site, and at 16 px light screens on a dark tile still read as a V where graphite
 //    screens on a light tile go grey and fuzzy. Small sizes (≤ 64 px) draw the V larger in the tile.
-// 2. iPad app icon (apps/apple/iPad/Assets.xcassets/AppIcon.appiconset): the same tile full bleed and
+// 2. iPhone and iPad app icon (apps/apple/iPad/Assets.xcassets/AppIcon.appiconset): the same tile full bleed and
 //    opaque, no corners (iOS masks it); the 1024 App Store icon has no alpha channel.
 // 3. Menu bar (StatusIcon, StatusIconLive imagesets): the V as a black template image (macOS tints it for
 //    light and dark bars), 20×16 pt with @2x. On air, the whole V turns red, as the old mark did.
@@ -93,7 +93,8 @@ const save = async (file: string, data: Promise<unknown> | void) => { await data
 for (const px of [16, 32, 64, 128, 256, 512, 1024])
   await save(join(mac, `AppIcon.appiconset/icon-${px}.png`), tilePng(macIcon(px), join(mac, `AppIcon.appiconset/icon-${px}.png`)));
 
-for (const px of [20, 29, 40, 58, 76, 80, 152, 167, 1024]) {
+// iPad sizes, then the iPhone's (PHONE-1: one universal app): 60, 87, 120, 180.
+for (const px of [20, 29, 40, 58, 76, 80, 152, 167, 60, 87, 120, 180, 1024]) {
   const f = join(ipad, `AppIcon-${px}.png`);
   await save(f, tilePng(squareIcon(px), f, true));
 }
