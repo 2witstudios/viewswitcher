@@ -132,6 +132,17 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .cover iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform: scale(var(--cover-scale, 0.1458333)); transform-origin: 0 0; pointer-events: none; }
 .badge { position: absolute; left: 10px; top: 10px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--live); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; display: inline-flex; align-items: center; }
 .badge.quiet { background: #0b0c0fcc; color: var(--sage); }
+/* Cued on a phone (PHONE-2): white, so it never reads as on air. */
+.cover.cued { outline-color: var(--cream); }
+.badge.cued { background: var(--cream); color: var(--on-cream); }
+.take-bar { display: flex; align-items: center; gap: 10px; }
+.take-next { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.take-next span { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; color: var(--sage); }
+.take-next b { font-family: var(--display); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.take-clear { width: 48px; height: 52px; flex: none; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--raised); display: inline-flex; align-items: center; justify-content: center; color: var(--ink-muted); }
+.take-btn { width: 132px; height: 52px; flex: none; border: 0; border-radius: 12px; background: var(--live); color: #fff; font-family: var(--display); font-weight: 700; font-size: 18px; }
+.take-clear:disabled, .take-btn:disabled { opacity: 0.4; cursor: default; }
+.take-btn:disabled { background: var(--menu-hover); color: var(--quiet); }
 .tile-meta { display: flex; align-items: center; gap: 8px; }
 .tile-meta .names { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .tile-meta .label { font-size: 16px; font-weight: 600; }
@@ -402,6 +413,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
   .livebar > .pill:first-child { flex: 1 1 100%; justify-content: flex-start; height: 44px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
   .livebar .out-btn { flex: 1 1 0; justify-content: center; height: 48px; font-size: 14px; }
   .livebar .pill.link, .livebar .pill.off:not(:first-child) { height: 32px; font-size: 11px; }
+  .livebar .take-bar { flex: 1 1 100%; order: 99; padding-top: 8px; border-top: 1px solid var(--line); }
 
   .section { gap: 12px; }
   .section-head h2 { font-size: 12px; letter-spacing: 0.24em; }

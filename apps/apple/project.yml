@@ -1,7 +1,7 @@
 # ViewSwitcher for Apple platforms (MAC-10): one project, generated with XcodeGen.
 #   cd apps/apple && xcodegen      (the .xcodeproj is gitignored; scripts/*.sh run this for you)
 # Targets: ViewSwitcher (macOS 14+, the Mac app around the bundled server), ViewSwitcher iPad
-# (iPadOS 17+, the switcher over USB-C or the network) and the shared ViewSwitcherKit package (Kit/).
+# (iPadOS and iOS 17+, one universal app for iPad and iPhone (PHONE-1): the switcher over USB-C or the network) and the shared ViewSwitcherKit package (Kit/).
 name: ViewSwitcher
 options:
   bundleIdPrefix: com.twowitstudios
@@ -150,7 +150,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher
         PRODUCT_NAME: ViewSwitcher
-        TARGETED_DEVICE_FAMILY: "2"
+        # iPhone and iPad (PHONE-1): one universal app, one bundle id, one purchase.
+        TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
   ViewSwitcher iPad UITests:
@@ -161,7 +162,8 @@ targets:
       - target: ViewSwitcher iPad
     settings:
       base:
-        TARGETED_DEVICE_FAMILY: "2"
+        # iPhone and iPad (PHONE-1): one universal app, one bundle id, one purchase.
+        TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic
 schemes:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MAC-20: checks an exported ViewSwitcher iPad .ipa for what App Store validation rejects, before upload.
+# MAC-20, PHONE-1: checks an exported ViewSwitcher (iPhone and iPad) .ipa for what App Store validation rejects, before upload.
 # Run by scripts/ipad-release.sh after the export.
 #   bash apps/apple/scripts/ipad-check.sh <ViewSwitcher.ipa> [expected build number]
 set -euo pipefail
@@ -22,7 +22,7 @@ build="$(get CFBundleVersion)"; version="$(get CFBundleShortVersionString)"
 [[ "$build" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] && ok "build $build" || bad "CFBundleVersion \"$build\" isn't 1 to 3 integers"
 [ -z "$WANT_BUILD" ] || [ "$build" = "$WANT_BUILD" ] || bad "CFBundleVersion is $build, expected $WANT_BUILD"
 [ "$(get CFBundleIdentifier)" = "com.twowitstudios.viewswitcher" ] && ok "bundle id com.twowitstudios.viewswitcher" || bad "bundle id is $(get CFBundleIdentifier)"
-[ "$(json UIDeviceFamily)" = "[2]" ] && ok "iPad only" || bad "UIDeviceFamily is $(json UIDeviceFamily), expected [2]"
+[ "$(json UIDeviceFamily)" = "[1,2]" ] && ok "iPhone and iPad (universal)" || bad "UIDeviceFamily is $(json UIDeviceFamily), expected [1,2]"
 
 # Export compliance
 [ "$(get ITSAppUsesNonExemptEncryption)" = "false" ] && ok "ITSAppUsesNonExemptEncryption NO" || bad "ITSAppUsesNonExemptEncryption isn't NO"
@@ -39,12 +39,14 @@ for key in UISupportedInterfaceOrientations 'UISupportedInterfaceOrientations~ip
 done
 [ "$(get UIRequiresFullScreen)" = "false" ] && ok "UIRequiresFullScreen NO (Split View, Stage Manager)" || bad "UIRequiresFullScreen isn't NO"
 
-# Icons: the compiled catalog's iPad icons, named in the plist, and the 1024 App Store icon without alpha
-icons="$(plutil -convert json -o - "$PLIST" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("CFBundleIcons~ipad",{}).get("CFBundlePrimaryIcon",{}).get("CFBundleIconName",""))')"
-[ "$icons" = "AppIcon" ] && ok "CFBundleIcons~ipad → AppIcon" || bad "no CFBundleIcons~ipad AppIcon"
+# Icons: the compiled catalog's iPhone and iPad icons, named in the plist, and the 1024 App Store icon without alpha
+for key in CFBundleIcons 'CFBundleIcons~ipad'; do
+  icons="$(plutil -convert json -o - "$PLIST" | python3 -c 'import json,sys; print(json.load(sys.stdin).get(sys.argv[1],{}).get("CFBundlePrimaryIcon",{}).get("CFBundleIconName",""))' "$key")"
+  [ "$icons" = "AppIcon" ] && ok "$key → AppIcon" || bad "no $key AppIcon"
+done
 [ -f "$APP/Assets.car" ] || bad "no Assets.car"
 info="$(xcrun --sdk iphoneos assetutil --info "$APP/Assets.car" 2>/dev/null || true)"
-for px in 20 29 40 58 76 80 152 167 1024; do
+for px in 20 29 40 58 60 76 80 87 120 152 167 180 1024; do
   python3 -c '
 import json, sys
 px = int(sys.argv[1]); items = json.load(sys.stdin)

@@ -6,7 +6,8 @@ import { PencilIcon, useOpenEditor } from "./SceneTile";
 import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
 
-export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) {
+/** `take`: the phone's Take row (PHONE-2), shown at the bottom of the live bar. */
+export function PageHead({ crumb, title, take }: { crumb: ReactNode; title: string; take?: ReactNode }) {
   const { state, connected } = useLive();
   const obs = state?.obs;
   const onAir = state?.onAir;
@@ -46,6 +47,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
               {state.usb.connected ? "IPAD · USB" : "IPAD · OPEN THE APP"}
             </span>
           )}
+          {take}
         </div>
       </header>
       {!!state?.warnings.length && (

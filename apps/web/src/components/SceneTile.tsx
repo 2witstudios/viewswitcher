@@ -16,10 +16,12 @@ export const PencilIcon = () => (
 );
 
 /** An album-style cover: a live, scaled render of the scene file. */
-export function SceneTile({ label, path, live, badge, onActivate, onEdit, editChoices, menu }: {
+export function SceneTile({ label, path, live, cued, badge, onActivate, onEdit, editChoices, menu }: {
   label: string;
   path: string;
   live?: boolean;
+  /** Cued on a phone (PHONE-2): Take puts it on air, and a tap on the cover cues or clears it. */
+  cued?: boolean;
   badge?: string;
   /** Primary action (put on air). Without one, clicking opens the menu. */
   onActivate?: () => void;
@@ -50,13 +52,14 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
       <button
         type="button"
         ref={cover}
-        className={`cover${live ? " live" : ""}`}
-        aria-label={onActivate ? `Put ${label} on air` : `Options for ${label}`}
+        className={`cover${live ? " live" : cued ? " cued" : ""}`}
+        aria-label={!onActivate ? `Options for ${label}` : cued !== undefined ? (cued ? `Clear the cue on ${label}` : `Cue ${label}`) : `Put ${label} on air`}
+        aria-pressed={cued}
         onClick={onActivate ?? (() => openMenu())}
         onContextMenu={openMenu}
       >
         <iframe title={label} src={sceneUrl(path, versions, true)} sandbox={SCENE_SANDBOX} loading="lazy" tabIndex={-1} />
-        {live ? <span className="badge">ON AIR</span> : badge ? <span className="badge quiet">{badge}</span> : null}
+        {live ? <span className="badge">ON AIR</span> : cued ? <span className="badge cued">CUED</span> : badge ? <span className="badge quiet">{badge}</span> : null}
       </button>
       <div className="tile-meta">
         <div className="names">
