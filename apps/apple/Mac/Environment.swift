@@ -12,11 +12,28 @@ enum Env {
     static let updatesEnabled = vars["VIEWSWITCHER_UPDATES"] != "0"
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     static let logFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/ViewSwitcher/server.log")
+    /// A new secret each launch, for the pairing endpoints only this app may call (apps/server: /api/remote…).
+    /// It goes to the server in its environment and never leaves this Mac.
+    static let adminToken: String = {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess else { fatalError("no random bytes") }
+        return bytes.map { String(format: "%02x", $0) }.joined()
+    }()
+
+    /// "Let phones and tablets on this Wi-Fi connect" (MAC-23): off by default and remembered. The
+    /// end-to-end check keeps its own value in memory, so it never changes the installed app's setting.
+    @MainActor static var wifi: Bool {
+        get { e2e ? e2eWifi : UserDefaults.standard.bool(forKey: "wifiRemotes") }
+        set { if e2e { e2eWifi = newValue } else { UserDefaults.standard.set(newValue, forKey: "wifiRemotes") } }
+    }
+    @MainActor private static var e2eWifi = false
 
     /// The bundled sidecar in a built app; `bun apps/server/src/index.ts` from a checkout (scripts/dev.sh sets VIEWSWITCHER_REPO).
-    static func launch() -> Launch? {
+    @MainActor static func launch() -> Launch? {
         var env = vars
         env["PORT"] = port
+        env["VIEWSWITCHER_ADMIN_TOKEN"] = adminToken
+        env["VIEWSWITCHER_LAN"] = wifi ? "1" : "0"
         // The server exits if this app goes away without stopping it (apps/server/src/index.ts).
         env["VIEWSWITCHER_PARENT_PID"] = String(getpid())
         // The Claude Desktop extension the server makes carries the app's version.

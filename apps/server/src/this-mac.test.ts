@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { isLocalRequest } from "./local";
+import { fromThisMac, fromThisMacOnly, type Peer } from "./gate";
+
+// This Mac itself (gate.ts fromThisMacOnly): what /mcp, /api/info, /api/agent/clients and the .mcpb answer.
+const isLocalRequest = (r: Request, peer: Peer, bridged?: ReadonlySet<number>) => fromThisMacOnly(peer, r.headers, bridged);
 
 const req = (headers: Record<string, string>) => new Request("http://127.0.0.1:7420/mcp", { headers });
 
-describe("isLocalRequest", () => {
+describe("fromThisMacOnly", () => {
   test("loopback peer, loopback Host, no proxy headers", () => {
     for (const host of ["127.0.0.1:7420", "localhost:7420", "[::1]:7420", "localhost"]) {
       for (const peer of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) expect({ host, peer, ok: isLocalRequest(req({ host }), { address: peer, port: 50000 }) }).toEqual({ host, peer, ok: true });
@@ -28,5 +31,7 @@ describe("isLocalRequest", () => {
     expect(isLocalRequest(r, { address: "127.0.0.1", port: 51234 }, bridged)).toBe(false);
     expect(isLocalRequest(r, { address: "127.0.0.1", port: 51235 }, bridged)).toBe(true);
     expect(isLocalRequest(r, { address: "127.0.0.1", port: 51234 }, new Set())).toBe(true);
+    // The gate itself still lets the iPad's bridge in, as the switcher should: it's only these routes it can't use.
+    expect(fromThisMac("127.0.0.1", r.headers)).toBe(true);
   });
 });

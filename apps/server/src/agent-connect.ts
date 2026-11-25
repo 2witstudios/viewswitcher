@@ -1,6 +1,6 @@
 // How an agent on this Mac connects (the switcher's Edit with AI sheet, MCP-10): which agent apps are
 // installed, the stdio command, the Claude Code command, and the Claude Desktop extension (.mcpb).
-// Everything here can contain absolute paths, so main.ts answers with it only to this Mac (local.ts),
+// Everything here can contain absolute paths, so main.ts answers with it only to this Mac (gate.ts fromThisMacOnly),
 // and /api/agent/clients turns it into booleans.
 import { join } from "node:path";
 import type { AgentClients } from "@viewswitcher/shared";

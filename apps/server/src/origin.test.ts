@@ -43,11 +43,31 @@ describe("DNS rebinding (evil.example → 127.0.0.1)", () => {
     expect(hostTrusted("localhost.evil.example")).toBe(false);
     expect(hostTrusted(null)).toBe(false);
     expect(hostTrusted("")).toBe(false);
-    for (const h of ["127.0.0.1:7420", "localhost:5173", "[::1]:7420", "LOCALHOST", "mac.tail1234.ts.net", "studio-mac.local:7420"]) expect(hostTrusted(h)).toBe(true);
+    for (const h of ["127.0.0.1:7420", "localhost:5173", "[::1]:7420", "LOCALHOST", "mac.tail1234.ts.net"]) expect(hostTrusted(h)).toBe(true);
   });
   test("VIEWSWITCHER_ORIGINS hosts are trusted", () => {
     expect(hostTrusted("switcher.example.com", ["https://switcher.example.com"])).toBe(true);
     expect(hostTrusted("192.168.1.20:7420", ["http://192.168.1.20:7420"])).toBe(true);
     expect(hostTrusted("192.168.1.20:7420")).toBe(false);
+  });
+});
+
+describe("Wi-Fi (MAC-25): this Mac's .local name and LAN addresses", () => {
+  const lan = { localName: "studio-mac.local", addresses: ["192.168.1.68", "10.0.0.4"] };
+  test("are trusted only while the Wi-Fi listener is on", () => {
+    for (const h of ["studio-mac.local:7420", "STUDIO-MAC.local", "192.168.1.68:7420", "10.0.0.4"]) {
+      expect(hostTrusted(h, [], lan)).toBe(true);
+      expect(hostTrusted(h)).toBe(false);
+    }
+  });
+  test("other .local names and addresses are not: a device on the LAN can answer mDNS for any name", () => {
+    for (const h of ["evil.local", "studio-mac.local.evil.example", "192.168.1.69:7420", "192.168.1.6"]) expect(hostTrusted(h, [], lan)).toBe(false);
+  });
+  test("a paired phone's same-host POST is allowed; a page elsewhere on the LAN is not", () => {
+    expect(originAllowed("http://192.168.1.68:7420", { host: "192.168.1.68:7420", lan })).toBe(true);
+    expect(originAllowed("http://studio-mac.local:7420", { host: "studio-mac.local:7420", lan })).toBe(true);
+    expect(originAllowed("http://192.168.1.68:7420", { host: "192.168.1.68:7420" })).toBe(false); // Wi-Fi off
+    expect(originAllowed("http://192.168.1.20:7420", { host: "192.168.1.68:7420", lan })).toBe(false);
+    expect(originAllowed("http://evil.local:7420", { host: "evil.local:7420", lan })).toBe(false);
   });
 });

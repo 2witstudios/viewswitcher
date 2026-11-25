@@ -80,11 +80,14 @@ describe("from this Mac", () => {
   });
 });
 
-describe("refused (404) to anything but this Mac", () => {
+// Refused before the route by the pairing gate (401: an unpaired device; 421: a name the Wi-Fi listener
+// isn't on) or by the route itself (404): never answered.
+const REFUSED = [401, 404, 421];
+describe("refused to anything but this Mac", () => {
   test("a name this Mac is reached by from elsewhere", async () => {
     for (const path of PATHS) {
       const r = await request(path, { host: `studio.local:${port}` });
-      expect({ path, status: r.status }).toEqual({ path, status: 404 });
+      expect(REFUSED).toContain(r.status);
       expect(new TextDecoder().decode(r.body)).not.toContain(library);
     }
   });
@@ -92,7 +95,8 @@ describe("refused (404) to anything but this Mac", () => {
     for (const path of PATHS) {
       for (const h of [{ "x-forwarded-for": "100.64.0.3" }, { forwarded: "for=100.64.0.3" }] as Record<string, string>[]) {
         const r = await request(path, h);
-        expect({ path, status: r.status }).toEqual({ path, status: 404 });
+        expect(REFUSED).toContain(r.status);
+        expect(new TextDecoder().decode(r.body)).not.toContain(library);
       }
     }
   });

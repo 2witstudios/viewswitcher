@@ -5,18 +5,22 @@ import { homedir } from "node:os";
 import { join, sep } from "node:path";
 import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
+import type { Server, ServerWebSocket } from "bun";
 import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, stdioLaunch } from "./agent-connect";
 import { config } from "./config";
 import * as lib from "./library";
 import { customizeScene, duplicateScene, onAirFor, type OnAirRequest, orgDir, renamedOnAir, sceneFromTemplate } from "./library-actions";
 import { ensureLibrary } from "./library-kit";
-import { isLocalRequest } from "./local";
 import { handleMcp, noteSeen } from "./mcp/http";
 import { createPreviewer } from "./preview";
 import type { McpDeps } from "./mcp/server";
 import { OBSClient } from "./obs";
 import { checkObsSetup, setupObs } from "./obs-setup";
+import { fromThisMac, fromThisMacOnly, gate, loopbackAddress, rateKey } from "./gate";
+import { thisMac } from "./lan";
 import { hostTrusted, originAllowed } from "./origin";
+import { PAIR_PAGE_CSP, pairPage } from "./pair-page";
+import { deviceName, guessName, Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 import { inside, PathError, plainName } from "./paths";
 import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
@@ -43,6 +47,26 @@ await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
 
+// The network is reached only through the Wi-Fi setting (its own listener, which it can close); HOST may
+// only move the main listener between loopback addresses.
+if (!loopbackAddress(config.host) && config.host !== "localhost") {
+  console.error(`[viewswitcher] HOST=${config.host} isn't a loopback address. To let phones and tablets connect, use the Wi-Fi setting (VIEWSWITCHER_LAN=1).`);
+  process.exit(1);
+}
+
+// Phones and tablets (MAC-23 … MAC-26); before anything else awaits, so publish() can always reach them.
+/** Paired devices and the open pairing code (pairing.ts); devices.json sits with state.json, outside git (.viewswitcher/ is ignored). */
+const pairing = await new Pairing({ file: join(config.library, ".viewswitcher", "devices.json"), ttlMs: Number(process.env.VIEWSWITCHER_PAIR_TTL_MS) || undefined }).load();
+type Socket = ServerWebSocket<{ device: string | null; lan: boolean }>;
+const sockets = new Set<Socket>();
+// A removed device's token stops at once: its next request is refused, and its live sockets close now.
+pairing.onRemoved = (id) => {
+  for (const ws of sockets) if (ws.data.device === id) ws.close(4401, "This device was removed");
+};
+
+/** The Wi-Fi listener, while "Let phones and tablets on this Wi-Fi connect" is on. */
+let lanServer: Server<Socket["data"]> | null = null;
+
 // ---------------------------------------------------------------- live state
 
 const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { onAir: OnAir | null }, () => ({ onAir: null }));
@@ -59,7 +83,9 @@ let lastSlots: { path: string; slots: Slot[] } | null = null;
 const acceptSlots = createSlotOrder();
 
 function publish(msg: ServerMessage) {
-  server.publish("all", JSON.stringify(msg));
+  const text = JSON.stringify(msg);
+  server.publish("all", text);
+  lanServer?.publish("all", text);
 }
 const publishState = () => publish({ t: "state", state });
 
@@ -204,7 +230,83 @@ watch(config.library, { recursive: true }, (_event, filename) => {
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 
-async function api(req: Request, path: string, url: URL): Promise<Response> {
+// ---------------------------------------------------------------- phones and tablets (MAC-23 … MAC-26)
+
+/** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
+const lanNames = () => (lanServer ? thisMac() : null);
+
+// Private ranges first (the Wi-Fi), so the QR code points at the address a phone can reach.
+const rank = (ip: string) => (/^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 0 : 1);
+function remoteStatus() {
+  const mac = thisMac();
+  const addresses = [...mac.addresses].sort((a, b) => rank(a) - rank(b));
+  const connected = new Map<string, number>();
+  for (const ws of sockets) if (ws.data.device) connected.set(ws.data.device, (connected.get(ws.data.device) ?? 0) + 1);
+  return {
+    enabled: !!lanServer,
+    port: config.port,
+    localName: mac.localName,
+    urls: lanServer ? [...(mac.localName ? [mac.localName] : []), ...addresses].map((h) => `http://${h}:${config.port}/`) : [],
+    code: pairing.codeExpiresAt() ? { expiresAt: pairing.codeExpiresAt() } : null,
+    /** The last code was cancelled by wrong guesses: someone on the network is guessing. */
+    codeGuessed: pairing.codeGuessed,
+    devices: pairing.list().map((d) => ({ ...d, connected: connected.get(d.id) ?? 0 })),
+  };
+}
+
+function setLan(on: boolean): string | null {
+  if (on && !lanServer) {
+    try {
+      lanServer = Bun.serve({ hostname: config.lanHost, port: config.port, fetch: handle, websocket });
+      console.log(`[wifi] phones and tablets may connect: http://${thisMac().localName ?? config.lanHost}:${config.port}`);
+    } catch (e) {
+      console.error("[wifi] couldn't listen on the network:", (e as Error).message);
+      return `Couldn't listen on the network: ${(e as Error).message}`;
+    }
+  }
+  if (!on && lanServer) {
+    const s = lanServer;
+    lanServer = null;
+    // Off means off: the port closes and every device on the Wi-Fi is cut off now (they stay paired).
+    for (const ws of sockets) if (ws.data.lan) ws.close(1001, "Wi-Fi connections were turned off");
+    s.stop(true);
+    console.log("[wifi] network listener closed; 127.0.0.1 only");
+  }
+  return null;
+}
+
+/** The pairing endpoints the Mac app calls: from this Mac, with the secret it started the server with. */
+const adminSecret = config.adminToken.length >= 32 ? sha3(config.adminToken) : null;
+const isAdmin = (req: Request, macOnly: boolean) =>
+  macOnly && adminSecret !== null && sha3(req.headers.get("x-viewswitcher-admin") ?? "") === adminSecret; // digests, not raw secrets (pairing.ts)
+
+async function remoteApi(req: Request, path: string): Promise<Response> {
+  if (path === "/api/remote" && req.method === "GET") return json(remoteStatus());
+  if (req.method !== "POST") return json({ error: "Not found" }, 404);
+  const b = await body(req);
+  if (path === "/api/remote") {
+    const error = setLan(b.enabled === true);
+    return error ? json({ error, ...remoteStatus() }, 500) : json(remoteStatus());
+  }
+  if (path === "/api/remote/code") {
+    const { code, expiresAt } = pairing.newCode();
+    const s = remoteStatus();
+    const [host] = s.urls.filter((u) => !u.includes(".local:")).concat(s.urls);
+    return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}` : null });
+  }
+  if (path === "/api/remote/remove") {
+    try {
+      await pairing.remove(String(b.id ?? ""));
+    } catch (e) {
+      return json({ error: (e as Error).message, ...remoteStatus() }, 500);
+    }
+    return json(remoteStatus());
+  }
+  return json({ error: "Not found" }, 404);
+}
+
+/** `macOnly`: from this Mac itself, not the iPad on the USB-C bridge (gate.ts fromThisMacOnly). */
+async function api(req: Request, path: string, url: URL, macOnly: boolean): Promise<Response> {
   const root = config.library;
   const post = req.method === "POST";
   /** One org's folder; every mutation below works inside it. */
@@ -218,20 +320,24 @@ async function api(req: Request, path: string, url: URL): Promise<Response> {
   if (path === "/api/library" && req.method === "GET") return json(await lib.scanLibrary(root, plainName(url.searchParams.get("org") ?? "")));
   if (path === "/api/state" && req.method === "GET") return json(state);
   // For the Mac app's menu (Open Library Folder) and Edit with AI's commands: with the Claude Desktop
-  // extension below, the only responses with absolute paths in them. Only for this Mac (local.ts).
-  const local = () => isLocalRequest(req, server.requestIP(req));
+  // extension below, the only responses with absolute paths in them. Only for this Mac itself
+  // (gate.ts fromThisMacOnly): from loopback, addressed to a loopback host, no proxy headers, and not
+  // the iPad on the USB-C bridge.
   if (path === "/api/info" && req.method === "GET") {
-    if (!local()) return json({ error: "Not found" }, 404);
+    if (!macOnly) return json({ error: "Not found" }, 404);
     return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(server.port ?? config.port)) });
+  }
+  if (path === "/api/remote" || path.startsWith("/api/remote/")) {
+    return isAdmin(req, macOnly) ? remoteApi(req, path) : json({ error: "Not found" }, 404);
   }
   // Which agent apps this Mac has, so Edit with AI lists them first. Booleans only.
   if (path === "/api/agent/clients" && req.method === "GET") {
-    if (!local()) return json({ error: "Not found" }, 404);
+    if (!macOnly) return json({ error: "Not found" }, 404);
     return json(detectClients({ home: homedir(), path: process.env.PATH ?? "", exists: existsSync }));
   }
   // Add to Claude Desktop: an extension made for this install, whose command is this server's own executable.
   if (path === "/api/agent/viewswitcher.mcpb" && req.method === "GET") {
-    if (!local()) return json({ error: "Not found" }, 404);
+    if (!macOnly) return json({ error: "Not found" }, 404);
     const file = mcpbFile(mcpbManifest({ launch: ownStdio(server.port ?? config.port), version: extensionVersion }));
     return new Response(file, { headers: { "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="ViewSwitcher.mcpb"', "cache-control": "no-store" } });
   }
@@ -412,49 +518,88 @@ function agentSeen(client: string | null) {
   if (seen.publish) publishState();
 }
 
-const server = Bun.serve({
-  hostname: process.env.HOST ?? "127.0.0.1",
-  port: config.port,
-  async fetch(req, server) {
+/** Every request, on 127.0.0.1 and (while it's on) the Wi-Fi listener. */
+async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Response | undefined> {
     const url = new URL(req.url);
     const path = decodeURIComponent(url.pathname);
     try {
+      const host = req.headers.get("host");
+      const local = fromThisMac(srv.requestIP(req)?.address, req.headers);
       // DNS rebinding: a page at evil.example that now resolves to 127.0.0.1 sends Host: evil.example.
-      // The API, the library and the live socket answer only to hosts this server is known by (origin.ts).
-      if ((path === "/ws" || path === "/mcp" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(req.headers.get("host"), config.allowedOrigins)) {
-        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${req.headers.get("host")}`);
+      // The API, the library and the live socket answer only to hosts this server is known by (origin.ts);
+      // and anything not from this Mac, page loads included, only to those.
+      if ((!local || path === "/ws" || path === "/mcp" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(host, config.allowedOrigins, lanNames())) {
+        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${host}`);
         return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
       }
-      if (path === "/ws") {
-        // Pages from other sites, and scenes (sandboxed: their Origin is "null"), get no socket.
-        if (!originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins })) {
+      // Anything not from this Mac needs a paired device (gate.ts); unpaired, it can only pair.
+      const device = local ? null : pairing.check(tokenFromCookie(req.headers.get("cookie")));
+      const g = gate({ local, paired: !!device, method: req.method, path });
+      if (g.kind === "deny") return json({ error: "Pair this device first: open ViewSwitcher on the Mac, then Phones and Tablets." }, 401);
+      if (g.kind === "pair-page") {
+        return new Response(req.method === "HEAD" ? null : pairPage({ name: guessName(req.headers.get("user-agent") ?? "") }), {
+          status: 401,
+          headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "content-security-policy": PAIR_PAGE_CSP, "x-frame-options": "DENY", "referrer-policy": "no-referrer" },
+        });
+      }
+      // Another website in a browser on this Mac (or on a paired phone) must not be able to change anything (see origin.ts).
+      if (path.startsWith("/api/") && req.method !== "GET" && req.method !== "HEAD") {
+        const ok = originAllowed(req.headers.get("origin"), { host, forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins, lan: lanNames() });
+        if (!ok) {
+          if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
           return json({ error: "Not allowed from this page" }, 403);
         }
-        return server.upgrade(req) ? undefined : new Response("Upgrade failed", { status: 400 });
+      }
+      if (g.kind === "pair") {
+        // The one POST an unpaired device may make: small, and its size known before it's read.
+        const size = Number(req.headers.get("content-length"));
+        if (!(size > 0 && size <= 2048)) return json({ error: "Too large" }, 413);
+        const b = await body(req);
+        const r = pairing.pair(b.code, deviceName(b.name, req.headers.get("user-agent") ?? ""), rateKey(srv.requestIP(req)?.address, req.headers));
+        if (!r.ok) {
+          console.log(`[pairing] refused a code from ${srv.requestIP(req)?.address} (${r.reason})`);
+          return json({ error: r.error }, r.reason === "limited" ? 429 : 403);
+        }
+        console.log(`[pairing] paired "${r.device.name}"`);
+        const secure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+        return Response.json({ ok: true, name: r.device.name }, { headers: { "cache-control": "no-store", "set-cookie": tokenCookie(r.token, secure) } });
+      }
+      // A paired device (or this Mac) that opens the QR code's link again goes straight to the switcher.
+      if (path === "/pair") return new Response(null, { status: 303, headers: { location: "/" } });
+      if (path === "/ws") {
+        // A WebSocket isn't covered by CORS: a website open in a browser on this Mac could otherwise read
+        // the live state. Native clients send no Origin and are let through.
+        if (!originAllowed(req.headers.get("origin"), { host, forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins, lan: lanNames() })) {
+          return json({ error: "Not allowed from this page" }, 403);
+        }
+        return srv.upgrade(req, { data: { device: device?.id ?? null, lan: srv === lanServer } }) ? undefined : new Response("Upgrade failed", { status: 400 });
       }
       if (path === "/mcp") {
+        // Past the gate, and only ever this Mac itself: handleMcp refuses anything fromThisMacOnly
+        // doesn't pass (a paired phone, the USB-C iPad, the Wi-Fi listener) with 404.
         // No idle timeout for agents' calls: Bun drops a connection that's quiet for 10 s, and a tool
         // call can be quiet longer than that (previews run one at a time, ~1.5 s each, so a few in
         // parallel queue up), which the agent would see as a transport error, not an answer.
-        // Only for this Mac's requests: anything else is refused at once by handleMcp, and keeps the default.
-        if (isLocalRequest(req, server.requestIP(req))) server.timeout(req, 0);
-        return await handleMcp(req, server.requestIP(req), { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
+        if (fromThisMacOnly(srv.requestIP(req), req.headers)) srv.timeout(req, 0);
+        return await handleMcp(req, srv.requestIP(req), { deps: mcp, allowedOrigins: config.allowedOrigins, onSeen: agentSeen });
       }
+      const res = await route();
+      // A device in use gets its cookie again once a day, so it stays paired 400 days from its last use.
+      if (device && res && pairing.renew(device.id)) {
+        const token = tokenFromCookie(req.headers.get("cookie"));
+        if (token) res.headers.append("set-cookie", tokenCookie(token, url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https"));
+      }
+      return res;
+
+
+    async function route(): Promise<Response> {
       if (path.startsWith("/api/")) {
         if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
-        // Another website in a browser on this Mac must not be able to change anything (see origin.ts).
-        if (req.method !== "GET" && req.method !== "HEAD") {
-          const ok = originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins });
-          if (!ok) {
-            if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
-            return json({ error: "Not allowed from this page" }, 403);
-          }
-        }
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });
         }
-        return await api(req, path, url);
+        return await api(req, path, url, fromThisMacOnly(srv.requestIP(req), req.headers));
       }
       if (path.startsWith("/library/")) {
         // Every library page is served sandboxed (scene-sandbox.ts): a scene's scripts never run as the switcher.
@@ -492,26 +637,41 @@ const server = Bun.serve({
       if (asset) return asset;
       const index = await fileResponse(join(config.webDist, "index.html"));
       return index ?? new Response("The switcher isn't built yet. Run `bun run build`, or use the dev server (`bun run dev`, then http://localhost:5173).", { status: 503 });
+    }
     } catch (e) {
       if (e instanceof PathError || e instanceof EditError || e instanceof PackError || e instanceof SettingsError) return json({ error: e.message }, 400);
       console.error(e);
-      // No absolute paths in responses (CLAUDE.md): a filesystem error names the file it failed on.
-      return json({ error: String((e as Error).message).replaceAll(config.library, "<library>") }, 500);
+      // The full message only for this Mac, with no absolute paths (CLAUDE.md: a filesystem error names the
+      // file it failed on); a paired device gets a plain one.
+      const local = fromThisMac(srv.requestIP(req)?.address, req.headers);
+      return json({ error: local ? String((e as Error).message).replaceAll(config.library, "<library>") : "Something went wrong on the Mac. Its server log has the details." }, 500);
     }
+}
+
+const websocket = {
+  open(ws: Socket) {
+    if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
+    sockets.add(ws);
+    ws.subscribe("all");
+    ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
+    ws.send(JSON.stringify({ t: "build", build } satisfies ServerMessage));
   },
-  websocket: {
-    open(ws) {
-      if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
-      ws.subscribe("all");
-      ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
-      ws.send(JSON.stringify({ t: "build", build } satisfies ServerMessage));
-    },
-    message() {},
+  message() {},
+  close(ws: Socket) {
+    sockets.delete(ws);
   },
-});
+};
+
+const server: Server<Socket["data"]> = Bun.serve({ hostname: config.host, port: config.port, fetch: handle, websocket });
+if (config.lan) setLan(true);
 
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
+
+// Quit (the Mac app sends SIGTERM) or Ctrl-C: write paired devices first, so nothing changed in the last moment is lost.
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
+}
 
 // Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
 // so the port is never left held by an orphan.
@@ -522,7 +682,7 @@ if (parent > 1) {
       process.kill(parent, 0);
     } catch {
       console.log("[viewswitcher] the Mac app is gone; stopping");
-      process.exit(0);
+      void pairing.flush().finally(() => process.exit(0));
     }
   }, 2000).unref();
 }

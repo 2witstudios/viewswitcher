@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
@@ -30,6 +30,15 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   menu: MenuItem[];
 }) {
   const { versions } = useLive();
+  // The 1920×1080 scene scaled to the cover's width: 280 px on a desktop, half a phone's width (MAC-27).
+  const cover = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const el = cover.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => el.style.setProperty("--cover-scale", String(el.clientWidth / 1920)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const openMenu = (e?: MouseEvent) => {
@@ -40,6 +49,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
     <div className="tile">
       <button
         type="button"
+        ref={cover}
         className={`cover${live ? " live" : ""}`}
         aria-label={onActivate ? `Put ${label} on air` : `Options for ${label}`}
         onClick={onActivate ?? (() => openMenu())}

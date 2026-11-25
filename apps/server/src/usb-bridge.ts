@@ -7,7 +7,7 @@
 // One tunnel per HTTP connection or WebSocket, so there is no multiplexing protocol.
 import { existsSync } from "node:fs";
 import net from "node:net";
-import { bridgePorts } from "./local";
+import { bridgePorts } from "./gate";
 import { concat, connectMessage, decodeMessages, decodeOne, listenMessage, resultNumber, u8, USBMUXD_SOCKET } from "./usbmux";
 
 const POOL = 4;
@@ -143,7 +143,7 @@ export function startUsbBridge({ serverPort, devicePort = 7421, log = (m) => con
         upstream.setNoDelay(true);
         sockets.add(upstream);
         let marked: number | undefined;
-        // The server must know this connection is the iPad's (local.ts) before it reads a byte of it,
+        // The server must know this connection is the iPad's (gate.ts bridgePorts) before it reads a byte of it,
         // so nothing is sent until its local port is marked.
         upstream.once("connect", () => {
           marked = upstream.localPort;

@@ -9,9 +9,13 @@
 // agent, the menu-bar status, agents (the sidecar's /mcp and --mcp-stdio, Edit with AI), navigation
 // and permissions, Undo forwarding, the traffic lights and drag regions (MAC-13a), close-keeps-serving, Quit stopping the server, attach mode (Quit leaves a
 // server it didn't start), Restart Server, a port held by something else, and that the server exits
-// if the app is killed. SCREENSHOTS=<dir> also saves the window, windowed and full screen.
+// if the app is killed, and phones and tablets on the Wi-Fi (MAC-23 … MAC-26: the menu, the Wi-Fi
+// listener on this Mac's LAN address E2E_LAN_IP, pairing from that address, removing a device,
+// turning it off). SCREENSHOTS=<dir> also saves the window, windowed and full screen, and the
+// Phones and Tablets window and the menu.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import http from "node:http";
+import { networkInterfaces, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const PORT = process.env.E2E_PORT ?? "7435";
@@ -48,6 +52,7 @@ const listeners = () => Bun.spawnSync(["lsof", "-nP", `-iTCP:${PORT}`, "-sTCP:LI
 const command = (pid: number) => Bun.spawnSync(["ps", "-o", "command=", "-p", String(pid)]).stdout.toString().trim();
 
 if (listeners().length) throw new Error(`Port ${PORT} is busy; stop what's there first.`);
+const LAN_IP = process.env.E2E_LAN_IP ?? Object.values(networkInterfaces()).flat().find((i) => i?.family === "IPv4" && !i.internal && /^(192\.168|10|172\.(1[6-9]|2\d|3[01]))\./.test(i.address))?.address;
 const library = mkdtempSync(join(tmpdir(), "vs-e2e-lib-"));
 const control = mkdtempSync(join(tmpdir(), "vs-e2e-ctl-"));
 const env = {
@@ -58,7 +63,26 @@ const env = {
   VIEWSWITCHER_LIBRARY: library,
   VIEWSWITCHER_UPDATES: "0",
   VIEWSWITCHER_E2E_DIR: control,
+  // The Wi-Fi listener binds only this Mac's LAN address, so the check reaches it the way a phone does.
+  ...(LAN_IP ? { VIEWSWITCHER_LAN_HOST: LAN_IP } : {}),
 } as Record<string, string>;
+
+/** A request that arrives from this Mac's LAN address, as a phone's would (node:http: it sends the Host and Origin given). */
+function fromLan(path: string, { method = "GET", headers = {} as Record<string, string>, body = "" } = {}) {
+  return new Promise<{ status: number; body: string; cookie: string }>((resolve, reject) => {
+    const req = http.request({ host: LAN_IP, port: Number(PORT), path, method, agent: false, headers: { host: `${LAN_IP}:${PORT}`, ...headers } }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data, cookie: String(res.headers["set-cookie"]?.[0] ?? "").split(";")[0] }));
+    });
+    req.on("error", reject);
+    // A stalled connection mustn't hold up the polling around it: give up after 3 s.
+    const deadline = setTimeout(() => req.destroy(new Error("timed out")), 3000);
+    req.on("close", () => clearTimeout(deadline));
+    req.end(body);
+  });
+}
+const lanOpen = () => fromLan("/").then(() => true, () => false);
 
 // ------------------------------------------------------------ driving the app
 let seq = 0;
@@ -80,7 +104,9 @@ async function cmd<T = any>(op: string, args: Record<string, unknown> = {}, ms =
   }
   throw new Error(`${op}: no answer from the app`);
 }
+type Remotes = { visible: boolean; enabled: boolean; code: string; pairUrl: string; devices: string[]; error: string };
 type State = {
+  wifi: boolean; remotes: Remotes | null;
   menu: string[]; menuEnabled: string[]; statusTitle: string; statusLive: boolean;
   server: { owned: boolean; pid: number } | null;
   window: { visible: boolean; number: number; fullscreen: boolean; url: string; frame: [number, number]; lights: number[][]; events: string[] } | null;
@@ -318,6 +344,45 @@ try {
   const back = await evalJs<any>(`return { full: document.documentElement.classList.contains("shell-fullscreen"), lights: getComputedStyle(document.documentElement).getPropertyValue("--shell-lights").trim() };`);
   const backLights = (await state()).window!.lights[0];
   check(!back.full && back.lights !== "0px" && Math.abs(backLights[1] + backLights[3] / 2 - 32) <= 1, `back from full screen, the lights and inset return (${JSON.stringify(back)})`);
+
+  // ------------------------------------------------------------ phones and tablets on the Wi-Fi (MAC-23 … MAC-26)
+  if (!LAN_IP) console.log("- no LAN address: skipping the Wi-Fi checks");
+  else {
+    const WIFI = "Let Phones and Tablets on This Wi-Fi Connect";
+    const s0 = await state();
+    check(s0.menu.includes(WIFI) && s0.menu.includes("Phones and Tablets…") && !s0.wifi, "the menu has the Wi-Fi setting, off by default, and Phones and Tablets…");
+    check(!(await lanOpen()), `off: nothing listens on ${LAN_IP}:${PORT}`);
+    await cmd("menu", { item: WIFI });
+    check(await until(async () => (await state()).wifi && (await lanOpen()), 8000), `turned on from the menu: the server listens on ${LAN_IP}:${PORT}`);
+    const unpaired = await fromLan("/");
+    check(unpaired.status === 401 && unpaired.body.includes("Pair with ViewSwitcher"), "an unpaired device gets the pairing page");
+    check((await fromLan("/api/state")).status === 401, "…and 401 for the API");
+    check(await answers(), "this Mac is unchanged");
+    if (shots) writeFileSync(join(shots, "pair-page.html"), unpaired.body);
+    await cmd("remotes");
+    check(await until(async () => !!(await state()).remotes?.code, 8000), "Phones and Tablets… shows a code");
+    const r = (await state()).remotes!;
+    check(r.pairUrl === `http://${LAN_IP}:${PORT}/pair?code=${r.code}`, `the QR code links to this Mac's LAN address with the code (${r.pairUrl})`);
+    if (shots) {
+      await sleep(500);
+      await cmd("remotesSnapshot", { path: join(shots, "mac-remotes-qr.png") }).then(() => console.log("  screenshot mac-remotes-qr.png"));
+    }
+    const paired = await fromLan("/api/pair", { method: "POST", headers: { "content-type": "application/json", origin: `http://${LAN_IP}:${PORT}` }, body: JSON.stringify({ code: r.code, name: "E2E phone" }) });
+    check(paired.status === 200 && paired.cookie.startsWith("vs_device="), "the phone pairs with the code");
+    check((await fromLan("/api/state", { headers: { cookie: paired.cookie } })).status === 200, "…and is let in");
+    check(await until(async () => (await state()).remotes?.devices.includes("E2E phone"), 6000), "the window lists it");
+    check(await until(async () => !(await state()).remotes?.code, 4000), "the code is used up");
+    if (shots) {
+      await cmd("remotesSnapshot", { path: join(shots, "mac-remotes-devices.png") }).then(() => console.log("  screenshot mac-remotes-devices.png"));
+      await cmd("menuPicture", { path: join(shots, "mac-menu.png") }).then(() => console.log("  screenshot mac-menu.png (drawn from the menu's items)"));
+    }
+    await cmd("remotesRemove", { name: "E2E phone" });
+    check((await fromLan("/api/state", { headers: { cookie: paired.cookie } })).status === 401, "removed: its token stops at once");
+    await cmd("menu", { item: WIFI });
+    check(await until(async () => !(await state()).wifi && !(await lanOpen()), 8000), "turned off: the LAN port closes");
+    check(await answers(), "…and this Mac carries on");
+    check((await state()).menuEnabled.includes(WIFI), "the setting stays in the menu");
+  }
 
   // ------------------------------------------------------------ close keeps serving; Quit stops (MAC-11)
   await cmd("close");

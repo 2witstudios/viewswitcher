@@ -108,17 +108,18 @@ describe("POST /mcp refuses, without any MCP processing", () => {
     const r = await mcp(initialize(), { host: `evil.example:${port}` });
     expect(r.status).toBe(421);
   });
-  test("a trusted name that isn't loopback (the tailnet, Bonjour): 404", async () => {
+  // Refused by the pairing gate first (401 unpaired; 421 a name it isn't on), else by handleMcp (404).
+  test("a trusted name that isn't loopback (the tailnet, Bonjour): refused", async () => {
     for (const host of ["mac.tail1234.ts.net", `studio.local:${port}`]) {
       const r = await mcp(initialize(), { host });
-      expect({ host, status: r.status }).toEqual({ host, status: 404 });
+      expect([401, 404, 421]).toContain(r.status);
       refusedWithoutMcp(r);
     }
   });
-  test("proxied (tailscale serve connects from loopback but adds forwarding headers): 404", async () => {
+  test("proxied (tailscale serve connects from loopback but adds forwarding headers): refused", async () => {
     for (const h of [{ "x-forwarded-for": "100.64.0.3" }, { "x-forwarded-host": "mac.tail1234.ts.net" }, { forwarded: "for=100.64.0.3" }] as Record<string, string>[]) {
       const r = await mcp(initialize(), h);
-      expect(r.status).toBe(404);
+      expect([401, 404, 421]).toContain(r.status);
       refusedWithoutMcp(r);
     }
   });
@@ -145,6 +146,22 @@ describe("handleMcp from another machine", () => {
     for (const peer of [{ address: "192.168.1.20" }, { address: "100.64.0.3" }, { address: "" }, null]) {
       const r = await handleMcp(req(), peer, { deps, allowedOrigins: [], onSeen: () => seen++ });
       expect({ peer, status: r.status }).toEqual({ peer, status: 404 });
+    }
+    expect(seen).toBe(0);
+  });
+});
+
+describe("handleMcp from the iPad on the USB-C bridge", () => {
+  test("a bridged socket (loopback peer and Host, its port marked by usb-bridge.ts) is refused with 404", async () => {
+    const { bridgePorts } = await import("../gate");
+    let seen = 0;
+    const deps = { root: library, kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
+    const req = () => new Request(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { host: `127.0.0.1:${port}`, ...MCP_HEADERS }, body: JSON.stringify(initialize()) });
+    bridgePorts.add(52001);
+    try {
+      expect((await handleMcp(req(), { address: "127.0.0.1", port: 52001 }, { deps, allowedOrigins: [], onSeen: () => seen++ })).status).toBe(404);
+    } finally {
+      bridgePorts.delete(52001);
     }
     expect(seen).toBe(0);
   });
