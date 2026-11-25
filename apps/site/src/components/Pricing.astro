@@ -16,7 +16,8 @@ import { IPAD_PRICE } from "../lib/cta";
           <li>The full set of views, in your colors</li>
           <li>As many shows and episodes as you like</li>
           <li>Your camera and screen placed for you in OBS</li>
-          <li>Switch from the Mac, a browser or a phone</li>
+          <li>Switch from the Mac app or a browser on the Mac</li>
+          <li class="soon">Coming soon: pair your phone over Wi-Fi</li>
         </ul>
       </article>
       <article>
@@ -24,8 +25,8 @@ import { IPAD_PRICE } from "../lib/cta";
         <p class="price">{IPAD_PRICE} <span class="once">one time</span></p>
         <ul>
           <li>Switch views from an iPad beside you</li>
-          <li>Plug it into the Mac with a cable: no Wi-Fi needed</li>
-          <li>Works over your network when it's unplugged</li>
+          <li>Plug it into the Mac with a USB-C cable: no Wi-Fi needed</li>
+          <li>Retype titles and move boxes with a finger</li>
         </ul>
         <IpadStore />
       </article>
@@ -39,4 +40,5 @@ import { IPAD_PRICE } from "../lib/cta";
   .price { font: 700 clamp(1.6rem, 3vw, 2.1rem)/1.1 var(--display); letter-spacing: -0.025em; }
   .once { font: 500 1rem var(--text); color: var(--ink-3); letter-spacing: 0; margin-left: 0.25rem; }
   ul { margin: 0; padding-left: 1.1rem; color: var(--ink-2); display: grid; gap: 0.4rem; }
+  .soon { color: var(--ink-3); list-style: none; margin-left: -1.1rem; }
 </style>

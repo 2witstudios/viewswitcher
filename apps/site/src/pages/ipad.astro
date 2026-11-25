@@ -33,8 +33,8 @@ const store = site.ipadApp.state === "store";
     <p>The cable keeps the switch fast and doesn't depend on the venue's Wi-Fi. The first time, tap <strong>Trust</strong> on the iPad when it asks about the computer.</p>
     <Shot src={usb} alt="ViewSwitcher for iPad connected over USB-C: Grace Community's templates, with Nothing on air, Rec, Go Live, USB and OBS offline at the top." caption="Connected over the cable: the USB label sits beside Go Live and Rec." />
 
-    <h2 id="network">Or over the network</h2>
-    <p>Without the cable, the app connects through <a href="https://tailscale.com">Tailscale</a>, a free private network between your own devices. Sign in to Tailscale on the Mac and the iPad, share ViewSwitcher from the Mac with <code>tailscale serve --bg 7420</code> in Terminal, and type the address it prints (it ends in .ts.net) into the app's connect screen once. If the cable is plugged in later, the app uses whichever link works.</p>
+    <h2 id="network">Without the cable (advanced)</h2>
+    <p>For now, the cable is the way to connect. Pairing over Wi-Fi is coming soon. If you already use <a href="https://tailscale.com">Tailscale</a>, the app can connect through it instead. Sign in to Tailscale on the Mac and the iPad, share ViewSwitcher from the Mac with <code>tailscale serve --bg 7420</code> in Terminal, and type the address it prints (it ends in .ts.net) into the app's connect screen once. If the cable is plugged in later, the app uses whichever link works.</p>
 
     <h2 id="what-you-can-do">What you can do from the iPad</h2>
     <ul>
@@ -51,7 +51,7 @@ const store = site.ipadApp.state === "store";
 
     <h2 id="price">Price and availability</h2>
     <p>ViewSwitcher for iPad is {IPAD_PRICE}, once: no subscription, no account, no ads, and it collects no data. To install it on another iPad, download it again with the same Apple Account at no charge. It needs iPadOS 17 or later, and a Mac running ViewSwitcher (free) and OBS for anything beyond the demo.</p>
-    <p>{store ? "It's on the App Store now." : "It's coming to the App Store. The Mac app is free and works on its own, from the Mac or any browser on it, in the meantime."}</p>
+    <p>{store ? "It's on the App Store now." : "It's coming to the App Store. The Mac app is free and works on its own in the meantime: switch from the app or a browser on the Mac."}</p>
     <IpadStore />
     <Cta />
 
