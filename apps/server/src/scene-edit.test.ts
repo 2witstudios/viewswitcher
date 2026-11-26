@@ -4,6 +4,7 @@ import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanElements, textOf, untagForEdit } from "@viewswitcher/shared";
+import { PathError } from "./paths";
 import { editScene, HASHED_CHANGES, readForEdit, sceneHash, viewHashes } from "./scene-edit";
 
 const starter = join(import.meta.dir, "../starter");
@@ -56,6 +57,8 @@ describe("viewHashes (sent with a library change)", () => {
       expect(h).not.toBeNull();
       expect(Object.keys(h!)).toEqual([SCENE]);
       await expect(Promise.race([readForEdit(root, pipe), Bun.sleep(3000).then(() => "hung")])).rejects.toThrow();
+      // Refused as a bad path (a 400 for the editor), not an unexpected error.
+      await expect(editScene(root, pipe, "x", [{ id: 1, text: "y" }])).rejects.toBeInstanceOf(PathError);
     } finally {
       await rm(join(root, pipe), { force: true });
     }

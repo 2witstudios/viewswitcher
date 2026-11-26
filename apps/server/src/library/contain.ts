@@ -122,9 +122,12 @@ export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O
  * file the switcher reads in full on its own (titles, hashes, the editor's copy, a pack install) uses this.
  */
 export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
-  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
+  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS).catch((e) => {
+    // A path that became a link since it was checked is refused like one that was a link then (a 400, not a 500).
+    throw (e as NodeJS.ErrnoException).code === "ELOOP" ? outside() : e;
+  });
   try {
-    if (!(await f.stat()).isFile()) throw new Error("not a plain file");
+    if (!(await f.stat()).isFile()) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");
     return await use(f);
   } finally {
     await f.close();

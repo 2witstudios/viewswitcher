@@ -1,6 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { chmod, copyFile, cp, lstat, mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
@@ -75,9 +75,15 @@ export async function createOrg(libraryRoot: string, starter: string, name: stri
 /** The starter kit copied to `dest` with every text file filled in, plus the empty folders an org has. */
 async function fillStarter(starter: string, dest: string, vars: ReturnType<typeof placeholderVars>) {
   await cp(starter, dest, { recursive: true });
+  // The org's files and folders are its own to edit: an installed app's starter may be read-only, and cp keeps
+  // its modes. Folders first, so files (and the folders made below) can be written in them.
+  const writable = async (abs: string) => {
+    const s = await lstat(abs);
+    if (s.isDirectory() || s.isFile()) await chmod(abs, (s.mode & 0o777) | (s.isDirectory() ? 0o700 : 0o600));
+  };
+  await writable(dest);
+  for (const rel of await readdir(dest, { recursive: true })) await writable(join(dest, String(rel)));
   const files = await walkFiles(dest);
-  // The org's files are its own to edit: an installed app's starter may be read-only, and cp keeps its modes.
-  await Promise.all(files.map(async (rel) => chmod(join(dest, rel), ((await stat(join(dest, rel))).mode & 0o777) | 0o600)));
   await Promise.all(
     files.filter(isTextFile).map(async (rel) => {
       const p = join(dest, rel);

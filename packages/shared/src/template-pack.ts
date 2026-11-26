@@ -285,9 +285,9 @@ const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"
 /**
  * CSS without its comments, where a value is safe (the starter names the show in one). Quoted strings
  * are kept and skipped while comments are taken out, so a "/*" inside one isn't a comment; a string
- * ends at its line's end at the latest, as CSS ends an unclosed one.
+ * ends at its line's end at the latest, as CSS ends an unclosed one, unless a backslash continues it.
  */
-const cssCode = (css: string) => css.replace(/("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?)|\/\*[\s\S]*?\*\//g, (_m, quoted: string | undefined) => quoted ?? "");
+const cssCode = (css: string) => css.replace(/("(?:\\[\s\S]|[^"\\\n])*"?|'(?:\\[\s\S]|[^'\\\n])*'?)|\/\*[\s\S]*?\*\//g, (_m, quoted: string | undefined) => quoted ?? "");
 
 /**
  * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, a .js file, or a

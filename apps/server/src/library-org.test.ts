@@ -72,12 +72,14 @@ describe("createOrg", () => {
     const ro = await mkdtemp(join(tmpdir(), "vs-org-starter-"));
     dirs.push(ro);
     await cp(starter, ro, { recursive: true });
-    // Its files read-only (its folders aren't, in an app bundle copied by the person).
-    for (const f of await readdir(ro, { recursive: true })) if ((await stat(join(ro, String(f)))).isFile()) await chmod(join(ro, String(f)), 0o444);
+    // Files and folders read-only, deepest first (an installed app's can be either).
+    const all = (await readdir(ro, { recursive: true })).map(String).sort((a, b) => b.length - a.length);
+    for (const f of all) await chmod(join(ro, f), (await stat(join(ro, f))).isDirectory() ? 0o555 : 0o444);
     const { orgId } = await createOrg(root, ro, "Daisy");
     expect(await readFile(join(root, orgId, "templates/ending.html"), "utf8")).toContain("Daisy");
     // Files with nothing to fill (scene.js, order.json) are the org's to edit too.
-    for (const f of ["templates/_shared/scene.js", "templates/_shared/order.json"]) expect({ f, writable: ((await stat(join(root, orgId, f))).mode & 0o200) !== 0 }).toEqual({ f, writable: true });
+    for (const f of ["templates/_shared/scene.js", "templates/_shared/order.json", "templates", "templates/_shared"]) expect({ f, writable: ((await stat(join(root, orgId, f))).mode & 0o200) !== 0 }).toEqual({ f, writable: true });
+    for (const f of [...all].reverse()) await chmod(join(ro, f), 0o755); // so the folder can be removed
   });
 
   test("a create that fails leaves nothing behind", async () => {
