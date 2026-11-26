@@ -13,6 +13,7 @@ import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "no
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, PackPlaceholder, StagedPack } from "@viewswitcher/shared";
+import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
 import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
@@ -138,7 +139,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
     const meta: StageMeta = { org: orgId, set, manifest: report.manifest, files, created: Date.now() };
-    await writeFile(join(dir, "meta.json"), JSON.stringify(meta));
+    await writeAtomic(join(dir, "meta.json"), JSON.stringify(meta));
     return {
       token, set, manifest: report.manifest, views,
       transition: report.transition ? `${previewRel}/${report.transition}` : null,
