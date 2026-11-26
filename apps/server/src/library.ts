@@ -1,12 +1,11 @@
-import { constants as fsConstants } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { chmod, copyFile, cp, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
-import { libraryStaging, readNoFollow, resolveInLibrary } from "./library/contain";
+import { libraryStaging, readNoFollow, readNoFollowBytes, resolveInLibrary } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
 
@@ -127,9 +126,9 @@ export async function customizeTransition(orgDir: string, projectId: string) {
   if (await exists(dest)) return;
   const src = join(orgDir, ORG_TRANSITION);
   if (!(await exists(src))) throw new PathError("This show has no transition to start from yet");
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dest);
-  await copyNew(src, dest);
+  await copyNew(real, dest);
 }
 
 /** Back to the org's transition: deletes the project's own. */
@@ -158,11 +157,15 @@ export async function isFile(path: string) {
  */
 const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgDir), relative(dirname(orgDir), abs), { forWrite: true });
 
-/** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
-async function copyNew(src: string, dest: string) {
-  if (!(await stat(src).then((s) => s.isFile(), () => true))) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");
+/**
+ * Copy `real` (a real path, as contained() gives) to a new file only: read through the no-link open (so a
+ * link or a pipe swapped in since the check is refused), and written exclusively, never through a link
+ * already at `dest` (a dangling one could point outside the library).
+ */
+async function copyNew(real: string, dest: string) {
+  const bytes = await readNoFollowBytes(real);
   try {
-    await copyFile(src, dest, fsConstants.COPYFILE_EXCL);
+    await writeFile(dest, bytes, { flag: "wx" });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PathError("Something is already there (a link to somewhere else?). Remove it, then try again.");
     throw e;
@@ -260,9 +263,9 @@ export async function customize(orgDir: string, projectId: string, streamId: str
   const src = join(projectDir(orgDir, projectId), "scenes", `${plainName(name)}.html`);
   const dest = join(streamDir(orgDir, projectId, streamId), `${name}.html`);
   if (await exists(dest)) return { name };
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dirname(dest));
-  await copyNew(src, dest);
+  await copyNew(real, dest);
   return { name };
 }
 

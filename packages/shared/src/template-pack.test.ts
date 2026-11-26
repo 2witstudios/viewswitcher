@@ -156,6 +156,11 @@ describe("checkPack", () => {
     // CSS reads CRLF (and CR, and form feed) as one newline, so a backslash-CRLF continues the string too.
     const crlf = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\r\n/* {{ORG_NAME}} */" }` }));
     expect(crlf.ok && crlf.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // An escaped slash and an unquoted url(…) are code in CSS, not a comment's start.
+    for (const css of [`.a\\/* {{ORG_NAME}} */ {}`, `.a { background: url(/x/* {{ORG_NAME}} */.png) }`]) {
+      const r = checkPack(planned(basic), texts({ "_shared/theme.css": css }));
+      expect({ css, warned: !!(r.ok && r.warnings.find((x) => x.includes("in a script"))) }).toEqual({ css, warned: true });
+    }
     // Many unclosed comment starts stay fast (one pass), and what follows the first is a comment.
     const t0 = performance.now();
     const many = checkPack(planned(basic), texts({ "_shared/theme.css": `.a {}\n${"/* ".repeat(30000)}{{ORG_NAME}}` }));

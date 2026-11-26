@@ -6,9 +6,8 @@
 // switcher's own routes) is left out. Reading text, not running it: a URL a script builds at run time
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
-import { lstat } from "node:fs/promises";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
-import { inside } from "./paths";
+import { PathError } from "./paths";
 
 const BASE_HOST = "scene.invalid";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -110,13 +109,16 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
   while (queue.length) {
     const file = queue.shift()!;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
+    let failure: unknown = null;
     const text = await Promise.resolve()
       .then(() => resolveInLibrary(root, file).then(readNoFollow))
-      .catch(() => null);
+      .catch((e) => ((failure = e), null));
     if (text === null) {
-      // Something is there that couldn't be read (a link out, a pipe): what it loads is unknown, so the
-      // guard treats the list as not all (agent-guard.ts "unreadable"). A file that isn't there loads nothing.
-      if (await Promise.resolve().then(() => lstat(inside(root, file))).then(() => true, () => false)) unreadable.push(file);
+      // What /library/ refuses too (a link out, a dot-folder, a folder, a pipe: a PathError) or what isn't
+      // there loads nothing on the page. Any other failure (EACCES, EIO) leaves what it loads unknown, so the
+      // guard treats the list as not all (agent-guard.ts "unreadable").
+      const code = (failure as NodeJS.ErrnoException | null)?.code;
+      if (!(failure instanceof PathError) && code !== "ENOENT" && code !== "ENOTDIR") unreadable.push(file);
       continue;
     }
     read[file] = textHash(text);

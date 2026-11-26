@@ -3,7 +3,7 @@
 // a view that is a link outside the library is never copied in.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addFromTemplate, customize, duplicate } from "./library";
@@ -76,9 +76,27 @@ describe("a named pipe in the library", () => {
     const r = await settled(loadedFiles(root, ["daisy/templates/brb.html"]));
     expect(r).not.toBe("hung");
     expect((r as { v: { read: Record<string, string> } }).v.read).not.toHaveProperty("daisy/templates/_shared/theme.css");
-    // What a file that's there but can't be read loads is unknown: it's named, so the guard can say which.
-    expect((r as { v: { unreadable: string[] } }).v.unreadable).toEqual(["daisy/templates/_shared/theme.css"]);
+    // A pipe is what /library/ refuses too, so the page loads nothing from it: not "unreadable", and agents aren't blocked.
+    expect((r as { v: { unreadable: string[] } }).v.unreadable).toEqual([]);
   });
+
+  test("stale references on the view on air (a dangling link, a folder named like a stylesheet, no permission) don't block agents", async () => {
+    await writeFile(join(root, "daisy/templates/stale.html"), ["gone", "folder", "locked"].map((n) => `<link rel="stylesheet" href="/library/daisy/templates/_shared/${n}.css">`).join(""));
+    await symlink(join(root, "daisy/templates/_shared/nowhere.css"), join(root, "daisy/templates/_shared/gone.css"));
+    await mkdir(join(root, "daisy/templates/_shared/folder.css"));
+    await writeFile(join(root, "daisy/templates/_shared/locked.css"), "body{}");
+    await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o000);
+    try {
+      // /library/ serves none of them, so the page loads nothing from them: they're listed as loaded, not unknown.
+      const r = await loadedFiles(root, ["daisy/templates/stale.html"]);
+      expect(r.unreadable).toEqual([]);
+      expect(r.complete).toBe(true);
+      expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css"]);
+    } finally {
+      await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o644);
+    }
+  });
+
 
   test("duplicating it refuses", async () => {
     const r = await settled(duplicate(root, "daisy/templates/pipe.html"));

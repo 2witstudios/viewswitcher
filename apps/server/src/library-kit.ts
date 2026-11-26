@@ -58,7 +58,13 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
     const dest = join(root, to);
     // A kit file someone made a link (AGENTS.md → CLAUDE.md) is their arrangement: never replaced.
     if (await lstat(dest).then((s) => s.isSymbolicLink(), () => false)) continue;
-    const current = await readPlainText(dest).catch(() => null);
+    // Missing: copy it. Anything else that can't be read (a pipe, a folder, no permission) is the person's: leave it.
+    let unreadable = false;
+    const current = await readPlainText(dest).catch((e) => {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") unreadable = true;
+      return null;
+    });
+    if (unreadable) continue;
     if (current === null) {
       await writeAtomic(dest, text);
       result.copied.push(to);

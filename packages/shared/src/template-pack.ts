@@ -301,6 +301,16 @@ function cssCode(css: string): string {
       let j = i + 1;
       while (j < text.length && text[j] !== c && text[j] !== "\n") j += text[j] === "\\" ? 2 : 1;
       i = Math.min(text[j] === c ? j + 1 : j, text.length);
+    } else if (c === "\\") {
+      i += 2; // an escape (\/, \", \'): the character after it is code, never a comment or a string's start
+    } else if (/url\(/iy.test(text.slice(i, i + 4)) && !/[\w-]/.test(text[i - 1] ?? "")) {
+      // An unquoted url(…) runs to its ")": a "/*" in it is part of the URL. A quoted one is a string, as above.
+      let j = i + 4;
+      while (j < text.length && /\s/.test(text[j]!)) j++;
+      if (text[j] !== '"' && text[j] !== "'") {
+        while (j < text.length && text[j] !== ")") j += text[j] === "\\" ? 2 : 1;
+        i = Math.min(j + 1, text.length);
+      } else i = j;
     } else if (c === "/" && text[i + 1] === "*") {
       kept.push(text.slice(from, i));
       const close = text.indexOf("*/", i + 2);
