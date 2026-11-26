@@ -9,7 +9,7 @@
 // 3. remove a set: delete its folder, unless scenes made from it still use its theme and pictures:
 //    then only its views and pack.json go, so those scenes keep their look.
 import { createHash, randomBytes } from "node:crypto";
-import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
@@ -61,15 +61,16 @@ async function freeSet(orgDir: string, id: string) {
 
 /**
  * Copy `raw` to `dest` with every text file filled in. Staging wrote plain files and folders only, so
- * each is read from raw's real path with no link anywhere below it (contain.ts readNoFollowBytes): a
- * file or folder swapped for a link since is refused, never followed.
+ * each is read with no link anywhere in its path (contain.ts readNoFollowBytes): a file or folder
+ * swapped for a link since is refused, never followed.
  */
 async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
   const changed = (f: string) => new PackError(`"${f}" changed in staging. Drop the pack again.`);
+  // `raw` is already a real path (the staging folder is, and the token folder isn't a link), so the no-link
+  // open refuses a link at raw or anywhere below it, at the moment each file is opened.
   if (!(await lstat(raw)).isDirectory()) throw changed("raw");
-  const realRaw = await realpath(raw);
   for (const f of files) {
-    const bytes = await readNoFollowBytes(inside(realRaw, f), { single: true }).catch(() => {
+    const bytes = await readNoFollowBytes(inside(raw, f), { single: true }).catch(() => {
       throw changed(f);
     });
     const to = inside(dest, installedPath(f));

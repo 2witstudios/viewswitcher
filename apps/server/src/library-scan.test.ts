@@ -6,7 +6,8 @@ import { mkdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titledCopy } from "./library";
-import { LibraryScanner, noLinkFiles, readNoFollow } from "./library/scanner";
+import { readNoFollow } from "./library/contain";
+import { LibraryScanner, noLinkFiles } from "./library/scanner";
 import { createSceneTitles } from "./scene-titles";
 
 /**

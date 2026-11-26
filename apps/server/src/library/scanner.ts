@@ -29,10 +29,7 @@ import { exists, readOrg } from "../library";
 import { limit } from "../limit";
 import { inside, plainName } from "../paths";
 import { createSceneTitles } from "../scene-titles";
-import { readNoFollow, withNoLinks } from "./contain";
-import { resolveInLibrary } from "./contain";
-
-export { readNoFollow };
+import { readNoFollow, resolveInLibrary, withNoLinks } from "./contain";
 import { dirs as listDirs, type Io, readJson as readJsonFile } from "./read";
 
 const KINDS: Record<string, AssetKind> = {
