@@ -2,11 +2,11 @@
 //
 // The switching itself is lib/program-loop.ts: one serialized loop that always ends on the latest
 // request and drops superseded ones mid-load. This page gives it the frames: two scene frames it swaps
-// between, and the transition frame over the org's ground color. The scene editor's live previews
+// between, and the transition frame over the org's ground color. The scene editor's live edits
 // apply to the on-air frame in place.
 //
 // Scenes run in sandboxed frames with an opaque origin: this page can't reach into them, and their
-// scripts can't reach the switcher. Where the slots are, the transition's hold and live previews go
+// scripts can't reach the switcher. Where the slots are, the transition's hold and live edits go
 // through the bridge the server adds to each scene (apps/server/src/scene-bridge.ts).
 import { editKind } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
@@ -27,7 +27,7 @@ if (typeof window !== "undefined") {
 
 const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
-/** A live preview that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
+/** A live edit that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
 const PREVIEW_BACKSTOP_MS = 5000;
 
 // Slot reports are numbered per page, so the server applies them in the order they were made (live
@@ -71,7 +71,7 @@ export const Route = createFileRoute("/program")({
   component: function Program() {
     // Only what's on air and its files' versions: not the warnings, OBS or the agent, and not other files.
     const onAir = useLive((l) => l.state?.onAir ?? null);
-    // Scenes load with data-vs element ids (?edit) so the editor's live previews can find their element.
+    // Scenes load with data-vs element ids (?edit) so the editor's live edits can find their element.
     // A scene whose file was deleted on air isn't loaded again: the frame keeps the version it has,
     // where a reload would put the server's 404 on stream.
     const target = useLive((l) => (onAir && !onAir.missing ? sceneUrl(onAir.path, l.versions, false, true, true) : null));
@@ -154,13 +154,13 @@ export const Route = createFileRoute("/program")({
     const program = loop.current;
 
     // Live edits from the scene editor: change the on-air frame's DOM (never the file), only when the
-    // edit was made against the version this frame shows. When a moved element is or holds a device
-    // slot, report the slots again (at most ~30 times a second) so OBS follows it. If previews stop
+    // edit was made against the version this frame shows. When a moved element is or holds a camera
+    // box, report the slots again (at most ~30 times a second) so OBS follows it. If live edits stop
     // without a save (the editor went away mid-drag), reload the frame so the stream matches the file.
     useEffect(() => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let slotsToReport: { path: string; slots: Slot[] } | null = null;
-      // Newest preview seq applied, per editor and element, for the version on screen (reset with it).
+      // Newest live edit seq applied, per editor and element, for the version on screen (reset with it).
       const latest = new Map<string, number>();
       let latestFor = "";
       let sent = 0;
@@ -174,9 +174,9 @@ export const Route = createFileRoute("/program")({
           latest.clear();
           latestFor = version ?? "";
         }
-        // A preview for another version of the file would name the wrong elements: the bridge ignores it too.
+        // A live edit for another version of the file would name the wrong elements: the bridge ignores it too.
         if (!version || hash !== version) return;
-        // Previews are separate requests and can arrive out of order: never step back to an older one.
+        // Live edits are separate requests and can arrive out of order: never step back to an older one.
         const kind = editKind(edit);
         const key = `${order.session}:${edit.id}:${kind === "text" ? "t" : kind === "src" ? "s" : "p"}`;
         if (order.seq <= (latest.get(key) ?? -1)) return;
@@ -189,7 +189,7 @@ export const Route = createFileRoute("/program")({
           program.request({ url: freshUrl(job.url, ++seq.current), path: job.path });
         }, PREVIEW_BACKSTOP_MS);
       });
-      // The bridge answers each preview; when it moved a device slot, report the slots again (at most
+      // The bridge answers each live edit; when it moved a camera box, report the slots again (at most
       // ~30 times a second) so OBS follows it.
       const onApplied = (e: MessageEvent) => {
         const d = e.data as { viewswitcher?: string; slotMoved?: boolean; slots?: unknown } | null;

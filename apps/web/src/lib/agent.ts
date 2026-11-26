@@ -98,7 +98,7 @@ export type PendingEvent =
   | { t: "answered"; id: number; ok: boolean }
   /** The switcher's state said this (it comes over the live socket, maybe after the HTTP answer). */
   | { t: "published"; value: AgentOnAir | undefined }
-  /** A while after its answer: give up waiting (another device may have changed it meanwhile). */
+  /** A while after its answer: give up waiting (another phone or tablet may have changed it meanwhile). */
   | { t: "expire"; id: number };
 
 /**

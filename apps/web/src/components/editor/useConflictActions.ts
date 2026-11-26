@@ -26,7 +26,7 @@ export function useConflictActions(opts: {
     const latest = k.current() ?? c.latest; // the newest version, if it moved on again
     const pairs = edits.map((e) => ({ e, m: retarget(prev.source, latest.source, e) }));
     k.mode.dispatch({ t: "end", kind: "conflict" });
-    // The ones that can be placed go through; the others are said so. (Their earlier live previews
+    // The ones that can be placed go through; the others are said so. (Their earlier live edits
     // were on the old version, which the stream already replaced.)
     const lost = pairs.filter((p) => p.m === null).length;
     if (lost) toast(lost === pairs.length ? "That part of the view isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");

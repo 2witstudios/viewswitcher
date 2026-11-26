@@ -1,7 +1,7 @@
 // The scene bridge. Scenes run in sandboxed frames with an opaque origin, so the switcher's
 // pages can't reach into their DOM, and a scene's own scripts can't reach the switcher (its /api,
 // its socket, its pages). The program page still needs two things from the scene on air: where its
-// device slots are, and the scene editor's live previews applied in place. This script, added to
+// camera boxes are, and the scene editor's live edits applied in place. This script, added to
 // the scene as the server serves it for the program page (?bridge), does both over postMessage:
 //
 //   page → scene   { viewswitcher: "frame:hello", id }                 → frame:state

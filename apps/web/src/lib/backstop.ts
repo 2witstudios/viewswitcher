@@ -1,4 +1,4 @@
-// The program page's backstop: a live preview that's neither saved nor refreshed for a while (the
+// The program page's backstop: a live edit that's neither saved nor refreshed for a while (the
 // editor went away) is dropped by reloading the on-air frame. It must never undo a newer request.
 
 type Job = { url: string; path: string };

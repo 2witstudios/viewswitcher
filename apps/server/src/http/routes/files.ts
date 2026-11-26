@@ -33,7 +33,7 @@ export function fileRoutes(d: RouteDeps): Route[] {
     if (rel.endsWith(".html") && (q.has("edit") || q.has("bridge"))) {
       // ?edit: the scene with data-vs element ids, for the editor and the program page; the file is only read.
       // If it can't be tagged for any reason, serve the plain file: the program shows the scene and
-      // live previews simply don't apply to it. ?bridge: with the bridge the program page talks to it through.
+      // live edits simply don't apply to it. ?bridge: with the bridge the program page talks to it through.
       const scene = q.has("edit")
         ? await readForEdit(root, rel).catch((e) => {
             d.log?.(`[edit] serving ${rel} untagged: ${(e as Error).message}`);

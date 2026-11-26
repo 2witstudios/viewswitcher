@@ -1,6 +1,6 @@
 // The scene file the editor works on: the version it last read or saved (the base), the generation
 // that every element id is checked against, the save queue, conflicts, and reading the file again
-// when it changes somewhere else (an agent, another device).
+// when it changes somewhere else (an agent, another phone or tablet).
 import { applyEdits, changedElements, isStructural, scanElements, toBase } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
