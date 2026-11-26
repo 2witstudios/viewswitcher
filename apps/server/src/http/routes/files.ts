@@ -1,8 +1,8 @@
 // Files (paired): the library's, served sandboxed, and the switcher's own pages, last of all routes.
-import { readFile, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { Audience } from "../../gate";
-import { resolveInLibrary } from "../../library/contain";
+import { readNoFollow, resolveInLibrary } from "../../library/contain";
 import { inside, PathError } from "../../paths";
 import { withBridge } from "../../scene-bridge";
 import { readForEdit } from "../../scene-edit";
@@ -40,7 +40,7 @@ export function fileRoutes(d: RouteDeps): Route[] {
             return null;
           })
         : null;
-      const html = scene?.html ?? (await readFile(file, "utf8").catch(() => null));
+      const html = scene?.html ?? (await readNoFollow(file).catch(() => null));
       if (html !== null) {
         // INERT_CSP (same-origin) only on a body that went through defuseMeta; anything else is sandboxed as usual.
         return new Response(inert ? defuseMeta(html) : q.has("bridge") ? withBridge(html) : html, {

@@ -1,6 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { copyFile, cp, lstat, mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, cp, lstat, mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
@@ -75,8 +75,11 @@ export async function createOrg(libraryRoot: string, starter: string, name: stri
 /** The starter kit copied to `dest` with every text file filled in, plus the empty folders an org has. */
 async function fillStarter(starter: string, dest: string, vars: ReturnType<typeof placeholderVars>) {
   await cp(starter, dest, { recursive: true });
+  const files = await walkFiles(dest);
+  // The org's files are its own to edit: an installed app's starter may be read-only, and cp keeps its modes.
+  await Promise.all(files.map(async (rel) => chmod(join(dest, rel), ((await stat(join(dest, rel))).mode & 0o777) | 0o600)));
   await Promise.all(
-    (await walkFiles(dest)).filter(isTextFile).map(async (rel) => {
+    files.filter(isTextFile).map(async (rel) => {
       const p = join(dest, rel);
       const text = await readFile(p, "utf8");
       const filled = fillPlaceholders(rel, text, vars);

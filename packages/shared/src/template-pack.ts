@@ -283,6 +283,13 @@ function remoteScripts(html: string): string[] {
 const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
 
 /**
+ * CSS without its comments, where a value is safe (the starter names the show in one). Quoted strings
+ * are kept and skipped while comments are taken out, so a "/*" inside one isn't a comment; a string
+ * ends at its line's end at the latest, as CSS ends an unclosed one.
+ */
+const cssCode = (css: string) => css.replace(/("(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?)|\/\*[\s\S]*?\*\//g, (_m, quoted: string | undefined) => quoted ?? "");
+
+/**
  * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, a .js file, or a
  * .css file outside its comments (the starter's theme.css names the show in one, where it's safe). A
  * value is HTML-escaped in a page and as typed in .js (TEXT_TYPES), right for text and attributes
@@ -297,11 +304,13 @@ function textInCode(texts: Record<string, string>): { placeholder: string; where
     const e = extensionOf(path);
     if (e === ".js") note(text, path);
     // In a .css file a value is as typed (only a comment's end is broken up), so outside comments it's in code.
-    // Quoted strings are skipped while comments are taken out, so a "/*" inside one isn't a comment.
-    if (e === ".css") note(text.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\/\*[\s\S]*?\*\//g, (m, quoted: string | undefined) => quoted ?? ""), path);
+    if (e === ".css") note(cssCode(text), path);
     if (e !== ".html" && e !== ".svg") continue;
     for (const el of scanElements(text)) {
-      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
+      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) {
+        const inner = text.slice(el.innerStart, el.innerEnd);
+        note(el.tag === "style" ? cssCode(inner) : inner, `${path} <${el.tag}>`);
+      }
       // An on… or style attribute is HTML-decoded, then read as JS or CSS: the same as code.
       for (const a of el.attrs) if ((/^on/i.test(a.name) || a.name.toLowerCase() === "style") && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
     }

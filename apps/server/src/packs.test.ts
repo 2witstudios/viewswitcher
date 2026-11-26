@@ -1,7 +1,7 @@
 // Staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { cp, link, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
@@ -444,6 +444,21 @@ describe("an org's .viewswitcher/ or staging/ linked outside the library", () =>
       } finally {
         await rm(away, { recursive: true, force: true });
       }
+    }
+  });
+
+  test("a staged file swapped for a hard link to a file outside the library: install refuses", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await writeFile(join(away, "secret.css"), "outside secret");
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const raw = join(root, org, ".viewswitcher/staging", s.token, "raw/_shared/theme.css");
+      await rm(raw);
+      await link(join(away, "secret.css"), raw);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("changed in staging");
+      expect((await scanOrg(root, org)).sets).toEqual([]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
     }
   });
 

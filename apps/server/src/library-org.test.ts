@@ -76,6 +76,8 @@ describe("createOrg", () => {
     for (const f of await readdir(ro, { recursive: true })) if ((await stat(join(ro, String(f)))).isFile()) await chmod(join(ro, String(f)), 0o444);
     const { orgId } = await createOrg(root, ro, "Daisy");
     expect(await readFile(join(root, orgId, "templates/ending.html"), "utf8")).toContain("Daisy");
+    // Files with nothing to fill (scene.js, order.json) are the org's to edit too.
+    for (const f of ["templates/_shared/scene.js", "templates/_shared/order.json"]) expect({ f, writable: ((await stat(join(root, orgId, f))).mode & 0o200) !== 0 }).toEqual({ f, writable: true });
   });
 
   test("a create that fails leaves nothing behind", async () => {

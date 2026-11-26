@@ -21,7 +21,7 @@
 // test makes its own and shares nothing with another.
 import type { Dirent } from "node:fs";
 import { realpathSync } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
@@ -164,7 +164,12 @@ export class LibraryScanner {
    */
   private realFile = (orgDir: string, rel: string, dir: string, e: Dirent): Promise<string | null> =>
     e.isSymbolicLink() ? this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, `${rel}/${e.name}`))).catch(() => null) : Promise.resolve(join(dir, e.name));
-  private readJson = async <T>(orgDir: string, rel: string, fallback: T) => ((await this.inLibrary(orgDir, rel)) ? readJsonFile(join(orgDir, rel), fallback, this.io) : fallback);
+  /** Where `rel` really is, when that's in the library; null otherwise. */
+  private realPath = (orgDir: string, rel: string) => this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).catch(() => null);
+  private readJson = async <T>(orgDir: string, rel: string, fallback: T) => {
+    const real = await this.realPath(orgDir, rel);
+    return real === null ? fallback : readJsonFile(real, fallback, this.io);
+  };
   /** `url` when the file `rel` is there, in the library, else null (a transition, for the library listing). */
   private urlIfThere = async (orgDir: string, rel: string, url: string) =>
     (await this.io(() => exists(join(orgDir, rel)))) && (await this.inLibrary(orgDir, rel)) ? url : null;
@@ -230,7 +235,8 @@ export class LibraryScanner {
     const found = await Promise.all(
       (await this.dirs(orgDir, "templates")).map(async (id): Promise<TemplateSet | null> => {
         const manifest = `templates/${id}/pack.json`;
-        const text = (await this.inLibrary(orgDir, manifest)) ? await this.io(() => readFile(join(orgDir, manifest), "utf8")).catch(() => null) : null;
+        const real = await this.realPath(orgDir, manifest);
+        const text = real === null ? null : await this.io(() => readNoFollow(real)).catch(() => null);
         if (text === null) return null;
         const read = readManifest(text);
         // A pack.json someone edited by hand into something odd: still list the set, by its folder.

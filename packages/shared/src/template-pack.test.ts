@@ -147,6 +147,12 @@ describe("checkPack", () => {
     // A "/*" inside a CSS string doesn't open a comment that would hide what follows.
     const quoted = checkPack(planned(basic), texts({ "_shared/theme.css": `.a::before { content: "/*" } .n::after { content: "{{ORG_NAME}}" } /* end */` }));
     expect(quoted.ok && quoted.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // An unclosed string ends at its line, as CSS ends it: a later comment stays a comment.
+    const unclosed = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x }\n/* {{ORG_NAME}} */\n.b { content: "y" }` }));
+    expect(unclosed.ok && unclosed.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+    // A view's <style> follows the same rule: a comment there is safe, its code isn't.
+    const styled = checkPack(planned(basic), texts({ "templates/main.html": `<html><head><style>/* {{ORG_NAME}} */ .a { color: red }</style></head><body></body></html>` }));
+    expect(styled.ok && styled.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
   });
 
   test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {

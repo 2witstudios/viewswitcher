@@ -69,7 +69,7 @@ async function fillCopy(raw: string, dest: string, files: string[], vars: Return
   if (!(await lstat(raw)).isDirectory()) throw changed("raw");
   const realRaw = await realpath(raw);
   for (const f of files) {
-    const bytes = await readNoFollowBytes(inside(realRaw, f)).catch(() => {
+    const bytes = await readNoFollowBytes(inside(realRaw, f), { single: true }).catch(() => {
       throw changed(f);
     });
     const to = inside(dest, installedPath(f));

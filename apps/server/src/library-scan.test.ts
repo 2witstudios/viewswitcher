@@ -251,6 +251,14 @@ describe("links out of the library are never read", () => {
     expect(l!.projects[0]!.scenes.find((s) => s.name === "pipe")?.label).toBe("pipe");
   });
 
+  test("a named pipe where a JSON file goes (project.json) can't hang the scan: it reads as missing", async () => {
+    await rm(join(root, ORG, "projects/p/project.json"));
+    expect(Bun.spawnSync(["mkfifo", join(root, ORG, "projects/p/project.json")]).exitCode).toBe(0);
+    const l = await Promise.race([scanner.scanOrg(ORG), Bun.sleep(3000).then(() => null)]);
+    expect(l).not.toBeNull();
+    expect(l!.projects[0]!.name).toBe("p");
+  });
+
   test("an org folder that is a link outside the library lists nothing from there", async () => {
     await mkdir(join(away, "org/projects/p/scenes"), { recursive: true });
     await writeFile(join(away, "org/org.json"), JSON.stringify({ name: "Outside org" }));

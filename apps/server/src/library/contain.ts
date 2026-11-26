@@ -134,5 +134,12 @@ export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promis
 /** A file's text, read only when no part of `abs` is a link and it's a plain file. */
 export const readNoFollow = (abs: string) => withNoLinks(abs, (f) => f.readFile("utf8"));
 
-/** A file's bytes, the same way. */
-export const readNoFollowBytes = (abs: string) => withNoLinks(abs, async (f) => new Uint8Array(await f.readFile()));
+/**
+ * A file's bytes, the same way. `single`: refused when the file has another name too (a hard link), as
+ * nothing the switcher wrote itself does, so a staged file can't be one to a file outside the library.
+ */
+export const readNoFollowBytes = (abs: string, { single = false }: { single?: boolean } = {}) =>
+  withNoLinks(abs, async (f) => {
+    if (single && (await f.stat()).nlink !== 1) throw new Error("has another name (a hard link)");
+    return new Uint8Array(await f.readFile());
+  });
