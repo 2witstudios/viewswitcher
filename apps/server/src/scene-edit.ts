@@ -1,10 +1,11 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
 import type { Stats } from "node:fs";
-import { chmod, lstat, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
+import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 
 /** Identifies one version of a file's text. */
@@ -18,17 +19,15 @@ export function scenePath(root: string, path: unknown): string {
   return inside(root, p);
 }
 
-/** The scene's real file, which must be inside the library even when the path goes through a link. */
-async function realScene(root: string, path: unknown) {
-  const real = await realpath(scenePath(root, path));
-  const back = relative(await realpath(root), real);
-  if (back === "" || back.startsWith("..") || isAbsolute(back)) throw new PathError("This scene is a link to a file outside the library");
-  return real;
+/** The scene's real file, by the library's one rule (library/contain.ts): even through a link, inside the library. */
+async function realScene(root: string, path: unknown, forWrite: boolean) {
+  scenePath(root, path);
+  return resolveInLibrary(root, path, { forWrite });
 }
 
 /** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
 export async function readForEdit(root: string, path: string) {
-  const text = await readFile(await realScene(root, path), "utf8");
+  const text = await readFile(await realScene(root, path, false), "utf8");
   const hash = sceneHash(text);
   return { html: tagForEdit(text, hash), hash };
 }
@@ -146,7 +145,7 @@ export function editScene(
     if (!Array.isArray(edits) || edits.length === 0) throw new EditError("No edits to save");
     if (edits.length > 100) throw new EditError("Too many edits at once");
     const parsed = edits.map(parseEdit);
-    const real = await realScene(root, path);
+    const real = await realScene(root, path, true);
     const read = await stat(real);
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);
@@ -171,7 +170,7 @@ export type RenameResult = { ok: true; hash: string; path: string; was: string |
  */
 export function renameScene(root: string, path: string, hash: string, name: unknown): Promise<RenameResult> {
   return serial(async (): Promise<RenameResult> => {
-    const real = await realScene(root, path);
+    const real = await realScene(root, path, true);
     const read = await stat(real);
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);

@@ -95,18 +95,18 @@ describe("POST /mcp refuses, without any MCP processing", () => {
     const r = await mcp(initialize(), { host: `evil.example:${port}` });
     expect(r.status).toBe(421);
   });
-  // Refused by the pairing gate first (401 unpaired; 421 a name it isn't on), else by handleMcp (404).
+  // Refused by the dispatcher first (403 with remote access off, as here; 401 unpaired; 421 a name it isn't on), else by handleMcp (404).
   test("a trusted name that isn't loopback (the tailnet, Bonjour): refused", async () => {
     for (const host of ["mac.tail1234.ts.net", `studio.local:${port}`]) {
       const r = await mcp(initialize(), { host });
-      expect([401, 404, 421]).toContain(r.status);
+      expect([401, 403, 404, 421]).toContain(r.status);
       refusedWithoutMcp(r);
     }
   });
   test("proxied (tailscale serve connects from loopback but adds forwarding headers): refused", async () => {
     for (const h of [{ "x-forwarded-for": "100.64.0.3" }, { "x-forwarded-host": "mac.tail1234.ts.net" }, { forwarded: "for=100.64.0.3" }] as Record<string, string>[]) {
       const r = await mcp(initialize(), h);
-      expect([401, 404, 421]).toContain(r.status);
+      expect([401, 403, 404, 421]).toContain(r.status);
       refusedWithoutMcp(r);
     }
   });

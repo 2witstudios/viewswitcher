@@ -1,7 +1,7 @@
 #if os(macOS)
 import Foundation
 
-/// What `GET /api/info` answers, only to this Mac itself (apps/server/src/gate.ts, fromThisMacOnly).
+/// What `GET /api/info` answers, only to this Mac itself (a mac route in apps/server/src/http/routes.ts; gate.ts isMac).
 public struct ServerInfo: Decodable, Equatable, Sendable {
     /// The library folder, an absolute path.
     public var library: String

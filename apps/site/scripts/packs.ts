@@ -9,7 +9,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { sitePacks, zipPack } from "../../server/src/export-packs";
-import { listZip, readZipEntry } from "../../server/src/zip";
+import { listZip, readZipEntrySync } from "../../server/src/zip";
 import { checkPack, PACK_TEXT, planPack } from "../../../packages/shared/src/index";
 import { SHOWS } from "../src/data/shows";
 
@@ -23,7 +23,7 @@ export function verifyZip(id: string, zip: Uint8Array): { views: string[]; files
   if (!plan.ok) throw new Error(`${id}.zip: ${plan.error}`);
   const byName = new Map(entries.map((e) => [e.name, e]));
   const texts: Record<string, string> = {};
-  for (const f of plan.files) if (PACK_TEXT.test(f.path)) texts[f.path] = new TextDecoder().decode(readZipEntry(zip, byName.get(f.from)!));
+  for (const f of plan.files) if (PACK_TEXT.test(f.path)) texts[f.path] = new TextDecoder().decode(readZipEntrySync(zip, byName.get(f.from)!));
   const report = checkPack(plan.files, texts);
   if (!report.ok) throw new Error(`${id}.zip: ${report.error}`);
   if (report.warnings.length) throw new Error(`${id}.zip: ${report.warnings.join("; ")}`);

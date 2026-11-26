@@ -1,16 +1,24 @@
-// The real server (from source, OBS offline, no USB, a temp library) against the two attacks in
-// origin.ts: DNS rebinding (Host: evil.example:7420) and cross-site POSTs (Origin: another site).
+// The real server (from source, OBS offline, no USB, Wi-Fi off, a temp library) against the attacks in
+// origin.ts and http/dispatch.ts: DNS rebinding (Host: evil.example:7420), requests from another site or
+// another page on this Mac (Origin, Content-Type), framing, and library paths that lead somewhere else.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Subprocess } from "bun";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { starterPack, zipPack } from "./export-packs";
 import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 let port = 0;
 let proc: Subprocess;
 const library = mkdtempSync(join(tmpdir(), "vs-guard-"));
+const outside = mkdtempSync(join(tmpdir(), "vs-guard-out-"));
+// A built switcher of its own, so its pages and assets are real files here whatever this checkout has built.
+const dist = mkdtempSync(join(tmpdir(), "vs-guard-web-"));
+mkdirSync(join(dist, "assets"));
+writeFileSync(join(dist, "index.html"), '<!doctype html><script type="module" src="/assets/index-test.js"></script>');
+writeFileSync(join(dist, "assets/index-test.js"), "console.log(1)");
 
 /** node:http, because it sends the Host header we give it (fetch derives it from the URL). */
 function request(path: string, { method = "GET", headers = {} as Record<string, string>, body = "" } = {}) {
@@ -27,15 +35,19 @@ function request(path: string, { method = "GET", headers = {} as Record<string, 
 
 beforeAll(async () => {
   port = await freePort();
-  proc = await startServer({ PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "", VIEWSWITCHER_LAN: "", VIEWSWITCHER_ADMIN_TOKEN: "" }, () => request("/api/state").then((r) => r.status === 200));
+  proc = await startServer(
+    { PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "", VIEWSWITCHER_LAN: "", VIEWSWITCHER_ADMIN_TOKEN: "", VIEWSWITCHER_WEB_DIST: dist },
+    () => request("/api/state").then((r) => r.status === 200),
+  );
 }, SERVER_START_MS);
 afterAll(() => {
   proc?.kill();
-  rmSync(library, { recursive: true, force: true });
+  for (const d of [library, outside, dist]) rmSync(d, { recursive: true, force: true });
 });
 
 const onAir = (headers: Record<string, string>) =>
-  request("/api/onair", { method: "POST", headers: { "content-type": "text/plain", ...headers }, body: JSON.stringify({ path: "my-channel/templates/brb.html", label: "BRB" }) });
+  request("/api/onair", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ path: "my-channel/templates/brb.html", label: "BRB" }) });
+const WS = { connection: "Upgrade", upgrade: "websocket", "sec-websocket-version": "13", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==" };
 
 describe("DNS rebinding: Host evil.example:7420", () => {
   test("the API, the library and the live socket refuse it", async () => {
@@ -51,9 +63,10 @@ describe("DNS rebinding: Host evil.example:7420", () => {
     }
     expect((await request("/library/my-channel/org.json")).status).toBe(200);
   });
-  test("a known name that isn't this Mac's own (tailscale serve) is let past the host guard, then needs pairing (MAC-25)", async () => {
-    expect((await request("/api/state", { headers: { host: "mac.tail1234.ts.net" } })).status).toBe(401);
-    expect((await request("/api/state", { headers: { "x-forwarded-for": "100.64.0.9" } })).status).toBe(401);
+  test("a known name that isn't this Mac's own (tailscale serve) is let past the host guard, then refused: remote access is off", async () => {
+    expect((await request("/api/state", { headers: { host: "mac.tail1234.ts.net" } })).status).toBe(403);
+    expect((await request("/api/state", { headers: { "x-forwarded-for": "100.64.0.9" } })).status).toBe(403);
+    expect((await request("/", { headers: { host: "mac.tail1234.ts.net" } })).status).toBe(403); // not even the pairing page
   });
   test("a .local name that isn't this Mac's is refused (any device on the LAN can answer mDNS for one)", async () => {
     expect((await request("/api/state", { headers: { host: "studio.local" } })).status).toBe(421);
@@ -90,9 +103,9 @@ describe("HOST", () => {
 describe("the Mac app's own endpoints", () => {
   test("/api/info and /api/remote are not for anything forwarded; /api/remote needs the app's secret", async () => {
     expect((await request("/api/info")).status).toBe(200);
-    expect((await request("/api/info", { headers: { "x-forwarded-for": "1.2.3.4" } })).status).toBe(401);
+    expect((await request("/api/info", { headers: { "x-forwarded-for": "1.2.3.4" } })).status).toBe(403); // remote access is off
     expect((await request("/api/remote")).status).toBe(404); // this server was started without one
-    expect((await request("/api/remote/code", { method: "POST", headers: { "x-viewswitcher-admin": "" } })).status).toBe(404);
+    expect((await request("/api/remote/code", { method: "POST", headers: { "x-viewswitcher-admin": "", "content-type": "application/json" }, body: "{}" })).status).toBe(404);
   });
 });
 
@@ -107,13 +120,13 @@ describe("cross-site POST: Origin from another site", () => {
     // preview_scene loads an agent-written scene in OBS from this server's origin; under the CSP
     // sandbox its fetches carry Origin: null, so the settings route (which has no agent guard) refuses them.
     const set = (origin: string) =>
-      request("/api/agent/settings", { method: "POST", headers: { origin, "content-type": "text/plain" }, body: JSON.stringify({ onAir: "always" }) });
+      request("/api/agent/settings", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ onAir: "always" }) });
     expect((await set("null")).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("not-live");
     // The same request from the switcher's own page works (people are never blocked).
     expect((await set(`http://127.0.0.1:${port}`)).status).toBe(200);
     expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("always");
-    expect((await request("/api/agent/settings", { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify({ onAir: "not-live" }) })).status).toBe(200);
+    expect((await request("/api/agent/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ onAir: "not-live" }) })).status).toBe(200);
   });
   test("is refused, and changes nothing", async () => {
     expect((await onAir({ origin: "https://evil.example" })).status).toBe(403);
@@ -122,13 +135,183 @@ describe("cross-site POST: Origin from another site", () => {
   });
   test("the switcher's own pages are accepted: this Mac, Vite dev", async () => {
     expect((await onAir({ origin: `http://127.0.0.1:${port}` })).status).toBe(200);
+    expect((await onAir({ origin: `http://localhost:${port}`, host: `localhost:${port}` })).status).toBe(200);
+    // Vite's proxy keeps the page's Host (apps/web/vite.config.ts), so its pages are this server's own origin.
     expect((await onAir({ origin: "http://localhost:5173", host: "localhost:5173" })).status).toBe(200);
     expect((await onAir({})).status).toBe(200); // no Origin: curl, the Mac app
   });
 });
 
+describe("another page on this Mac (another localhost port)", () => {
+  test("can't change anything: its Origin isn't this server's own", async () => {
+    for (const origin of ["http://localhost:8000", "http://127.0.0.1:8000", `http://localhost:${port}`, `https://127.0.0.1:${port}`]) {
+      expect({ origin, status: (await onAir({ origin })).status }).toEqual({ origin, status: 403 });
+    }
+    // A proxy that rewrites the Host (Vite's changeOrigin) leaves the page's port in Origin: refused too.
+    expect((await onAir({ origin: "http://localhost:5173", host: `localhost:${port}` })).status).toBe(403);
+  });
+  test("can't read the live socket", async () => {
+    for (const origin of ["http://localhost:8000", "http://127.0.0.1:8000"]) {
+      expect({ origin, status: (await request("/ws", { headers: { ...WS, origin } })).status }).toEqual({ origin, status: 403 });
+    }
+  });
+});
+
+describe("Content-Type: a page can't send JSON to another origin without a preflight", () => {
+  test("a text/plain POST gets a 415, even from the switcher's own origin, and changes nothing", async () => {
+    await request("/api/onair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: "my-channel/templates/brb.html", label: "Before" }) });
+    for (const headers of [{ "content-type": "text/plain" }, { "content-type": "text/plain", origin: `http://127.0.0.1:${port}` }, {}, { "content-type": "application/x-www-form-urlencoded" }, { "content-type": "multipart/form-data; boundary=x" }] as Record<string, string>[]) {
+      const r = await request("/api/onair", { method: "POST", headers, body: JSON.stringify({ path: "my-channel/templates/brb.html", label: "After" }) });
+      expect({ headers, status: r.status }).toEqual({ headers, status: 415 });
+    }
+    expect(JSON.parse((await request("/api/state")).body).onAir.label).toBe("Before");
+    expect((await request("/api/obs/setup", { method: "POST", headers: { "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
+  });
+  test("JSON with a charset is JSON; the upload routes take multipart and nothing else", async () => {
+    expect((await request("/api/onair", { method: "POST", headers: { "content-type": "application/json; charset=utf-8" }, body: JSON.stringify({ path: "my-channel/templates/brb.html" }) })).status).toBe(200);
+    for (const path of ["/api/assets", "/api/packs/stage"]) {
+      expect((await request(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status).toBe(415);
+      expect((await request(path, { method: "POST", headers: { "content-type": "text/plain" }, body: "x" })).status).toBe(415);
+    }
+  });
+  test("a body that isn't a JSON object is a 400", async () => {
+    for (const body of ["{nope", "[1]", "3"]) expect((await request("/api/onair", { method: "POST", headers: { "content-type": "application/json" }, body })).status).toBe(400);
+  });
+});
+
+describe("framing: nobody but the switcher's own pages can frame it", () => {
+  const framed = (r: { headers: http.IncomingHttpHeaders }) => [String(r.headers["content-security-policy"]), r.headers["x-content-type-options"]];
+  test("frame-ancestors 'self' and nosniff on the switcher, its assets, its API and its 404s", async () => {
+    for (const p of ["/", "/program", "/daisy/edit/x", "/assets/index-test.js", "/api/state", "/api/nope", "/assets/missing.js", "/api/info", "/pair"]) {
+      const r = await request(p);
+      expect({ p, h: framed(r) }).toEqual({ p, h: ["frame-ancestors 'self'", "nosniff"] });
+    }
+    expect((await request("/assets/index-test.js")).status).toBe(200);
+    expect((await request("/api/nope")).status).toBe(404);
+    // Refusals too.
+    expect(framed(await onAir({ origin: "https://evil.example" }))).toEqual(["frame-ancestors 'self'", "nosniff"]);
+    expect(framed(await request("/api/onair", { method: "POST", headers: { "content-type": "text/plain" }, body: "{}" }))).toEqual(["frame-ancestors 'self'", "nosniff"]);
+  });
+  test("/library/ keeps its own sandbox CSP and no frame-ancestors: the switcher frames scenes, and OBS loads them top level", async () => {
+    for (const p of ["/library/my-channel/templates/brb.html", "/library/my-channel/templates/brb.html?edit&bridge", "/library/my-channel/nope.html"]) {
+      const csp = String((await request(p)).headers["content-security-policy"]);
+      expect(csp).toStartWith("sandbox allow-scripts;");
+      expect(csp).not.toContain("frame-ancestors");
+    }
+  });
+});
+
+describe("library paths obey the real-path rule, for reads as for writes", () => {
+  test("a link out of the library, plain or ?edit or ?bridge, is a 404; a link inside it works", async () => {
+    writeFileSync(join(outside, "secret.html"), "<title>Outside</title>secret");
+    symlinkSync(join(outside, "secret.html"), join(library, "my-channel/templates/away.html"));
+    symlinkSync(outside, join(library, "my-channel/assets-away"));
+    for (const p of ["templates/away.html", "templates/away.html?edit", "templates/away.html?bridge", "templates/away.html?edit&inert", "assets-away/secret.html"]) {
+      const r = await request(`/library/my-channel/${p}`);
+      expect({ p, status: r.status }).toEqual({ p, status: 404 });
+      expect(r.body).not.toContain("secret");
+    }
+    symlinkSync(join(library, "my-channel/templates/brb.html"), join(library, "my-channel/templates/alias.html"));
+    expect((await request("/library/my-channel/templates/alias.html")).status).toBe(200);
+    expect((await request("/library/my-channel/templates/alias.html?edit")).status).toBe(200);
+  });
+  test("dot-folders and dot-files are a 404: .git, .viewswitcher, and a link into them", async () => {
+    mkdirSync(join(library, ".git"), { recursive: true });
+    writeFileSync(join(library, ".git/config"), "[core]");
+    mkdirSync(join(library, "my-channel/.git"), { recursive: true });
+    writeFileSync(join(library, "my-channel/.git/config"), "[core]");
+    writeFileSync(join(library, "my-channel/.env"), "SECRET=1");
+    symlinkSync(join(library, ".viewswitcher/settings.json"), join(library, "my-channel/settings.json"));
+    await request("/api/agent/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ onAir: "not-live" }) });
+    for (const p of [".git/config", "my-channel/.git/config", ".viewswitcher/settings.json", ".viewswitcher/state.json", "my-channel/.env", "my-channel/settings.json", "my-channel/.viewswitcher/staging/x", "my-channel/%2egit/config"]) {
+      const r = await request(`/library/${p}`);
+      expect({ p, status: r.status }).toEqual({ p, status: 404 });
+    }
+  });
+  test("a staged pack's preview still loads, and nothing else in staging does", async () => {
+    const token = "0a1b2c3d4e5f60718293a4b5";
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/view.html`), "<title>Cover</title>");
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/meta.json`), "{}");
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/.hidden`), "x");
+    expect((await request(`/library/my-channel/.viewswitcher/staging/${token}/preview/view.html`)).status).toBe(200);
+    for (const p of [`${token}/meta.json`, `${token}/preview/.hidden`, `${token}/raw/view.html`, "not-a-token/preview/view.html"]) {
+      expect({ p, status: (await request(`/library/my-channel/.viewswitcher/staging/${p}`)).status }).toEqual({ p, status: 404 });
+    }
+  });
+  test("going on air through a link out of the library is refused, so the program never loads a 404", async () => {
+    const r = await onAir({});
+    expect(r.status).toBe(200);
+    const away = await request("/api/onair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: "my-channel/templates/away.html" }) });
+    expect(away.status).toBe(400);
+  });
+});
+
+describe("errors", () => {
+  test("a 500's message reaches this Mac, without absolute paths", async () => {
+    const r = await request("/api/scenes/duplicate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: "my-channel/templates/gone.html" }) });
+    expect(r.status).toBe(500);
+    const error = JSON.parse(r.body).error as string;
+    expect(error).toContain("ENOENT");
+    expect(error).toContain("my-channel/templates/gone.html");
+    expect(error).not.toContain(library);
+    expect(error).not.toContain(tmpdir());
+  });
+});
+
+describe("unpacking a template pack never blocks the server", () => {
+  test("/api/state keeps answering while a 96 MB pack unpacks", async () => {
+    // Text-like data, 3:1, written straight into bytes (millions of little strings would leave this
+    // process collecting garbage mid-test): inflating it takes long enough to see, in four entries of 24 MB.
+    const words = Array.from({ length: 4096 }, (_, i) => new TextEncoder().encode(`${Math.random().toString(36).slice(2, 4 + (i % 9))} `));
+    const big = () => {
+      const out = new Uint8Array(24 * 1024 * 1024);
+      for (let n = 0; n < out.length; ) {
+        const w = words[(Math.random() * words.length) | 0]!;
+        out.set(w.subarray(0, Math.min(w.length, out.length - n)), n);
+        n += w.length;
+      }
+      return out;
+    };
+    const zip = zipPack("big", [...(await starterPack(resolve(import.meta.dir, "../starter"))), ...[1, 2, 3, 4].map((i) => ({ path: `assets/big-${i}.mp4`, data: big() }))]);
+    // The poller is a process of its own, so only the server's delays count, not this one's upload.
+    const poller = Bun.spawn(
+      [process.execPath, "-e", `
+        let stop = false, worst = 0, n = 0;
+        (async () => { for await (const _ of Bun.stdin.stream()) {} stop = true; })();
+        while (!stop) {
+          const t = performance.now();
+          await fetch("http://127.0.0.1:${port}/api/state");
+          if (n++ === 0) console.log("ready");
+          worst = Math.max(worst, performance.now() - t);
+          await Bun.sleep(2);
+        }
+        console.log(JSON.stringify({ worst, n }));`],
+      { stdin: "pipe", stdout: "pipe" },
+    );
+    const lines = poller.stdout.pipeThrough(new TextDecoderStream()).getReader();
+    expect((await lines.read()).value?.trim()).toBe("ready");
+    const form = new FormData();
+    form.set("org", "my-channel");
+    form.set("zip", new File([zip], "big.zip"));
+    const started = performance.now();
+    const r = await fetch(`http://127.0.0.1:${port}/api/packs/stage`, { method: "POST", body: form, headers: { origin: `http://127.0.0.1:${port}` } });
+    const stageMs = performance.now() - started;
+    poller.stdin.end();
+    let rest = "";
+    for (let c = await lines.read(); !c.done; c = await lines.read()) rest += c.value;
+    const { worst, n } = JSON.parse(rest.trim()) as { worst: number; n: number };
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { set: string }).set).toBe("starter");
+    // It answered all along, never held for a large part of the stage. That each entry inflates off
+    // the event loop is zip.test.ts's job: a shared CI runner's scheduling stalls are as long as one
+    // entry's inflate, so a bound that tight here would measure the runner, not the server.
+    expect(n).toBeGreaterThan(5);
+    expect(worst).toBeLessThan(stageMs / 2);
+  }, 60_000);
+});
+
 describe("scenes are served sandboxed (EDIT-26)", () => {
-  const ws = { connection: "Upgrade", upgrade: "websocket", "sec-websocket-version": "13", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==" };
+  const ws = WS;
   test("every library page has an opaque origin, its scripts kept off plain http and ws", async () => {
     for (const q of ["", "?preview", "?edit", "?edit&bridge"]) {
       const r = await request(`/library/my-channel/templates/brb.html${q}`);
@@ -158,6 +341,7 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     expect((await request("/library/my-channel/templates/_shared/theme.css")).headers["content-type"]).toContain("text/css");
   });
   test("every library response is sandboxed, whatever it's called; a trailing slash finds nothing", async () => {
+    // A staged pack's preview: its token is 24 hex characters (packs.ts).
     const r = await request("/library/my-channel/templates/brb.html/");
     expect(r.status).toBe(404);
     for (const p of ["/library/my-channel/org.json", "/library/my-channel/templates/_shared/theme.css", "/library/my-channel/BRAND.md"]) {
@@ -173,8 +357,8 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     expect((await request("/library/my-channel/assets/photo.jpg")).status).toBe(200);
     expect((await request("/library/my-channel/assets/photo.jpg")).headers["access-control-allow-origin"]).toBeUndefined();
     // A staged pack's preview copy is a template pack's design files too (covers before installing).
-    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg"), "<svg/>");
-    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
+    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg"), "<svg/>");
+    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
     const sneaky = await request("/library/my-channel/templates/%2e%2e/assets/photo.jpg");
     expect(sneaky.headers["access-control-allow-origin"]).toBeUndefined();
   });

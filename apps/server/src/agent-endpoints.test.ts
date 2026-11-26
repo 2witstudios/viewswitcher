@@ -73,9 +73,9 @@ describe("from this Mac", () => {
   });
 });
 
-// Refused before the route by the pairing gate (401: an unpaired device; 421: a name the Wi-Fi listener
-// isn't on) or by the route itself (404): never answered.
-const REFUSED = [401, 404, 421];
+// Refused before the route by the dispatcher (403: remote access is off; 401: an unpaired device; 421:
+// a name the Wi-Fi listener isn't on) or because the route is this Mac's only (404): never answered.
+const REFUSED = [401, 403, 404, 421];
 describe("refused to anything but this Mac", () => {
   test("a name this Mac is reached by from elsewhere", async () => {
     for (const path of PATHS) {
