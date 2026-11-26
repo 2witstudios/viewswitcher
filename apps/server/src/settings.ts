@@ -67,4 +67,20 @@ export function writeSettings(root: string, patch: Partial<Settings>): Promise<S
   return run;
 }
 
+/**
+ * What to call when the library's watcher reports settings.json (edited by hand, a git checkout, the
+ * file deleted): it reads the file again and passes the settings it now says to `apply`. A burst of
+ * reports is read once, after `delayMs`; reads wait for writes in flight, so the newest one wins.
+ */
+export function followSettings(root: string, apply: (s: Settings) => void, delayMs = 100): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const run = queue.then(async () => apply(await readSettings(root)));
+      queue = run.catch((e) => console.error("[settings]", (e as Error).message));
+    }, delayMs);
+  };
+}
+
 export class SettingsError extends Error {}

@@ -25,7 +25,7 @@ import { sweepStaging } from "./packs";
 import { Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 import { createPreviewer } from "./preview";
 import { pathScrub } from "./scrub";
-import { readSettings } from "./settings";
+import { followSettings, readSettings } from "./settings";
 import { createSlotOrder } from "./slot-order";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
@@ -168,9 +168,14 @@ let changed = new Set<string>();
 const serverRun = crypto.randomUUID();
 let librarySeq = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+// settings.json changed outside the switcher (by hand, a git checkout): agents follow what it says now.
+const settingsChanged = followSettings(config.library, (s) => {
+  if (s.agentOnAir !== state.agent.onAir) store.update({ agent: { ...state.agent, onAir: s.agentOnAir } });
+});
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
   const rel = filename.split(sep).join("/");
+  if (rel === ".viewswitcher" || rel === ".viewswitcher/settings.json") settingsChanged();
   if (rel.startsWith(".git") || rel.startsWith(".viewswitcher") || rel.includes("/.") || rel.endsWith("~")) return;
   changed.add(rel);
   clearTimeout(flushTimer);
