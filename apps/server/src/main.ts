@@ -11,6 +11,7 @@ import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
+import { appParent, watchParent } from "./parent-watch";
 import { ensureLibrary } from "./library-kit";
 import { createPlacer } from "./live/placement";
 import { LiveStore } from "./live/store";
@@ -316,18 +317,13 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
 }
 
-// Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
-// so the port is never left held by an orphan.
-const parent = Number(process.env.VIEWSWITCHER_PARENT_PID);
-if (parent > 1) {
-  setInterval(() => {
-    try {
-      process.kill(parent, 0);
-    } catch {
-      console.log("[viewswitcher] the Mac app is gone; stopping");
-      void pairing.flush().finally(() => process.exit(0));
-    }
-  }, 2000).unref();
+// Started by the Mac app: exit if the app goes away without stopping us (parent-watch.ts).
+const parent = appParent();
+if (parent) {
+  watchParent(parent, () => {
+    console.log("[viewswitcher] the Mac app is gone; stopping");
+    void pairing.flush().finally(() => process.exit(0));
+  });
 }
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).

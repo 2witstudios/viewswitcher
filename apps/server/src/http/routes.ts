@@ -22,6 +22,7 @@ import type { LiveStore } from "../live/store";
 import { handleMcp } from "../mcp/http";
 import type { McpDeps } from "../mcp/server";
 import type { OBSClient } from "../obs";
+import { appParent } from "../parent-watch";
 import { checkObsSetup, setupObs } from "../obs-setup";
 import { cancelPack, installPack, removeSet, stagePack } from "../packs";
 import { PAIR_PAGE_CSP, pairPage } from "../pair-page";
@@ -198,7 +199,9 @@ export function routes(d: RouteDeps): Route[] {
       // extension below, the only responses with absolute paths in them.
       method: "GET",
       path: "/api/info",
-      handler: () => json({ library: root, port: d.port(), claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(d.ownStdio(d.port())) }),
+      // sidecar, parentPid and pid let a relaunched app find and replace an orphan it started before.
+      handler: () =>
+        json({ library: root, port: d.port(), sidecar: appParent() !== null, parentPid: appParent(), pid: process.pid, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(d.ownStdio(d.port())) }),
     },
     {
       // Which agent apps this Mac has, so Edit with AI lists them first. Booleans only.

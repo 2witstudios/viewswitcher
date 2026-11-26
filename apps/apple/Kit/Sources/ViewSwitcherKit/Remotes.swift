@@ -45,10 +45,6 @@ public struct RemoteStatus: Decodable, Equatable, Sendable {
     public var devices: [RemoteDevice]
     /// The link the QR code holds (with the code), from POST /api/remote/code.
     public var pairUrl: String?
-
-    public static func decode(_ data: Data) throws -> RemoteStatus {
-        try JSONDecoder().decode(RemoteStatus.self, from: data)
-    }
 }
 
 public enum RemoteText {

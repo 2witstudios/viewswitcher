@@ -10,16 +10,16 @@ final class RemotesTests: XCTestCase {
          "code":{"code":"K7PQ2MXA","expiresAt":1700000300000},"pairUrl":"http://192.168.1.68:7420/pair?code=K7PQ2MXA",
          "devices":[{"id":"a1","name":"Jono's iPhone","pairedAt":1700000000000,"lastSeen":1700000100000,"connected":1}]}
         """
-        let s = try RemoteStatus.decode(Data(json.utf8))
+        let s = try JSONDecoder().decode(RemoteStatus.self, from: Data(json.utf8))
         XCTAssertTrue(s.enabled)
         XCTAssertEqual(s.code?.code, "K7PQ2MXA")
         XCTAssertEqual(s.devices.first?.name, "Jono's iPhone")
         XCTAssertEqual(s.pairUrl, "http://192.168.1.68:7420/pair?code=K7PQ2MXA")
-        let off = try RemoteStatus.decode(Data(#"{"enabled":false,"port":7420,"localName":null,"urls":[],"code":null,"devices":[]}"#.utf8))
+        let off = try JSONDecoder().decode(RemoteStatus.self, from: Data(#"{"enabled":false,"port":7420,"localName":null,"urls":[],"code":null,"devices":[]}"#.utf8))
         XCTAssertFalse(off.enabled)
         XCTAssertNil(off.code)
         XCTAssertNil(off.codeGuessed)
-        let guessed = try RemoteStatus.decode(Data(#"{"enabled":true,"port":7420,"localName":null,"urls":[],"code":null,"codeGuessed":true,"devices":[]}"#.utf8))
+        let guessed = try JSONDecoder().decode(RemoteStatus.self, from: Data(#"{"enabled":true,"port":7420,"localName":null,"urls":[],"code":null,"codeGuessed":true,"devices":[]}"#.utf8))
         XCTAssertEqual(guessed.codeGuessed, true)
     }
 

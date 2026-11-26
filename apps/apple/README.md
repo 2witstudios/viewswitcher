@@ -5,12 +5,12 @@ One Xcode project, generated from `project.yml` with [XcodeGen](https://github.c
 
 | target | what |
 |---|---|
-| `ViewSwitcher` (macOS 14+) | ViewSwitcher.app: the bundled server, the switcher in a window, a menu-bar item. `com.twowitstudios.viewswitcher.mac` |
-| `ViewSwitcher iPad` (iOS and iPadOS 17+) | one universal app (PHONE-1): the switcher on the iPhone or iPad over USB-C or the network. `com.twowitstudios.viewswitcher` |
-| `Kit/` (Swift package `ViewSwitcherKit`) | shared by both: live state and menu text, navigation policy, server controller (macOS), shell bridge, update feed |
+| `ViewSwitcher` (macOS 14+) | ViewSwitcher.app: the bundled server, the switcher in a window, a menu-bar item. `com.twowitstudios.viewswitcher.mac` (Debug: `com.twowitstudios.viewswitcher.mac.dev`) |
+| `ViewSwitcher iPad` (iOS and iPadOS 17+) | one universal app: the switcher on the iPhone or iPad over USB-C or the network. `com.twowitstudios.viewswitcher` |
+| `Kit/` (Swift package `ViewSwitcherKit`) | shared by both: live state and menu text, navigation policy, the USB-C tunnel, shell bridge, update feed; on macOS the server supervisor, its typed API and the status menu. Built with complete concurrency checking |
 
 ```sh
-bun run mac:dev                  # Debug Mac app against the server in this checkout (attaches to `bun run dev` if it's up)
+bun run mac:dev                  # Debug Mac app against the server in this checkout (attaches to whatever answers on PORT, e.g. `bun run dev`)
 bun run mac:build                # build/ViewSwitcher.dmg + build/appcast/appcast.xml (signed, universal)
 bun run mac:build --app          # just build/export/ViewSwitcher.app
 bun run mac:e2e                  # drives that app on port 7435 (E2E_PORT), OBS offline, USB off, a temp library
@@ -28,15 +28,29 @@ bun apps/apple/AppStore/check.ts              # App Store listing lengths
 
 ## Mac app
 
-- `Mac/main.swift`, `AppDelegate.swift`: lifecycle, the server (ViewSwitcherKit `connectOrStart`: attach to a
-  ViewSwitcher server already on `PORT`, else start `Contents/Helpers/viewswitcher-server` and own it), the
-  menu-bar item, the main menu and Sparkle. Quit stops only a server it started; a crash posts a
-  notification and the menu offers Restart Server. The server exits by itself if the app dies
-  (`VIEWSWITCHER_PARENT_PID`). Its output goes to `~/Library/Logs/ViewSwitcher/server.log`, restarted past 5 MB.
+- `Mac/main.swift`, `AppDelegate.swift`: lifecycle, the main menu, Sparkle, Undo routing, and what the
+  person sees as the server comes and goes. The server itself is ViewSwitcherKit's `ServerSupervisor`,
+  one `ServerState` (`starting`, `owned`, `attached`, `restarting`, `crashed`, `lost`, `failed`,
+  `quitting`): it attaches to a ViewSwitcher server already on `PORT`, else starts
+  `Contents/Helpers/viewswitcher-server` and owns it. A probe that times out is asked again for 5 s
+  before the port counts as taken. If its own server exits by itself, it's restarted at once, then after
+  2 s, then 10 s; a fourth crash within a minute stops that, and the menu offers Restart Server. Each
+  step posts a notification (asked for at launch) and a banner over the switcher (`ShellInfo.notice`).
+  Quit stops only a server it started. The server exits by itself if the app dies
+  (`VIEWSWITCHER_PARENT_PID`, `apps/server/src/parent-watch.ts`); an app relaunched before it has gone
+  finds it through `/api/info` (`sidecar`, `parentPid`, `pid`) and replaces it instead of attaching.
+  Server calls go through ViewSwitcherKit's `ServerAPI`. Its output goes to
+  `~/Library/Logs/ViewSwitcher/server.log`, restarted past 5 MB.
+- `StatusMenuBuilder.swift`: the menu-bar menu, from ViewSwitcherKit's `StatusMenu` (what it lists for a state).
+- Debug builds have their own bundle id, so `bun run mac:dev` runs beside an installed ViewSwitcher
+  (one at a time is per bundle id) with its own settings, login item and notification permission;
+  Release is unchanged, and so are the Claude Desktop extension and `--mcp-stdio`, which open the
+  installed app (`open -b com.twowitstudios.viewswitcher.mac`).
 - `SwitcherWindow.swift`: the window and its WKWebView. Closing hides it. Navigation stays on the server,
   other http(s) links open in the browser, other schemes are refused; no camera or microphone; no
-  downloads; window.open never opens a window. alert/confirm/prompt and file inputs are native.
-- `RemotesWindow.swift`: Phones and Tablets (MAC-23 … MAC-26): the Wi-Fi setting (UserDefaults
+  downloads; window.open never opens a window. alert/confirm/prompt and file inputs are native. A load
+  that fails (the server restarting) is retried on the same page, never the root.
+- `RemotesWindow.swift`: Phones and Tablets: the Wi-Fi setting (UserDefaults
   `wifiRemotes`, passed to the server as `VIEWSWITCHER_LAN`; the e2e keeps its own in memory), Bonjour
   while it's on, a one-time code with its QR code (ViewSwitcherKit `qrCode`, CoreImage), and the paired
   devices. It calls the server's `/api/remote…` with `Env.adminToken`, a secret made at each launch.
@@ -85,7 +99,10 @@ QR code carries the Mac's LAN address, so private LAN addresses are allowed like
 
 `iPad/`: a web view from edge to edge with `ViewSwitcher-iPad/<version>` in its user agent. The bundled
 connector (`iPad/Connector/index.html`, served at `viewswitcher://connector/`) finds the server (USB-C
-first, through `UsbTunnel.swift`, unchanged from the Capacitor app, then a saved network address). The
+first, through ViewSwitcherKit's `UsbTunnel`, then a saved network address). The tunnel pairs each web
+view connection with an idle tunnel from the Mac; each direction ends on its own (a half-close passed
+on), the pair closes once both have, and the next read waits for the last send, so a slow side slows
+the other rather than filling memory (`Kit/Tests/.../UsbTunnelTests.swift`, two loopback listeners). The
 main frame may show the connector, `127.0.0.1`, `*.ts.net` and `*.local`; other web pages open in Safari.
 The screen stays awake while the app is in front, and the tunnel restarts when it comes back. The page
 keeps clear of the safe area itself (`env(safe-area-inset-*)`). Every orientation is supported and full

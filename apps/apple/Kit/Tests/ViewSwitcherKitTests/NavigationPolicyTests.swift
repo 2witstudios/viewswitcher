@@ -1,10 +1,28 @@
 import XCTest
 @testable import ViewSwitcherKit
 
-/// MAC-13 and MAC-14: where each web view may go.
+/// Where each web view may go.
 final class NavigationPolicyTests: XCTestCase {
     let server = URL(string: "http://127.0.0.1:7435")!
     func u(_ s: String) -> URL { URL(string: s)! }
+
+    func testARetryKeepsThePage() {
+        let root = u("http://127.0.0.1:7435/")
+        let editor = u("http://127.0.0.1:7435/daisy/edit?scene=a")
+        let stream = u("http://127.0.0.1:7435/daisy/projects/p/streams/s")
+        let cases: [(failed: URL?, current: URL?, expected: URL, why: String)] = [
+            (editor, stream, editor, "the page that failed to open"),
+            (nil, stream, stream, "else the page that was open"),
+            (u("https://example.com/"), stream, stream, "a failed page elsewhere isn't retried"),
+            (nil, u("https://example.com/"), root, "an open page elsewhere isn't reloaded"),
+            (nil, u("about:blank"), root, "nor a blank page"),
+            (u("http://127.0.0.1:7420/"), nil, root, "nor another port"),
+            (nil, nil, root, "nothing open yet: the switcher's root"),
+        ]
+        for c in cases {
+            XCTAssertEqual(NavigationPolicy.retryTarget(failed: c.failed, current: c.current, server: server), c.expected, c.why)
+        }
+    }
 
     func testMacMainFrameStaysOnTheServer() {
         XCTAssertEqual(NavigationPolicy.mac(u("http://127.0.0.1:7435/daisy/edit"), server: server, mainFrame: true), .allow)

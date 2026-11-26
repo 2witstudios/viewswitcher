@@ -21,7 +21,7 @@ final class WeakMessageHandler: NSObject, WKScriptMessageHandler {
     }
 }
 
-/// The switcher's window (MAC-11, MAC-13, MAC-13a). Closing hides it; the server keeps serving.
+/// The switcher's window. Closing hides it; the server keeps serving.
 @MainActor
 final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     /// The traffic lights are centered in this row: the switcher's sidebar brand row and the editor's top bar (64 px).
@@ -37,6 +37,9 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
     private(set) var fullscreen = false
     /// The page's main-frame loads that failed and are being retried.
     private var retry: DispatchWorkItem?
+    /// The banner over the page (ShellInfo.notice), and when it goes by itself.
+    private var notice: String?
+    private var noticeEnds: DispatchWorkItem?
     var events: [String] = []
 
     init(base: URL) {
@@ -90,18 +93,28 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
 
     func load() { webView.load(URLRequest(url: base.appendingPathComponent(""))) }
 
-    /// After Restart Server: stay on the page that was open (the editor, a stream) when it's on the server.
-    func reloadCurrent() {
-        if let url = webView.url, NavigationPolicy.mac(url, server: base, mainFrame: true) == .allow, url.scheme?.hasPrefix("http") == true {
-            webView.load(URLRequest(url: url))
-        } else {
-            load()
-        }
+    /// After Restart Server, or a load that failed: stay on the page that was open (the editor, a
+    /// stream), or the one that failed to open, when it's on the server; else the switcher's root.
+    func reloadCurrent(preferring failed: URL? = nil) {
+        webView.load(URLRequest(url: NavigationPolicy.retryTarget(failed: failed, current: webView.url, server: base)))
     }
 
-    /// Edit with AI… (MCP-10): the page opens its sheet for #ai, or for /?ai when it loads.
+    /// A banner over the page, or none; with `until`, it goes by itself then (at once if that's past).
+    func showNotice(_ text: String?, until: Date? = nil) {
+        noticeEnds?.cancel()
+        noticeEnds = nil
+        let left = until.map { $0.timeIntervalSinceNow }
+        notice = (left ?? 1) > 0 ? text : nil
+        pushShellInfo()
+        guard notice != nil, let left else { return }
+        let item = DispatchWorkItem { [weak self] in self?.showNotice(nil) }
+        noticeEnds = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + left, execute: item)
+    }
+
+    /// Edit with AI…: the page opens its sheet for #ai, or for /?ai when it loads.
     func openAgentSheet() {
-        if let url = webView.url, !webView.isLoading, url.scheme?.hasPrefix("http") == true, NavigationPolicy.mac(url, server: base, mainFrame: true) == .allow {
+        if let url = webView.url, !webView.isLoading, NavigationPolicy.onServer(url, server: base) {
             webView.evaluateJavaScript("location.hash = 'ai'")
         } else if var c = URLComponents(url: base.appendingPathComponent(""), resolvingAgainstBaseURL: false) {
             c.query = "ai"
@@ -116,7 +129,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         layoutTrafficLights()
     }
 
-    // ------------------------------------------------------------ safe zones (MAC-13a)
+    // ------------------------------------------------------------ safe zones
 
     private var closeButton: NSButton? { window.standardWindowButton(.closeButton) }
     /// NSTitlebarContainerView: holds the title bar and its buttons.
@@ -143,7 +156,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
 
     var shellInfo: ShellInfo {
         let zoomMaxX = window.standardWindowButton(.zoomButton)?.frame.maxX ?? 72
-        return ShellInfo.mac(lightsInset: Double(zoomMaxX + 14), headerRow: Double(Self.headerRow), dragStrip: Double(Self.dragStrip), fullscreen: fullscreen)
+        return ShellInfo.mac(lightsInset: Double(zoomMaxX + 14), headerRow: Double(Self.headerRow), dragStrip: Double(Self.dragStrip), fullscreen: fullscreen, notice: notice)
     }
 
     private var pushed: ShellInfo?
@@ -213,7 +226,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
 
     private var hideAfterFullScreen = false
 
-    // ------------------------------------------------------------ navigation (MAC-13)
+    // ------------------------------------------------------------ navigation
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { return decisionHandler(.cancel) }
@@ -263,8 +276,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         events.append("download \(url.path)")
         Task {
             do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw ServerError.startFailed("The server didn't make the extension.") }
+                let data = try await Env.api.agentExtension()
                 let folder = Env.e2e ? FileManager.default.temporaryDirectory : (FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory)
                 let file = folder.appendingPathComponent("ViewSwitcher.mcpb")
                 try data.write(to: file, options: .atomic)
@@ -281,7 +293,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         let e = error as NSError
         if e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled { return }
         if e.domain == "WebKitErrorDomain" && e.code == 102 { return } // frame load interrupted (a policy cancel)
-        scheduleRetry()
+        scheduleRetry(failed: e.userInfo[NSURLErrorFailingURLErrorKey] as? URL)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -291,16 +303,30 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         scheduleRetry()
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { scheduleRetry() }
+    /// The web content crashed. A page that crashes it again soon after (a scene is anyone's code) is
+    /// left for the switcher's root, so it can't reload itself in a loop.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        let now = Date()
+        let again = lastContentCrash.map { now.timeIntervalSince($0) < 30 } ?? false
+        lastContentCrash = now
+        scheduleRetry(toRoot: again)
+    }
 
-    func scheduleRetry() {
+    private var lastContentCrash: Date?
+
+    /// Retries the page that was open, or the one that failed to open: not the root, which would drop
+    /// someone out of the editor or a stream because the server restarted. A connection that fails
+    /// keeps being retried this way for as long as the server is coming back.
+    func scheduleRetry(failed: URL? = nil, toRoot: Bool = false) {
         retry?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.load() }
+        let item = DispatchWorkItem { [weak self] in
+            if toRoot { self?.load() } else { self?.reloadCurrent(preferring: failed) }
+        }
         retry = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: item)
     }
 
-    // ------------------------------------------------------------ permissions (MAC-13)
+    // ------------------------------------------------------------ permissions
 
     /// No camera or microphone for a scene, or anything it embeds. (Geolocation and notifications
     /// aren't offered to pages by a WKWebView this app doesn't grant them to; clipboard writes from a
@@ -345,7 +371,7 @@ final class SwitcherWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WK
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.canChooseFiles = true
         // WKOpenPanelParameters doesn't pass on the input's accept list, so this allows what any of the
-        // page's inputs take: pictures, video, audio, and template packs (EDIT-24).
+        // page's inputs take: pictures, video, audio, and template packs.
         panel.allowedContentTypes = [.image, .movie, .audio, .zip]
         panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
     }
