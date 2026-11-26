@@ -473,6 +473,8 @@ describe("readTitle", () => {
       "<head>" + "<!--".repeat(mb / 4),
       "<head>" + "</a>".repeat(mb / 4),
       "<head>" + "</a ".repeat(mb / 4),
+      // Deep nesting under a <template>, with many titles in it: none is the page's.
+      "<head><template>" + "<div>".repeat(100_000) + "<title></title>".repeat(30_000),
     ];
     for (const html of pages) {
       const t = performance.now();

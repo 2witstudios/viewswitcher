@@ -119,6 +119,15 @@ test("an org whose name has HTML characters: its new templates and an added set 
   expect((await scanLibrary(root, id)).org.name).toBe(name);
 });
 
+test("a pack's cover captions are its views' titles filled in for the org, as the covers show them", async () => {
+  const id = (await createOrg(root, starter, "R&B <Live>")).orgId;
+  const files = (await starterPack(starter)).map((f) =>
+    f.path === "templates/teaching.html" ? { ...f, data: new TextEncoder().encode(new TextDecoder().decode(f.data).replace(/<title>[^<]*<\/title>/, "<title>{{ORG_NAME}} · Live</title>")) } : f,
+  );
+  const s = await stagePack(root, id, { zip: zipPack("starter", files) }, null);
+  expect(s.views.find((v) => v.name === "teaching")!.label).toBe("R&B <Live> · Live");
+});
+
 test("the site's six example shows each install as a set", async () => {
   const packs = await showPacks();
   expect(packs.map((p) => p.id)).toEqual(["fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);

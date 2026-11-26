@@ -349,11 +349,14 @@ const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
 /** The placeholder names `text` uses ("ORG_NAME" for {{ORG_NAME}}), each once, known or not. */
 export const placeholdersIn = (text: string): string[] => [...new Set(Array.from(text.matchAll(PLACEHOLDER), (m) => m[1]!))];
 
+/** `text`'s characters as people see them (a flag, a skin-toned emoji, an accented letter are one each). */
+export const graphemes = (text: string): string[] => Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text), (s) => s.segment);
+
 /** The placeholders' values for an org: its id, name, initial and colors, and {{PACK}} when a set is filled in. */
 export function placeholderVars(org: { id: string; name: string; accent: string; ground: string }, packUrl?: string): Partial<Record<PackPlaceholder, string>> {
   const name = org.name.trim();
-  // The first character, not the first UTF-16 unit: "🎸 Band" starts with 🎸, not half of it.
-  return { ORG_ID: org.id, ORG_NAME: name, ORG_INITIAL: ([...name][0] ?? "?").toUpperCase(), ACCENT: org.accent, GROUND: org.ground, ...(packUrl === undefined ? {} : { PACK: packUrl }) };
+  // The first character as people see it, not the first UTF-16 unit: "🇺🇸 Club" starts with 🇺🇸.
+  return { ORG_ID: org.id, ORG_NAME: name, ORG_INITIAL: (graphemes(name)[0] ?? "?").toUpperCase(), ACCENT: org.accent, GROUND: org.ground, ...(packUrl === undefined ? {} : { PACK: packUrl }) };
 }
 
 /**

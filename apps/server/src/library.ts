@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { fillPlaceholders, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
+import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
@@ -244,9 +244,9 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
 export function titledCopy(html: string): string {
   const title = readTitle(html);
   if (!title) return html;
-  // Whole characters only (an emoji at the cut isn't split in half), within setTitle's 120 UTF-16 units.
+  // Whole characters only (an emoji or a flag at the cut isn't split), within setTitle's 120 UTF-16 units.
   let kept = "";
-  for (const ch of title) {
+  for (const ch of graphemes(title)) {
     if (kept.length + ch.length > 120 - " copy".length) break;
     kept += ch;
   }

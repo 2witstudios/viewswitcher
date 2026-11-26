@@ -237,8 +237,15 @@ export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").
  * never shows that one). The one readTitle reads and setTitle writes, so the two can't disagree.
  */
 function titleElement(els: ScannedElement[]): ScannedElement | undefined {
-  const inTemplate = (e: ScannedElement): boolean => e.parent !== null && (els[e.parent]!.tag === "template" || inTemplate(els[e.parent]!));
-  return els.find((e) => e.tag === "title" && e.closed && !inTemplate(e));
+  // One forward pass: a parent always comes before its children in `els`, so each element's answer is
+  // its parent's, known already (no walk up the tree per title, which nesting made quadratic).
+  const inTemplate = new Uint8Array(els.length);
+  for (const e of els) {
+    const p = e.parent === null ? null : els[e.parent]!;
+    inTemplate[e.id] = p !== null && (p.tag === "template" || inTemplate[p.id] === 1) ? 1 : 0;
+    if (e.tag === "title" && e.closed && !inTemplate[e.id]) return e;
+  }
+  return undefined;
 }
 
 /**

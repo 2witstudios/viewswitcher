@@ -111,6 +111,7 @@ describe("titledCopy (Duplicate)", () => {
   test("an emoji at the cut is kept whole", () => {
     expect(titledCopy(`<head><title>${"x".repeat(113)}🎸🎸</title></head>`)).toBe(`<head><title>${"x".repeat(113)}🎸 copy</title></head>`);
     expect(titledCopy(`<head><title>${"x".repeat(114)}🎸</title></head>`)).toBe(`<head><title>${"x".repeat(114)} copy</title></head>`); // the emoji won't fit whole
+    expect(titledCopy(`<head><title>${"x".repeat(112)}🇺🇸</title></head>`)).toBe(`<head><title>${"x".repeat(112)} copy</title></head>`); // nor a flag (two code points), never half of one
   });
   test("a page without a title, or with an empty one, is copied as it is", () => {
     expect(titledCopy("<main></main>")).toBe("<main></main>");
