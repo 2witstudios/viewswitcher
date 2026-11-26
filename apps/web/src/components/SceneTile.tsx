@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
-import { type MouseEvent, useEffect, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
+import { tileReloads } from "../lib/stagger";
 import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { PencilIcon } from "./icons";
@@ -26,18 +27,60 @@ function useCoverScale<T extends HTMLElement>(): (el: T | null) => void {
   return setEl;
 }
 
+/** How far outside the screen a tile starts its scene, so one scrolled to is usually ready. */
+const NEAR_SCREEN = "300px";
+
+/** Whether `el` is on screen or near it (callback-ref style, like useCoverScale). Without IntersectionObserver, always. */
+function useNearScreen(el: HTMLElement | null): boolean {
+  const [near, setNear] = useState(typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((entries) => setNear(entries.at(-1)!.isIntersecting), { rootMargin: NEAR_SCREEN });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [el]);
+  return near;
+}
+
+const onScreen = (el: HTMLElement | null) => {
+  const r = el?.getBoundingClientRect();
+  return !!r && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+};
+
+/**
+ * The url a tile's frame shows. A change to the tile's own file loads straight away; a change to the
+ * shared theme only (every tile's url at once) waits its turn in tileReloads. Off screen there's no
+ * frame, so the new url is simply taken.
+ */
+function useTileSrc(path: string, el: HTMLElement | null, near: boolean): string {
+  const wanted = useLive((l) => sceneUrl(path, l.versions, true));
+  const own = useLive((l) => l.versions[path] ?? 0);
+  const [src, setSrc] = useState(wanted);
+  const shownOwn = useRef(own);
+  useEffect(() => {
+    if (wanted === src) return;
+    const take = () => {
+      shownOwn.current = own;
+      setSrc(wanted);
+    };
+    if (!near || own !== shownOwn.current) return take();
+    return tileReloads.request(take, () => onScreen(el));
+  }, [wanted, near]);
+  return src;
+}
+
 /** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Mounted only there, so the
  *  Mac, the iPad and the deck don't load and run a hidden copy of the on-air scene. */
 export function OnAirHero() {
-  const { state, versions, connected } = useLive();
-  const onAir = state?.onAir;
+  const onAir = useLive((l) => (l.connected ? l.state?.onAir : null));
+  const src = useLive((l) => (onAir ? sceneUrl(onAir.path, l.versions, true) : null));
   const box = useCoverScale<HTMLDivElement>();
   const shown = isUprightPhone({ upright: useMedia(UPRIGHT), deck: useMedia(DECK) });
-  if (!shown || !onAir || !connected) return null;
+  if (!shown || !onAir || !src) return null;
   return (
     <section className="onair-hero" aria-label="On air">
       <div className="cover live" ref={box}>
-        <iframe title={onAir.label} src={sceneUrl(onAir.path, versions, true)} sandbox={SCENE_SANDBOX} tabIndex={-1} />
+        <iframe title={onAir.label} src={src} sandbox={SCENE_SANDBOX} tabIndex={-1} />
         <span className="badge">ON AIR</span>
       </div>
       <span className="label">{onAir.label}</span>
@@ -45,7 +88,7 @@ export function OnAirHero() {
   );
 }
 
-/** An album-style cover: a live, scaled render of the scene file. */
+/** An album-style cover: a live, scaled render of the scene file while it's on screen. */
 export function SceneTile({ label, path, live, badge, onActivate, onEdit, editChoices, menu }: {
   label: string;
   path: string;
@@ -59,8 +102,13 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   editChoices?: MenuItem[];
   menu: MenuItem[];
 }) {
-  const { versions } = useLive();
-  const cover = useCoverScale<HTMLButtonElement>();
+  const [box, setBox] = useState<HTMLButtonElement | null>(null);
+  const scale = useCoverScale<HTMLButtonElement>();
+  const cover = useCallback((el: HTMLButtonElement | null) => (setBox(el), scale(el)), [scale]);
+  // A scene runs only while its tile is on screen or near it (a stream page on an iPad can hold
+  // dozens); away from it the cover is an empty box of the same size.
+  const near = useNearScreen(box);
+  const src = useTileSrc(path, box, near);
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const openMenu = (e?: MouseEvent) => {
@@ -77,7 +125,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
         onClick={onActivate ?? (() => openMenu())}
         onContextMenu={openMenu}
       >
-        <iframe title={label} src={sceneUrl(path, versions, true)} sandbox={SCENE_SANDBOX} loading="lazy" tabIndex={-1} />
+        {near && <iframe title={label} src={src} sandbox={SCENE_SANDBOX} tabIndex={-1} />}
         {live ? <span className="badge">ON AIR</span> : badge ? <span className="badge quiet">{badge}</span> : null}
       </button>
       <div className="tile-meta">
