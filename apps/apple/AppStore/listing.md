@@ -149,9 +149,9 @@ WHAT THE APP DOES ON THE DEVICE
 Like a presentation remote, the app is the touch surface for software on the user's Mac. On the device itself it: runs a USB-C tunnel to the Mac over the cable (Network framework), so no Wi-Fi is needed; scans the Mac's pairing QR code with VisionKit and pairs the device; finds the Mac on the Wi-Fi with Bonjour when the user types the code instead; keeps the screen awake while a show runs; and includes a complete offline demo show, so every control can be tried without a Mac.
 
 TRY IT WITHOUT A MAC: THE DEMO
-1. Open the app. With no Mac connected it opens the demo by itself: a sample cooking show, "Saltwater Kitchen", with a white bar along the top that reads "Demo · Connect your Mac to go live".
-2. Tap any view on the right (in portrait, below; on iPhone sideways, beside the program). The program on the left cuts to it, the camera and guest move into their new places, and the red "On air" tally moves to the view you tapped.
-3. "Connect your Mac" in the bar opens the connector, which looks for the Mac and shows how to connect. "Try the demo" there opens the demo again.
+1. Open the app. With no Mac connected it opens the demo by itself: a sample cooking show, "Saltwater Kitchen", in the same switcher the app shows with a Mac. A grey "Demo" pill says it's a demo (on iPad at the top right, beside the "Connect your Mac" button; on iPhone in the bar along the bottom).
+2. Tap any view under "Views". The program at the top ("On the stream") cuts to it, the camera and guest move into their new places, and the red "On air" ring moves to the view you tapped. (On iPhone held sideways, the program is on the left and the views beside it.)
+3. "Connect your Mac" opens the connector, which looks for the Mac and shows how to connect. "Try the demo" there opens the demo again.
 Nothing in the demo is streamed or sent anywhere; it is all inside the app and works offline.
 
 WITH A MAC (OPTIONAL)
