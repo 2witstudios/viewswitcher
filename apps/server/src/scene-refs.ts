@@ -7,7 +7,7 @@
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
 import { lstat, readlink, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
 
@@ -100,19 +100,28 @@ export const textHash = (text: string) => Bun.hash(text).toString(36);
 const DEFINITE = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG", "EACCES", "EPERM"]);
 
 /**
- * Where a ref that is a link leads, as library paths, link by link (at most 8): a dangling link's
- * target would be served for the ref the moment someone created it, like a missing file is. A hop out of
- * the library ends the chain (/library/ never serves through it).
+ * Where a ref leads through links, as library paths, link by link (at most 8): the ref itself or a
+ * folder on its way may be a link to something not there yet, which /library/ would serve for the ref
+ * the moment someone created it, like a missing file. Each link is read from its real folder, as the
+ * system reads it. A hop out of the library ends the chain (/library/ never serves through it).
  */
 async function linkTargets(root: string, file: string): Promise<string[]> {
   const out: string[] = [];
   const realRoot = await realpath(root).catch(() => root);
-  let abs = await Promise.resolve().then(() => inside(root, file)).catch(() => null);
+  const inLibrary = (abs: string) => [relative(realRoot, abs), relative(root, abs)].find((r) => r && !r.startsWith("..") && !isAbsolute(r));
+  let abs: string | null = await Promise.resolve().then(() => inside(root, file)).catch(() => null);
   for (let hops = 0; abs && hops < 8; hops++) {
-    const s = await lstat(abs).catch(() => null);
-    if (!s?.isSymbolicLink()) break;
-    const next = resolve(dirname(abs), await readlink(abs));
-    const rel = [relative(root, next), relative(realRoot, next)].find((r) => r && !r.startsWith("..") && !isAbsolute(r));
+    // The nearest part of the path that's there: the ref itself, or a folder on its way.
+    let at = abs, rest = "";
+    while (inLibrary(at) && !(await lstat(at).then(() => true, () => false))) {
+      rest = `/${basename(at)}${rest}`;
+      at = dirname(at);
+    }
+    if (!inLibrary(at) || !(await lstat(at).then((s) => s.isSymbolicLink(), () => false))) break;
+    const target = await readlink(at).catch(() => null);
+    if (target === null) break; // gone or unreadable since: nothing more to follow
+    const next: string = resolve(await realpath(dirname(at)).catch(() => dirname(at)), target) + rest;
+    const rel = inLibrary(next);
     if (!rel) break;
     out.push(rel.split(sep).join("/"));
     abs = next;
@@ -139,6 +148,18 @@ export async function loadedFiles(
   let complete = true;
   while (queue.length) {
     const file = queue.shift()!;
+    // Where it leads through links (a dangling one included) is listed too, so creating that is guarded
+    // like the ref: for every ref, pictures and fonts too. Past the limit, the list isn't all.
+    for (const target of await linkTargets(root, file)) {
+      if (seen.has(target)) continue;
+      if (found.length >= limit) {
+        complete = false;
+        break;
+      }
+      seen.add(target);
+      found.push(target);
+    }
+    if (!complete) break;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
     const text = await Promise.resolve()
       .then(() => resolveInLibrary(root, file).then(readText))
@@ -158,12 +179,6 @@ export async function loadedFiles(
           (e) => !(e instanceof PathError || DEFINITE.has((e as NodeJS.ErrnoException)?.code ?? "")),
         );
       if (served) unreadable.push(file);
-      // A link that leads nowhere yet: where it points is listed too, so creating that is guarded like the ref.
-      for (const target of await linkTargets(root, file)) {
-        if (seen.has(target) || found.length >= limit) continue;
-        seen.add(target);
-        found.push(target);
-      }
       continue;
     }
     read[file] = textHash(text);

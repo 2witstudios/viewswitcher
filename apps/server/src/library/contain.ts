@@ -68,6 +68,8 @@ export async function resolveInLibrary(libraryRoot: string, clientPath: unknown,
         // Not there (yet): check the folder it would be made in. Anything else is said as it is.
         const code = (e as NodeJS.ErrnoException).code;
         if (code === "ENOENT" || code === "ENOTDIR") return false;
+        // A folder on the way that's a link loop, or a path too long to be one: it leads nowhere in the library.
+        if (code === "ELOOP" || code === "ENAMETOOLONG") throw outside();
         throw asRefusal(e);
       },
     );
@@ -75,7 +77,8 @@ export async function resolveInLibrary(libraryRoot: string, clientPath: unknown,
       // A link that points nowhere (ENOENT) or at itself (ELOOP) leads nowhere in the library.
       const real = await realpath(at).catch((e) => {
         const code = (e as NodeJS.ErrnoException).code;
-        if (code === "ENOENT" || code === "ELOOP") return null;
+        // Dangling, looping, through a file (a.css → brb.html/x), or too long: it leads nowhere in the library.
+        if (code === "ENOENT" || code === "ELOOP" || code === "ENOTDIR" || code === "ENAMETOOLONG") return null;
         throw asRefusal(e);
       });
       if (real === null) throw outside();
