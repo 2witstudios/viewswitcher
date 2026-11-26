@@ -185,8 +185,9 @@ has() { local out; out="$("${@:2}" 2>&1 || true)"; [[ "$out" == *"$1"* ]]; }
 has "x86_64 arm64" lipo -archs "$APP/Contents/MacOS/ViewSwitcher" || { echo "the app isn't universal" >&2; exit 1; }
 has "x86_64 arm64" lipo -archs "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't universal" >&2; exit 1; }
 has "com.apple.security.cs.allow-jit" codesign -d --entitlements - --xml "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar lost its allow-jit entitlement" >&2; exit 1; }
-has "flags=0x10000(runtime)" codesign -dv "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't on the hardened runtime" >&2; exit 1; }
-has "flags=0x10000(runtime)" codesign -dv "$APP" || { echo "the app isn't on the hardened runtime" >&2; exit 1; }
+source "$APPLE/scripts/sign-check.sh"
+hardened_runtime "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't on the hardened runtime" >&2; exit 1; }
+hardened_runtime "$APP" || { echo "the app isn't on the hardened runtime" >&2; exit 1; }
 if [ -n "$IDENTITY" ]; then
   has "TeamIdentifier=$TEAM" codesign -dv "$APP" || { echo "the app isn't signed by $TEAM" >&2; exit 1; }
   has "TeamIdentifier=$TEAM" codesign -dv "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't signed by $TEAM" >&2; exit 1; }

@@ -55,6 +55,22 @@ public struct Launch: Sendable {
     }
 }
 
+/// The installed app's bundle id: its server log is the one people (and support) look for.
+public let releaseBundleID = "com.twowitstudios.viewswitcher.mac"
+
+/// Where this build's server log goes, so builds never share one: the installed app's is
+/// ~/Library/Logs/ViewSwitcher/server.log; another build of the app (Debug's `.mac.dev`) gets its own
+/// file beside it (server-dev.log); an end-to-end run writes into its own folder. Sharing one would
+/// mix their lines in Show Server Log, and a run's capLog could start the installed app's log over.
+public func serverLogFile(home: URL, bundleID: String?, e2eDir: URL?) -> URL {
+    if let e2eDir { return e2eDir.appendingPathComponent("server.log") }
+    let logs = home.appendingPathComponent("Library/Logs/ViewSwitcher")
+    guard let id = bundleID, id != releaseBundleID else { return logs.appendingPathComponent("server.log") }
+    let suffix = id.hasPrefix(releaseBundleID + ".") ? String(id.dropFirst(releaseBundleID.count + 1)) : id
+    let safe = suffix.map { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" ? $0 : "-" }
+    return logs.appendingPathComponent("server-\(String(safe)).log")
+}
+
 public enum ServerError: LocalizedError, Equatable {
     case portTaken(String)
     case startFailed(String)
@@ -245,8 +261,10 @@ func processFacts(_ pid: Int32) -> ProcessFacts? {
     let size = Int32(MemoryLayout<proc_bsdinfo>.size)
     guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
     var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
-    guard proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 else { return nil }
-    return ProcessFacts(path: String(cString: buf), uid: info.pbi_uid, ppid: info.pbi_ppid)
+    let length = proc_pidpath(pid, &buf, UInt32(buf.count))
+    guard length > 0 else { return nil }
+    let path = String(decoding: buf.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    return ProcessFacts(path: path, uid: info.pbi_uid, ppid: info.pbi_ppid)
 }
 
 /// Whether `pid` is a leftover of the server this app launches: that same executable, run by this

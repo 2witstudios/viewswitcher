@@ -195,6 +195,11 @@ try {
     const o = (await state()).opened;
     return o.includes(`${BASE}/`) && o.some((p) => resolve(p) === resolve(library) || p.endsWith(library.split("/").pop()!));
   }, 5000), "menu bar: Open in Browser and Open Library Folder");
+  // This run's server log is its own, never the installed app's (~/Library/Logs/ViewSwitcher/server.log).
+  const ownLog = join(control, "server.log");
+  check(existsSync(ownLog) && readFileSync(ownLog, "utf8").includes("[viewswitcher]"), "the server logs into this run's own folder");
+  await cmd("menu", { item: "Show Server Log" });
+  check(await until(async () => (await state()).opened.includes(ownLog), 5000), "Show Server Log opens this run's log");
 
   // ------------------------------------------------------------ the page may change things; other sites may not
   const fromPage = await evalJs<number>(`return (await fetch("/api/onair", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: ${JSON.stringify(orgScene)}, label: "Be right back" }) })).status`);
