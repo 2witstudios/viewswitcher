@@ -228,7 +228,7 @@ export class Pairing {
     let ok = true;
     this.saving = this.saving.then(async () => {
       try {
-        await writeAtomic(file, body, { mode: 0o600 });
+        await writeAtomic(file, body, { mode: 0o600, plainParent: true });
       } catch (e) {
         ok = false;
         console.error("[pairing] couldn't save devices:", (e as Error).message);

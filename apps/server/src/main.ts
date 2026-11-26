@@ -13,6 +13,7 @@ import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
 import { appParent, watchParent } from "./parent-watch";
+import { plainStateFolder } from "./library/contain";
 import { LibraryScanner } from "./library/scanner";
 import { ensureLibrary } from "./library-kit";
 import { createPlacer } from "./live/placement";
@@ -31,6 +32,8 @@ import { createSlotOrder } from "./slot-order";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
+// The state folder must be a plain folder before anything writes state or pairings into it (contain.ts).
+await plainStateFolder(config.library);
 const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
 if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
   const did = [
