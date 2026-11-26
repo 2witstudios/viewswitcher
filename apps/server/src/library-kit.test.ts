@@ -53,7 +53,7 @@ describe("ensureLibrary", () => {
     const root = await tempDir();
     await mkdir(join(root, "CLAUDE.md"));
     expect(Bun.spawnSync(["mkfifo", join(root, "AGENTS.md")]).exitCode).toBe(0);
-    const r = await Promise.race([ensureLibrary(root, { kit, starter, gitInit: fakeGit }), Bun.sleep(5000).then(() => null)]);
+    const r = await Promise.race([ensureLibrary(root, { kit, starter, gitInit: fakeGit }), Bun.sleep(3000).then(() => null)]);
     expect(r).not.toBeNull();
     expect([...r!.copied, ...r!.updated]).not.toContain("CLAUDE.md");
     expect([...r!.copied, ...r!.updated]).not.toContain("AGENTS.md");

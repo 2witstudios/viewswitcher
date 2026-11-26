@@ -165,6 +165,8 @@ const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgD
 async function copyNew(real: string, dest: string) {
   const { bytes, mode } = await withNoLinks(real, async (f) => ({ bytes: new Uint8Array(await f.readFile()), mode: (await f.stat()).mode & 0o777 }));
   try {
+    // The source's permissions through the umask, as cp gives them: a private view's copy stays private,
+    // and a world-writable one doesn't make a world-writable copy.
     await writeFile(dest, bytes, { flag: "wx", mode });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PathError("Something is already there (a link to somewhere else?). Remove it, then try again.");
@@ -172,7 +174,6 @@ async function copyNew(real: string, dest: string) {
     await rm(dest, { force: true }).catch(() => {});
     throw e;
   }
-  await chmod(dest, mode); // the source's permissions, as a copy keeps them (writeFile's mode goes through the umask)
 }
 
 /** Whether anything at all is at `path`, a link included, even one that points nowhere (lstat, not stat). */

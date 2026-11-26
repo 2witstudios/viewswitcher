@@ -26,6 +26,17 @@ const STAGING_COVERS = /^[^/]+\/\.viewswitcher\/staging\/[a-f0-9]{24}\/covers\/[
 const badPath = (p: string) =>
   new PathError(`Bad path: ${p || "(empty)"}. Paths start with the show's id, like "my-show/templates/brb.html", and never go into dot-folders.`);
 const outside = () => new PathError("That path is a link to somewhere outside the library");
+const noPermission = () => new PathError("That path can't be read (no permission)");
+
+/**
+ * A file-system error as a refusal when it says something about the path (no permission), else as it is:
+ * a disk error, or too many open files, is the switcher's trouble right now, not the path's, and callers
+ * that must fail safe (the agents' on-air guard) need to tell the two apart.
+ */
+const asRefusal = (e: unknown): unknown => {
+  const code = (e as NodeJS.ErrnoException)?.code;
+  return code === "EACCES" || code === "EPERM" ? noPermission() : e;
+};
 
 /** Whether a library path (org first, "/"-separated) obeys the dot rule. */
 function plainPath(p: string, forWrite: boolean): boolean {
@@ -38,7 +49,9 @@ function plainPath(p: string, forWrite: boolean): boolean {
 
 /**
  * The absolute file a client's library path (`daisy/projects/…`) leads to, through any links, or a
- * PathError. `forWrite`: the path will be written, so a staged pack's covers are refused too. A path
+ * PathError (refused: a dot-path, a link out of the library or to nowhere, no permission). Any other
+ * file-system error (a disk error, too many open files) is thrown as it is: it's not about the path.
+ * `forWrite`: the path will be written, so a staged pack's covers are refused too. A path
  * that exists comes back as its real file; one that doesn't, inside its nearest real folder.
  */
 export async function resolveInLibrary(libraryRoot: string, clientPath: unknown, { forWrite = false }: { forWrite?: boolean } = {}): Promise<string> {
@@ -49,8 +62,22 @@ export async function resolveInLibrary(libraryRoot: string, clientPath: unknown,
   let rest = "";
   for (let at = abs; at.length > libraryRoot.length; at = dirname(at)) {
     // lstat, not stat: a link that points nowhere is there, and writing through it could land anywhere.
-    if (await lstat(at).then(() => true, () => false)) {
-      const real = await realpath(at).catch(() => null);
+    const there = await lstat(at).then(
+      () => true,
+      (e) => {
+        // Not there (yet): check the folder it would be made in. Anything else is said as it is.
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ENOTDIR") return false;
+        throw asRefusal(e);
+      },
+    );
+    if (there) {
+      // A link that points nowhere (ENOENT) or at itself (ELOOP) leads nowhere in the library.
+      const real = await realpath(at).catch((e) => {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === "ENOENT" || code === "ELOOP") return null;
+        throw asRefusal(e);
+      });
       if (real === null) throw outside();
       const back = relative(realRoot, real);
       if (!back || back.startsWith("..") || isAbsolute(back)) throw outside();

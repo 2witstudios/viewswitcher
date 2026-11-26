@@ -30,3 +30,9 @@ test("a file /library/ would serve but the scan couldn't read is named as unread
   expect(g.ok).toBe(false);
   expect(g.ok ? "" : g.reason).toContain("daisy/templates/_shared/theme.css");
 });
+
+test("a transient error (too many open files) that also hits the re-check is unknown, never \"loads nothing\"", async () => {
+  const emfile = () => Promise.reject(Object.assign(new Error("too many open files"), { code: "EMFILE" }));
+  const l = await loadedFiles(root, ["daisy/templates/brb.html"], 200, { read: failing, stat: emfile });
+  expect(l.unreadable).toEqual(["daisy/templates/_shared/theme.css"]);
+});

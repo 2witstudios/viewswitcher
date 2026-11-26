@@ -82,22 +82,22 @@ describe("a named pipe in the library", () => {
 
   test("references /library/ wouldn't serve either (a dangling link, a folder named like a stylesheet, a file or folder without permission) don't block agents", async () => {
     await writeFile(join(root, "daisy/templates/stale.html"), [...["gone", "folder", "locked"].map((n) => `_shared/${n}.css`), "shut/x.css"].map((n) => `<link rel="stylesheet" href="/library/daisy/templates/${n}">`).join(""));
-    await mkdir(join(root, "daisy/templates/shut"), { recursive: true });
-    await writeFile(join(root, "daisy/templates/shut/x.css"), "body{}");
-    await chmod(join(root, "daisy/templates/shut"), 0o600);
-    await symlink(join(root, "daisy/templates/_shared/nowhere.css"), join(root, "daisy/templates/_shared/gone.css"));
-    await mkdir(join(root, "daisy/templates/_shared/folder.css"));
-    await writeFile(join(root, "daisy/templates/_shared/locked.css"), "body{}");
-    await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o000);
     try {
+      await mkdir(join(root, "daisy/templates/shut"), { recursive: true });
+      await writeFile(join(root, "daisy/templates/shut/x.css"), "body{}");
+      await chmod(join(root, "daisy/templates/shut"), 0o600);
+      await symlink(join(root, "daisy/templates/_shared/nowhere.css"), join(root, "daisy/templates/_shared/gone.css"));
+      await mkdir(join(root, "daisy/templates/_shared/folder.css"));
+      await writeFile(join(root, "daisy/templates/_shared/locked.css"), "body{}");
+      await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o000);
       // /library/ serves none of them, so the page loads nothing from them: they're listed as loaded, not unknown.
       const r = await loadedFiles(root, ["daisy/templates/stale.html"]);
       expect(r.unreadable).toEqual([]);
       expect(r.complete).toBe(true);
       expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css", "daisy/templates/shut/x.css"]);
     } finally {
-      await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o644);
-      await chmod(join(root, "daisy/templates/shut"), 0o755);
+      await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o644).catch(() => {});
+      await chmod(join(root, "daisy/templates/shut"), 0o755).catch(() => {});
     }
   });
 
