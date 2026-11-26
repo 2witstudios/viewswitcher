@@ -84,6 +84,16 @@ describe("scanLibrary", () => {
     expect(now).toContain("p/streams/b/end.html=The end");
   });
 
+  test("forgetting a change to thousands of files at once (a git pull, a sync) is quick", async () => {
+    for (let s = 0; s < 400; s++) for (const v of ["a", "b", "c", "d", "e"]) await put(`${ORG}/projects/p/streams/s${s}/${v}.html`, view(`${v} ${s}`));
+    await scanLibrary(root, ORG); // about 2,000 titles kept: a pass over all of them per path took 200 ms here
+    const paths = Array.from({ length: 20_000 }, (_, i) => `${ORG}/projects/p/streams/s${i % 400}/new-${i}.html`);
+    paths.push(`${ORG}/projects/p/streams/s7/a.html`, `${ORG}/projects/p/streams/s8`);
+    const t = performance.now();
+    forgetScanned(root, paths);
+    expect(performance.now() - t).toBeLessThan(100);
+  });
+
   test("a library with many more files than are read at once, scanned by several clients together", async () => {
     for (let s = 0; s < 40; s++) {
       await put(`${ORG}/projects/p/streams/s${s}/stream.json`, JSON.stringify({ name: `S${s}`, date: `2026-03-${String(s + 1).padStart(2, "0")}` }));

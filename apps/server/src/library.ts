@@ -1,9 +1,10 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
+import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 
 const KINDS: Record<string, AssetKind> = {
@@ -17,22 +18,8 @@ const KINDS: Record<string, AssetKind> = {
 // dropped for the paths the watcher reports), and folders are walked side by side. File reads and
 // stats go through one bounded queue, so a big library can't run out of open files.
 
-/** At most this many file reads or stats at once, across every scan. */
-const IO_AT_ONCE = 32;
-let ioActive = 0;
-const ioWaiting: (() => void)[] = [];
-async function io<T>(fn: () => Promise<T>): Promise<T> {
-  if (ioActive < IO_AT_ONCE) ioActive++;
-  else await new Promise<void>((go) => ioWaiting.push(go));
-  try {
-    return await fn();
-  } finally {
-    // The slot passes straight to the next waiter, so nothing slips in between and goes over the bound.
-    const next = ioWaiting.shift();
-    if (next) next();
-    else ioActive--;
-  }
-}
+/** File reads and stats for scans: at most 32 at once, across every scan. */
+const io = limit(32);
 
 async function dirs(path: string): Promise<string[]> {
   try {
@@ -51,7 +38,8 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
-const there = (path: string) => io(() => exists(path));
+/** `url` when the file `abs` is there, else null (a transition, for the library listing). */
+const urlIfThere = (abs: string, url: string) => io(() => exists(abs)).then((t) => (t ? url : null));
 
 /** Each scene file's title as last read, with the size and modification time it was read at. */
 const titles = new Map<string, { mtimeMs: number; size: number; title: string }>();
@@ -73,11 +61,24 @@ async function titleOf(abs: string): Promise<string> {
 /**
  * Library paths that changed (the watcher's, library-relative): their titles are read again on the
  * next scan, even if a change kept the size and time the same. A folder drops everything inside it.
+ * Linear in the paths and the titles kept, so a change to thousands of files at once (a git pull, a
+ * sync) doesn't hold up the server.
  */
 export function forgetScanned(libraryRoot: string, paths: string[]) {
+  const folders = new Set<string>();
+  // A path that was a title kept is done; any other may be a folder.
   for (const p of paths) {
     const abs = resolve(libraryRoot, p);
-    for (const key of titles.keys()) if (key === abs || key.startsWith(abs + sep)) titles.delete(key);
+    if (!titles.delete(abs)) folders.add(abs);
+  }
+  if (!folders.size) return;
+  for (const key of titles.keys()) {
+    for (let dir = dirname(key); dir !== dirname(dir); dir = dirname(dir)) {
+      if (folders.has(dir)) {
+        titles.delete(key);
+        break;
+      }
+    }
   }
 }
 
@@ -153,7 +154,7 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
     listSets(root, prefix),
     listAssets(root, prefix),
     dirs(join(root, "projects")).then((ids) => Promise.all(ids.map((id) => scanProject(root, prefix, id)))),
-    there(join(root, ORG_TRANSITION)).then((t) => (t ? `${prefix}${ORG_TRANSITION}` : null)),
+    urlIfThere(join(root, ORG_TRANSITION), `${prefix}${ORG_TRANSITION}`),
   ]);
   return { org, templates, sets, assets, projects, transition };
 }
@@ -187,7 +188,7 @@ async function scanProject(root: string, prefix: string, id: string): Promise<Pr
         }),
       ),
     ),
-    there(join(dir, TRANSITION)).then((t) => (t ? `${prefix}projects/${id}/${TRANSITION}` : null)),
+    urlIfThere(join(dir, TRANSITION), `${prefix}projects/${id}/${TRANSITION}`),
   ]);
   streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
   return { id, name: p.name, scenes, streams, transition };
@@ -209,7 +210,7 @@ async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {
       const rel = `templates/${id}`;
       const [templates, transition] = await Promise.all([
         scenesIn(root, rel, "template", m.views, prefix, id),
-        there(join(root, rel, "_shared", TRANSITION)).then((t) => (t ? `${prefix}${rel}/_shared/${TRANSITION}` : null)),
+        urlIfThere(join(root, rel, "_shared", TRANSITION), `${prefix}${rel}/_shared/${TRANSITION}`),
       ]);
       return { id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}), templates, transition };
     }),
