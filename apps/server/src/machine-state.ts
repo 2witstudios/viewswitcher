@@ -31,9 +31,9 @@ export function machineStateDir(stateRoot: string, library: string): string {
  *   tablets pair again;
  * and both old files are removed from the library. Returns what it did, for the log.
  */
-export async function migrateMachineState(library: string, dir: string): Promise<{ settings: "kept-never" | "dropped" | null; devices: "dropped" | null }> {
+export async function migrateMachineState(library: string, dir: string): Promise<{ settings: "kept-never" | "kept-own" | "dropped" | null; devices: "dropped" | null }> {
   const old = (name: string) => join(library, ".viewswitcher", name);
-  const done: { settings: "kept-never" | "dropped" | null; devices: "dropped" | null } = { settings: null, devices: null };
+  const done: { settings: "kept-never" | "kept-own" | "dropped" | null; devices: "dropped" | null } = { settings: null, devices: null };
 
   const drop = (name: string) => rm(old(name), { force: true }).catch((e) => console.error(`[library] couldn't remove the old ${name} from the library:`, (e as Error).message));
   const oldSettings = await readFile(old("settings.json"), "utf8").catch(() => null);
@@ -48,7 +48,7 @@ export async function migrateMachineState(library: string, dir: string): Promise
     const there = await readFile(join(dir, "settings.json"), "utf8").then(() => true, () => false);
     if (never && !there) await writeAtomic(join(dir, "settings.json"), JSON.stringify({ agentOnAir: "never" }, null, 2) + "\n", { plainParent: true });
     await drop("settings.json");
-    done.settings = never && !there ? "kept-never" : "dropped";
+    done.settings = there ? "kept-own" : never ? "kept-never" : "dropped";
   }
   if (await readFile(old("devices.json")).then(() => true, () => false)) {
     await drop("devices.json");

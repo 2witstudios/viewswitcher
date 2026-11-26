@@ -65,7 +65,7 @@ describe("migrateMachineState", () => {
     const lib = library({ "settings.json": JSON.stringify({ agentOnAir: "never" }) });
     const dir = scratch();
     writeFileSync(join(dir, "settings.json"), JSON.stringify({ agentOnAir: "always" }));
-    expect((await migrateMachineState(lib, dir)).settings).toBe("dropped"); // nothing was carried over
+    expect((await migrateMachineState(lib, dir)).settings).toBe("kept-own"); // this Mac's choice stays; nothing was carried over
     expect(JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"))).toEqual({ agentOnAir: "always" });
   });
 
