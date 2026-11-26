@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { hostTrusted, originAllowed } from "./origin";
+import { hostTrusted, originAllowed, pageProto } from "./origin";
 
-const at = (host: string, extra?: string[], forwardedHost?: string) => ({ host, extra, forwardedHost });
+const at = (host: string, extra?: string[], proto?: "http" | "https") => ({ host, extra, proto });
 
-describe("originAllowed (state-changing POSTs)", () => {
+describe("originAllowed (state-changing requests): exactly this server's own origin", () => {
   test("refuses other websites, including a no-cors text/plain POST from one", () => {
     expect(originAllowed("https://evil.example", at("127.0.0.1:7420"))).toBe(false);
     expect(originAllowed("http://192.168.1.20:7420", at("127.0.0.1:7420"))).toBe(false);
     expect(originAllowed("https://someone.ts.net", at("127.0.0.1:7420"))).toBe(false);
+  });
+  test("refuses another page on this Mac: another port, another loopback name, another scheme", () => {
+    expect(originAllowed("http://localhost:8000", at("127.0.0.1:7420"))).toBe(false);
+    expect(originAllowed("http://127.0.0.1:8000", at("127.0.0.1:7420"))).toBe(false);
+    expect(originAllowed("http://localhost:7420", at("127.0.0.1:7420"))).toBe(false);
+    expect(originAllowed("http://localhost:5173", at("localhost:7420"))).toBe(false);
+    expect(originAllowed("https://127.0.0.1:7420", at("127.0.0.1:7420"))).toBe(false);
   });
   test("refuses opaque and odd origins", () => {
     for (const o of ["null", "file://", "capacitor://localhost", "not a url"]) expect(originAllowed(o, at("127.0.0.1:7420"))).toBe(false);
@@ -15,26 +22,34 @@ describe("originAllowed (state-changing POSTs)", () => {
   test("allows requests without an Origin (curl, the Mac app, scripts)", () => {
     expect(originAllowed(null, at("127.0.0.1:7420"))).toBe(true);
   });
-  test("allows this Mac: the switcher, the OBS browser source, the iPad over USB, Vite on :5173", () => {
+  test("allows this Mac's own pages: the switcher, the OBS browser source, the iPad over USB, Vite (its proxy keeps the Host)", () => {
     expect(originAllowed("http://127.0.0.1:7420", at("127.0.0.1:7420"))).toBe(true);
     expect(originAllowed("http://localhost:7420", at("localhost:7420"))).toBe(true);
-    expect(originAllowed("http://localhost:5173", at("localhost:5173"))).toBe(true); // Vite's proxy keeps its own Host
+    expect(originAllowed("http://localhost:5173", at("localhost:5173"))).toBe(true);
     expect(originAllowed("http://[::1]:7420", at("[::1]:7420"))).toBe(true);
+    expect(originAllowed("http://localhost", at("localhost:80"))).toBe(true);
   });
-  test("allows the page's own host behind a proxy (tailscale serve), by Host or X-Forwarded-Host", () => {
-    expect(originAllowed("https://mac.tail1234.ts.net", at("mac.tail1234.ts.net"))).toBe(true);
-    expect(originAllowed("https://mac.tail1234.ts.net", at("127.0.0.1:7420", undefined, "mac.tail1234.ts.net"))).toBe(true);
-    expect(originAllowed("https://MAC.tail1234.ts.net", at("mac.tail1234.ts.net"))).toBe(true);
+  test("allows the page's own host behind tailscale serve, over https", () => {
+    expect(originAllowed("https://mac.tail1234.ts.net", at("mac.tail1234.ts.net", undefined, "https"))).toBe(true);
+    expect(originAllowed("https://MAC.tail1234.ts.net", at("mac.tail1234.ts.net", undefined, "https"))).toBe(true);
+    expect(originAllowed("https://mac.tail1234.ts.net", at("mac.tail1234.ts.net"))).toBe(false);
   });
   test("allows origins listed in VIEWSWITCHER_ORIGINS", () => {
     expect(originAllowed("https://switcher.example.com", at("127.0.0.1:7420", ["https://switcher.example.com/"]))).toBe(true);
   });
 });
 
+describe("pageProto: the scheme a page came over", () => {
+  test("tailscale serve's X-Forwarded-Proto, else the request's own", () => {
+    expect(pageProto(new URL("http://x/"), new Headers({ "x-forwarded-proto": "https" }))).toBe("https");
+    expect(pageProto(new URL("http://x/"), new Headers({ "x-forwarded-proto": "gopher" }))).toBe("http");
+    expect(pageProto(new URL("http://x/"), new Headers())).toBe("http");
+  });
+});
+
 describe("DNS rebinding (evil.example → 127.0.0.1)", () => {
   test("a rebound page's same-host Origin is refused", () => {
     expect(originAllowed("http://evil.example:7420", at("evil.example:7420"))).toBe(false);
-    expect(originAllowed("http://evil.example:7420", at("127.0.0.1:7420", undefined, "evil.example:7420"))).toBe(false);
   });
   test("hostTrusted refuses evil.example:7420 and allows the names this server is known by", () => {
     expect(hostTrusted("evil.example:7420")).toBe(false);
