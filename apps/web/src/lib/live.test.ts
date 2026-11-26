@@ -45,8 +45,8 @@ describe("a change in a _shared/ folder reloads the views that use it", () => {
     expect(reloaded(["daisy/templates/_shared/theme.css"])).toEqual(["orgTemplate", "neonView", "neonTransition", "citrusView", "orgTransition", "projectView", "streamView", "projectTransition"]);
   });
 
-  test("one set's theme: that set's views and the org's projects and streams, not the org's own templates or another set's", () => {
-    expect(reloaded(["daisy/templates/neon/_shared/theme.css"])).toEqual(["neonView", "neonTransition", "projectView", "streamView", "projectTransition"]);
+  test("one set's theme: that set's views and everything the org's people and agents wrote (its own templates, transition, projects, streams), not another set's views", () => {
+    expect(reloaded(["daisy/templates/neon/_shared/theme.css"])).toEqual(["orgTemplate", "neonView", "neonTransition", "orgTransition", "projectView", "streamView", "projectTransition"]);
   });
 
   test("a file outside any _shared/ folder reloads only itself", () => {

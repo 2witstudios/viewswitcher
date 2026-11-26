@@ -80,7 +80,7 @@ async function fillStarter(starter: string, dest: string, vars: ReturnType<typeo
       const p = join(dest, rel);
       const text = await readFile(p, "utf8");
       const filled = fillPlaceholders(rel, text, vars);
-      if (filled !== text) await writeFile(p, filled);
+      if (filled !== text) await writeAtomic(p, filled); // a new file: the starter's own may be read-only
     }),
   );
   await mkdir(join(dest, "assets"), { recursive: true });

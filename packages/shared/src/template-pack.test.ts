@@ -141,12 +141,16 @@ describe("checkPack", () => {
     expect(w).toStartWith("{{ORG_NAME}}, {{ORG_INITIAL}} are in a script");
     for (const where of ["templates/main.html <style>", "templates/main.html onclick", "templates/main.html style", "templates/main.html <script>", "_shared/scene.js"]) expect(w).toContain(where);
     expect(w).toContain("Keep placeholders in text and attributes");
+    // A .css file counts outside its comments: the starter names the show in one, where it's safe.
+    const css = checkPack(planned(basic), texts({ "_shared/theme.css": `/* {{ORG_NAME}} theme */ .n::after { content: "{{ORG_NAME}}" }` }));
+    expect(css.ok && css.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
   });
 
   test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {
     const r = checkPack(planned(basic), texts({
       "templates/main.html": `<html><head><style>:root { --accent: {{ACCENT}}; --ground: {{GROUND}} }</style><div style="color: {{ACCENT}}"></div></head><body><h1 title="{{ORG_NAME}}">{{ORG_NAME}}</h1><img alt="{{ORG_INITIAL}}" src="{{PACK}}/_shared/x.png" onerror="this.src='{{PACK}}/_shared/y.png'"><script>const org = "{{ORG_ID}}";</script></body></html>`,
       "_shared/scene.js": `fetch("{{PACK}}/_shared/data.json");`,
+      "_shared/theme.css": `/* {{ORG_NAME}}, made for the show */ :root { --accent: {{ACCENT}} }`,
     }));
     expect(r.ok && r.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
   });

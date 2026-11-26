@@ -128,10 +128,12 @@ export class LibraryScanner {
     if (known && (known.done === null || this.now() - known.done < this.keepMs)) return known.content;
     const entry: Kept = { content: this.scan(orgId).then(frozen), done: null };
     this.kept.set(orgId, entry);
-    entry.content.then(
-      () => (entry.done = this.now()),
-      () => this.kept.get(orgId) === entry && this.kept.delete(orgId),
-    );
+    const drop = () => this.kept.get(orgId) === entry && this.kept.delete(orgId);
+    entry.content.then(() => {
+      entry.done = this.now();
+      // Gone once it can't answer any more, so asking for many org ids (real or not) keeps nothing.
+      setTimeout(drop, this.keepMs).unref?.();
+    }, drop);
     return entry.content;
   }
 

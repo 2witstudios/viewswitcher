@@ -283,7 +283,8 @@ function remoteScripts(html: string): string[] {
 const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
 
 /**
- * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, or a .js file. A
+ * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, a .js file, or a
+ * .css file outside its comments (the starter's theme.css names the show in one, where it's safe). A
  * value is HTML-escaped in a page and as typed in .js (TEXT_TYPES), right for text and attributes
  * but not inside code: "O'Brien" ends a JS string, "R&amp;B" shows in a CSS content string.
  */
@@ -295,6 +296,8 @@ function textInCode(texts: Record<string, string>): { placeholder: string; where
   for (const [path, text] of Object.entries(texts)) {
     const e = extensionOf(path);
     if (e === ".js") note(text, path);
+    // In a .css file a value is as typed (only a comment's end is broken up), so outside comments it's in code.
+    if (e === ".css") note(text.replace(/\/\*[\s\S]*?\*\//g, ""), path);
     if (e !== ".html" && e !== ".svg") continue;
     for (const el of scanElements(text)) {
       if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);

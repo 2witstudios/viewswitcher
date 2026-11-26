@@ -156,8 +156,12 @@ step "ViewSwitcher.app (xcodebuild archive, Release, universal)"
 xcodegen --quiet
 rm -rf "$BUILD/ViewSwitcher.xcarchive" "$BUILD/export"
 # Ad hoc: on the hardened runtime like a release, with library validation off (Mac/AdHoc.entitlements),
-# since an ad hoc app has no team for Sparkle's to match and couldn't launch otherwise.
-signing=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGN_ENTITLEMENTS=Mac/AdHoc.entitlements)
+# since an ad hoc app has no team for Sparkle's to match and couldn't launch otherwise. Merged onto the
+# app's own entitlements, as the setting replaces them rather than adding to them.
+ADHOC_ENT="$BUILD/adhoc.entitlements"
+cp Mac/ViewSwitcher.entitlements "$ADHOC_ENT"
+/usr/libexec/PlistBuddy -c "Merge Mac/AdHoc.entitlements" "$ADHOC_ENT" >/dev/null
+signing=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGN_ENTITLEMENTS="$ADHOC_ENT")
 [ -n "$IDENTITY" ] && signing=(CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM")
 xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -configuration Release -derivedDataPath "$DD" \
   -archivePath "$BUILD/ViewSwitcher.xcarchive" -destination "generic/platform=macOS" "${signing[@]}" -quiet archive

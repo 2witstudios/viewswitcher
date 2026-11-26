@@ -136,15 +136,16 @@ export function sharedRootOf(path: string): string | null {
 const anyShared = (org: string) => `${org}/*`;
 
 /**
- * The shared versions a view's page depends on. The org's own templates use the org's _shared/; a
- * set's views (and its transition) their set's, and they may link the org's too. A project's or a
- * stream's view may have come from any template, set or not, so any shared change in its org counts.
- * Cheap enough for every tile on every change: a path is read, not the page.
+ * The shared versions a view's page depends on. A set's views (and its transition) link their set's
+ * own files through {{PACK}} and may link the show's, so their set's _shared/ and the org's. Anything
+ * else in the org (its own templates and transition, a project's or a stream's view) is written by
+ * hand or by an agent and may link any set's theme, so any shared change in its org counts. A link to
+ * another org's files isn't followed: views use their own show's. Cheap enough for every tile on every
+ * change: a path is read, not the page.
  */
 export function sharedFor(path: string): string[] {
   const p = parseLibraryPath(path);
-  const org = `${p.org}/templates/_shared`;
-  if ((p.kind === "template" || p.kind === "transition" || p.kind === "shared") && p.rest.startsWith("templates/")) return p.set ? [`${p.org}/templates/${p.set}/_shared`, org] : [org];
+  if (p.set && (p.kind === "template" || p.kind === "transition" || p.kind === "shared")) return [`${p.org}/templates/${p.set}/_shared`, `${p.org}/templates/_shared`];
   return [anyShared(p.org)];
 }
 
