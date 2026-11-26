@@ -11,7 +11,7 @@
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
 import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
-import { type FileHandle, lstat, open, realpath, rename } from "node:fs/promises";
+import { type FileHandle, lstat, mkdir, open, realpath, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
 
@@ -123,13 +123,30 @@ async function plainStaging(dir: string): Promise<string> {
  * `<dir>.moved-aside-<time>`) and never followed or deleted. Returns where it was moved, or null when
  * there was nothing to move. A rename that fails says so plainly (a read-only library, say).
  */
-export async function plainFolder(dir: string, now = new Date()): Promise<string | null> {
+/** Heals in progress, by folder: writes that find the same link at once share one move. */
+const healing = new Map<string, Promise<string | null>>();
+
+export function plainFolder(dir: string, now = new Date()): Promise<string | null> {
+  let heal = healing.get(dir);
+  if (!heal) {
+    heal = moveAside(dir, now).finally(() => healing.delete(dir));
+    healing.set(dir, heal);
+  }
+  return heal;
+}
+
+async function moveAside(dir: string, now: Date): Promise<string | null> {
   const s = await lstat(dir).catch(() => null);
   if (!s || s.isDirectory()) return null;
-  const aside = `${dir}.moved-aside-${now.toISOString().replace(/[:.]/g, "-")}`;
+  const aside = `${dir}.moved-aside-${now.toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 4)}`;
   try {
     await rename(dir, aside);
   } catch (e) {
+    // Another process healed it a moment ago: what's there now is its plain folder, or nothing yet.
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      const now = await lstat(dir).catch(() => null);
+      if (!now || now.isDirectory()) return null;
+    }
     throw new Error(`${dir} is a link or a file, and it couldn't be moved aside (${(e as Error).message}). Move or remove it, then start ViewSwitcher again.`);
   }
   console.error(`[library] ${basename(dir)} was a link or a file, so it was moved aside to ${aside} and a plain folder takes its place`);
@@ -143,7 +160,17 @@ export async function plainFolder(dir: string, now = new Date()): Promise<string
  * switcher would write its state and pairings wherever it points. So it's checked at startup, and
  * again by every state write (writeAtomic's `plainParent`) and settings read.
  */
-export const plainStateFolder = (libraryRoot: string, now = new Date()) => plainFolder(join(libraryRoot, ".viewswitcher"), now);
+export async function plainStateFolder(libraryRoot: string, now = new Date()): Promise<string | null> {
+  const dir = join(libraryRoot, ".viewswitcher");
+  const aside = await plainFolder(dir, now);
+  if (aside) {
+    // The person's agent setting went with the old folder (git deletes a gitignored folder it replaces).
+    // Fail closed: the fresh folder says agents may put nothing on air until they choose again.
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "settings.json"), JSON.stringify({ agentOnAir: "never" }, null, 2) + "\n", { flag: "wx" }).catch(() => {});
+  }
+  return aside;
+}
 
 /**
  * Where a library path really is (through links), as a library path, or the path itself when that
