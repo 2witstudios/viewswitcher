@@ -9,7 +9,7 @@ import { type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { config } from "./config";
 import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
-import { pairPageResponse, routes } from "./http/routes";
+import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
 import { appParent, watchParent } from "./parent-watch";
 import { ensureLibrary } from "./library-kit";
@@ -285,7 +285,7 @@ const handle = dispatcher({
   device: (req) => pairing.check(tokenFromCookie(req.headers.get("cookie")))?.id ?? null,
   renew: (device, c) => {
     const token = tokenFromCookie(c.req.headers.get("cookie"));
-    return token && pairing.renew(device) ? tokenCookie(token, c.url.protocol === "https:" || c.req.headers.get("x-forwarded-proto") === "https") : null;
+    return token && pairing.renew(device) ? tokenCookie(token, secure(c)) : null;
   },
   pairPage: pairPageResponse,
   scrub: pathScrub(config.library),

@@ -25,6 +25,7 @@ import type { OBSClient } from "../obs";
 import { appParent } from "../parent-watch";
 import { checkObsSetup, setupObs } from "../obs-setup";
 import { cancelPack, installPack, removeSet, stagePack } from "../packs";
+import { pageProto } from "../origin";
 import { PAIR_PAGE_CSP, pairPage } from "../pair-page";
 import { deviceName, guessName, type Pairing, tokenCookie } from "../pairing";
 import { inside, PathError, plainName } from "../paths";
@@ -76,7 +77,7 @@ async function fileResponse(abs: string, cache = "no-store", extra: Record<strin
 }
 
 /** A secure cookie when the page itself came over https (tailscale serve). */
-const secure = (c: Ctx) => c.url.protocol === "https:" || c.req.headers.get("x-forwarded-proto") === "https";
+export const secure = (c: Ctx) => pageProto(c.url, c.req.headers) === "https";
 
 export function routes(d: RouteDeps): Route[] {
   const { root, store } = d;
