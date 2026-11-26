@@ -57,7 +57,7 @@ public final class LiveClient {
 
     private func receive(_ t: URLSessionWebSocketTask, _ gen: Int) {
         t.receive { [weak self] result in
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self, gen == self.generation else { return }
                     switch result {

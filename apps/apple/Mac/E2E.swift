@@ -97,12 +97,15 @@ final class E2E {
         let w = app.switcher
         switch cmd["op"] as? String {
         case "state":
+            let replacedOrphan: Any = app.server?.replacedOrphan.map { Int($0) } ?? NSNull()
             return [
                 "menu": app.statusMenu.items.map { $0.isSeparatorItem ? "" : $0.title },
                 "menuEnabled": app.statusMenu.items.filter { $0.isEnabled && !$0.isSeparatorItem }.map(\.title),
                 "statusTitle": app.status.title.isEmpty ? "" : " \(app.status.title)",
                 "statusLive": app.status.live,
                 "server": app.server.map { ["owned": $0.owned, "pid": Int($0.pid ?? 0)] } ?? NSNull(),
+                "serverState": String(describing: app.supervisor.state),
+                "replacedOrphan": replacedOrphan,
                 "window": w.map { w in [
                     "visible": w.window.isVisible,
                     "number": w.window.windowNumber,

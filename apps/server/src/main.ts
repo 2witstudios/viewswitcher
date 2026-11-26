@@ -32,6 +32,7 @@ import { defuseMeta, libraryHeaders } from "./scene-sandbox";
 import { readSettings, SettingsError, writeSettings } from "./settings";
 import { asDropped, type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
+import { appParent, watchParent } from "./parent-watch";
 
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
 const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
@@ -287,7 +288,8 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
   if (path === "/api/info" && req.method === "GET") {
     if (!macOnly) return json({ error: "Not found" }, 404);
     const port = server?.port ?? config.port;
-    return json({ library: root, port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(port)) });
+    // sidecar, parentPid and pid let a relaunched app find and replace an orphan it started before.
+    return json({ library: root, port, sidecar: appParent() !== null, parentPid: appParent(), pid: process.pid, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(port)) });
   }
   if (path === "/api/remote" || path.startsWith("/api/remote/")) {
     return isAdmin(req, macOnly) ? remoteApi(req, path) : json({ error: "Not found" }, 404);
@@ -648,18 +650,13 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
 }
 
-// Started by the Mac app: exit if the app goes away without stopping us (a crash, a force quit),
-// so the port is never left held by an orphan.
-const parent = Number(process.env.VIEWSWITCHER_PARENT_PID);
-if (parent > 1) {
-  setInterval(() => {
-    try {
-      process.kill(parent, 0);
-    } catch {
-      console.log("[viewswitcher] the Mac app is gone; stopping");
-      void pairing.flush().finally(() => process.exit(0));
-    }
-  }, 2000).unref();
+// Started by the Mac app: exit if the app goes away without stopping us (parent-watch.ts).
+const parent = appParent();
+if (parent) {
+  watchParent(parent, () => {
+    console.log("[viewswitcher] the Mac app is gone; stopping");
+    void pairing.flush().finally(() => process.exit(0));
+  });
 }
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
