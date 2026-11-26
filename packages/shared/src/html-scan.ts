@@ -235,11 +235,11 @@ export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").
  * The first <title> outside comments, raw-text content (the scanner's RAW elements: script, style,
  * noscript, textarea…) and <template> content: the one the browser shows, and the one setTitle
  * writes. One pass, no element scan, so listing many big scenes stays cheap. A comment ends at the
- * first "-->" after "<!--", as the scanner reads it; a tag name ends at a space, "/" or ">", so
- * <style-box> is an element of its own, not a <style>.
+ * first "-->" after "<!--", as the scanner reads it; a tag name, opening or closing, ends at a space,
+ * "/" or ">" (so <style-box> is an element of its own, and </script/> closes a script).
  */
 const TITLE = new RegExp(
-  `<!--[\\s\\S]*?(?:-->|$)|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*>[\\s\\S]*?(?:<\\/\\1\\s*>|$)|<title(?=[\\s/>])[^>]*>([\\s\\S]*?)<\\/title\\s*>`,
+  `<!--[\\s\\S]*?(?:-->|$)|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*>[\\s\\S]*?(?:<\\/\\1(?=[\\s/>])[^>]*>|$)|<title(?=[\\s/>])[^>]*>([\\s\\S]*?)<\\/title(?=[\\s/>])[^>]*>`,
   "gi",
 );
 

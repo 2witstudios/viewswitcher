@@ -440,6 +440,9 @@ describe("readTitle", () => {
     template: "<head><template><title>Inner</title></template><title>Real</title></head>",
     "a custom element named like one": "<head><style-box></style-box><title>Real</title></head>",
     "a tagged title": '<head><title data-vs="1">Real</title></head>',
+    "a close tag with a slash": "<head><script>x</script/><title>Real</title></head>",
+    "a close tag with junk": "<head><script>x</script foo><title>Real</title></head>",
+    "a title's own close tag with a slash": "<head><title>Real</title/></head>",
   };
   test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
     expect(readTitle(html)).toBe("Real");
