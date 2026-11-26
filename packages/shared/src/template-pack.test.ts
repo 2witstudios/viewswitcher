@@ -175,6 +175,7 @@ test("fillPlaceholders escapes values for the file they land in", () => {
   const vars = { ORG_NAME: `R&B <Live> "Club"`, ORG_INITIAL: "<" };
   expect(fillPlaceholders("templates/brb.html", "<h1 title=\"{{ORG_NAME}}\">{{ORG_NAME}}</h1>", vars)).toBe("<h1 title=\"R&amp;B &lt;Live&gt; &quot;Club&quot;\">R&amp;B &lt;Live&gt; &quot;Club&quot;</h1>");
   expect(fillPlaceholders("_shared/mark.svg", "<text>{{ORG_INITIAL}}</text>", vars)).toBe("<text>&lt;</text>");
+  expect(fillPlaceholders("brb.html", "<img alt='{{ORG_NAME}}'>", { ORG_NAME: "O'Brien' onerror='x" })).toBe("<img alt='O&#39;Brien&#39; onerror=&#39;x'>"); // single quotes too
   expect(fillPlaceholders("TEMPLATES/BRB.HTML", "{{ORG_INITIAL}}", vars)).toBe("&lt;");
   const json = fillPlaceholders("org.json", '{ "name": "{{ORG_NAME}}" }', vars);
   expect(JSON.parse(json).name).toBe(vars.ORG_NAME);

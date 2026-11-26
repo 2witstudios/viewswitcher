@@ -36,12 +36,12 @@ export async function readBuiltins(dir: string): Promise<BuiltinPackFiles[]> {
   return order(out);
 }
 
-/** From the repo's sources: the starter kit (at `starter`) and the example shows. */
-export async function buildBuiltins(starter: string, onError: (id: string, e: Error) => void = () => {}): Promise<BuiltinPackFiles[]> {
+/** From the repo's sources: the starter kit (at `starter`) and the example shows (at `showsDir`, else the packs package's own). */
+export async function buildBuiltins(starter: string, onError: (id: string, e: Error) => void = () => {}, showsDir?: string): Promise<BuiltinPackFiles[]> {
   // Each pack on its own: one that won't build is left out (and reported), never the rest.
   const [starterFiles, shows] = await Promise.all([
     starterPack(starter).catch((e) => (onError("starter", e as Error), null)),
-    showPacks({ onError }).catch((e) => (onError("shows", e as Error), [])),
+    showPacks({ onError, dir: showsDir }).catch((e) => (onError("shows", e as Error), [])),
   ]);
   const packs = [...(starterFiles ? [{ id: "starter", files: starterFiles }] : []), ...shows];
   return order(packs.map((p) => describe(p.id, p.files)).filter((b): b is BuiltinPackFiles => !!b));

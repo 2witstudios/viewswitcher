@@ -49,7 +49,7 @@ const builtins = () =>
   (builtinsLoad ??= (config.packs
     ? readBuiltins(config.packs)
     : buildBuiltins(config.starter, (id, e) =>
-        console.error(`[packs] built-in template pack ${id} left out: ${e.message}`))
+        console.error(`[packs] built-in template pack ${id} left out: ${e.message}`), config.shows)
   ).catch((e) => {
     console.error("[packs] built-in template packs:", (e as Error).message);
     return [];

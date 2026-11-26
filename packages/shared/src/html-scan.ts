@@ -217,12 +217,13 @@ export function decodeEntities(text: string): string {
 }
 
 /**
- * `text` safe as an element's text and inside a double-quoted attribute: &, <, > and " escaped.
- * `quotes: false` leaves " as typed, for text alone (an edit then changes only what it must).
+ * `text` safe as an element's text and inside a quoted attribute, single or double: &, <, >, " and '
+ * escaped. `quotes: false` leaves both quotes as typed, for text alone (an edit then changes only
+ * what it must).
  */
 export function escapeHtml(text: string, { quotes = true }: { quotes?: boolean } = {}): string {
   const out = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return quotes ? out.replace(/"/g, "&quot;") : out;
+  return quotes ? out.replace(/"/g, "&quot;").replace(/'/g, "&#39;") : out;
 }
 
 /** Text as typed into a scene: escaped, and a non-breaking space kept as one (&nbsp;, which the browser won't collapse). */

@@ -30,6 +30,8 @@ export const config = {
    * Unset in a source run: they're built from the repo (the starter and @viewswitcher/packs' shows).
    */
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
+  /** The example shows' views and themes a source run builds them from; unset: @viewswitcher/packs' own shows/ folder. */
+  shows: env.VIEWSWITCHER_SHOWS ? resolve(env.VIEWSWITCHER_SHOWS) : undefined,
   /** What a new library starts with: the agent skill, CLAUDE.md, AGENTS.md, the MCP configs, .gitignore (see library-kit/README.md). */
   libraryKit: resolve(env.VIEWSWITCHER_LIBRARY_KIT ?? join(import.meta.dir, "../library-kit")),
   /** Extra page origins allowed to POST (comma-separated), beyond this Mac and the page's own host; see origin.ts. */
