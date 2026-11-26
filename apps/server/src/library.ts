@@ -6,7 +6,7 @@ import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateI
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
-import { libraryStaging, resolveInLibrary } from "./library/contain";
+import { libraryStaging, readNoFollow, resolveInLibrary } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
 
@@ -224,7 +224,7 @@ export async function createProject(orgDir: string, name: string, templates: str
   const order: string[] = [];
   for (const { file, name: view } of sources) {
     if (!(await exists(file))) continue;
-    order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readFile(file, "utf8"), check));
+    order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readNoFollow(await contained(orgDir, file)), check));
   }
   await writeAtomic(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
   return { projectId: id };
@@ -248,10 +248,10 @@ export async function createStream(orgDir: string, projectId: string, name: stri
 export async function addFromTemplate(orgDir: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
   const { file: src, name: view } = templateFile(orgDir, template);
   const dir = streamId ? streamDir(orgDir, projectId, streamId) : join(projectDir(orgDir, projectId), "scenes");
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dir);
   await mkdir(dir, { recursive: true });
-  return { name: await writeFresh(dir, view, ".html", await readFile(src, "utf8"), check) };
+  return { name: await writeFresh(dir, view, ".html", await readNoFollow(real), check) };
 }
 
 /** Copy a project scene into a stream so the stream can change it on its own. */
@@ -279,7 +279,8 @@ export async function duplicate(libraryRoot: string, path: string, check?: Befor
   const src = inside(libraryRoot, path);
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
-  const html = await readFile(src, "utf8");
+  // What it copies must really be in the library: a view that is a link outside isn't read (contain.ts).
+  const html = await readNoFollow(await resolveInLibrary(libraryRoot, path));
   return { name: await writeFresh(dir, `${base}-copy`, ".html", titledCopy(html), check) };
 }
 

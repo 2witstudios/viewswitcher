@@ -6,7 +6,7 @@
 // switcher's own routes) is left out. Reading text, not running it: a URL a script builds at run time
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
-import { readFile } from "node:fs/promises";
+import { readNoFollow, resolveInLibrary } from "./library/contain";
 import { inside } from "./paths";
 
 const BASE_HOST = "scene.invalid";
@@ -107,7 +107,7 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
     const file = queue.shift()!;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
     const text = await Promise.resolve()
-      .then(() => readFile(inside(root, file), "utf8"))
+      .then(() => resolveInLibrary(root, file).then(readNoFollow))
       .catch(() => null);
     if (text === null) continue;
     read[file] = textHash(text);

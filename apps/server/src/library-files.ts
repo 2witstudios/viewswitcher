@@ -3,11 +3,11 @@
 // .viewswitcher), text files only, and a file that exists is only replaced with the hash of the
 // version that was read (the same hash the scene editor uses, so the two never overwrite each other).
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { isTextFile, isViewPath, libraryUrl, orgOf, parseLibraryPath, slugify, TEXT_EXTENSIONS } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
-import { resolveInLibrary } from "./library/contain";
+import { readNoFollow, resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
 import { replaceChecked, sceneHash, serial } from "./scene-edit";
 
@@ -82,7 +82,7 @@ export async function readText(root: string, path: unknown, port: number): Promi
   if (s.isDirectory()) throw new PathError(`${p} is a folder. Use list_files for it.`);
   if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Views use it as ${libraryUrl(p)}, and it's at http://127.0.0.1:${port}${libraryUrl(p)}.`);
   if (s.size > MAX_TEXT_BYTES) throw new PathError(`${p} is over 2 MB, too big to read here`);
-  const text = await readFile(abs, "utf8");
+  const text = await readNoFollow(await resolveInLibrary(root, p));
   return { text, hash: sceneHash(text) };
 }
 
@@ -114,7 +114,7 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
     if (real) {
       const read = await stat(real);
       if (!read.isFile()) throw new PathError(`${p} is a folder`);
-      const current = await readFile(real, "utf8");
+      const current = await readNoFollow(real);
       const now = sceneHash(current);
       if (hash === undefined || hash === null || hash === "") return { ok: false, path: p, hash: now, reason: `${p} already exists. read_file it first and pass its hash, so you change what's really there.` };
       if (hash !== now) return { ok: false, path: p, hash: now, reason: `${p} changed since you read it (someone saved it in the switcher or another tool). read_file it again and redo your change on the new text.` };
@@ -131,7 +131,7 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
       await writeFile(abs, text, { flag: "wx" });
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-      const latest = await readFile(abs, "utf8").catch(() => "");
+      const latest = await realpath(abs).then(readNoFollow).catch(() => "");
       return { ok: false, path: p, hash: sceneHash(latest), reason: `${p} was just created by someone else. read_file it and redo your change.` };
     }
     return { ok: true, path: p, hash: sceneHash(text), created: true, changed: true };

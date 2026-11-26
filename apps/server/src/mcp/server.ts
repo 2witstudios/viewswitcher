@@ -2,7 +2,7 @@
 // library, change scenes under the switcher's own rules, look at its work, and go on air when that's
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
-import { readFileSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -13,7 +13,7 @@ import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
 import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import * as lib from "../library";
-import { realLibraryPath } from "../library/contain";
+import { readNoFollowSync, realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { cancelPack, installPack, PackError, stagePack } from "../packs";
@@ -155,7 +155,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const unchanged = (loads: OnAirLoads) =>
     Object.entries(loads.read).every(([p, h]) => {
       try {
-        return textHash(readFileSync(inside(root, p), "utf8")) === h;
+        // Non-blocking and plain files only: this runs on the event loop, where a named pipe would stop the server.
+        return textHash(readNoFollowSync(realpathSync(inside(root, p)))) === h;
       } catch {
         return false;
       }

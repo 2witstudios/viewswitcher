@@ -10,7 +10,7 @@
 //   folder that isn't there yet will be made inside.
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
-import { constants, existsSync, realpathSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { type FileHandle, lstat, open, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
@@ -131,6 +131,17 @@ export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promis
     return await use(f);
   } finally {
     await f.close();
+  }
+}
+
+/** readNoFollow at one instant (the agents' on-air guard checks at a commit): the same open, synchronously. */
+export function readNoFollowSync(abs: string): string {
+  const fd = openSync(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
+  try {
+    if (!fstatSync(fd).isFile()) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");
+    return readFileSync(fd, "utf8");
+  } finally {
+    closeSync(fd);
   }
 }
 
