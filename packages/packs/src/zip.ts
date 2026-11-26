@@ -1,4 +1,4 @@
-// A small zip reader for template packs (EDIT-24): it lists entries from the central directory and
+// A small zip reader for template packs: it lists entries from the central directory and
 // inflates one entry at a time, never more bytes than the entry declares. No dependency.
 //
 // What it refuses, so the caller never has to think about it: encrypted entries, ZIP64, methods

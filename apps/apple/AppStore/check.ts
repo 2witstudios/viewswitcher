@@ -1,4 +1,4 @@
-// Checks listing.md against App Store Connect's length limits (MAC-19): bun apps/apple/AppStore/check.ts
+// Checks listing.md against App Store Connect's length limits: bun apps/apple/AppStore/check.ts
 const md = await Bun.file(new URL("listing.md", import.meta.url)).text();
 const cell = (field: string) => md.match(new RegExp(`^\\| ${field} \\(\\d+\\) \\| \`([^\`]*)\`[^|\\n]*\\|`, "m"))?.[1]; // a note may follow the value
 const block = (heading: string) => md.match(new RegExp(`^### ${heading} \\(\\d+\\)\\n\\n\`\`\`\\n([\\s\\S]*?)\\n\`\`\``, "m"))?.[1];

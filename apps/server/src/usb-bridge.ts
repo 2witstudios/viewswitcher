@@ -14,7 +14,7 @@ import { concat, connectMessage, decodeMessages, decodeOne, deviceKind, listenMe
 const POOL = 4;
 const RETRY_MS = 1000;
 
-/** What the bridge sees: an iPhone or iPad plugged in (which, PHONE-8), and the ViewSwitcher app on it with tunnels ready. */
+/** What the bridge sees: an iPhone or iPad plugged in (and which), and the ViewSwitcher app on it with tunnels ready. */
 export type BridgeStatus = { attached: boolean; connected: boolean; device?: UsbDevice };
 
 type Options = {

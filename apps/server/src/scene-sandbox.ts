@@ -1,5 +1,5 @@
 import { posix } from "node:path";
-// How library files are served (EDIT-26). Scenes are HTML that anyone may have written: an agent, a
+// How library files are served. Scenes are HTML that anyone may have written: an agent, a
 // template pack from a stranger. Served plainly from /library/, a scene would be same-origin with the
 // switcher, so its scripts could call /api (go on air, edit files, upload), open the live socket,
 // or reach into the page that frames it.

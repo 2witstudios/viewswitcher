@@ -1,4 +1,4 @@
-// The library files a scene loads (MCP-7): its <link>, <script>, <img>, <video>, <audio>, <source>,
+// The library files a scene loads: its <link>, <script>, <img>, <video>, <audio>, <source>,
 // <track> and <iframe> targets, inline SVG's <image> and <use>, CSS url()/@import/image-set() targets
 // and the modules a script imports, resolved the way a browser resolves them
 // from /library/<file>. The agent guard uses it so that, while live, an agent can't change a logo or

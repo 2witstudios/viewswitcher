@@ -1,4 +1,4 @@
-// Template packs (EDIT-23): one portable folder or .zip with a full set of views, which installs into an
+// Template packs: one portable folder or .zip with a full set of views, which installs into an
 // org as its own template set. The format is in docs/template-packs.md; this is its validator. Pure: the
 // server lists a zip's entries (or a dropped folder's files), asks `planPack` which of them to
 // extract, then reads the text files and asks `checkPack` whether the result is a pack.

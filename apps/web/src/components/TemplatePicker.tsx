@@ -1,7 +1,7 @@
-// The built-in template sets (EDIT-30): the starter and the site's six example shows, shown with
+// The built-in template sets: the starter and the site's six example shows, shown with
 // covers in this org's own name and colors. Used for a new org ("Pick your templates") and on the
 // Templates page ("Add templates"). Each one is staged and installed through the same path as a
-// dropped template pack (EDIT-24), so it lands as its own set; nothing changes until "Add".
+// dropped template pack, so it lands as its own set; nothing changes until "Add".
 import { libraryUrl } from "@viewswitcher/shared";
 import { useEffect, useRef, useState } from "react";
 import { packs } from "../lib/api";

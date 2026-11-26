@@ -1,4 +1,4 @@
-// How an agent on this Mac connects (the switcher's Edit with AI sheet, MCP-10): which agent apps are
+// How an agent on this Mac connects (the switcher's Edit with AI sheet): which agent apps are
 // installed, the stdio command, the Claude Code command, and the Claude Desktop extension (.mcpb).
 // Everything here can contain absolute paths, so main.ts answers with it only to this Mac (a mac route, gate.ts isMac),
 // and /api/agent/clients turns it into booleans.

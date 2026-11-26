@@ -1,6 +1,6 @@
 import XCTest
 
-/// MAC-18, PHONE-7 (iPhone and iPad): with no Mac, a first launch opens the demo; tapping a view changes the program; the bar
+/// The demo on iPhone and iPad: with no Mac, a first launch opens the demo; tapping a view changes the program; the bar
 /// leads back to the connector, which offers the demo again. Runs in the regular `xcodebuild test`:
 /// VIEWSWITCHER_PROBE points the Mac probe at a closed port, since the simulator shares the Mac's
 /// ports and 127.0.0.1:7420 there is the Mac's own switcher.
@@ -20,7 +20,7 @@ final class DemoTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = launch()
         let web = app.webViews.firstMatch
-        // (Guest cook's cover: on an iPhone held sideways the show's header is hidden, PHONE-7.)
+        // (Guest cook's cover: on an iPhone held sideways the show's header is hidden.)
         XCTAssertTrue(web.switches["Guest cook"].waitForExistence(timeout: 20), "the demo opened by itself")
         XCTAssertTrue(web.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Demo'")).firstMatch.exists, "the demo bar says it's a demo")
         XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label ==[c] 'On air'")).firstMatch.exists, "the tally (styled in capitals)")

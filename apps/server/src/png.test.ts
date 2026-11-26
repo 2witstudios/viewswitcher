@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { deflateSync } from "node:zlib";
 import { isBlankPng, solidPng } from "./png";
 
-describe("isBlankPng (MCP-1)", () => {
+describe("isBlankPng", () => {
   test("an all-zero frame is blank; anything painted isn't", () => {
     expect(isBlankPng(solidPng(960, 540, [0, 0, 0, 0]))).toBe(true);
     expect(isBlankPng(solidPng(960, 540, [14, 15, 19, 255]))).toBe(false);

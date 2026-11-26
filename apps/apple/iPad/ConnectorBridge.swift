@@ -5,7 +5,7 @@ import WebKit
 import ViewSwitcherKit
 
 /// What the bundled connector page (viewswitcher://connector/) can ask the app for, as
-/// `window.webkit.messageHandlers.vs.postMessage(...)` with a reply (PHONE-4, PHONE-5):
+/// `window.webkit.messageHandlers.vs.postMessage(...)` with a reply:
 ///  - `"scan"`: the camera reads the Mac's pairing QR code; replies with { link, local } (local: the same
 ///    pairing on the Mac's .local name, when the code names it), or null.
 ///  - `"browse"`: finds Macs running ViewSwitcher on this Wi-Fi by Bonjour; replies with
@@ -28,7 +28,7 @@ final class ConnectorBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
     }
 
-    // ------------------------------------------------------------ scan (PHONE-4)
+    // ------------------------------------------------------------ scan
 
     private func scan(_ done: @escaping @MainActor (URL?) -> Void) {
         // Already presenting (the scanner or the camera alert): UIKit would refuse a second one and never reply.
@@ -145,8 +145,8 @@ private final class PairingScanner: UIViewController, DataScannerViewControllerD
     }
 }
 
-/// Macs running ViewSwitcher on this Wi-Fi (PHONE-5). The Mac app announces "ViewSwitcher" as an
-/// _http._tcp service while phones may connect (RemotesWindow.swift, MAC-23); a second Mac on the same
+/// Macs running ViewSwitcher on this Wi-Fi. The Mac app announces "ViewSwitcher" as an
+/// _http._tcp service while phones may connect (RemotesWindow.swift); a second Mac on the same
 /// network gets a numbered name. Browses until the first Mac answers (then a moment more for others), or
 /// a long limit: the first search on a fresh install waits behind iOS's Local Network prompt, and no
 /// results arrive while it's up. Only a .local name is accepted (PairingLink.bonjourMac).

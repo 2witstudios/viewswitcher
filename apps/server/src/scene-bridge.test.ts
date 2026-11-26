@@ -1,4 +1,4 @@
-// EDIT-26: the program page reaches a sandboxed scene only through the bridge's messages.
+// The program page reaches a sandboxed scene only through the bridge's messages.
 // (Moved from apps/web's apply-preview tests: the program page no longer touches the scene's DOM.)
 import { describe, expect, test } from "bun:test";
 import { SCENE_BRIDGE, withBridge } from "./scene-bridge";

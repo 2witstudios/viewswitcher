@@ -1,4 +1,4 @@
-// MAC-18: copies the site's made-up show, Saltwater Kitchen, into the iPad app's offline demo
+// Copies the site's made-up show, Saltwater Kitchen, into the iPad app's offline demo
 // (iPad/Connector/demo/). Run it again when the site's views change:
 //   bun apps/apple/scripts/demo-assets.ts
 // The photos are Unsplash License (apps/site/CREDITS.md), which allows this; the views are rendered

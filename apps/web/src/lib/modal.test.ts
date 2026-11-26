@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { MODAL_SELECTOR, modalOpen, trapTab } from "./modal";
 
-describe("modal dialogs own the keyboard (CodeRabbit: Edit with AI over the editor)", () => {
+describe("modal dialogs own the keyboard (Edit with AI over the editor)", () => {
   test("modalOpen asks for an aria-modal dialog", () => {
     const asked: string[] = [];
     expect(modalOpen({ querySelector: (s: string) => (asked.push(s), {} as Element) })).toBe(true);

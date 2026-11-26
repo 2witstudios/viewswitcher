@@ -2,7 +2,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import Foundation
 
-// Phones and tablets on the Wi-Fi (MAC-23 … MAC-26): what the server's /api/remote says, and how the
+// Phones and tablets on the Wi-Fi: what the server's /api/remote says, and how the
 // Mac app shows it. The server keeps the codes and tokens (apps/server/src/pairing.ts); the app only
 // shows a code, its QR code, and the paired devices.
 
@@ -48,7 +48,7 @@ public struct RemoteStatus: Decodable, Equatable, Sendable {
 }
 
 public enum RemoteText {
-    /// The setting's help text: plain HTTP on the Wi-Fi is the known limit (Decisions, MAC-23). Users
+    /// The setting's help text: plain HTTP on the Wi-Fi is the known limit (the Decisions page). Users
     /// never see a VPN named (Decisions): the caveat is the kind of network, not a product.
     public static let help = "Phones and tablets you pair can switch views from a browser. Wi-Fi traffic isn't encrypted, so use this on networks you trust, like home or church Wi-Fi."
 

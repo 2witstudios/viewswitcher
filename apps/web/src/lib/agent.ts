@@ -1,4 +1,4 @@
-// Edit with AI (MCP-10, MCP-11): what the sheet says and offers, apart from React.
+// Edit with AI: what the sheet says and offers, apart from React.
 import type { AgentClients, AgentOnAir, AgentStatus } from "@viewswitcher/shared";
 import type { ClientKind } from "./client-kind";
 
@@ -72,7 +72,7 @@ export function sheetParts(kind: ClientKind) {
   return { waysIn: !ipad, connectOnMac: ipad, onAirSetting: !ipad, setupGuide: !ipad };
 }
 
-/** The setup guide on the site (MCP-11): how to connect each agent, step by step. */
+/** The setup guide on the site: how to connect each agent, step by step. */
 export const SETUP_GUIDE_URL = "https://viewswitcher.com/ai";
 
 // What agents may do to the show (apps/server/src/agent-guard.ts); people in the switcher are never limited.

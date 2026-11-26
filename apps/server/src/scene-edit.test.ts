@@ -1,4 +1,4 @@
-// EDIT-3 / EDIT-4: the editor's file endpoints, as functions and over HTTP against a real server.
+// The editor's file endpoints, as functions and over HTTP against a real server.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,7 +18,7 @@ beforeAll(async () => {
 });
 afterAll(() => rm(root, { recursive: true, force: true }));
 
-describe("readForEdit (EDIT-3)", () => {
+describe("readForEdit", () => {
   test("tags every element and hashes the file, without touching it", async () => {
     const abs = join(root, SCENE);
     const before = await readFile(abs, "utf8");
@@ -37,7 +37,7 @@ describe("readForEdit (EDIT-3)", () => {
   });
 });
 
-describe("editScene (EDIT-4)", () => {
+describe("editScene", () => {
   test("with the current hash: patches and saves; with a stale one: changes nothing", async () => {
     const abs = join(root, SCENE);
     const before = await readFile(abs, "utf8");
@@ -65,7 +65,7 @@ describe("editScene (EDIT-4)", () => {
   });
 });
 
-describe("saving keeps the file what it was (PR #1 review)", () => {
+describe("saving keeps the file what it was", () => {
   test("permissions survive a save", async () => {
     const abs = join(root, "acme/templates/brb.html");
     await chmod(abs, 0o664);
@@ -97,7 +97,7 @@ describe("saving keeps the file what it was (PR #1 review)", () => {
   });
 });
 
-describe("a write that lands while saving (PR #1 architecture #5)", () => {
+describe("a write that lands while saving", () => {
   test("someone else's save between read and replace wins; this one is a 409", async () => {
     const SC = "acme/templates/starting-soon.html";
     const abs = join(root, SC);
@@ -114,7 +114,7 @@ describe("a write that lands while saving (PR #1 architecture #5)", () => {
   });
 });
 
-describe("no staged copy is left behind (PR #1 round 5)", () => {
+describe("no staged copy is left behind", () => {
   test("a failure between staging and replacing removes the temp file", async () => {
     const SC = "acme/templates/ending.html";
     const before = await readFile(join(root, SC), "utf8");
@@ -185,7 +185,7 @@ describe("over HTTP", () => {
     expect((await post("/api/scene/edit", { path: "../x.html", hash, edits: [{ id: 1, text: "x" }] })).status).toBe(400);
   });
 
-  test("?edit falls back to the plain file when the scene can't be tagged (PR #1 architecture #4)", async () => {
+  test("?edit falls back to the plain file when the scene can't be tagged", async () => {
     // An org folder name the editor refuses (plainName) must still show on the program page.
     await cp(join(root, "acme"), join(root, "_odd"), { recursive: true });
     const plain = await readFile(join(root, "_odd/templates/brb.html"), "utf8");

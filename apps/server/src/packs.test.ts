@@ -1,4 +1,4 @@
-// EDIT-24 · EDIT-25 · EDIT-27 · EDIT-29: staging, installing and removing template packs on a real (temporary)
+// Staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
@@ -35,7 +35,7 @@ beforeEach(async () => {
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-describe("the starter kit as a pack (EDIT-27)", () => {
+describe("the starter kit as a pack", () => {
   test("stages with covers filled in for the org, and says what it runs", async () => {
     const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
     expect(s.set).toBe("starter");
@@ -194,7 +194,7 @@ describe("built-in template packs", () => {
   });
 });
 
-describe("removing a set (EDIT-25)", () => {
+describe("removing a set", () => {
   test("goes entirely when no scene uses it", async () => {
     await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
     expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
@@ -230,7 +230,7 @@ describe("removing a set (EDIT-25)", () => {
   });
 });
 
-describe("hostile and broken packs change nothing (EDIT-24 · EDIT-26)", () => {
+describe("hostile and broken packs change nothing", () => {
   const good = async () => (await starterPack(starter)).map((f) => ({ name: `p/${f.path}`, data: f.data }));
   const cases: [string, () => Promise<Uint8Array>, RegExp][] = [
     ["zip-slip", async () => writeZip([...(await good()), { name: "p/../../../evil.html", data: "<script>x</script>" }]), /outside the pack/],

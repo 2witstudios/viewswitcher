@@ -1,4 +1,4 @@
-// PR #1 round 5: live slot reports that arrive out of order must not leave OBS mid-drag.
+// Live slot reports that arrive out of order must not leave OBS mid-drag.
 import { describe, expect, test } from "bun:test";
 import { createSlotOrder } from "./slot-order";
 

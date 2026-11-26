@@ -70,7 +70,7 @@ describe("usbmux", () => {
     });
   });
 
-  test("names the device from its product id (PHONE-8)", () => {
+  test("names the device from its product id", () => {
     expect(deviceKind(0x12a8)).toBe("iPhone");
     expect(deviceKind(4779)).toBe("iPad");
     expect(deviceKind("4776")).toBe("iPhone");

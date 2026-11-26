@@ -1,4 +1,4 @@
-// EDIT-26: what the install dialog says a pack runs.
+// What the install dialog says a pack runs.
 import { expect, test } from "bun:test";
 import { describeScripts } from "./pack-drop";
 

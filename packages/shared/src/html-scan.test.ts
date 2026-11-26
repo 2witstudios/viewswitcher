@@ -134,7 +134,7 @@ describe("text and entities", () => {
   });
 });
 
-describe("edits (EDIT-2)", () => {
+describe("edits", () => {
   const teaching = readFileSync(join(starter, "teaching.html"), "utf8");
   const title = scanElements(teaching).find((e) => e.leaf && textOf(teaching, e) === "Today's topic")!;
   const notes = el(teaching, "section");
@@ -198,7 +198,7 @@ describe("edits (EDIT-2)", () => {
   });
 });
 
-describe("conflicts (EDIT-8)", () => {
+describe("conflicts", () => {
   const base = `<main><section style="left: 1px; top: 2px"><span>Notes</span><p>Old note</p></section><h2>Title</h2></main>`;
   const theirs = `<main><section style="left: 1px; top: 2px"><span>Notes</span><p>Their note</p></section><h2>Title</h2><p>Added</p></main>`;
 
@@ -293,7 +293,7 @@ describe("tagging a very large scene", () => {
   });
 });
 
-describe("version stamp (PR #1 architecture #1, #2)", () => {
+describe("version stamp", () => {
   test("tagForEdit stamps the hash on <html> only, and untagForEdit removes it", () => {
     const html = `<!doctype html><html lang="en"><body><p>x</p></body></html>`;
     const tagged = tagForEdit(html, "abc123");
@@ -306,7 +306,7 @@ describe("version stamp (PR #1 architecture #1, #2)", () => {
   });
 });
 
-describe("CodeRabbit findings on PR #1", () => {
+describe("edge cases: positions in quoted values and comments, raw text, empty text, swapped text, retargeting", () => {
   const pos = (style: string) => {
     const html = `<div style="${style}"></div>`;
     return positionOf(html, scanElements(html)[0]!);
@@ -349,7 +349,7 @@ describe("CodeRabbit findings on PR #1", () => {
   });
 });
 
-describe("/code-review findings on PR #1", () => {
+describe("entities and unchanged text", () => {
   test("named entities decode (case-sensitive), so an unchanged text is left alone", () => {
     expect(decodeEntities("caf&eacute; &Eacute;t&eacute; 10&nbsp;AM &euro;5 &yuml;")).toBe("café Été 10 AM €5 ÿ");
     const html = `<p>Caf&eacute; at 10&nbsp;AM</p>`;
@@ -359,7 +359,7 @@ describe("/code-review findings on PR #1", () => {
   });
 });
 
-describe("/review round 2 findings on PR #1", () => {
+describe("more edge cases: comments in values, !important, twins, nested panels", () => {
   const pos = (style: string) => {
     const html = `<div style="${style}"></div>`;
     return positionOf(html, scanElements(html)[0]!);
@@ -380,7 +380,7 @@ describe("/review round 2 findings on PR #1", () => {
     // One on each side still works.
     expect(retarget(`<p>Notes</p>`, `<h1>New</h1><p>Notes</p>`, { id: 0, text: "Mine" })).toEqual({ id: 1, text: "Mine" });
   });
-  test("retarget doesn't fall back to another element with the same start tag (round 3)", () => {
+  test("retarget doesn't fall back to another element with the same start tag", () => {
     const prev = `<section><span class="kicker">Notes</span></section><section><span class="kicker">Agenda</span></section>`;
     const next = `<section><span class="kicker">Agenda</span></section>`;
     expect(retarget(prev, next, { id: 1, text: "Mine" })).toBeNull();
@@ -394,14 +394,14 @@ describe("/review round 2 findings on PR #1", () => {
   });
 });
 
-describe("/code-review round 2 on PR #1", () => {
+describe("entities with digits", () => {
   test("names with digits decode (&frac12;, &sup2;)", () => {
     expect(decodeEntities("&frac12; &sup2; &frac34;")).toBe("½ ² ¾");
     expect(setText(`<p>&frac12; cup</p>`, 0, "½ cup")).toBe(`<p>&frac12; cup</p>`);
   });
 });
 
-describe("/code-review round 4 on PR #1", () => {
+describe("non-breaking spaces are text", () => {
   test("leading and trailing non-breaking spaces are text, not whitespace", () => {
     const html = `<p>&nbsp;&nbsp;Indented</p>`;
     expect(textOf(html, scanElements(html)[0]!)).toBe("  Indented");
@@ -412,7 +412,7 @@ describe("/code-review round 4 on PR #1", () => {
   });
 });
 
-describe("round 5 on PR #1", () => {
+describe("empty and whitespace-only text", () => {
   test("text that's only spaces is empty, a lone non-breaking space included", () => {
     expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();
     expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();

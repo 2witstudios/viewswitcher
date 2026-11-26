@@ -28,8 +28,8 @@ export function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
-  // On a phone (MAC-27) the library folds into a button at the left of the top bar, so the scenes come
-  // first; open, it slides in from the left and fills the screen, upright and sideways (PHONE-12). The
+  // On a phone the library folds into a button at the left of the top bar, so the scenes come
+  // first; open, it slides in from the left and fills the screen, upright and sideways. The
   // page title opens it too (lib/library-sheet). Wider screens never see the button and always show the library.
   const libraryOpen = useLibraryOpen();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -220,7 +220,7 @@ function OrgSwitcher({ current }: { current?: string }) {
         />
       )}
       {picking && (
-        // EDIT-30: a new org starts from a built-in template set, if it likes.
+        // A new org starts from a built-in template set, if it likes.
         <TemplatePicker
           org={picking.id}
           have={["starter"]}

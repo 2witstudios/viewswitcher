@@ -115,7 +115,7 @@ export const api = {
     return res?.ok ? res.json() : null;
   },
 
-  /** Create the ViewSwitcher scene and sources in OBS (MAC-3). */
+  /** Create the ViewSwitcher scene and sources in OBS. */
   setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean; warnings?: string[] }>("/api/obs/setup"),
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
@@ -149,7 +149,7 @@ export const packs = {
   install: (org: string, token: string) => change<{ set: string }>("/api/sets/install", { org, token }),
   cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
   removeSet: (org: string, set: string) => change<{ kept: number }>("/api/sets/remove", { org, set }),
-  /** The built-in template packs (EDIT-29): the starter and the site's six shows. */
+  /** The built-in template packs: the starter and the site's six shows. */
   builtin: async (): Promise<BuiltinPack[]> => {
     const r = await fetch("/api/packs/builtin");
     if (!r.ok) throw new Error("Couldn't list the built-in templates");

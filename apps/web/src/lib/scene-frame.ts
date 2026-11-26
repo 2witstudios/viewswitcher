@@ -1,4 +1,4 @@
-// Scene frames (EDIT-26). Every frame that shows a scene is sandboxed so it gets an opaque origin:
+// Scene frames. Every frame that shows a scene is sandboxed so it gets an opaque origin:
 // the scene's scripts run, but as no site, so they can't call the switcher's API, open its socket,
 // or reach into this page (the server serves library pages with the same sandbox as a CSP too;
 // apps/server/src/scene-sandbox.ts). The scene editor's frame is the one exception: it needs the

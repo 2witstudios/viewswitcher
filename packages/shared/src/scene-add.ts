@@ -28,7 +28,7 @@ export function freeSlotName(base: string, used: string[]): string {
 /**
  * The markup for a new element of `kind`. `slots` are the scene's slot names (so a second camera box
  * asks for "Camera 2"); `image` is the picture for an image (its natural size keeps its shape).
- * `at`: where it was dropped (EDIT-22), in scene pixels: it's centred there, inside the scene, and a
+ * `at`: where it was dropped, in scene pixels: it's centred there, inside the scene, and a
  * picture smaller than the 600 px box keeps its own size instead of being blown up.
  */
 export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src: string; width?: number; height?: number }; at?: { x: number; y: number } } = {}): string {

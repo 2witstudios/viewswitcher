@@ -310,7 +310,7 @@ describe("unpacking a template pack never blocks the server", () => {
   }, 60_000);
 });
 
-describe("scenes are served sandboxed (EDIT-26)", () => {
+describe("scenes are served sandboxed", () => {
   const ws = WS;
   test("every library page has an opaque origin, its scripts kept off plain http and ws", async () => {
     for (const q of ["", "?preview", "?edit", "?edit&bridge"]) {

@@ -1,4 +1,4 @@
-// Review finding on PR #1: a save queued behind a 409 must not go out with the reloaded file's hash
+// A save queued behind a 409 must not go out with the reloaded file's hash
 // and the old file's element ids (it would patch the wrong element).
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -108,7 +108,7 @@ describe("createSceneSaver", () => {
     expect(calls).toBe(2);
   });
 
-  test("idle() waits for every queued save, including ones queued meanwhile (round 5)", async () => {
+  test("idle() waits for every queued save, including ones queued meanwhile", async () => {
     const s = setup();
     const title = idOf(teaching, "Today's topic");
     s.save([{ id: title, text: "One" }], null);

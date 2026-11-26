@@ -1,4 +1,4 @@
-// Real-OBS check for previews (MCP-1), serving the library itself on --port and printing timings and OBS's program before/after: OBS_URL=… OBS_PASSWORD=… bun apps/server/scripts/preview-check.ts --library <dir> --scene <org/…/scene.html> --out <file.png> [--full] [--program] [--port 7433]
+// Real-OBS check for previews, serving the library itself on --port and printing timings and OBS's program before/after: OBS_URL=… OBS_PASSWORD=… bun apps/server/scripts/preview-check.ts --library <dir> --scene <org/…/scene.html> --out <file.png> [--full] [--program] [--port 7433]
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 import { config } from "../src/config";

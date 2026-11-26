@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bun run ipad:deploy: build ViewSwitcher iPad, sign it with your team, install it on the
-# USB-connected iPad or iPhone, and launch it (MAC-14, PHONE-1). Replaces the app that's on it.
+# USB-connected iPad or iPhone, and launch it. Replaces the app that's on it.
 #   bun run ipad:deploy            (first connected iPad, else iPhone)
 #   DEVICE=<id> bun run ipad:deploy
 set -euo pipefail

@@ -1,4 +1,4 @@
-// Pairing phones and tablets (MAC-24, MAC-26): one-time codes the Mac app shows, and the device tokens
+// Pairing phones and tablets: one-time codes the Mac app shows, and the device tokens
 // they are exchanged for.
 //
 // - A code is 8 characters from an alphabet without look-alikes (I, L, O, 0, 1), lives 5 minutes, and

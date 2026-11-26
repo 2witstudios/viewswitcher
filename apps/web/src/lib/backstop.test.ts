@@ -1,4 +1,4 @@
-// PR #1 round 5: the backstop's decision, tested apart from the route.
+// The backstop's decision, tested apart from the route.
 import { describe, expect, test } from "bun:test";
 import { freshUrl, shouldBackstop } from "./backstop";
 

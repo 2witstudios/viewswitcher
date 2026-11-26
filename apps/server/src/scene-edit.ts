@@ -93,7 +93,7 @@ let queue: Promise<unknown> = Promise.resolve();
  * Returns false (writing nothing) when someone else saved meanwhile.
  */
 // `read` is a plain Stats: Awaited<ReturnType<typeof stat>> is the last overload's, which newer
-// @types/node types as possibly undefined (stat with throwIfNoEntry: false), ISSUE-11.
+// @types/node types as possibly undefined (stat with throwIfNoEntry: false).
 export async function replaceChecked(real: string, read: Stats, current: string, next: string, hooks: { beforeReplace?: () => Promise<void>; atRename?: () => void }) {
   // A linked scene is written where it really lives (so the link stays a link), never outside the library.
   // Write beside it and rename, so nothing ever reads a half-written scene; keep its permissions.

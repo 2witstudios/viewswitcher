@@ -1,4 +1,4 @@
-// The scenes skill as a download (SITE-27): /skills/viewswitcher-scenes.zip, for Claude's skill upload.
+// The scenes skill as a download: /skills/viewswitcher-scenes.zip, for Claude's skill upload.
 //
 //   bun scripts/skill.ts            (runs before astro build; see package.json)
 //

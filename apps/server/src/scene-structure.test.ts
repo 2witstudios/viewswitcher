@@ -1,4 +1,4 @@
-// EDIT-16…19 on the server: insert, remove, resize and image edits under the hash/409 rule, and renaming.
+// The editor's structural edits on the server: insert, remove, resize and image edits under the hash/409 rule, and renaming.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,7 +24,7 @@ afterAll(() => rm(root, { recursive: true, force: true }));
 
 const read = (p: string) => readFile(join(root, p), "utf8");
 
-describe("structural edits (EDIT-16 · EDIT-17 · EDIT-18)", () => {
+describe("structural edits", () => {
   const P = `${STREAM}/teaching-copy.html`;
   test("insert, resize, swap and remove each save as one patch, and 409 on a stale hash", async () => {
     const before = await read(P);
@@ -75,7 +75,7 @@ describe("structural edits (EDIT-16 · EDIT-17 · EDIT-18)", () => {
   });
 });
 
-describe("renameScene (EDIT-19)", () => {
+describe("renameScene", () => {
   /** A stream scene of its own for each test, so each runs alone too. */
   const seed = async (file: string, title = "Teaching copy") => {
     const text = (await read("acme/templates/teaching.html")).replace("<title>Teaching</title>", `<title>${title}</title>`);
@@ -117,7 +117,7 @@ describe("renameScene (EDIT-19)", () => {
   });
 });
 
-describe("the server keeps a delete undoable (CodeRabbit on PR #5)", () => {
+describe("the server keeps a delete undoable", () => {
   test("refuses to delete what Undo couldn't put back", async () => {
     const html = `<main class="scene">\n  <div class="abs"><script>x()</script></div>\n</main>`;
     await writeFile(join(root, STREAM, "script.html"), html);

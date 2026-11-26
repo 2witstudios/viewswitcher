@@ -42,7 +42,7 @@ public struct LiveState: Decodable, Equatable, Sendable {
         public var enabled: Bool
         public var attached: Bool
         public var connected: Bool
-        /// "iPhone" or "iPad" (PHONE-8), when the server knows which is plugged in.
+        /// "iPhone" or "iPad", when the server knows which is plugged in.
         public var device: String?
         public init(enabled: Bool, attached: Bool = false, connected: Bool = false, device: String? = nil) {
             self.enabled = enabled
@@ -64,7 +64,7 @@ public struct LiveState: Decodable, Equatable, Sendable {
         self.usb = usb
     }
 
-    /// OBS is streaming or recording: Set Up OBS asks first (MAC-12).
+    /// OBS is streaming or recording: Set Up OBS asks first.
     public var obsLive: Bool { obs.streaming || obs.recording }
 }
 

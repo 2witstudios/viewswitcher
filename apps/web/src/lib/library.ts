@@ -32,7 +32,7 @@ export const lastOrg = {
   },
 };
 
-/** Templates by set (EDIT-25): the org's own first, then each installed template pack. */
+/** Templates by set: the org's own first, then each installed template pack. */
 export function templateGroups(lib: OrgContent): { set: TemplateSet | null; name: string; templates: Scene[] }[] {
   return [{ set: null, name: lib.org.name, templates: lib.templates }, ...lib.sets.map((s) => ({ set: s, name: s.name, templates: s.templates }))];
 }

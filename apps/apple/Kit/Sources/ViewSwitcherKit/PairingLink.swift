@@ -1,7 +1,7 @@
 import Foundation
 
-/// The Mac's pairing link (MAC-24), as its QR code carries it: http://<LAN address or name.local>:<port>/pair?code=…
-/// The phone and iPad app read it with their own scanner (PHONE-4), so the device token lands in the
+/// The Mac's pairing link, as its QR code carries it: http://<LAN address or name.local>:<port>/pair?code=…
+/// The phone and iPad app read it with their own scanner, so the device token lands in the
 /// app's web view rather than in Safari, which is where the system Camera would open it. Pure, so
 /// XCTest covers what's accepted.
 public enum PairingLink {
@@ -20,7 +20,7 @@ public enum PairingLink {
         return localAlternative(url)
     }
 
-    /// The same pairing on the Mac's .local name, when the link names it (`&mac=<name>.local`, PHONE-4). A
+    /// The same pairing on the Mac's .local name, when the link names it (`&mac=<name>.local`). A
     /// device paired on the name keeps finding the Mac when its LAN address changes; the connector uses it
     /// when the name answers, else the link as it is.
     public static func localAlternative(_ url: URL) -> URL? {
@@ -42,7 +42,7 @@ public enum PairingLink {
         return "\(url.scheme?.lowercased() ?? "http")://\(host)\(url.port.map { ":\($0)" } ?? "")"
     }
 
-    /// A Mac found by Bonjour (PHONE-5): its address, only for a `.local` name and a real port. Whoever
+    /// A Mac found by Bonjour: its address, only for a `.local` name and a real port. Whoever
     /// answers on the Wi-Fi picks the name, so anything else (a *.ts.net or loopback name, an IP) is refused,
     /// as PairingLink refuses it from a QR code.
     public static func bonjourMac(host: String, port: Int) -> String? {

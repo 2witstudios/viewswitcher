@@ -1,4 +1,4 @@
-// EDIT-23: the template pack format's validator.
+// The template pack format's validator.
 import { describe, expect, test } from "bun:test";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, placeholdersIn, placeholderVars, planPack, readManifest } from "./template-pack";
 

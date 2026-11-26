@@ -1,4 +1,4 @@
-// EDIT-26: what the program page takes from a (possibly hostile) scene frame.
+// What the program page takes from a (possibly hostile) scene frame.
 import { expect, test } from "bun:test";
 import { cleanSlots, frameState } from "./scene-frame";
 

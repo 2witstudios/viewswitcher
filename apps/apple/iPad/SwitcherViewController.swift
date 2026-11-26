@@ -3,7 +3,7 @@ import WebKit
 import ViewSwitcherKit
 
 /// Serves the bundled connector (Connector/index.html) at viewswitcher://connector/, and the offline
-/// demo (Connector/demo/, MAC-18) at viewswitcher://connector/demo/. The switcher sends the app back
+/// demo (Connector/demo/) at viewswitcher://connector/demo/. The switcher sends the app back
 /// to the connector when the server has been gone a while (apps/web/src/lib/live.ts).
 final class ConnectorScheme: NSObject, WKURLSchemeHandler {
     let root = Bundle.main.resourceURL!.appendingPathComponent("Connector")
@@ -66,14 +66,14 @@ final class CapacitorMigration: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 }
 
-/// The app's one screen, on iPad and iPhone (PHONE-1): a web view from edge to edge. The page keeps its controls inside the safe
-/// area itself (viewport-fit=cover and env(safe-area-inset-*) in apps/web/src/styles.css, MAC-13a),
+/// The app's one screen, on iPad and iPhone: a web view from edge to edge. The page keeps its controls inside the safe
+/// area itself (viewport-fit=cover and env(safe-area-inset-*) in apps/web/src/styles.css),
 /// so its own background reaches every edge in each orientation, Split View and Stage Manager.
 final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
     static let connector = URL(string: "\(NavigationPolicy.connectorScheme)://connector/")!
     static let demo = URL(string: "\(NavigationPolicy.connectorScheme)://connector/demo/")!
     private var webView: WKWebView!
-    /// The connector's scan and Bonjour requests (PHONE-4, PHONE-5).
+    /// The connector's scan and Bonjour requests.
     private let bridge = ConnectorBridge()
 
     override var prefersStatusBarHidden: Bool { true }
@@ -148,7 +148,7 @@ final class SwitcherViewController: UIViewController, WKNavigationDelegate, WKUI
         webView.load(URLRequest(url: Self.start))
     }
 
-    /// The connector, which opens the demo by itself on a first launch with no Mac (MAC-18). In a Debug
+    /// The connector, which opens the demo by itself on a first launch with no Mac. In a Debug
     /// build, VIEWSWITCHER_SERVER (e.g. http://127.0.0.1:7445) opens that server directly instead, for
     /// the simulator, which shares the Mac's ports and would otherwise find whatever switcher runs on the
     /// Mac's 7420; VIEWSWITCHER_START=demo opens the demo.

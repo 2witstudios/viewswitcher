@@ -1,4 +1,4 @@
-// The one page an unpaired phone or tablet gets (MAC-24): enter (or scan) the code the Mac shows, name
+// The one page an unpaired phone or tablet gets: enter (or scan) the code the Mac shows, name
 // the device, and land in the switcher. Self-contained, so nothing else (assets, the SPA) is served to
 // a device that isn't paired.
 

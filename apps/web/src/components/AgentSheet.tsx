@@ -1,4 +1,4 @@
-// Edit with AI (MCP-10, MCP-11): connect the agent people already use, see whether one is connected,
+// Edit with AI: connect the agent people already use, see whether one is connected,
 // and choose what agents may put on air. Opened from the header, "ask your agent" hints, and the Mac
 // app's Edit with AI… menu item (/?ai or #ai).
 import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";

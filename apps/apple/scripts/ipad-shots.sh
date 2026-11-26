@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The App Store screenshots (MAC-19, PHONE-9): the real app in the 13-inch iPad Pro simulator (or, with
+# The App Store screenshots: the real app in the 13-inch iPad Pro simulator (or, with
 # IPHONE=1, the 6.9-inch iPhone 17 or 16 Pro Max), on a real-looking show with OBS connected and live,
 # captured with `simctl io screenshot` under a clean status bar at the App Store sizes (iPad 2752×2064 /
 # 2064×2752, iPhone 17 Pro Max 2868×1320 / 1320×2868).
@@ -18,7 +18,7 @@
 #   raw/<n>-<screen>.png        the captures
 #   <n>-<screen>.png            the App Store versions, framed
 # Then DemoTests runs against the same server, so "a Mac answering leaves the demo" is checked too, and on
-# the iPad split/ipad-split-*.png show the switcher at Split View widths (MAC-13a; a simulation, see SwitcherViewController).
+# the iPad split/ipad-split-*.png show the switcher at Split View widths (a simulation, see SwitcherViewController).
 # Never the Mac's 7420 (the simulator shares the Mac's ports), never ~/ViewSwitcher Library, never a device.
 #   bash apps/apple/scripts/ipad-shots.sh [out-dir] [simulator-udid]     (out-dir: apps/apple/AppStore/screenshots)
 #   IPHONE=1 bash apps/apple/scripts/ipad-shots.sh [out-dir] [udid]       (out-dir: apps/apple/AppStore/screenshots/iphone)
@@ -109,7 +109,7 @@ uitest() { # uitest <test> [web width]
 }
 uitest DemoTests
 if [ -z "$IPHONE" ]; then
-# Split View widths on the 13-inch iPad Pro (MAC-13a), not for the store: half (678 pt in landscape) and a third (444 pt).
+# Split View widths on the 13-inch iPad Pro, not for the store: half (678 pt in landscape) and a third (444 pt).
 mkdir -p "$OUT/split"
 uitest SafeAreaScreenshots/testOrientations 678 half
 uitest SafeAreaScreenshots/testOrientations 444 third

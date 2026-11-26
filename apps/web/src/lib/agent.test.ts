@@ -53,7 +53,7 @@ describe("ports (the kit's configs name 7420)", () => {
   });
 });
 
-describe("the on-air setting's requests (CodeRabbit)", () => {
+describe("the on-air setting's requests", () => {
   test("go one at a time, in the order they were made, even when the first is slow or fails", async () => {
     const run = inOrder();
     const sent: string[] = [];
@@ -75,7 +75,7 @@ describe("the on-air setting's requests (CodeRabbit)", () => {
   });
 });
 
-describe("the radios while a change is on its way (CodeRabbit)", () => {
+describe("the radios while a change is on its way", () => {
   // The sheet's flow without React: the radios show shownChoice; a click on a radio that isn't shown
   // fires onChange, which picks, sends in order, and reports the answer; the published value arrives
   // separately (the live socket), here after the HTTP answer.

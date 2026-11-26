@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bun run ipad:release (MAC-17, MAC-20): archive ViewSwitcher iPad (Release), export it for App Store
+# bun run ipad:release: archive ViewSwitcher iPad (Release), export it for App Store
 # Connect, check it as App Store validation would, and upload it.
 #
 #   bun run ipad:release             archive, export, check, upload to App Store Connect
@@ -81,7 +81,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist "$(options
   -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"} -quiet
 IPA="$(ls "$OUT"/export/*.ipa | head -1)"
 
-step "Check the build (MAC-20)"
+step "Check the build"
 bash "$APPLE/scripts/ipad-check.sh" "$IPA" "$BUILD_NUMBER"
 
 if [ "$UPLOAD" = 1 ]; then

@@ -2,7 +2,7 @@ import CoreImage
 import XCTest
 @testable import ViewSwitcherKit
 
-/// Phones and tablets (MAC-24, MAC-26): the server's /api/remote, the code and device text, the QR code.
+/// Phones and tablets: the server's /api/remote, the code and device text, the QR code.
 final class RemotesTests: XCTestCase {
     func testDecodesTheServersStatus() throws {
         let json = """

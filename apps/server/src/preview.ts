@@ -1,4 +1,4 @@
-// Pictures of scenes for agents (MCP-1). The compiled server has no browser, but OBS has one (CEF):
+// Pictures of scenes for agents. The compiled server has no browser, but OBS has one (CEF):
 // a scene of its own (config.obs.previewScene), never the program, holds one 1920×1080 browser
 // source. A preview points that source at the scene with ?preview and screenshots it until the
 // picture settles. program() screenshots the ViewSwitcher scene as it is, camera included.

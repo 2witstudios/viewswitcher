@@ -93,7 +93,7 @@ const save = async (file: string, data: Promise<unknown> | void) => { await data
 for (const px of [16, 32, 64, 128, 256, 512, 1024])
   await save(join(mac, `AppIcon.appiconset/icon-${px}.png`), tilePng(macIcon(px), join(mac, `AppIcon.appiconset/icon-${px}.png`)));
 
-// iPad sizes, then the iPhone's (PHONE-1: one universal app): 60, 87, 120, 180.
+// iPad sizes, then the iPhone's (one universal app): 60, 87, 120, 180.
 for (const px of [20, 29, 40, 58, 76, 80, 152, 167, 60, 87, 120, 180, 1024]) {
   const f = join(ipad, `AppIcon-${px}.png`);
   await save(f, tilePng(squareIcon(px), f, true));
