@@ -155,7 +155,9 @@ lipo -archs "$PAYLOAD/viewswitcher-server"
 step "ViewSwitcher.app (xcodebuild archive, Release, universal)"
 xcodegen --quiet
 rm -rf "$BUILD/ViewSwitcher.xcarchive" "$BUILD/export"
-signing=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual)
+# Ad hoc: on the hardened runtime like a release, with library validation off (Mac/AdHoc.entitlements),
+# since an ad hoc app has no team for Sparkle's to match and couldn't launch otherwise.
+signing=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual CODE_SIGN_ENTITLEMENTS=Mac/AdHoc.entitlements)
 [ -n "$IDENTITY" ] && signing=(CODE_SIGN_IDENTITY="$IDENTITY" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM")
 xcodebuild -project ViewSwitcher.xcodeproj -scheme ViewSwitcher -configuration Release -derivedDataPath "$DD" \
   -archivePath "$BUILD/ViewSwitcher.xcarchive" -destination "generic/platform=macOS" "${signing[@]}" -quiet archive
@@ -189,6 +191,8 @@ source "$APPLE/scripts/sign-check.sh"
 hardened_runtime "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't on the hardened runtime" >&2; exit 1; }
 hardened_runtime "$APP" || { echo "the app isn't on the hardened runtime" >&2; exit 1; }
 if [ -n "$IDENTITY" ]; then
+  # Library validation stays on in anything Developer ID signed: only the ad hoc build turns it off.
+  has "disable-library-validation" codesign -d --entitlements - --xml "$APP" && { echo "the app turns off library validation (Mac/AdHoc.entitlements is for --unsigned only)" >&2; exit 1; }
   has "TeamIdentifier=$TEAM" codesign -dv "$APP" || { echo "the app isn't signed by $TEAM" >&2; exit 1; }
   has "TeamIdentifier=$TEAM" codesign -dv "$APP/Contents/Helpers/viewswitcher-server" || { echo "the sidecar isn't signed by $TEAM" >&2; exit 1; }
 fi
