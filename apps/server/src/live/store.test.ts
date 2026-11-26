@@ -222,6 +222,39 @@ describe("sources placed before", () => {
   });
 });
 
+describe("publishing", () => {
+  const states = () => sent.filter((m) => m.t === "state").length;
+
+  test("a placement report with the same warnings, every 33 ms while a box is dragged, publishes nothing", async () => {
+    const store = await open();
+    await store.goOnAir({ path: `${ORG}/templates/a.html`, label: "A" });
+    store.setPlacementWarnings(["no Camera"]);
+    const before = states();
+    for (let i = 0; i < 30; i++) store.setPlacementWarnings(["no Camera"]);
+    expect(states()).toBe(before);
+    store.setPlacementWarnings([]);
+    expect(states()).toBe(before + 1);
+    expect(sent.at(-1)).toMatchObject({ t: "state", state: { warnings: [] } });
+  });
+
+  test("an update or a publish that changes nothing sends nothing; a change is sent once", async () => {
+    const store = await open();
+    store.publish();
+    const before = states();
+    store.update({ obs: { connected: false, recording: false, streaming: false } });
+    store.update({ usb: { enabled: false, attached: false, connected: false } });
+    store.publish();
+    expect(states()).toBe(before);
+    store.update({ obs: { connected: true, recording: false, streaming: false } });
+    store.update({ obs: { connected: true, recording: false, streaming: false } });
+    expect(states()).toBe(before + 1);
+    // A part of the state changed in place by its owner (the agent's last-seen) is still noticed.
+    store.state.agent = { ...store.state.agent, client: "Claude" };
+    store.publish();
+    expect(states()).toBe(before + 2);
+  });
+});
+
 describe("the ground color", () => {
   test("read once per org, and again after its org.json changes", async () => {
     const store = await open();
