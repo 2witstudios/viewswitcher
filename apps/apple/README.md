@@ -53,7 +53,7 @@ bun apps/apple/AppStore/check.ts              # App Store listing lengths
 - `RemotesWindow.swift`: Phones and Tablets: the Wi-Fi setting (UserDefaults
   `wifiRemotes`, passed to the server as `VIEWSWITCHER_LAN`; the e2e keeps its own in memory), Bonjour
   while it's on, a one-time code with its QR code (ViewSwitcherKit `qrCode`, CoreImage), and the paired
-  devices. It calls the server's `/api/remote…` with `Env.adminToken`, a secret made at each launch.
+  phones and tablets. It calls the server's `/api/remote…` with `Env.adminToken`, a secret made at each launch.
   Attached to a server it didn't start, pairing isn't available (that server has another secret).
 - `E2E.swift`: the e2e script's handle on the app, active only with `VIEWSWITCHER_E2E_DIR`.
 
@@ -63,7 +63,7 @@ switcher's header row, and the menus are rebuilt from live state (and read back 
 ### Edit → Undo / Redo (⌘Z)
 
 WKWebView hands a typed ⌘Z to the page first, and the menu only gets it when the page didn't
-`preventDefault`. So a typed ⌘Z reaches the scene editor exactly once, as in a browser. The menu then
+`preventDefault`. So a typed ⌘Z reaches the editor exactly once, as in a browser. The menu then
 runs the native text undo if focus is in a field, and nothing otherwise. Chosen from the menu with the
 mouse, Undo hands the page a ⌘Z (or runs the native text undo in a field).
 
@@ -87,7 +87,7 @@ already shows.
 
 One app for both (PHONE-1): the target keeps its name and the `ViewSwitcher-iPad` user-agent token, which
 the switcher reads as "the native app" on either. On a phone the switcher has its own layouts
-(apps/web/src/styles.css): sideways, the deck (a short touch screen: the scenes four across under one
+(apps/web/src/styles.css): sideways, the deck (a short touch screen: the views four across under one
 bar, the library behind the title, PHONE-12); upright, what's on air on top (PHONE-3). Switching only:
 editing stays on the Mac and iPad.
 

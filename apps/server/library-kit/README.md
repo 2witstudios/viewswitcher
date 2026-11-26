@@ -15,6 +15,6 @@ What a new ViewSwitcher library starts with. On every start the server's `ensure
 
 They're stored under other names so this repo's own agents and git don't pick them up as this repo's CLAUDE.md, AGENTS.md, .gitignore, MCP config or skill. All of them are meant to be committed in the library's repo, so the kit's `.gitignore` never ignores them.
 
-**This is where changes to the scene skill ship.** A file the kit wrote and nobody has changed since (its hash is in the library's `.viewswitcher/kit.json`) is updated when the kit changes; a file someone edited, or one that was there before the kit, is never touched.
+**This is where changes to the agent skill (viewswitcher-scenes) ship.** A file the kit wrote and nobody has changed since (its hash is in the library's `.viewswitcher/kit.json`) is updated when the kit changes; a file someone edited, or one that was there before the kit, is never touched.
 
 This README isn't copied.

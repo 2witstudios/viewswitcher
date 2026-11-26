@@ -1,6 +1,6 @@
 # viewswitcher.com
 
-The landing page: a static Astro site, no client framework. The only script on the page is the hero's scene switcher (about 1 KB, inlined).
+The landing page: a static Astro site, no client framework. The only script on the page is the hero's view switcher (about 1 KB, inlined).
 
 ```sh
 cd apps/site
@@ -12,16 +12,19 @@ bun run check      # astro check (uses TypeScript 6 locally; the rest of the rep
 
 The package is named `viewswitcher-site`, outside the `@viewswitcher/*` filter, so the root `bun run dev`, `build` and `start` don't run or build it.
 
-## The call to action (one switch)
+## The switches
 
-`src/site.config.ts` → `MAC_APP_RELEASED`.
+Each is a constant at the top of `src/site.config.ts`, and a build can override it without a commit (e.g. to show the other state on a Vercel preview):
 
-| | primary | secondary |
-|---|---|---|
-| `false` (now) | Get it on GitHub → the repo | Watch releases → /releases |
-| `true` (after MAC-8) | Download for Mac → `releases/latest/download/ViewSwitcher.dmg` | View on GitHub |
+| constant | now | override | what it changes |
+|---|---|---|---|
+| `MAC_APP_RELEASED` | `true` | `SITE_MAC_APP=1` or `0` | the call to action (`<Cta />`: the hero, the download section and the other pages). `true`: **Download for Mac** → `releases/latest/download/ViewSwitcher.dmg`; `false`: **Follow the Mac app** → the GitHub releases page (`src/lib/cta.ts`) |
+| `IPAD_APP_URL` | `null` | `SITE_IPAD_APP_URL` | an `https://apps.apple.com/` link turns "Coming to the App Store" into the store badge |
+| `TEMPLATE_DOWNLOADS_URL` | `"/templates"` | `SITE_TEMPLATE_DOWNLOADS_URL` | the show cards' "Download these templates" link (null: "Download coming soon") |
+| `PACK_INSTALL_VERSION` | `"1.1.0"` | `SITE_PACK_INSTALL_VERSION` | the template pages' "Needs ViewSwitcher 1.1.0 or later" (null: installing packs "comes in the next update") |
+| `AI_CONNECT_RELEASED` | `true` | `SITE_AI_CONNECT_RELEASED=1` or `0` | How it works step 2, the FAQ and `/download` describe Edit with AI |
 
-The hero, the download section and the small print all follow it. A build can override it without a commit, e.g. to show the other state on a Vercel preview: `SITE_MAC_APP=1 bun run build` (or `0`). The dmg link only resolves if the release has an asset named exactly `ViewSwitcher.dmg`.
+The dmg link only resolves if the release has an asset named exactly `ViewSwitcher.dmg`.
 
 ## View images (generated, never hand-made)
 
@@ -29,13 +32,13 @@ The hero, the download section and the small print all follow it. A build can ov
 bun run shots     # then: bun run og
 ```
 
-The site shows six made-up shows (`packages/packs/src/shows.ts`, shared with the app's built-in template sets), each with its own look: Full Count (sports podcast, the hero), NOVA_PLAYS (gaming), Grace Community (church), Roam with Remi (travel), Riverside Live (live events) and Saltwater Kitchen (cooking). Each show's views are plain HTML in `packages/packs/shows/<id>/` (a `theme.css` plus starting soon, full-screen camera, main, break and ending), sharing `packages/packs/shows/_shared/` (base styles and `view.js`: countdown, clock, and cutting the device boxes out of patterned grounds). They're written to become downloadable template sets (the pack format, [docs/template-packs.md](../../docs/template-packs.md)); `TEMPLATE_DOWNLOADS_URL` in `site.config.ts` turns the show cards' "Download coming soon" into "Download these templates". `scripts/library.ts` copies them into a scratch library **outside the repo** (`$TMPDIR/viewswitcher-site-library`, or `SHOTS_LIBRARY`). `scripts/shots.ts` starts the switcher server on port 7434 (OBS offline, USB bridge off), renders every view the way OBS shows it (transparent, with holes for the devices) to `src/assets/views/<show>-<view>.webp`, and records each view's device boxes and ground color in `src/data/views.json` (`SHOTS_ONLY=nova,grace` renders just those). `bun scripts/contact-sheet.ts <out.jpg>` composites every view with its photos for checking by eye.
+The site shows six made-up shows (`packages/packs/src/shows.ts`, shared with the app's built-in template sets), each with its own template set: Full Count (sports podcast, the hero), NOVA_PLAYS (gaming), Grace Community (church), Roam with Remi (travel), Riverside Live (live events) and Saltwater Kitchen (cooking). Each show's views are plain HTML in `packages/packs/shows/<id>/` (a `theme.css` plus starting soon, full-screen camera, main, break and ending), sharing `packages/packs/shows/_shared/` (base styles and `view.js`: countdown, clock, and cutting the camera boxes out of patterned grounds). They're written to become downloadable template sets (the pack format, [docs/template-packs.md](../../docs/template-packs.md)); `TEMPLATE_DOWNLOADS_URL` in `site.config.ts` turns the show cards' "Download coming soon" into "Download these templates". `scripts/library.ts` copies them into a scratch library **outside the repo** (`$TMPDIR/viewswitcher-site-library`, or `SHOTS_LIBRARY`). `scripts/shots.ts` starts the switcher server on port 7434 (OBS offline, USB bridge off), renders every view the way OBS shows it (transparent, with holes for the camera boxes) to `src/assets/views/<show>-<view>.webp`, and records each view's camera boxes and ground color in `src/data/views.json` (`SHOTS_ONLY=nova,grace` renders just those). `bun scripts/contact-sheet.ts <out.jpg>` composites every view with its photos for checking by eye.
 
-The site stacks them the way OBS does: the show's ground color, then the photo or screen in each box (`media` in `shows.ts`, focal points in `src/lib/views.ts`), then the view on top. The hero moves the camera, guest and screen between boxes when you click a view. Photos are Unsplash-licensed and credited in `CREDITS.md`; no real org's scenes appear on the site.
+The site stacks them the way OBS does: the show's ground color, then the photo or screen in each box (`media` in `shows.ts`, focal points in `src/lib/views.ts`), then the view on top. The hero moves the camera, guest and screen between boxes when you click a view. Photos are Unsplash-licensed and credited in `CREDITS.md`; no real show's views appear on the site.
 
 ## Pages and SEO (SITE-19…24)
 
-The homepage, `/download`, `/setup` (OBS setup guide), `/ipad`, `/church-livestream`, `/support` and `/privacy`. "The free, one-click OBS scene switcher for Mac" is the descriptor (`descriptor` in `src/site.config.ts`): the homepage title and hero line, and the footer. The Mac app's version and minimum macOS are `site.mac` in `site.config.ts`: update them with each release. Structured data (schema.org JSON-LD) comes from `src/lib/seo.ts` through `Base.astro`'s `schema` prop, and states only what the page shows: SoftwareApplication (free, macOS 14+) on the homepage and `/download`, FAQPage where there are questions on the page (`src/data/faq.ts` for the homepage), HowTo on `/setup`.
+The homepage, `/download`, `/setup` (OBS setup guide), `/ai` (Edit with AI), `/ipad`, `/templates`, `/church-livestream`, `/support` and `/privacy`. "The free, custom scene manager and one-click switcher for OBS on Mac." is the descriptor (`descriptor` in `src/site.config.ts`): the hero line and the footer. It keeps OBS's word, scene, because that's what people search for. The Mac app's version and minimum macOS are `site.mac` in `site.config.ts`: update them with each release. Structured data (schema.org JSON-LD) comes from `src/lib/seo.ts` through `Base.astro`'s `schema` prop, and states only what the page shows: SoftwareApplication (free, macOS 14+) on the homepage and `/download`, FAQPage where there are questions on the page (`src/data/faq.ts` for the homepage), HowTo on `/setup`.
 
 App screenshots are real: `bun scripts/app-shots.ts` runs the switcher on port 7434 (OBS offline, USB off) against the scratch library, makes Grace Community a Sunday stream, and saves the switcher, the editor and the Connect OBS card to `src/assets/app/`. The iPad ones are the iPhone and iPad app's App Store screenshots (`apps/apple/scripts/ipad-shots.sh`).
 
@@ -45,7 +48,7 @@ App screenshots are real: `bun scripts/app-shots.ts` runs the switcher on port 7
 
 ## Demo video (SITE-11)
 
-Record into **`apps/site/public/demo/viewswitcher-demo.mp4`**: 1920×1080 (16:9), H.264 MP4, 10–20 s, no audio track, loops cleanly, ideally under 4 MB. Build again and the hero plays it (autoplay, muted, looped) in the program monitor, with a rendered scene as the poster, in place of the clickable covers.
+Record into **`apps/site/public/demo/viewswitcher-demo.mp4`**: 1920×1080 (16:9), H.264 MP4, 10–20 s, no audio track, loops cleanly, ideally under 4 MB. Build again and the hero plays it (autoplay, muted, looped) in the program monitor, with a rendered view as the poster, in place of the clickable covers.
 
 ## Vercel
 
