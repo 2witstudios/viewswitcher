@@ -20,7 +20,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func debugGeometry(_ scene: UIWindowScene) {
         let env = ProcessInfo.processInfo.environment
         if let o = env["VIEWSWITCHER_ORIENTATION"] {
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: o == "portrait" ? .portrait : .landscapeLeft))
+            // Landscape = the device turned landscapeLeft (XCUIDevice's, and what the screenshot scripts turn
+            // upright), which is the interface's landscapeRight: the top of the phone on the left.
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: o == "portrait" ? .portrait : .landscapeRight))
         }
     }
     #endif
