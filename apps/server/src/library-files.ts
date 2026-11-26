@@ -5,13 +5,12 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
-import { isViewPath, orgOf, parseLibraryPath, slugify } from "@viewswitcher/shared";
+import { isTextFile, isViewPath, orgOf, parseLibraryPath, slugify, TEXT_EXTENSIONS } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
 import { replaceChecked, sceneHash, serial } from "./scene-edit";
 
-export const TEXT_TYPES = [".html", ".css", ".js", ".json", ".md", ".svg", ".txt"];
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 
 /**
@@ -25,8 +24,6 @@ export async function checked(root: string, path: unknown): Promise<{ path: stri
   await existingOrg(root, orgOf(p));
   return { path: p, abs: inside(root, p) };
 }
-
-const isText = (path: string) => TEXT_TYPES.includes(extname(path).toLowerCase());
 
 /** A scene's name, as a template pack's views and the switcher's own new scenes have them (slugify). */
 const SCENE_NAME = /^[a-z0-9][a-z0-9-]{0,60}$/;
@@ -84,7 +81,7 @@ export async function readText(root: string, path: unknown, port: number): Promi
   const s = await stat(abs).catch(() => null);
   if (!s) throw new PathError(`There's no file at ${p}`);
   if (s.isDirectory()) throw new PathError(`${p} is a folder. Use list_files for it.`);
-  if (!isText(p)) throw new PathError(`${p} isn't a text file (${TEXT_TYPES.join(", ")}). Scenes use it as /library/${p}, and it's at http://127.0.0.1:${port}/library/${encodeURI(p)}.`);
+  if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Scenes use it as /library/${p}, and it's at http://127.0.0.1:${port}/library/${encodeURI(p)}.`);
   if (s.size > MAX_TEXT_BYTES) throw new PathError(`${p} is over 2 MB, too big to read here`);
   const text = await readFile(abs, "utf8");
   return { text, hash: sceneHash(text) };
@@ -110,7 +107,7 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
   return serial(async (): Promise<WriteResult> => {
     if (typeof text !== "string") throw new PathError("text must be a string");
     const { path: p, abs } = await checked(root, path);
-    if (!isText(p)) throw new PathError(`Only text files can be written (${TEXT_TYPES.join(", ")}). Add images and other media with add_asset.`);
+    if (!isTextFile(p)) throw new PathError(`Only text files can be written (${TEXT_EXTENSIONS.join(", ")}). Add images and other media with add_asset.`);
     if (Buffer.byteLength(text) > MAX_TEXT_BYTES) throw new PathError("That's over 2 MB, too big for a library text file");
     const real = await realpath(abs).catch(() => null);
     const page = pageProblem(p, !!real, (set) => existsSync(inside(root, `${orgOf(p)}/templates/${set}/pack.json`)));

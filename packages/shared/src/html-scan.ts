@@ -216,10 +216,29 @@ export function decodeEntities(text: string): string {
   });
 }
 
-const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;");
+/**
+ * `text` safe as an element's text and inside a double-quoted attribute: &, <, > and " escaped.
+ * `quotes: false` leaves " as typed, for text alone (an edit then changes only what it must).
+ */
+export function escapeHtml(text: string, { quotes = true }: { quotes?: boolean } = {}): string {
+  const out = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return quotes ? out.replace(/"/g, "&quot;") : out;
+}
+
+/** Text as typed into a scene: escaped, and a non-breaking space kept as one (&nbsp;, which the browser won't collapse). */
+const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace(/\u00a0/g, "&nbsp;");
 
 /** Collapse and trim HTML whitespace only. (JS trim() would also eat U+00A0, a non-breaking space, which is text.) */
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
+
+/**
+ * A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it
+ * has none or it's empty. Read without scanning the whole page, so listing many scenes stays cheap.
+ */
+export function readTitle(html: string): string | null {
+  const m = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(html);
+  return m ? collapseHtmlSpace(decodeEntities(m[1]!)) || null : null;
+}
 
 /** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
 export function textOf(html: string, el: ScannedElement): string {

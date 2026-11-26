@@ -1,5 +1,5 @@
 import { libraryUrl, templateId } from "@viewswitcher/shared";
-import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
+import type { Library, Scene, StagedPack, TemplateSet } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { AskAgent } from "../../../components/AgentSheet";
 import { type DragEvent, useEffect, useRef, useState } from "react";
@@ -7,7 +7,7 @@ import { PageHead } from "../../../components/PageHead";
 import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { TemplatePicker } from "../../../components/TemplatePicker";
 import { attempt, type MenuItem, PlusIcon, toast } from "../../../components/ui";
-import { api, copy, packs, type StagedPack } from "../../../lib/api";
+import { api, copy, packs } from "../../../lib/api";
 import { templateGroups, useLibrary } from "../../../lib/library";
 import { describeScripts, type DroppedPack, fromPicker, readDrop } from "../../../lib/pack-drop";
 import { SCENE_SANDBOX } from "../../../lib/scene-frame";

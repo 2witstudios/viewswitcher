@@ -6,7 +6,7 @@
 import { $ } from "bun";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { SHOWS } from "../../site/src/data/shows";
+import { SHOWS } from "../../../packages/packs/src/shows";
 import views from "../../site/src/data/views.json";
 
 const SHOW = "kitchen";

@@ -1,0 +1,16 @@
+{
+  // The built-in template sets and the pack files (zip, walk), for Bun: the server, the site's
+  // build scripts and packs:export. Its tests are bun tests in src/.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun"]
+  },
+  "include": ["src"]
+}

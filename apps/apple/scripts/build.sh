@@ -137,8 +137,8 @@ ditto "$REPO/apps/web/dist" "$PAYLOAD/web"
 ditto "$REPO/apps/server/starter" "$PAYLOAD/starter"
 ditto "$REPO/apps/server/library-kit" "$PAYLOAD/library-kit"
 rm -f "$PAYLOAD/library-kit/README.md"
-# The built-in template packs (EDIT-29): the starter and the site's six shows, from the same source
-# as the site's renders and downloads. Folders only; the server reads them at VIEWSWITCHER_PACKS.
+# The built-in template packs: the starter and the site's six shows, from @viewswitcher/packs, the
+# same source as the site's renders and downloads. Folders only; the server reads them at VIEWSWITCHER_PACKS.
 (cd "$REPO" && bun apps/server/src/export-packs.ts "$PAYLOAD/packs")
 rm -f "$PAYLOAD/packs/"*.zip
 

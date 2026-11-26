@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { starterPack, zipPack } from "./export-packs";
+import { starterPack, zipPack } from "@viewswitcher/packs";
 import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 let port = 0;

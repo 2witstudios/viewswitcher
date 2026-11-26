@@ -11,7 +11,7 @@ import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
 import type { LiveState } from "@viewswitcher/shared";
 import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
-import { asDropped, type BuiltinPack } from "../builtin-packs";
+import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import * as lib from "../library";
 import { realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
@@ -39,7 +39,7 @@ export type McpDeps = {
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
   /** The built-in template sets (builtin-packs.ts), as the switcher's Add templates lists them. */
-  templateSets?: () => Promise<BuiltinPack[]>;
+  templateSets?: () => Promise<BuiltinPackFiles[]>;
   /** The starter kit's scene.js, which a pack's own copy is compared with on install (packs.ts). */
   starterScript?: string | null;
   /** Whether OBS has said, since it connected, whether it's streaming or recording (OBSClient.outputsKnown). */
@@ -347,7 +347,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   // ------------------------------------------------------------ template sets
 
-  const setView = (b: BuiltinPack) => ({ id: b.id, name: b.name, description: b.description, views: b.views });
+  const setView = (b: BuiltinPackFiles) => ({ id: b.id, name: b.name, description: b.description, views: b.views });
   /** A built-in set by its id ("grace") or its name ("Grace Community"), in any case. */
   const findSet = async (set: string) => {
     const all = (await deps.templateSets?.()) ?? [];

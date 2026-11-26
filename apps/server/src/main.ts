@@ -5,7 +5,7 @@ import { join, sep } from "node:path";
 import type { ServerMessage } from "@viewswitcher/shared";
 import type { Server, ServerWebSocket } from "bun";
 import { stdioLaunch } from "./agent-connect";
-import { type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
+import { type BuiltinPackFiles, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { config } from "./config";
 import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
@@ -44,11 +44,11 @@ await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
 /** The built-in template packs: loaded once, on first use, and kept (a pack that won't build is logged and left out). */
-let builtinsLoad: Promise<BuiltinPack[]> | null = null;
+let builtinsLoad: Promise<BuiltinPackFiles[]> | null = null;
 const builtins = () =>
   (builtinsLoad ??= (config.packs
     ? readBuiltins(config.packs)
-    : buildBuiltins(config.starter, existsSync(join(config.site, "src/data/shows.ts")) ? config.site : null, (id, e) =>
+    : buildBuiltins(config.starter, (id, e) =>
         console.error(`[packs] built-in template pack ${id} left out: ${e.message}`))
   ).catch((e) => {
     console.error("[packs] built-in template packs:", (e as Error).message);

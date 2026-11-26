@@ -2,7 +2,7 @@
 // changed (by its stat) or the watcher reported it. Every client lists the library after each change,
 // and scene files can be megabytes (inline fonts), so reading each one in full every time added up.
 import { dirname, resolve } from "node:path";
-import { decodeEntities } from "@viewswitcher/shared";
+import { readTitle } from "@viewswitcher/shared";
 
 /** What a stat says about a version of a file: its size, modification and change times, and inode. */
 export type FileStamp = { size: number; mtimeMs: number; ctimeMs: number; ino: number | bigint };
@@ -28,7 +28,7 @@ export function createSceneTitles(fs: { stat: (abs: string) => Promise<FileStamp
       // Read after the stat: what's read is at least as new as the version it's kept under.
       const html = await fs.read(abs).catch(() => null);
       if (html === null) return "";
-      const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
+      const title = readTitle(html) ?? "";
       kept.set(abs, { stamp, title });
       return title;
     },

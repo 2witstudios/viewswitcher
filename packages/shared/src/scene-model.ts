@@ -1,7 +1,7 @@
 // What the scene editor knows about one version of a scene file: its source, the hash the server
 // gave it, and the scanned elements whose ids every edit names. Pure reads over that, shared so they
 // are tested once and the editor has no second copy of any of them.
-import { collapseHtmlSpace, decodeEntities, editKind, isLibraryUrl, isStructural, positionOf, scanElements, sizeOf, textOf, untagForEdit } from "./html-scan";
+import { editKind, isLibraryUrl, isStructural, positionOf, readTitle, scanElements, sizeOf, textOf, untagForEdit } from "./html-scan";
 import type { ScannedElement, SceneEdit } from "./html-scan";
 
 export type SceneBase = { source: string; hash: string; els: ScannedElement[] };
@@ -32,10 +32,7 @@ export const isSlot = (b: SceneBase, id: number) => attrIn(b, id, "data-slot") !
 /** An image a picture can replace: one from the library, without a srcset that would still show the old one. */
 export const replaceableImage = (b: SceneBase, id: number) => b.els[id]?.tag === "img" && isLibraryUrl(attrIn(b, id, "src") ?? "") && attrIn(b, id, "srcset") === null;
 /** The scene's own <title>, as the browser shows it. */
-export const titleIn = (b: SceneBase) => {
-  const t = b.els.find((e) => e.tag === "title" && e.closed);
-  return t ? collapseHtmlSpace(decodeEntities(b.source.slice(t.innerStart, t.innerEnd))) || null : null;
-};
+export const titleIn = (b: SceneBase) => readTitle(b.source);
 export const slotsIn = (b: SceneBase) => b.els.flatMap((e) => attrIn(b, e.id, "data-slot") ?? []);
 
 /** The value an edit would put back: the element's text, picture, size or position in `b`. */

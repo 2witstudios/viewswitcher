@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fontsFromCss, parseCredits } from "./credits";
-import { SHOWS } from "../data/shows";
+import { SHOWS, SHOWS_DIR } from "@viewswitcher/packs";
 
 const site = join(import.meta.dir, "../..");
 
@@ -22,6 +22,6 @@ describe("fontsFromCss", () => {
     expect(fontsFromCss('@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@500&family=Work+Sans:wght@400;600&display=swap");')).toEqual(["Caveat", "Work Sans"]);
   });
   test("every template set names at least one font", () => {
-    for (const id of readdirSync(join(site, "scripts/shows")).filter((d) => d !== "_shared")) expect(fontsFromCss(readFileSync(join(site, "scripts/shows", id, "theme.css"), "utf8")).length).toBeGreaterThan(0);
+    for (const id of readdirSync(SHOWS_DIR).filter((d) => d !== "_shared")) expect(fontsFromCss(readFileSync(join(SHOWS_DIR, id, "theme.css"), "utf8")).length).toBeGreaterThan(0);
   });
 });

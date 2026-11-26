@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { SKILL_DIR, skillFiles, skillZip, verifySkillZip } from "./skill";
-import { listZip, storedZip } from "../../server/src/zip";
+import { listZip, storedZip } from "@viewswitcher/packs";
 
 describe("the scenes skill download", () => {
   test("is the library kit's skill folder, zipped the way Claude's skill upload expects", async () => {

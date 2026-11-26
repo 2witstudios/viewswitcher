@@ -5,10 +5,9 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
-import { genericTheme, genericView, sitePacks, starterPack, zipPack } from "./export-packs";
 import { addFromTemplate, createOrg, createProject, scanLibrary } from "./library";
 import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
-import { writeZip } from "./zip";
+import { SHOWS, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
 let root = "";
@@ -101,8 +100,25 @@ describe("the starter kit as a pack (EDIT-27)", () => {
   });
 });
 
-test("the site's six example shows each install as a set (EDIT-27)", async () => {
-  const packs = await sitePacks(resolve(import.meta.dir, "../../site"));
+test("an org whose name has HTML characters: its new templates and an added set show the name as text", async () => {
+  const name = `R&B <Live> "Club"`;
+  const id = (await createOrg(root, starter, name)).orgId;
+  const own = await readFile(join(root, id, "templates/teaching.html"), "utf8");
+  const set = (await showPacks()).find((p) => p.id === "grace")!;
+  const s = await stagePack(root, id, { zip: zipPack(set.id, set.files) }, null);
+  await installPack(root, id, s.token);
+  const installed = await Promise.all(["starting-soon", "live", "main"].map((v) => readFile(join(root, id, `templates/grace/${v}.html`), "utf8")));
+  for (const html of [own, ...installed]) {
+    expect(html).not.toContain("<Live>");
+    expect(html).toContain("R&amp;B &lt;Live&gt;");
+  }
+  expect(await readFile(join(root, id, "templates/_shared/brand/mark.svg"), "utf8")).toContain(">R</text>");
+  expect(JSON.parse(await readFile(join(root, id, "org.json"), "utf8")).name).toBe(name); // org.json stays valid JSON
+  expect((await scanLibrary(root, id)).org.name).toBe(name);
+});
+
+test("the site's six example shows each install as a set", async () => {
+  const packs = await showPacks();
   expect(packs.map((p) => p.id)).toEqual(["fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);
   for (const p of packs) {
     const s = await stagePack(root, org, { zip: zipPack(p.id, p.files) }, null);
@@ -114,18 +130,19 @@ test("the site's six example shows each install as a set (EDIT-27)", async () =>
   expect(await readFile(join(root, org, "templates/nova/main.html"), "utf8")).toContain(`/library/${org}/templates/nova/_shared/theme.css`);
 });
 
-describe("built-in template packs (EDIT-29)", () => {
-  const site = resolve(import.meta.dir, "../../site");
+describe("built-in template packs", () => {
   test("the starter and the six shows, in the site's order", async () => {
-    const b = await buildBuiltins(starter, site);
+    const b = await buildBuiltins(starter);
     expect(b.map((p) => p.id)).toEqual(["starter", "fullcount", "nova", "grace", "remi", "riverside", "kitchen"]);
     expect(b.map((p) => p.name)).toEqual(["Starter", "Full Count", "NOVA_PLAYS", "Grace Community", "Roam with Remi", "Riverside Live", "Saltwater Kitchen"]);
-    expect((await buildBuiltins(starter, null)).map((p) => p.id)).toEqual(["starter"]); // no site: just the starter
+    const left: string[] = [];
+    expect((await buildBuiltins(join(root, "no-starter"), (id) => left.push(id))).map((p) => p.id)).toEqual(SHOWS.map((s) => s.id)); // one that won't build is left out
+    expect(left).toEqual(["starter"]);
   });
 
   test("each installs through the drop path as its own set, generic: the org's name and colors, not the show's", async () => {
     const shows = ["Full Count", "NOVA_PLAYS", "Grace Community", "Roam with Remi", "Riverside Live", "Saltwater Kitchen"];
-    for (const p of await buildBuiltins(starter, site)) {
+    for (const p of await buildBuiltins(starter)) {
       const s = await stagePack(root, org, { files: asDropped(p) }, await starterJs());
       expect(s.warnings).toEqual([]);
       const { set } = await installPack(root, org, s.token);
@@ -144,7 +161,7 @@ describe("built-in template packs (EDIT-29)", () => {
 
   test("prebuilt (the Mac app's Resources/packs) reads the same as built from source", async () => {
     const out = join(root, "..", `${org}-prebuilt-${Date.now()}`);
-    const built = await buildBuiltins(starter, site);
+    const built = await buildBuiltins(starter);
     for (const p of built) for (const f of p.files) {
       await mkdir(join(out, p.id, f.path, ".."), { recursive: true });
       await writeFile(join(out, p.id, f.path), f.data);
@@ -153,58 +170,6 @@ describe("built-in template packs (EDIT-29)", () => {
     const read = await readBuiltins(out);
     expect(read.map((p) => [p.id, p.files.length])).toEqual(built.map((p) => [p.id, p.files.length]));
     await rm(out, { recursive: true, force: true });
-  });
-
-  const show = { id: "remi", name: "Roam with Remi", initial: "R", kind: "", accent: "#d9472b", ground: "#e6dcc8", blurb: "", views: [] };
-  test("a view loses the show's name: as typed, broken over lines, in capitals, and in its title", () => {
-    expect(genericView(`<title>Roam with Remi · Walking</title><b>Roam<br>with<br/>Remi</b><i>Roam with\n    Remi</i><small>ROAM WITH REMI · DAY 4</small><p class="a" style="top: 1px">ROAM&nbsp;WITH REMI</p><p>Remi, up top</p>`, show))
-      .toBe(`<title>Walking</title><b>{{ORG_NAME}}</b><i>{{ORG_NAME}}</i><small style="text-transform: uppercase">{{ORG_NAME}} · DAY 4</small><p class="a" style="top: 1px; text-transform: uppercase">{{ORG_NAME}}</p><p>Remi, up top</p>`);
-    expect(genericView(`<p>{{EPISODE}}</p>`, show)).toBe(`<p>Episode title</p>`);
-  });
-  test("capitals keep the element plain text people can retype (one leaf, no span inside)", () => {
-    const out = genericView(`<small>ROAM WITH REMI · DAY 4</small>`, show);
-    expect(out).not.toContain("<span");
-  });
-  test("capitals: never styled onto a void element, nor onto lower-case words beside them; either quote; never markup inside an attribute", () => {
-    const span = `<span style="text-transform: uppercase">{{ORG_NAME}}</span>`;
-    expect(genericView(`<p>Live from<br>ROAM WITH REMI</p>`, show)).toBe(`<p>Live from<br>${span}</p>`);
-    expect(genericView(`<p>Live with ROAM WITH REMI, day 4</p>`, show)).toBe(`<p>Live with ${span}, day 4</p>`);
-    expect(genericView(`<p style='color: red'>ROAM WITH REMI</p>`, show)).toBe(`<p style='color: red; text-transform: uppercase'>{{ORG_NAME}}</p>`);
-    expect(genericView(`<img alt="ROAM WITH REMI" src="x.png">`, show)).toBe(`<img alt="{{ORG_NAME}}" src="x.png">`);
-  });
-  test("a show name left in an attribute fails the export too", () => {
-    expect(() => genericView(`<img alt="Roam With Remi">`, show)).toThrow(/still in a view/);
-  });
-  test("a show name it can't turn generic fails the export, however it's written", () => {
-    for (const v of [`<p>Roam With Remi</p>`, `<p>roam with remi</p>`, `<p>Roam&nbsp;with remi</p>`, `<p><b>ROAM</b> WITH REMI</p>`]) {
-      expect(() => genericView(v, show)).toThrow(/still in a view/);
-    }
-  });
-  test("a theme takes the org's accent and ground; a paper ground keeps its own color", () => {
-    const css = `:root {\n  --ground: #e6dcc8;\n  --red: #D9472B;\n}\n.ground.paper { background-color: var(--ground); }`;
-    expect(genericTheme(css, show)).toBe(`:root {\n  --ground: {{GROUND}};\n  --paper-ground: #e6dcc8;\n  --red: {{ACCENT}};\n}\n.ground.paper { background-color: var(--paper-ground); }`);
-    expect(() => genericTheme(":root { --ground: #000; }", show)).toThrow(/no --ground/);
-  });
-  test("compact CSS: every accent variable, one after another", () => {
-    expect(genericTheme(`:root{--ground:#e6dcc8;--red:#d9472b;--edge:#d9472b;}`, show)).toBe(`:root{--ground: {{GROUND}};--red:{{ACCENT}};--edge:{{ACCENT}};}`);
-  });
-  test("every variable set to the accent takes the org's; only --ground itself is the ground", () => {
-    const css = `:root { --x-ground: #e6dcc8; --ground: #e6dcc8; --red: #d9472b; --edge: #d9472b; }`;
-    expect(genericTheme(css, show)).toBe(`:root { --x-ground: #e6dcc8; --ground: {{GROUND}}; --red: {{ACCENT}}; --edge: {{ACCENT}}; }`);
-  });
-  test("one show that won't build is left out of the built-in packs, not the rest", async () => {
-    const site = join(root, "..", `${org}-site-${Date.now()}`);
-    const real = resolve(import.meta.dir, "../../site");
-    await cp(join(real, "scripts/shows"), join(site, "scripts/shows"), { recursive: true });
-    await mkdir(join(site, "src/data"), { recursive: true });
-    await cp(join(real, "src/data/shows.ts"), join(site, "src/data/shows.ts"));
-    await writeFile(join(site, "scripts/shows/nova/main.html"), "<p>NOVA PLAYS</p><p>nova_plays</p>"); // a name it can't make generic
-    const left: string[] = [];
-    const b = await buildBuiltins(starter, site, (id) => left.push(id));
-    expect(left).toEqual(["nova"]);
-    expect(b.map((p) => p.id)).toEqual(["starter", "fullcount", "grace", "remi", "riverside", "kitchen"]);
-    await expect(sitePacks(site)).rejects.toThrow(/nova/); // packs:export and the site build still fail on it
-    await rm(site, { recursive: true, force: true });
   });
 });
 

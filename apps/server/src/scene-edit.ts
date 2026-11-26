@@ -3,7 +3,7 @@
 import type { Stats } from "node:fs";
 import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, orgOf, parseLibraryPath, projectViewOf, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, canRemove, EditError, isLibraryUrl, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
@@ -175,8 +175,7 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
     const text = await readFile(real, "utf8");
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
-    const titleEl = scanElements(text).find((e) => e.tag === "title" && e.closed);
-    const was = titleEl ? decodeEntities(text.slice(titleEl.innerStart, titleEl.innerEnd)).replace(/\s+/g, " ").trim() || null : null;
+    const was = readTitle(text);
     const next = setTitle(text, String(name ?? ""));
     if (next !== text) {
       const r = await replaceChecked(real, read, current, next, {});

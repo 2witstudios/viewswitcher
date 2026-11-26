@@ -11,7 +11,7 @@
     "build": "bun run --filter @viewswitcher/web build",
     "start": "bun run build && bun apps/server/src/index.ts",
     "test": "bun test",
-    "typecheck": "cd apps/web && tsc --noEmit && tsc -p tsconfig.test.json && cd ../server && tsc -p . && cd ../../packages/shared && tsc -p . && tsc -p tsconfig.test.json",
+    "typecheck": "cd apps/web && tsc --noEmit && tsc -p tsconfig.test.json && cd ../server && tsc -p . && cd ../../packages/shared && tsc -p . && tsc -p tsconfig.test.json && cd ../packs && tsc -p .",
     "obs:setup": "bun apps/server/src/obs-setup.ts",
     "ipad:deploy": "bash apps/apple/scripts/deploy-ipad.sh",
     "ipad:release": "bash apps/apple/scripts/ipad-release.sh",

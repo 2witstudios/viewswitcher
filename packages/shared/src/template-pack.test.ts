@@ -1,6 +1,6 @@
 // EDIT-23: the template pack format's validator.
 import { describe, expect, test } from "bun:test";
-import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, type PackEntry, planPack, readManifest } from "./template-pack";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, planPack, readManifest } from "./template-pack";
 
 const file = (path: string, size = 100): PackEntry => ({ path, size, type: "file" });
 const manifest = (over: Record<string, unknown> = {}) => JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "Bright.", views: ["main", "brb"], placeholders: ["ORG_NAME", "PACK"], ...over });
@@ -168,5 +168,21 @@ test("installed paths: views move up out of templates/", () => {
 });
 
 test("fillPlaceholders fills known ones and leaves the rest", () => {
-  expect(fillPlaceholders("{{ORG_NAME}} {{PACK}}/x {{HOST}}", { ORG_NAME: "Daisy", PACK: "/library/daisy/templates/neon" })).toBe("Daisy /library/daisy/templates/neon/x {{HOST}}");
+  expect(fillPlaceholders("theme.css", "{{ORG_NAME}} {{PACK}}/x {{HOST}}", { ORG_NAME: "Daisy", PACK: "/library/daisy/templates/neon" })).toBe("Daisy /library/daisy/templates/neon/x {{HOST}}");
+});
+
+test("fillPlaceholders escapes values for the file they land in", () => {
+  const vars = { ORG_NAME: `R&B <Live> "Club"`, ORG_INITIAL: "<" };
+  expect(fillPlaceholders("templates/brb.html", "<h1 title=\"{{ORG_NAME}}\">{{ORG_NAME}}</h1>", vars)).toBe("<h1 title=\"R&amp;B &lt;Live&gt; &quot;Club&quot;\">R&amp;B &lt;Live&gt; &quot;Club&quot;</h1>");
+  expect(fillPlaceholders("_shared/mark.svg", "<text>{{ORG_INITIAL}}</text>", vars)).toBe("<text>&lt;</text>");
+  expect(fillPlaceholders("TEMPLATES/BRB.HTML", "{{ORG_INITIAL}}", vars)).toBe("&lt;");
+  const json = fillPlaceholders("org.json", '{ "name": "{{ORG_NAME}}" }', vars);
+  expect(JSON.parse(json).name).toBe(vars.ORG_NAME);
+  expect(fillPlaceholders("BRAND.md", "# {{ORG_NAME}}", vars)).toBe(`# ${vars.ORG_NAME}`);
+  expect(fillPlaceholders("_shared/theme.css", "/* {{ORG_NAME}} */", vars)).toBe(`/* ${vars.ORG_NAME} */`);
+});
+
+test("isTextFile: the library's text files, by extension in any case", () => {
+  for (const p of ["a.html", "t/A.HTML", "x.css", "x.js", "org.json", "BRAND.md", "n.txt", "m.svg"]) expect(isTextFile(p)).toBe(true);
+  for (const p of ["a.png", "a.woff2", "html", "dir.html/file", ".html.png", "a"]) expect(isTextFile(p)).toBe(false);
 });

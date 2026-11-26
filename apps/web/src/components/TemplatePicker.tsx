@@ -4,7 +4,8 @@
 // dropped template pack (EDIT-24), so it lands as its own set; nothing changes until "Add".
 import { libraryUrl } from "@viewswitcher/shared";
 import { useEffect, useRef, useState } from "react";
-import { type BuiltinPack, packs, type StagedPack } from "../lib/api";
+import { packs } from "../lib/api";
+import type { BuiltinPack, StagedPack } from "@viewswitcher/shared";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { Overlay, useEscape } from "./ui";
 

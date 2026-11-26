@@ -7,7 +7,7 @@
 import sharp, { type OverlayOptions } from "sharp";
 import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { SHOWS, viewId } from "../src/data/shows";
+import { SHOWS, viewId } from "@viewswitcher/packs/shows";
 import data from "../src/data/views.json";
 
 const site = resolve(import.meta.dir, "..");

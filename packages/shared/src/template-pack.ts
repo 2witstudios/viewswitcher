@@ -2,7 +2,7 @@
 // org as its own template set. The format is in docs/template-packs.md; this is its validator. Pure: the
 // server lists a zip's entries (or a dropped folder's files), asks `planPack` which of them to
 // extract, then reads the text files and asks `checkPack` whether the result is a pack.
-import { scanElements } from "./html-scan";
+import { escapeHtml, scanElements } from "./html-scan";
 
 /** The pack.json format this switcher reads. A newer pack says so plainly instead of half-installing. */
 export const PACK_FORMAT = 1;
@@ -27,8 +27,14 @@ export const PACK_LIMITS = {
 export const PACK_PLACEHOLDERS = ["ORG_ID", "ORG_NAME", "ORG_INITIAL", "ACCENT", "GROUND", "PACK"] as const;
 export type PackPlaceholder = (typeof PACK_PLACEHOLDERS)[number];
 
-/** Text files the placeholders are filled in (the starter kit's createOrg does the same set). */
-export const PACK_TEXT = /\.(html|css|js|json|md|txt|svg)$/i;
+/** The library's text files: the ones placeholders are filled in, and the ones agents may read and write. */
+export const TEXT_EXTENSIONS = [".html", ".css", ".js", ".json", ".md", ".txt", ".svg"] as const;
+
+/** Whether `path` is a text file, by its extension (any case). */
+export function isTextFile(path: string): boolean {
+  const dot = path.lastIndexOf(".");
+  return dot > path.lastIndexOf("/") && (TEXT_EXTENSIONS as readonly string[]).includes(path.slice(dot).toLowerCase());
+}
 
 const IMAGES = ["png", "jpg", "jpeg", "gif", "webp", "avif", "svg"];
 const FONTS = ["woff", "woff2", "ttf", "otf"];
@@ -53,6 +59,24 @@ export type PackManifest = {
   /** The placeholders the pack's files use (a subset of PACK_PLACEHOLDERS). */
   placeholders: PackPlaceholder[];
 };
+
+/** A template pack the server has checked and staged, ready to install (POST /api/packs/stage). */
+export type StagedPack = {
+  token: string;
+  /** The folder it installs as: the pack's id, or "<id>-2"… when the org has that already. */
+  set: string;
+  manifest: PackManifest;
+  /** Covers: library paths of the filled-in preview copy. */
+  views: { name: string; label: string; path: string }[];
+  transition: string | null;
+  scripts: PackScripts & { standard: boolean };
+  warnings: string[];
+  files: number;
+  bytes: number;
+};
+
+/** A built-in template pack, as GET /api/packs/builtin lists it: the starter and the site's six shows. */
+export type BuiltinPack = { id: string; name: string; description: string; views: string[] };
 
 /** One entry of a zip's listing or a dropped folder, before anything is written. */
 export type PackEntry = { path: string; size: number; type: "file" | "dir" | "symlink" | "other" };
@@ -254,8 +278,8 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   // Placeholders: anything {{LIKE_THIS}} that ViewSwitcher doesn't fill stays as typed.
   const used = new Set<string>();
   for (const [path, text] of Object.entries(texts)) {
-    if (!PACK_TEXT.test(path) || path === "pack.json") continue;
-    for (const m of text.matchAll(/\{\{([A-Z][A-Z0-9_]*)\}\}/g)) used.add(m[1]!);
+    if (!isTextFile(path) || path === "pack.json") continue;
+    for (const m of text.matchAll(PLACEHOLDER)) used.add(m[1]!);
   }
   const unknown = [...used].filter((p) => !(PACK_PLACEHOLDERS as readonly string[]).includes(p));
   if (unknown.length) warnings.push(`${unknown.map((p) => `{{${p}}}`).join(", ")} ${unknown.length === 1 ? "isn't a placeholder" : "aren't placeholders"} ViewSwitcher fills, so ${unknown.length === 1 ? "it stays" : "they stay"} as typed`);
@@ -296,7 +320,20 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
  */
 export const installedPath = (packPath: string) => (packPath.startsWith("templates/") ? packPath.slice("templates/".length) : packPath);
 
-/** Fill the placeholders in a text file; unknown ones stay as typed. */
-export function fillPlaceholders(text: string, vars: Partial<Record<PackPlaceholder, string>>): string {
-  return text.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (m, k: string) => (vars as Record<string, string | undefined>)[k] ?? m);
+/** A placeholder as files write it: {{ORG_NAME}}. */
+export const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+/**
+ * Fill the placeholders in the text file `path`; unknown ones stay as typed. Values are escaped for
+ * the file they land in: HTML-escaped in .html and .svg (an org named "R&B <Live>" reads as text and
+ * can't add markup), JSON-escaped in .json (they sit in strings, like org.json's name), and as typed
+ * anywhere else (.css, .js, .md, .txt).
+ */
+export function fillPlaceholders(path: string, text: string, vars: Partial<Record<PackPlaceholder, string>>): string {
+  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+  const escape = ext === ".html" || ext === ".svg" ? (v: string) => escapeHtml(v) : ext === ".json" ? (v: string) => JSON.stringify(v).slice(1, -1) : (v: string) => v;
+  return text.replace(PLACEHOLDER, (m, k: string) => {
+    const v = (vars as Record<string, string | undefined>)[k];
+    return v === undefined ? m : escape(v);
+  });
 }

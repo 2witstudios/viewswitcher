@@ -9,7 +9,7 @@
 // public/skills/ is gitignored.
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { listZip, readZipEntrySync, storedZip } from "../../server/src/zip";
+import { listZip, readZipEntrySync, storedZip } from "@viewswitcher/packs";
 
 const site = resolve(import.meta.dir, "..");
 export const SKILL_DIR = resolve(site, "../server/library-kit/skills/viewswitcher-scenes");

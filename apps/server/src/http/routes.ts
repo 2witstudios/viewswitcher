@@ -12,7 +12,7 @@ import { join, relative, sep } from "node:path";
 import { existsSync } from "node:fs";
 import type { ServerMessage, Slot } from "@viewswitcher/shared";
 import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, type stdioLaunch } from "../agent-connect";
-import { asDropped, type BuiltinPack } from "../builtin-packs";
+import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import { Audience, rateKey } from "../gate";
 import * as lib from "../library";
 import { customizeScene, duplicateScene, orgDir, sceneFromTemplate } from "../library-actions";
@@ -51,7 +51,7 @@ export type RouteDeps = {
   /** Whether a program page's slot report is the newest from that page (slot-order.ts). */
   acceptSlots: (page: unknown, seq: unknown) => boolean;
   publish: (msg: ServerMessage) => void;
-  builtins: () => Promise<BuiltinPack[]>;
+  builtins: () => Promise<BuiltinPackFiles[]>;
   starterScript: string | null;
   pairing: Pairing;
   /** Phones and tablets: what the Mac app's window shows, and the Wi-Fi setting (null, or why it couldn't listen). */

@@ -1,0 +1,14 @@
+{
+  "name": "@viewswitcher/packs",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@viewswitcher/shared": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./shows": "./src/shows.ts"
+  }
+}

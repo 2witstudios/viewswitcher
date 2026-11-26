@@ -1,4 +1,4 @@
-// Installing template packs (EDIT-24 · EDIT-25). A pack arrives as a .zip or a dropped folder's files.
+// Installing template packs. A pack arrives as a .zip or a dropped folder's files.
 //
 // 1. stage: list it, check every path and size before anything is written (planPack), unpack it into
 //    <org>/.viewswitcher/staging/<token>/raw (inside the org, so preview paths start with its id), check what it is (checkPack), and write a preview
@@ -11,12 +11,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, PACK_TEXT, planPack } from "@viewswitcher/shared";
-import type { PackEntry, PackFile, PackManifest, PackPlaceholder, PackScripts } from "@viewswitcher/shared";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, planPack, readTitle } from "@viewswitcher/shared";
+import type { PackEntry, PackFile, PackManifest, PackPlaceholder, StagedPack } from "@viewswitcher/shared";
 import { exists, readOrg } from "./library";
 import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
-import { listZip, readZipEntry, ZipError } from "./zip";
+import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
 
 /** A pack that can't be installed: the message says why, in plain words. */
 export class PackError extends Error {}
@@ -25,20 +25,6 @@ export class PackError extends Error {}
 const STAGE_TTL_MS = 60 * 60 * 1000;
 
 export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Blob }[] };
-
-export type StagedPack = {
-  token: string;
-  /** The folder it installs as: the pack's id, or "<id>-2"… when the org has that already. */
-  set: string;
-  manifest: PackManifest;
-  /** Covers: library paths of the filled-in preview copy. */
-  views: { name: string; label: string; path: string }[];
-  transition: string | null;
-  scripts: PackScripts & { standard: boolean };
-  warnings: string[];
-  files: number;
-  bytes: number;
-};
 
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
@@ -71,7 +57,7 @@ async function fillCopy(raw: string, dest: string, files: string[], vars: Record
     const from = inside(raw, f);
     const to = inside(dest, installedPath(f));
     await mkdir(dirname(to), { recursive: true });
-    if (PACK_TEXT.test(f)) await writeFile(to, fillPlaceholders(await readFile(from, "utf8"), vars), { flag: "wx" });
+    if (isTextFile(f)) await writeFile(to, fillPlaceholders(f, await readFile(from, "utf8"), vars), { flag: "wx" });
     else await writeFile(to, new Uint8Array(await readFile(from)), { flag: "wx" });
   }
 }
@@ -136,7 +122,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
       const to = inside(raw, f.path);
       await mkdir(dirname(to), { recursive: true });
       await writeFile(to, data, { flag: "wx" });
-      if (PACK_TEXT.test(f.path)) texts[f.path] = new TextDecoder().decode(data);
+      if (isTextFile(f.path)) texts[f.path] = new TextDecoder().decode(data);
     }
 
     // 3. Is it a pack?
@@ -148,8 +134,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
     // 4. A preview copy for the covers, filled in for this org.
     const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
     await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, `/library/${previewRel}`));
-    const label = (html: string, name: string) => /<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() || name.replace(/-/g, " ");
-    const views = report.views.map((v) => ({ name: v.name, label: label(texts[v.file] ?? "", v.name), path: `${previewRel}/${installedPath(v.file)}` }));
+    const views = report.views.map((v) => ({ name: v.name, label: readTitle(texts[v.file] ?? "") ?? v.name.replace(/-/g, " "), path: `${previewRel}/${installedPath(v.file)}` }));
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
     const meta: StageMeta = { org: orgId, set, manifest: report.manifest, files, created: Date.now() };
@@ -216,19 +201,13 @@ export async function cancelPack(root: string, orgId: string, token: unknown) {
 async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<number> {
   const needle = `/library/${orgId}/templates/${set}/`;
   const encoded = `/library/${encodeURIComponent(orgId)}/templates/${encodeURIComponent(set)}/`;
+  const projects = join(orgDir, "projects");
   let n = 0;
-  const walk = async (dir: string) => {
-    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      if (e.name.startsWith(".")) continue;
-      const p = join(dir, e.name);
-      if (e.isDirectory()) await walk(p);
-      else if (e.name.endsWith(".html")) {
-        const text = await readFile(p, "utf8").catch(() => "");
-        if (text.includes(needle) || text.includes(encoded)) n++;
-      }
-    }
-  };
-  await walk(join(orgDir, "projects"));
+  for (const rel of await walkFiles(projects).catch(() => [] as string[])) {
+    if (!rel.endsWith(".html")) continue;
+    const text = await readFile(join(projects, rel), "utf8").catch(() => "");
+    if (text.includes(needle) || text.includes(encoded)) n++;
+  }
   return n;
 }
 

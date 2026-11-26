@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { LiveState } from "@viewswitcher/shared";
-import { type BuiltinPack, buildBuiltins } from "../builtin-packs";
+import { type BuiltinPackFiles, buildBuiltins } from "../builtin-packs";
 import { config } from "../config";
 import { onAirFor } from "../library-actions";
 import { LiveStore } from "../live/store";
@@ -47,7 +47,7 @@ let previews: { scene: PreviewResult; program: PreviewResult };
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
 let client: Client;
-let builtins: Promise<BuiltinPack[]> | undefined;
+let builtins: Promise<BuiltinPackFiles[]> | undefined;
 /** Every result text, to check none of them has the library's absolute path. */
 const seen: string[] = [];
 
@@ -71,7 +71,7 @@ beforeAll(async () => {
     onCommit: () => atCommit?.(),
     outputsKnown: () => outputsKnown,
     // The real built-in sets, built from the repo as a source run does.
-    templateSets: () => (builtins ??= buildBuiltins(config.starter, config.site)),
+    templateSets: () => (builtins ??= buildBuiltins(config.starter)),
     starterScript: null,
   });
   const [a, b] = InMemoryTransport.createLinkedPair();

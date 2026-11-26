@@ -8,7 +8,7 @@
 //   bun apps/apple/scripts/shots-seed.ts http://127.0.0.1:7445
 import { appendFile, copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { SHOWS } from "../../site/src/data/shows";
+import { SHOWS } from "../../../packages/packs/src/shows";
 
 const base = process.argv[2] ?? "";
 const library = process.env.VIEWSWITCHER_LIBRARY ?? "";

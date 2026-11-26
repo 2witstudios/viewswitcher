@@ -1,7 +1,10 @@
-// The six made-up shows on the site, each with its own look, and the views the site shows.
-// Their view HTML lives in scripts/shows/<id>/ (one template set per show); scripts/library.ts copies it into a
-// scratch library outside the repo and scripts/shots.ts renders every view to src/assets/views/<id>-<view>.webp.
-// `media` says what fills each device box: a photo in src/assets/media (credited in CREDITS.md).
+// The six made-up shows on the site, each with its own look, and the views the site shows. Each is
+// also a built-in template set in the app (./build.ts showPacks).
+// Their view HTML lives in ../shows/<id>/ (one template set per show), with ../shows/_shared/ common
+// to all; the site's scripts/library.ts copies it into a scratch library outside the repo and
+// scripts/shots.ts renders every view to apps/site/src/assets/views/<id>-<view>.webp.
+// `media` says what fills each device box: a photo in apps/site/src/assets/media (credited in its CREDITS.md).
+// Plain data, so the site's pages can import it (@viewswitcher/packs/shows) without the pack builder.
 
 export type ViewSpec = {
   file: string; name: string; media?: Record<string, string>;

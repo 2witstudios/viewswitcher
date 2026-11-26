@@ -4,7 +4,7 @@
 // and /api/agent/clients turns it into booleans.
 import { join } from "node:path";
 import type { AgentClients } from "@viewswitcher/shared";
-import { storedZip } from "./zip";
+import { storedZip } from "@viewswitcher/packs";
 
 export type DetectEnv = {
   home: string;

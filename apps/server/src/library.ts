@@ -1,8 +1,9 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { parseTemplateId, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
+import { fillPlaceholders, isTextFile, parseTemplateId, readManifest, readTitle, setTitle, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
+import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
 import { resolveInLibrary } from "./library/contain";
 import { limit } from "./limit";
@@ -93,18 +94,12 @@ export async function createOrg(root: string, starter: string, name: string, acc
   while (await exists(join(root, id))) id = `${base}-${n++}`;
   const dir = join(root, id);
   await cp(starter, dir, { recursive: true });
-  const vars: Record<string, string> = { ORG_ID: id, ORG_NAME: name.trim(), ORG_INITIAL: name.trim()[0]!.toUpperCase(), ACCENT: accent, GROUND: ground };
-  const fill = async (path: string) => {
-    for (const e of await readdir(path, { withFileTypes: true })) {
-      const p = join(path, e.name);
-      if (e.isDirectory()) await fill(p);
-      else if (/\.(html|css|json|md|js|svg)$/.test(e.name)) {
-        const text = await readFile(p, "utf8");
-        await writeFile(p, text.replace(/\{\{(\w+)\}\}/g, (m, k) => vars[k] ?? m));
-      }
-    }
-  };
-  await fill(dir);
+  const vars = { ORG_ID: id, ORG_NAME: name.trim(), ORG_INITIAL: name.trim()[0]!.toUpperCase(), ACCENT: accent, GROUND: ground };
+  for (const rel of await walkFiles(dir)) {
+    if (!isTextFile(rel)) continue;
+    const p = join(dir, rel);
+    await writeAtomic(p, fillPlaceholders(rel, await readFile(p, "utf8"), vars));
+  }
   await mkdir(join(dir, "assets"), { recursive: true });
   await mkdir(join(dir, "projects"), { recursive: true });
   return { orgId: id };
@@ -369,7 +364,8 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
   const html = await readFile(src, "utf8");
-  return { name: await writeFresh(dir, `${base}-copy`, ".html", html.replace(/<title>([^<]*)<\/title>/i, (_m, t) => `<title>${t} copy</title>`), check) };
+  const title = readTitle(html);
+  return { name: await writeFresh(dir, `${base}-copy`, ".html", title ? setTitle(html, `${title} copy`) : html, check) };
 }
 
 export async function saveAsset(root: string, file: File, check?: BeforeCreate) {
