@@ -6,3 +6,4 @@ export * from "./snap";
 export * from "./obs-setup";
 export * from "./scene-add";
 export * from "./template-pack";
+export * from "./scene-model";

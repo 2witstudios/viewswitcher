@@ -3,6 +3,7 @@ import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
 import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
+import { PencilIcon } from "./icons";
 import { Menu, type MenuItem, MoreIcon } from "./ui";
 
 /** Open the scene editor on `path`; `rename`: with the name ready to retype (a fresh copy). */
@@ -11,10 +12,6 @@ export function useOpenEditor(): (path: string, opts?: { rename?: boolean; repla
   return (path, { rename, replace } = {}) =>
     void navigate({ to: "/$org/edit", params: { org: path.split("/")[0]! }, search: rename ? { path, rename: true } : { path }, replace });
 }
-
-export const PencilIcon = () => (
-  <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z" /><path d="M13 7l4 4" /></svg>
-);
 
 /** The 1920×1080 scene scaled to its box's width: 280 px on a desktop, half a phone's width (MAC-27).
  *  A callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */

@@ -3,7 +3,8 @@ import { api } from "../lib/api";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { appLink, useLive } from "../lib/live";
 import { openAgentSheet, SparkleIcon } from "./AgentSheet";
-import { PencilIcon, useOpenEditor } from "./SceneTile";
+import { PencilIcon } from "./icons";
+import { useOpenEditor } from "./SceneTile";
 import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
 
@@ -19,7 +20,7 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
         <div className="titles">
           <span className="crumb">{crumb}</span>
           <h1 className="title">{title}</h1>
-          {/* On a phone the title is the stream picker: it opens the library (PHONE-3, PHONE-12). */}
+          {/* On a phone the title is the stream picker: it opens the library. */}
           <button type="button" className="stream-pick" aria-expanded={libraryOpen} aria-controls="side-body" onClick={() => setLibraryOpen(!libraryOpen)}>
             <span className="crumb">{crumb}</span>
             <span className="title">{title}<ChevronIcon /></span>
@@ -47,9 +48,13 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
             <span className="dot" />{obs?.streaming ? "LIVE" : "GO LIVE"}
           </button>
           {appLink && <span className="pill link" title={appLink === "USB" ? "USB-C" : "Network"}>{appLink}</span>}
-          {!obs?.connected && <span className="pill off" title="Enable OBS's WebSocket server"><span className="dot" />OBS offline</span>}
+          {!obs?.connected && (
+            <span className="pill off" title={obs?.auth ? "OBS's WebSocket server: Tools → WebSocket Server Settings" : "Enable OBS's WebSocket server"}>
+              <span className="dot" />{obs?.auth === "missing" ? "OBS needs a password" : obs?.auth === "wrong" ? "OBS refused the password" : "OBS offline"}
+            </span>
+          )}
           {!appLink && state?.usb.attached && (
-            // PHONE-8: named for the device plugged in (iPhone or iPad); an unknown one reads as before.
+            // Named for the device plugged in (iPhone or iPad); an unknown one reads as before.
             <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "USB-C" : `Open ViewSwitcher on the ${state.usb.device ?? "iPad"}`}>
               {(state.usb.device ?? "iPad").toUpperCase()} · {state.usb.connected ? "USB" : "OPEN APP"}
             </span>

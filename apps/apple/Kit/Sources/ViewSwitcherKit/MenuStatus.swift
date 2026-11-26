@@ -30,7 +30,7 @@ public struct MenuStatus: Equatable, Sendable {
         let setup = state.obsSetup
         let needsSetup = state.obs.connected && setup != nil && !(setup!.ready)
 
-        var obs = "OBS: not connected"
+        var obs = state.obs.auth == "missing" ? "OBS: needs a password" : state.obs.auth == "wrong" ? "OBS: refused the password" : "OBS: not connected"
         if state.obs.connected {
             if needsSetup { obs = "OBS: needs setup" }
             else if let missing = setup?.missingDevices, !missing.isEmpty { obs = "OBS: connected · add \(missing.joined(separator: ", "))" }

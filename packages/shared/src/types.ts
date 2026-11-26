@@ -55,7 +55,7 @@ export type Org = {
 };
 
 /**
- * A set of templates installed from a template pack (EDIT-25): templates/<id>/ with the pack's pack.json,
+ * A set of templates installed from a template pack: templates/<id>/ with the pack's pack.json,
  * its views, _shared/ and assets/. Its templates are named "<set>/<view>" where a template is asked for.
  */
 export type TemplateSet = {
@@ -99,16 +99,26 @@ export type OnAir = {
   /** The transition page played when switching to this scene (see transitionCandidates); null for a plain ground-color wipe. */
   transition?: string | null;
   label: string;
-  /** Set when the scene on air was renamed (EDIT-19): its old path, so the program page swaps without a transition. */
+  /** The path this scene had on air before it was renamed, or the stream copy it replaced on Revert: the program page swaps without a transition. */
   renamedFrom?: string;
   projectId?: string;
   streamId?: string;
+  /**
+   * The file was deleted while on air and nothing took its place: the program keeps showing the
+   * version it has (reloading would put a 404 on stream) until another scene goes on air or the file is back.
+   */
+  missing?: boolean;
 };
 
 export type ObsStatus = {
   connected: boolean;
   recording: boolean;
   streaming: boolean;
+  /**
+   * Why OBS won't let the switcher in, while it won't: it asks for a password and none is set
+   * ("missing"), or it refused the one given ("wrong"). Absent once connected, or when OBS isn't there at all.
+   */
+  auth?: "missing" | "wrong";
 };
 
 /** What OBS has of what the switcher needs (see "Set up OBS"). */
@@ -119,6 +129,11 @@ export type ObsSetup = {
   program: boolean;
   /** Its ground color source exists. */
   ground: boolean;
+  /**
+   * The program source is the top item and the ground the bottom one. A source added in OBS above the
+   * program covers every scene, so setup is needed again (it puts them back in order).
+   */
+  ordered: boolean;
   /** Device sources (Camera, Screen, iPad) not in the scene yet; the user adds them in OBS. */
   missingDevices: string[];
 };
@@ -131,7 +146,7 @@ export type UsbStatus = {
   attached: boolean;
   /** The ViewSwitcher app on it is open and its tunnels are ready. */
   connected: boolean;
-  /** Which kind it is (PHONE-8), from usbmuxd's product id; absent when unknown. */
+  /** Which kind it is, from usbmuxd's product id; absent when unknown. */
   device?: UsbDevice;
 };
 export type UsbDevice = "iPhone" | "iPad";
@@ -165,7 +180,14 @@ export type LiveState = {
 /** Server → client WebSocket messages. */
 export type ServerMessage =
   | { t: "state"; state: LiveState }
-  | { t: "library:changed"; paths: string[] }
+  /** `seq` numbers the server's library changes, from 1 since it started. */
+  | { t: "library:changed"; paths: string[]; seq: number }
+  /**
+   * Sent on every connect, after the state and build: which server this is (a new id after a restart) and how many library
+   * changes it has sent. A client coming back compares them with what it last heard to know whether
+   * it missed any.
+   */
+  | { t: "hello"; server: string; seq: number }
   /** The scene editor showing a change live (never written): the program page applies it to the on-air scene if `path` matches. */
   | { t: "scene:preview"; path: string; hash: string; edit: SceneEdit; /** Which editor page sent it, and its order there: an older one from the same editor is ignored. */ session: string; seq: number }
   /** The entry script of the switcher build being served; a page running a different one reloads. "" when nothing is built. */
