@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { machineStateDir } from "./machine-state";
 import { join, resolve } from "node:path";
 
 const env = process.env;
@@ -19,6 +20,14 @@ export const config = {
   port: Number(env.PORT ?? 7420),
   /** The content library agents edit: one folder per org, each with templates, assets, projects. */
   library: resolve(env.VIEWSWITCHER_LIBRARY ?? join(homedir(), "ViewSwitcher Library")),
+  /**
+   * This Mac's own state for that library (paired devices, the agents' on-air setting), outside it so
+   * nothing that travels with the library can carry them (machine-state.ts). VIEWSWITCHER_STATE moves
+   * the root (tests and e2e use a temp folder).
+   */
+  get machineState() {
+    return machineStateDir(env.VIEWSWITCHER_STATE ?? join(homedir(), "Library/Application Support/ViewSwitcher"), this.library);
+  },
   // The next three default to the repo; the Mac app's compiled server (where import.meta.dir is
   // inside the binary) passes the copies in its Resources folder.
   /** Copied into each new org: neutral templates and theme. */

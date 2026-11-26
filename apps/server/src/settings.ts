@@ -1,10 +1,10 @@
-// The library's own switcher settings, in <library>/.viewswitcher/settings.json. For now that is
+// This Mac's switcher settings for a library, in its machine state folder (machine-state.ts), not in
+// the library, so a cloned or synced library can't bring a looser agent setting. For now that is
 // only what an AI agent connected over MCP may put on air (see agent-guard.ts).
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentOnAir } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
-import { plainStateFolder } from "./library/contain";
 
 export type Settings = { agentOnAir: AgentOnAir };
 
@@ -16,14 +16,13 @@ export const isAgentOnAir = (v: unknown): v is AgentOnAir => AGENT_ON_AIR.includ
 /** Whether `to` lets agents put more on air than `from` (AGENT_ON_AIR is strictest first). */
 export const widens = (from: AgentOnAir, to: AgentOnAir) => AGENT_ON_AIR.indexOf(to) > AGENT_ON_AIR.indexOf(from);
 
-const file = (root: string) => join(root, ".viewswitcher", "settings.json");
+/** `dir` is this Mac's state folder for the library (config.machineState), never the library itself. */
+const file = (dir: string) => join(dir, "settings.json");
 
 /** The file's keys (none for a missing file), or why it can't be read as a JSON object. */
 async function readRaw(root: string): Promise<{ saved: Record<string, unknown> } | { error: string }> {
   let text: string;
   try {
-    // A .viewswitcher that became a link (a git pull) would hand the guard someone else's settings.
-    await plainStateFolder(root);
     text = await readFile(file(root), "utf8");
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { saved: {} };

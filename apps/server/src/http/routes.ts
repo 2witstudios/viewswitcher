@@ -29,6 +29,8 @@ import type { Log } from "../log";
 export type RouteDeps = {
   /** The library folder. */
   root: string;
+  /** This Mac's state folder for the library: the agents' setting lives there (machine-state.ts). */
+  machineState: string;
   /** Reads an org's content (its cache is the server's, shared with the MCP server). */
   scanner: LibraryScanner;
   /** The starter kit new orgs are made from. */

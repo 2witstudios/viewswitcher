@@ -11,7 +11,7 @@
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
 import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
-import { type FileHandle, lstat, mkdir, open, realpath, rename, writeFile } from "node:fs/promises";
+import { type FileHandle, lstat, open, realpath, rename } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
 
@@ -154,23 +154,13 @@ async function moveAside(dir: string, now: Date): Promise<string | null> {
 }
 
 /**
- * The library's own state folder (<library>/.viewswitcher: state.json, settings.json, devices.json,
- * kit.json) as a plain folder. A cloned library can carry a link (or a file) there, and a `git pull`
+ * The library's own state folder (<library>/.viewswitcher: state.json, kit.json, staging) as a plain
+ * folder. (This Mac's pairings and agent setting live outside the library: machine-state.ts.) A cloned library can carry a link (or a file) there, and a `git pull`
  * can put one there while the server runs (the local folder is gitignored, so git replaces it), and the
- * switcher would write its state and pairings wherever it points. So it's checked at startup, and
- * again by every state write (writeAtomic's `plainParent`) and settings read.
+ * switcher would write its state wherever it points. So it's checked at startup, and
+ * again by every state write (writeAtomic's `plainParent`).
  */
-export async function plainStateFolder(libraryRoot: string, now = new Date()): Promise<string | null> {
-  const dir = join(libraryRoot, ".viewswitcher");
-  const aside = await plainFolder(dir, now);
-  if (aside) {
-    // The person's agent setting went with the old folder (git deletes a gitignored folder it replaces).
-    // Fail closed: the fresh folder says agents may put nothing on air until they choose again.
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, "settings.json"), JSON.stringify({ agentOnAir: "never" }, null, 2) + "\n", { flag: "wx" }).catch(() => {});
-  }
-  return aside;
-}
+export const plainStateFolder = (libraryRoot: string, now = new Date()) => plainFolder(join(libraryRoot, ".viewswitcher"), now);
 
 /**
  * Where a library path really is (through links), as a library path, or the path itself when that

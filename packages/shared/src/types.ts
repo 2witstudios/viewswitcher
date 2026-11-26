@@ -156,7 +156,7 @@ export type AgentOnAir = "never" | "not-live" | "always";
 
 /** The agent connection (MCP). */
 export type AgentStatus = {
-  /** The setting, from .viewswitcher/settings.json (default "not-live"). */
+  /** The setting, from this Mac's settings.json for the library (machine-state.ts; default "not-live"). */
   onAir: AgentOnAir;
   /** When an agent last called /mcp (ms since epoch), or null. */
   lastSeen: number | null;

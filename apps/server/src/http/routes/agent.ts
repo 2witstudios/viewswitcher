@@ -53,7 +53,7 @@ export function agentRoutes(d: RouteDeps): Route[] {
 
     // What agents connected over MCP may put on air (agent-guard.ts); people in the switcher are never limited.
     post("/api/agent/settings", async (b) => {
-      const s = await writeSettings(root, { agentOnAir: b.onAir });
+      const s = await writeSettings(d.machineState, { agentOnAir: b.onAir });
       store.update({ agent: { ...store.state.agent, onAir: s.agentOnAir } });
       return store.state.agent;
     }),

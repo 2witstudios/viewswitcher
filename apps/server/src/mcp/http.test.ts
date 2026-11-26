@@ -7,7 +7,8 @@ import { readFile } from "node:fs/promises";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { freePort, SERVER_START_MS, startServer } from "../test-server";
+import { machineStateDir } from "../machine-state";
+import { freePort, SERVER_START_MS, startServer, TEST_STATE_ROOT } from "../test-server";
 import type { AgentStatus } from "@viewswitcher/shared";
 import type { Previewer } from "../preview-types";
 import { LibraryScanner } from "../library/scanner";
@@ -182,13 +183,13 @@ describe("agent status", () => {
 
 describe("POST /api/agent/settings", () => {
   const set = (body: unknown, headers: Record<string, string> = {}) => request("/api/agent/settings", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
-  test("defaults to not-live, changes the setting, saves it in settings.json", async () => {
+  test("defaults to not-live, changes the setting, saves it in this Mac's settings.json, not the library's", async () => {
     expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("not-live");
     const r = await set({ onAir: "never" });
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).onAir).toBe("never");
     expect(JSON.parse((await request("/api/state")).body).agent.onAir).toBe("never");
-    expect(JSON.parse(await readFile(join(library, ".viewswitcher/settings.json"), "utf8"))).toEqual({ agentOnAir: "never" });
+    expect(JSON.parse(await readFile(join(machineStateDir(TEST_STATE_ROOT, library), "settings.json"), "utf8"))).toEqual({ agentOnAir: "never" });
     // The MCP side sees it straight away.
     const s = await mcp({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "get_state", arguments: {} } });
     expect(JSON.parse(JSON.parse(s.body).result.content[0].text).agent.onAir).toBe("never");

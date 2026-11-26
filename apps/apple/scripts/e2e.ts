@@ -62,6 +62,8 @@ const env = {
   OBS_URL: process.env.OBS_URL ?? "ws://127.0.0.1:1",
   VIEWSWITCHER_USB: "0",
   VIEWSWITCHER_LIBRARY: library,
+  // This Mac's pairings and agent setting for the run's library: a temp folder, never the real Application Support.
+  VIEWSWITCHER_STATE: mkdtempSync(join(tmpdir(), "vs-e2e-state-")),
   VIEWSWITCHER_UPDATES: "0",
   VIEWSWITCHER_E2E_DIR: control,
   // The Wi-Fi listener binds only this Mac's LAN address, so the check reaches it the way a phone does.

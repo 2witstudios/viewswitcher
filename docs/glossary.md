@@ -21,7 +21,7 @@ One word for each thing. **People read** is the word in the app, the site, the R
 | **source** | `source` | An OBS input a camera box names: Camera, Screen, iPad, Guest, Camera 2… | OBS |
 | **the ViewSwitcher scene** | `obsScene` | The one OBS scene ViewSwitcher drives. Always say "OBS scene" in code | `OBS_SCENE` |
 | **live** / **recording** | `ObsStatus.streaming`, `ObsStatus.recording` | OBS is broadcasting or recording. Never "stream" for this | |
-| **phone or tablet** (paired) | `remote`, `Remote` | A phone or tablet paired over Wi-Fi | `<library>/.viewswitcher/devices.json` |
+| **phone or tablet** (paired) | `remote`, `Remote` | A phone or tablet paired over Wi-Fi | this Mac's `devices.json`, under `VIEWSWITCHER_STATE`, never in the library |
 | **iPhone or iPad on USB-C** | `usb` (the caller `{ kind: "usb" }`, `Audience.MacOrUsb`, `LiveState.usb`) | The app connected over the cable | |
 | **the app** (iPhone, iPad) | `iPad` (folder, target "ViewSwitcher iPad", user agent `ViewSwitcher-iPad`): a historical name kept on purpose, for App Store continuity | The one universal iPhone and iPad app | `apps/apple/iPad` |
 | **AI app**, **agent** | `agent` | An AI app connected over MCP | `/mcp` |
