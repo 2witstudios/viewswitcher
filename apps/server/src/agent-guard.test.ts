@@ -61,7 +61,7 @@ describe("agentGuard", () => {
     const blind = { ...onAir, loadsUnreadable: ["daisy/templates/_shared/linked.css"] };
     const g = agentGuard({ setting: "not-live", live: true, onAir: blind, action: write("daisy/assets/anything.png") });
     expect(g.ok).toBe(false);
-    expect(g.ok ? "" : g.reason).toContain("loads daisy/templates/_shared/linked.css, which ViewSwitcher can't read");
+    expect(g.ok ? "" : g.reason).toContain("loads daisy/templates/_shared/linked.css, which ViewSwitcher couldn't read just now");
     expect(agentGuard({ setting: "not-live", live: false, onAir: blind, action: write("daisy/assets/anything.png") }).ok).toBe(true);
   });
   test("a template set's view on air: its set's transition and _shared/ are on stream, another set's aren't", () => {

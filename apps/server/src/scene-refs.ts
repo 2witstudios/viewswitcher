@@ -87,7 +87,7 @@ export type Loaded = {
   complete: boolean;
   /** Every file it read (the pages too), with a hash of the text it read, to tell later if any changed. */
   read: Record<string, string>;
-  /** Files that are there but couldn't be read (a link out of the library, a named pipe): what they load is unknown. */
+  /** Files that are there but couldn't be read for a reason /library/ wouldn't refuse too (a disk or permission error): what they load is unknown. */
   unreadable: string[];
 };
 
