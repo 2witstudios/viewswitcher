@@ -2,7 +2,7 @@ import XCTest
 @testable import ViewSwitcherKit
 
 final class ShellAndFeedTests: XCTestCase {
-    /// MAC-15: Sparkle reads the appcast from the latest published release, next to the dmg the site links to.
+    /// Sparkle reads the appcast from the latest published release, next to the dmg the site links to.
     func testAppcastURL() {
         XCTAssertEqual(UpdateFeed.appcast.absoluteString, "https://github.com/2witstudios/viewswitcher/releases/latest/download/appcast.xml")
         XCTAssertEqual(UpdateFeed.dmg.absoluteString, "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg")
@@ -22,6 +22,19 @@ final class ShellAndFeedTests: XCTestCase {
         let info = ShellInfo(kind: .ipad, vars: ["--x": "a\"b</script>"])
         XCTAssertTrue(ShellBridge.userScript(info).contains(#""--x":"a\"b<\/script>""#) || ShellBridge.userScript(info).contains(#""--x":"a\"b</script>""#))
         XCTAssertTrue(ShellBridge.userScript(info).contains(#"{"kind":"ipad""#))
+    }
+
+    func testANoticeTravelsWithTheShellInfo() {
+        let none = ShellInfo.mac(lightsInset: 84, headerRow: 64, dragStrip: 28, fullscreen: false)
+        XCTAssertTrue(ShellBridge.userScript(none).contains(#""notice":null"#))
+        let info = ShellInfo.mac(lightsInset: 84, headerRow: 64, dragStrip: 28, fullscreen: false, notice: "The server \"stopped\". Restarting…")
+        XCTAssertNotEqual(info, none, "a new notice is pushed to the page")
+        XCTAssertTrue(ShellBridge.applyScript(info).contains(#""notice":"The server \"stopped\". Restarting…""#), ShellBridge.applyScript(info))
+        // The banner is text, outside the page's own root, and never in the way of a click.
+        let script = ShellBridge.userScript(info)
+        XCTAssertTrue(script.contains("el.textContent = text"))
+        XCTAssertTrue(script.contains(ShellBridge.noticeId))
+        XCTAssertTrue(script.contains(#"pointerEvents: "none""#))
     }
 
     func testUndoScripts() {

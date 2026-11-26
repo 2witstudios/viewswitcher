@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the Mac menu-bar item shows (port of apps/mac/src/status.ts, MAC-6/MAC-12).
+/// What the Mac menu-bar item shows: the on-air scene, OBS and the USB-C link, from the live state.
 public struct MenuStatus: Equatable, Sendable {
     /// Text beside the icon: the on-air scene, or nothing.
     public var title: String
@@ -41,7 +41,7 @@ public struct MenuStatus: Equatable, Sendable {
 
         let ipad: String
         if let usb = state.usb, usb.enabled {
-            let device = usb.device ?? "iPad" // PHONE-8: an iPhone is named as one
+            let device = usb.device ?? "iPad" // an iPhone is named as one
             ipad = usb.connected ? "\(device): connected over USB" : usb.attached ? "\(device): plugged in · open ViewSwitcher on it" : "iPhone or iPad: not plugged in"
         } else {
             ipad = "iPhone or iPad: USB link off"

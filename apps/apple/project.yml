@@ -1,7 +1,7 @@
-# ViewSwitcher for Apple platforms (MAC-10): one project, generated with XcodeGen.
+# ViewSwitcher for Apple platforms: one project, generated with XcodeGen.
 #   cd apps/apple && xcodegen      (the .xcodeproj is gitignored; scripts/*.sh run this for you)
 # Targets: ViewSwitcher (macOS 14+, the Mac app around the bundled server), ViewSwitcher iPad
-# (iPadOS and iOS 17+, one universal app for iPad and iPhone (PHONE-1): the switcher over USB-C or the network) and the shared ViewSwitcherKit package (Kit/).
+# (iPadOS and iOS 17+, one universal app for iPad and iPhone: the switcher over USB-C or the network) and the shared ViewSwitcherKit package (Kit/).
 name: ViewSwitcher
 options:
   bundleIdPrefix: com.twowitstudios
@@ -49,17 +49,17 @@ targets:
         # The switcher is plain http on 127.0.0.1.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # Phones and tablets on the Wi-Fi (MAC-23): announce the switcher over Bonjour while that's on.
+        # Phones and tablets on the Wi-Fi: announce the switcher over Bonjour while that's on.
         NSLocalNetworkUsageDescription: ViewSwitcher lets the phones and tablets you pair switch scenes over this Wi-Fi, when you turn that on.
         NSBonjourServices:
           - _http._tcp
-        # Sparkle (MAC-15): the appcast on the latest published GitHub release (ViewSwitcherKit.UpdateFeed).
+        # Sparkle: the appcast on the latest published GitHub release (ViewSwitcherKit.UpdateFeed).
         SUFeedURL: https://github.com/2witstudios/viewswitcher/releases/latest/download/appcast.xml
         SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 21600
         SUVerifyUpdateBeforeExtraction: true
-        # Only the OS's own TLS (https to a Tailscale address): exempt (MAC-20).
+        # Only the OS's own TLS (https to a Tailscale address): exempt.
         ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: Mac/ViewSwitcher.entitlements
@@ -75,6 +75,10 @@ targets:
         SPARKLE_PUBLIC_KEY: hI8q9sOz72oOMceNPz4m2eELKkEFd2kGt+QkezqFw7Y=
         COMBINE_HIDPI_IMAGES: YES
       configs:
+        # Its own app to macOS, so bun run mac:dev runs beside an installed ViewSwitcher (one at a
+        # time is per bundle id) with its own settings and login item; Release is unchanged.
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher.mac.dev
         Release:
           ARCHS: "arm64 x86_64"
           ONLY_ACTIVE_ARCH: NO
@@ -127,8 +131,8 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
-        # Split View, Slide Over and Stage Manager (MAC-13a) need every orientation and no full-screen lock.
-        # App Store validation reads both keys for an iPad-only app (MAC-20), so both list all four.
+        # Split View, Slide Over and Stage Manager need every orientation and no full-screen lock.
+        # App Store validation reads both keys for an iPad-only app, so both list all four.
         UIRequiresFullScreen: false
         UISupportedInterfaceOrientations: &orientations
           - UIInterfaceOrientationPortrait
@@ -141,20 +145,20 @@ targets:
         # The switcher is plain http from 127.0.0.1 (the USB-C tunnel) or the LAN.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        # Permissions (MAC-20, PHONE-4): local network, and the camera for the app's own pairing scanner.
+        # Permissions: local network, and the camera for the app's own pairing scanner.
         # Web pages never get the camera: the web view refuses camera, microphone, motion and location.
         NSLocalNetworkUsageDescription: ViewSwitcher connects to the ViewSwitcher server on your Mac when the USB-C cable isn't plugged in.
-        # PHONE-5: Enter code finds the Mac's Bonjour announcement (RemotesWindow.swift) on the Wi-Fi.
+        # Enter code finds the Mac's Bonjour announcement (RemotesWindow.swift) on the Wi-Fi.
         NSBonjourServices: ["_http._tcp"]
-        # PHONE-4: the app's own scanner reads the Mac's pairing QR code, so the app itself is paired.
+        # The app's own scanner reads the Mac's pairing QR code, so the app itself is paired.
         NSCameraUsageDescription: ViewSwitcher uses the camera only to scan the pairing code your Mac shows.
-        # Only the OS's own TLS (https to a Tailscale address): exempt, no export compliance documents (MAC-20).
+        # Only the OS's own TLS (https to a Tailscale address): exempt, no export compliance documents.
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.twowitstudios.viewswitcher
         PRODUCT_NAME: ViewSwitcher
-        # iPhone and iPad (PHONE-1): one universal app, one bundle id, one purchase.
+        # iPhone and iPad: one universal app, one bundle id, one purchase.
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
@@ -166,7 +170,7 @@ targets:
       - target: ViewSwitcher iPad
     settings:
       base:
-        # iPhone and iPad (PHONE-1): one universal app, one bundle id, one purchase.
+        # iPhone and iPad: one universal app, one bundle id, one purchase.
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_STYLE: Automatic

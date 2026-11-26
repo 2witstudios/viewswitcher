@@ -3,73 +3,24 @@ import Network
 import XCTest
 @testable import ViewSwitcherKit
 
-/// MAC-11: probe, attach or own, stop only what it started, crash notice, start failures, log cap.
-/// The "server" is a stub: an in-process HTTP listener, or `bun stub.ts` when the controller starts it.
+/// Probe, attach or own, stop only what it started, replace an orphan, crash notice, start failures,
+/// log cap. The "server" is a stub: an in-process HTTP listener, or `bun stub.ts` when the controller starts it.
 final class ServerControllerTests: XCTestCase {
-    /// A tiny HTTP server in this process that answers every request with `body`.
-    final class Stub {
-        let listener: NWListener
-        let port: UInt16
-        init(body: String, status: String = "200 OK", silent: Bool = false) throws {
-            listener = try NWListener(using: .tcp, on: .any)
-            let ready = DispatchSemaphore(value: 0)
-            listener.stateUpdateHandler = { if case .ready = $0 { ready.signal() } }
-            listener.newConnectionHandler = { c in
-                c.start(queue: .global())
-                guard !silent else { return } // holds the connection and never answers
-                c.receive(minimumIncompleteLength: 1, maximumLength: 65536) { _, _, _, _ in
-                    let resp = "HTTP/1.1 \(status)\r\ncontent-type: application/json\r\ncontent-length: \(body.utf8.count)\r\nconnection: close\r\n\r\n\(body)"
-                    c.send(content: Data(resp.utf8), completion: .contentProcessed { _ in c.cancel() })
-                }
-            }
-            listener.start(queue: .global())
-            _ = ready.wait(timeout: .now() + 5)
-            port = listener.port!.rawValue
-        }
-        var base: URL { URL(string: "http://127.0.0.1:\(port)")! }
-        deinit { listener.cancel() }
-    }
-
-    static let state = #"{"onAir":null,"obs":{"connected":false,"recording":false,"streaming":false},"obsSetup":null,"usb":{"enabled":false,"attached":false,"connected":false},"warnings":[]}"#
-
-    /// A port nothing listens on: bind 127.0.0.1:0, read the port, close.
-    func freePort() throws -> UInt16 {
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        defer { close(fd) }
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
-        addr.sin_port = 0
-        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
-        let ok = withUnsafeMutablePointer(to: &addr) { p in
-            p.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(fd, $0, len) == 0 && Darwin.getsockname(fd, $0, &len) == 0 }
-        }
-        guard ok else { throw XCTSkip("no free port") }
-        return UInt16(bigEndian: addr.sin_port)
-    }
+    typealias Stub = TestServers.Stub
+    static let state = TestServers.state
+    static let serving = TestServers.serving
+    func freePort() throws -> UInt16 { try TestServers.freePort() }
 
     var tmp: URL!
-    override func setUp() {
-        tmp = FileManager.default.temporaryDirectory.appendingPathComponent("vs-kit-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-    }
-    override func tearDown() { try? FileManager.default.removeItem(at: tmp) }
-
-    var bun: URL? {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let paths = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init) + ["\(home)/.bun/bin", "/opt/homebrew/bin", "/usr/local/bin"]
-        return paths.map { URL(fileURLWithPath: $0).appendingPathComponent("bun") }.first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    override func setUp() { tmp = TestServers.tempDir() }
+    override func tearDown() {
+        for pid in leftovers { kill(pid, SIGKILL) }
+        try? FileManager.default.removeItem(at: tmp)
     }
 
-    /// A launch that runs a Bun stub server on `port` (its behaviour set by `script`).
     func stubLaunch(port: UInt16, script: String) throws -> Launch {
-        guard let bun else { throw XCTSkip("bun isn't installed") }
-        let file = tmp.appendingPathComponent("stub.ts")
-        try script.write(to: file, atomically: true, encoding: .utf8)
-        return Launch(executable: bun, arguments: [file.path], environment: ["PORT": String(port), "HOME": NSHomeDirectory()], logFile: tmp.appendingPathComponent("logs/server.log"))
+        try TestServers.launch(port: port, script: script, in: tmp)
     }
-
-    static let serving = "Bun.serve({ hostname: \"127.0.0.1\", port: Number(process.env.PORT), fetch: () => Response.json(\(state)) }); console.log(\"stub up\");"
 
     func testProbe() async throws {
         let ours = try Stub(body: Self.state)
@@ -80,7 +31,7 @@ final class ServerControllerTests: XCTestCase {
         XCTAssertEqual(r1, .other)
         let silent = try Stub(body: "", silent: true)
         let r2 = await probe(silent.base, timeout: 0.5)
-        XCTAssertEqual(r2, .other, "a port that holds the connection but never answers isn't free")
+        XCTAssertEqual(r2, .slow, "a port that holds the connection but never answers isn't free")
         let r3 = await probe(URL(string: "http://127.0.0.1:\(try freePort())")!)
         XCTAssertEqual(r3, .none)
     }
@@ -107,6 +58,7 @@ final class ServerControllerTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testStartsOwnsAndStops() async throws {
         let port = try freePort()
         let base = URL(string: "http://127.0.0.1:\(port)")!
@@ -114,7 +66,7 @@ final class ServerControllerTests: XCTestCase {
         let s = try await connectOrStart(base, launch: launch)
         XCTAssertTrue(s.owned)
         var crashed = false
-        await MainActor.run { s.onExit = { _ in crashed = true } }
+        s.onExit = { _ in crashed = true }
         let up = await probe(base)
         XCTAssertEqual(up, .viewswitcher)
         await s.stop()
@@ -124,6 +76,218 @@ final class ServerControllerTests: XCTestCase {
         XCTAssertFalse(crashed, "a requested stop isn't a crash")
         let log = try String(contentsOf: launch.logFile, encoding: .utf8)
         XCTAssertTrue(log.contains("starting") && log.contains("stub up") && log.contains("server exited"), log)
+    }
+
+    func testASlowAnswerIsAskedAgainBeforeThePortCountsAsTaken() async throws {
+        // Busy for its first second (a big library loading), then answering like us.
+        let late = try Stub(body: Self.state, silentFor: 1)
+        let t0 = Date()
+        let settled = await settledProbe(late.base, slowFor: 5, timeout: 0.4)
+        XCTAssertEqual(settled, .viewswitcher)
+        XCTAssertGreaterThan(Date().timeIntervalSince(t0), 0.9)
+        let launch = Launch(executable: URL(fileURLWithPath: "/nonexistent"), environment: [:], logFile: tmp.appendingPathComponent("log"))
+        let later = try Stub(body: Self.state, silentFor: 1)
+        let s = try await connectOrStart(later.base, launch: launch, slowFor: 5)
+        XCTAssertFalse(s.owned, "attached once it answered")
+    }
+
+    func testAPortThatStaysSilentIsInUse() async throws {
+        let silent = try Stub(body: "", silent: true)
+        let launch = Launch(executable: URL(fileURLWithPath: "/nonexistent"), environment: [:], logFile: tmp.appendingPathComponent("log"))
+        let t0 = Date()
+        do {
+            _ = try await connectOrStart(silent.base, launch: launch, slowFor: 1)
+            XCTFail("should throw")
+        } catch let e as ServerError {
+            XCTAssertEqual(e, .portTaken(String(silent.port)))
+        }
+        XCTAssertGreaterThan(Date().timeIntervalSince(t0), 1, "asked again for the whole wait first")
+    }
+
+    /// A Bun stub answering /api/info as a sidecar of `parent`, naming `reportPid` as its own pid (its
+    /// real one unless told otherwise), ignoring SIGTERM if told to.
+    func sidecarScript(parent: Int32, reportPid: Int32? = nil, ignoreTerm: Bool = false) -> String {
+        """
+        \(ignoreTerm ? "process.on(\"SIGTERM\", () => {});" : "")
+        Bun.serve({ hostname: "127.0.0.1", port: Number(process.env.PORT), fetch: (req) =>
+          new URL(req.url).pathname === "/api/info"
+            ? Response.json({ library: "/tmp/lib", sidecar: true, parentPid: \(parent), pid: \(reportPid.map(String.init) ?? "process.pid"), claudeCode: "x" })
+            : Response.json(\(Self.state)) });
+        """
+    }
+
+    /// Runs `script` with the same executable the controller would launch, detached the way an
+    /// earlier run of the app leaves it: its parent (a shell here) gone, so launchd (pid 1) holds it.
+    /// Returns its pid once it answers.
+    func runLeftover(port: UInt16, script: String) async throws -> Int32 {
+        let l = try TestServers.launch(port: port, script: script, in: tmp, name: "leftover.ts")
+        let sh = Process()
+        sh.executableURL = URL(fileURLWithPath: "/bin/sh")
+        sh.arguments = ["-c", "\"$0\" \"$1\" >/dev/null 2>&1 & echo $!", l.executable.path] + l.arguments
+        sh.environment = l.environment
+        let out = Pipe()
+        sh.standardOutput = out
+        try sh.run()
+        sh.waitUntilExit()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let pid = try XCTUnwrap(Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)))
+        leftovers.append(pid)
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        for _ in 0..<100 where await probe(base) != .viewswitcher { try await Task.sleep(for: .milliseconds(50)) }
+        return pid
+    }
+
+    /// Leftovers this test started, killed in tearDown whatever happened.
+    var leftovers: [Int32] = []
+
+    func deadPid() throws -> Int32 {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try p.run()
+        p.waitUntilExit()
+        return p.processIdentifier
+    }
+
+    func until(_ timeout: TimeInterval = 5, _ check: @escaping () -> Bool) async -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while Date() < end, !check() { try? await Task.sleep(for: .milliseconds(25)) }
+        return check()
+    }
+
+    func testAnOrphanFromAnEarlierRunIsReplaced() async throws {
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let orphan = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid()))
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertTrue(s.owned, "the app starts its own instead of attaching to a server about to go away")
+        XCTAssertEqual(s.replacedOrphan, orphan)
+        let gone = await until { !processExists(orphan) }
+        XCTAssertTrue(gone, "the orphan was stopped")
+        XCTAssertNotEqual(s.pid, orphan)
+        await s.stop()
+    }
+
+    func testAnOrphanThatIgnoresSigtermIsKilled() async throws {
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let orphan = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid(), ignoreTerm: true))
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertTrue(s.owned)
+        XCTAssertEqual(s.replacedOrphan, orphan)
+        let gone = await until { !processExists(orphan) }
+        XCTAssertTrue(gone)
+        await s.stop()
+    }
+
+    func testAPidThatIsntALeftoverServerIsNeverSignalled() async throws {
+        // Whatever holds the port names another process of this user (here a sleep, still with its
+        // parent) as its pid: the app must not kill it on that say-so.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let bystander = Process()
+        bystander.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        bystander.arguments = ["30"]
+        try bystander.run()
+        defer { bystander.terminate() }
+        _ = try await runLeftover(port: port, script: sidecarScript(parent: try deadPid(), reportPid: bystander.processIdentifier))
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertFalse(s.owned, "not provably a leftover of ours, and it stays: attach, as before")
+        XCTAssertNil(s.replacedOrphan)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(bystander.isRunning, "the bystander survives")
+    }
+
+    func testALeftoverThatCantBeConfirmedIsLeftToGoByItself() async throws {
+        // Says it's an orphan but names a pid the system can't confirm; it then exits on its own, as
+        // a real orphan's parent watch makes it. The app starts its own instead of attaching to it.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let bystander = Process()
+        bystander.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        bystander.arguments = ["30"]
+        try bystander.run()
+        defer { bystander.terminate() }
+        let leaving = "setTimeout(() => process.exit(0), 800);\n" + sidecarScript(parent: try deadPid(), reportPid: bystander.processIdentifier)
+        _ = try await runLeftover(port: port, script: leaving)
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertTrue(s.owned)
+        XCTAssertNil(s.replacedOrphan, "it went by itself; nothing was signalled")
+        XCTAssertTrue(bystander.isRunning)
+        await s.stop()
+    }
+
+    func testAServerThatStopsAnsweringIsAskedAgainNotAttached() async throws {
+        // Answers /api/state but never /api/info (a server on its way out): the info call gives up
+        // after its short timeout and the port is probed again, rather than launch waiting a minute.
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let hanging = "Bun.serve({ hostname: \"127.0.0.1\", port: Number(process.env.PORT), fetch: (req) => new URL(req.url).pathname === \"/api/info\" ? new Promise(() => {}) : Response.json(\(Self.state)) });"
+        _ = try await runLeftover(port: port, script: hanging)
+        let launch = Launch(executable: URL(fileURLWithPath: "/nonexistent"), environment: [:], logFile: tmp.appendingPathComponent("log"))
+        let t0 = Date()
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertFalse(s.owned, "it still answers like a server: attach")
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 6, "the info call has a short timeout")
+    }
+
+    func testACancelledStartStopsItsServerAndReturns() async throws {
+        let port = try freePort()
+        let launch = try stubLaunch(port: port, script: "setInterval(() => {}, 1000); console.log(\"never answers\");")
+        let task = Task { try await connectOrStart(URL(string: "http://127.0.0.1:\(port)")!, launch: launch, readyTimeout: 15) }
+        try await Task.sleep(for: .milliseconds(800))
+        let t0 = Date()
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("should throw")
+        } catch is CancellationError {}
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 4, "returns at once (SIGTERM), not after the 15 s wait")
+        let log = try String(contentsOf: launch.logFile, encoding: .utf8)
+        XCTAssertTrue(log.contains("server exited"), "the half-started server was stopped")
+    }
+
+    func testOnlyALeftoverOfThisAppsOwnServerQualifies() throws {
+        let sleep = Process()
+        sleep.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleep.arguments = ["30"]
+        try sleep.run()
+        defer { sleep.terminate() }
+        let facts = try XCTUnwrap(processFacts(sleep.processIdentifier))
+        XCTAssertEqual(facts.uid, getuid())
+        XCTAssertEqual(facts.ppid, UInt32(getpid()))
+        XCTAssertFalse(isLeftoverSidecar(sleep.processIdentifier, executable: URL(fileURLWithPath: "/bin/sleep")), "its parent is alive")
+        XCTAssertFalse(isLeftoverSidecar(getpid(), executable: URL(fileURLWithPath: "/bin/sleep")), "another executable")
+        XCTAssertNil(processFacts(try deadPid()))
+    }
+
+    func testASidecarWhoseAppIsAliveIsLeftAlone() async throws {
+        let port = try freePort()
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let app = Process()
+        app.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        app.arguments = ["30"]
+        try app.run()
+        defer { app.terminate() }
+        let other = try await runLeftover(port: port, script: sidecarScript(parent: app.processIdentifier))
+        let launch = try stubLaunch(port: port, script: Self.serving)
+        let s = try await connectOrStart(base, launch: launch)
+        XCTAssertFalse(s.owned, "another running copy's server: attach, never stop it")
+        XCTAssertTrue(processExists(other))
+    }
+
+    func testOrphanRules() {
+        let dead: (Int32) -> Bool = { _ in false }
+        let alive: (Int32) -> Bool = { _ in true }
+        XCTAssertTrue(ServerInfo(library: "/l", sidecar: true, parentPid: 500, pid: 900).isOrphan(ownPid: 700, isAlive: dead))
+        XCTAssertFalse(ServerInfo(library: "/l", sidecar: true, parentPid: 500, pid: 900).isOrphan(ownPid: 700, isAlive: alive), "its app still runs")
+        XCTAssertFalse(ServerInfo(library: "/l", sidecar: true, parentPid: 700, pid: 900).isOrphan(ownPid: 700, isAlive: dead), "this app's own")
+        XCTAssertFalse(ServerInfo(library: "/l", sidecar: false, parentPid: nil, pid: 900).isOrphan(ownPid: 700, isAlive: dead), "bun run dev")
+        XCTAssertFalse(ServerInfo(library: "/l").isOrphan(ownPid: 700, isAlive: dead), "an older server that doesn't say")
+        XCTAssertTrue(processExists(getpid()))
     }
 
     func testStopKillsAServerThatIgnoresSigterm() async throws {

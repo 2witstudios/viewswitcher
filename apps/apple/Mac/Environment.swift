@@ -20,7 +20,7 @@ enum Env {
         return bytes.map { String(format: "%02x", $0) }.joined()
     }()
 
-    /// "Let phones and tablets on this Wi-Fi connect" (MAC-23): off by default and remembered. The
+    /// "Let phones and tablets on this Wi-Fi connect": off by default and remembered. The
     /// end-to-end check keeps its own value in memory, so it never changes the installed app's setting.
     @MainActor static var wifi: Bool {
         get { e2e ? e2eWifi : UserDefaults.standard.bool(forKey: "wifiRemotes") }
@@ -28,13 +28,16 @@ enum Env {
     }
     @MainActor private static var e2eWifi = false
 
+    /// The app's calls to its server (the pairing ones carry the secret).
+    static var api: ServerAPI { ServerAPI(base: base, adminToken: adminToken) }
+
     /// The bundled sidecar in a built app; `bun apps/server/src/index.ts` from a checkout (scripts/dev.sh sets VIEWSWITCHER_REPO).
-    @MainActor static func launch() -> Launch? {
+    @MainActor static func launch() throws -> Launch {
         var env = vars
         env["PORT"] = port
         env["VIEWSWITCHER_ADMIN_TOKEN"] = adminToken
         env["VIEWSWITCHER_LAN"] = wifi ? "1" : "0"
-        // The server exits if this app goes away without stopping it (apps/server/src/index.ts).
+        // The server exits if this app goes away without stopping it (apps/server/src/parent-watch.ts).
         env["VIEWSWITCHER_PARENT_PID"] = String(getpid())
         // The Claude Desktop extension the server makes carries the app's version.
         env["VIEWSWITCHER_VERSION"] = version
@@ -45,12 +48,12 @@ enum Env {
             env["VIEWSWITCHER_WEB_DIST"] = res.appendingPathComponent("web").path
             env["VIEWSWITCHER_STARTER"] = res.appendingPathComponent("starter").path
             env["VIEWSWITCHER_LIBRARY_KIT"] = res.appendingPathComponent("library-kit").path
-            env["VIEWSWITCHER_PACKS"] = res.appendingPathComponent("packs").path // built-in template packs (EDIT-29)
+            env["VIEWSWITCHER_PACKS"] = res.appendingPathComponent("packs").path // built-in template packs
             return Launch(executable: sidecar, environment: env, logFile: logFile)
         }
-        guard let repo = vars["VIEWSWITCHER_REPO"] else { return nil }
-        let bun = vars["BUN"].map { URL(fileURLWithPath: $0) } ?? which("bun")
-        guard let bun else { return nil }
+        guard let repo = vars["VIEWSWITCHER_REPO"], let bun = vars["BUN"].map({ URL(fileURLWithPath: $0) }) ?? which("bun") else {
+            throw ServerError.startFailed("This build has no server inside it. Run it with bun run mac:dev, or build it with bun run mac:build.")
+        }
         return Launch(executable: bun, arguments: ["\(repo)/apps/server/src/index.ts"], environment: env, logFile: logFile)
     }
 
@@ -101,8 +104,8 @@ enum Outside {
         return a.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
     }
 
-    static func notify(_ title: String, _ body: String) {
+    static func notify(_ title: String, _ body: String, id: String = UUID().uuidString) {
         if Env.e2e { notices.append("\(title): \(body)"); return }
-        Notifier.shared.post(title, body)
+        Notifier.shared.post(title, body, id: id)
     }
 }
