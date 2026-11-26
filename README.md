@@ -73,6 +73,8 @@ No subscription, no watermark, and the templates are free. You need a Mac with m
 
 ViewSwitcher is open source under the [MIT license](LICENSE). Everything below is for running it from source, building on it, or making views by hand.
 
+The words below follow [docs/glossary.md](docs/glossary.md): a **view** is one page that can go on air (`Scene` in code), a **show** is one brand or channel (`org` in code), and the glossary maps the rest.
+
 ### Run from source
 
 You need [Bun](https://bun.sh) and OBS.

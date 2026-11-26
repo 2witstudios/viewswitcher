@@ -43,7 +43,9 @@ Tasks read `<CODE> — Given X, should Y`. Never renumber; inserted work takes a
 
 ## Code rules
 
-Bun workspaces monorepo: a live-stream scene switcher that drives OBS (`apps/`, `packages/`). Start with README.md.
+Bun workspaces monorepo: a live-stream switcher that drives OBS (`apps/`, `packages/`). Start with README.md.
+
+- Words: [docs/glossary.md](docs/glossary.md) has one word for each thing. People read "view" and "show"; code says `Scene` and `org`. OBS's own scene is always `obsScene`, a paired phone is a `remote`, an OBS input is a `source`. Use those words in new code, copy and comments.
 
 - Scene **content** lives in a separate repo, `~/ViewSwitcher Library` (env `VIEWSWITCHER_LIBRARY`), one folder per org. To create or edit scenes, work there with its `viewswitcher-scenes` skill. Don't add an org's scenes to this repo; the only scene HTML here is the neutral starter kit in `apps/server/starter/` (placeholders like `{{ORG_NAME}}` are filled in when an org is created).
 - Library paths sent to and from clients start with the org id (`daisy/projects/...`). Every server path from a client goes through `inside()` / `plainName()` in `apps/server/src/paths.ts`.
