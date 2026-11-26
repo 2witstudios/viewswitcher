@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { toBase } from "@viewswitcher/shared";
-import { refreshVerdict } from "./refresh";
+import { alreadyHave, refreshVerdict } from "./refresh";
 
 const v1 = toBase({ html: "<p>One</p>", hash: "1" });
 const v2 = toBase({ html: "<p>Two</p>", hash: "2" });
@@ -23,5 +23,16 @@ describe("a change made elsewhere, once read", () => {
     // The read started at v1, the editor saved v2 during it, and the read came back with v1's
     // predecessor or the agent's version: never shown over v2 without reading again.
     expect(refreshVerdict({ readFrom: v1, now: v2, readHash: "0", free: true })).toBe("retry");
+  });
+});
+
+describe("a change the server reported with its hash", () => {
+  test("is nothing to read when the hash is the version open (the editor's own save, coming back)", () => {
+    expect(alreadyHave("1", v1)).toBe(true);
+  });
+  test("is read when it's another version, when the server didn't say, or before anything is open", () => {
+    expect(alreadyHave("2", v1)).toBe(false);
+    expect(alreadyHave(undefined, v1)).toBe(false);
+    expect(alreadyHave("1", null)).toBe(false);
   });
 });

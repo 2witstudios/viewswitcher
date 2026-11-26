@@ -11,3 +11,9 @@ export function refreshVerdict(r: { readFrom: SceneBase | null; now: SceneBase |
   if (!r.free || r.now !== r.readFrom) return "retry";
   return "show";
 }
+
+/**
+ * Whether a change the server reported is the version the editor already has, by the hash the server
+ * sent with it (its own save, coming back), so there's nothing to read. Unknown (no hash) isn't.
+ */
+export const alreadyHave = (reportedHash: string | undefined, now: SceneBase | null) => reportedHash !== undefined && reportedHash === now?.hash;

@@ -24,6 +24,7 @@ import { checkObsSetup } from "./obs-setup";
 import { sweepStaging } from "./packs";
 import { Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 import { createPreviewer } from "./preview";
+import { viewHashes } from "./scene-edit";
 import { pathScrub } from "./scrub";
 import { followSettings, readSettings } from "./settings";
 import { createSlotOrder } from "./slot-order";
@@ -186,7 +187,9 @@ watch(config.library, { recursive: true }, (_event, filename) => {
     scanner.forget(paths);
     // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
     await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
-    publish({ t: "library:changed", paths, seq: ++librarySeq });
+    // The views' hashes, so an editor sees that a change is its own save without reading it again.
+    const hashes = await viewHashes(config.library, paths);
+    publish({ t: "library:changed", paths, seq: ++librarySeq, ...(Object.keys(hashes).length ? { hashes } : {}) });
   }, 120);
 });
 

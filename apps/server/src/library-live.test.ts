@@ -7,6 +7,7 @@ import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { OrgContent } from "@viewswitcher/shared";
+import { sceneHash } from "./scene-edit";
 import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 let port = 0;
@@ -48,4 +49,24 @@ test("a change made on disk shows once the watcher sees it", async () => {
   let label = brb.label;
   for (const end = Date.now() + 5_000; Date.now() < end && label !== "Back in five"; await Bun.sleep(50)) label = (await listing()).templates.find((t) => t.name === "brb")!.label;
   expect(label).toBe("Back in five");
+});
+
+test("the change message carries a changed view's hash, the version the editor gets for it", async () => {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+  const changes: { paths: string[]; hashes?: Record<string, string> }[] = [];
+  ws.onmessage = (e) => {
+    const m = JSON.parse(String(e.data));
+    if (m.t === "library:changed") changes.push(m);
+  };
+  await new Promise((r) => (ws.onopen = r));
+  const path = `${ORG}/templates/ending.html`;
+  const text = `<!doctype html><title>The end</title><main class="scene"></main>`;
+  writeFileSync(join(library, `${path}.tmp`), text);
+  renameSync(join(library, `${path}.tmp`), join(library, path));
+  for (const end = Date.now() + 5_000; Date.now() < end && !changes.some((c) => c.hashes?.[path]); ) await Bun.sleep(50);
+  ws.close();
+  const hash = changes.find((c) => c.hashes?.[path])?.hashes?.[path];
+  expect(hash).toBe(sceneHash(text));
+  // What the editor opens it as (api.ts sceneForEdit).
+  expect((await fetch(`${base()}/library/${path}?edit`)).headers.get("x-scene-hash")).toBe(hash!);
 });

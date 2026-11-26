@@ -41,7 +41,7 @@ function counted<S>(store: Store<Live>, select: (l: Live) => S, isEqual?: (a: S,
 
 describe("re-rendering for the part of live state a component reads", () => {
   test("a warnings-only change doesn't re-render a tile, the on-air badge or the record buttons", () => {
-    const store = createStore<Live>({ connected: true, state: null, versions: {} });
+    const store = createStore<Live>({ connected: true, state: null, versions: {}, hashes: {} });
     receive(store, { t: "state", state: state() });
     const tile = counted(store, (l) => sceneUrl("show/templates/title.html", l.versions, true));
     const onAir = counted(store, (l) => l.state?.onAir);
@@ -60,7 +60,7 @@ describe("re-rendering for the part of live state a component reads", () => {
   });
 
   test("a tile re-renders for its own file and the shared theme, not for another file", () => {
-    const store = createStore<Live>({ connected: true, state: state(), versions: {} });
+    const store = createStore<Live>({ connected: true, state: state(), versions: {}, hashes: {} });
     const tile = counted(store, (l) => sceneUrl("show/templates/title.html", l.versions, true));
     receive(store, { t: "library:changed", paths: ["show/templates/brb.html"], seq: 1 });
     expect(tile.renders).toBe(1);
@@ -73,7 +73,7 @@ describe("re-rendering for the part of live state a component reads", () => {
   });
 
   test("what's on air changing re-renders what reads it, with the new value", () => {
-    const store = createStore<Live>({ connected: true, state: state(), versions: {} });
+    const store = createStore<Live>({ connected: true, state: state(), versions: {}, hashes: {} });
     const onAir = counted(store, (l) => l.state?.onAir?.label);
     receive(store, { t: "state", state: state({ onAir: { path: "show/templates/title.html", org: "show", label: "Title" } }) });
     expect(onAir.renders).toBe(2);
@@ -82,7 +82,7 @@ describe("re-rendering for the part of live state a component reads", () => {
   });
 
   test("a selector with its own equality re-renders only when that says the part changed", () => {
-    const store = createStore<Live>({ connected: true, state: state(), versions: {} });
+    const store = createStore<Live>({ connected: true, state: state(), versions: {}, hashes: {} });
     const sameLength = (a: string[] | undefined, b: string[] | undefined) => a?.length === b?.length;
     const count = counted(store, (l) => l.state?.warnings, sameLength);
     receive(store, { t: "state", state: state({ warnings: [] }) });

@@ -15,6 +15,8 @@ export type Live = {
    * (`<org>/*`) when a file in one of its _shared/ folders changes; `*` when every file may have.
    */
   versions: Record<string, number>;
+  /** Each changed view's hash as the server last read it (an editor's version); none when it couldn't say. */
+  hashes: Record<string, string>;
 };
 
 /** A value that changes over time, read by components a part at a time (useStore). */
@@ -76,7 +78,7 @@ export function keepUnchanged<T>(prev: T, next: T): T {
   return (same ? p : merged) as T;
 }
 
-const store = createStore<Live>({ connected: false, state: null, versions: {} });
+const store = createStore<Live>({ connected: false, state: null, versions: {}, hashes: {} });
 
 type LiveEditListener = (path: string, hash: string, edit: SceneEdit, order: { session: string; seq: number }) => void;
 const liveEditListeners = new Set<LiveEditListener>();
@@ -149,9 +151,13 @@ export function sharedFor(path: string): string[] {
 export function nextLive(live: Live, msg: Extract<ServerMessage, { t: "state" | "library:changed" }>): Live {
   if (msg.t === "state") return { ...live, state: keepUnchanged(live.state, msg.state) };
   const versions = { ...live.versions };
+  const hashes = { ...live.hashes };
   const bump = (k: string) => (versions[k] = (versions[k] ?? 0) + 1);
   for (const p of msg.paths) {
     bump(p);
+    // A hash the server didn't send now would be an older version's: forget it.
+    if (msg.hashes?.[p]) hashes[p] = msg.hashes[p];
+    else delete hashes[p];
     // A shared folder: the views that use it reload (sharedFor), not every view in every org.
     const root = sharedRootOf(p);
     if (root) {
@@ -159,7 +165,7 @@ export function nextLive(live: Live, msg: Extract<ServerMessage, { t: "state" | 
       bump(anyShared(parseLibraryPath(p).org));
     }
   }
-  return { ...live, versions };
+  return { ...live, versions, hashes };
 }
 
 function connect() {

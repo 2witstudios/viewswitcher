@@ -10,7 +10,7 @@ import { createSceneSaver } from "../../lib/scene-saver";
 import { toast } from "../ui";
 import { canReloadIn } from "./mode";
 import { newestOnly } from "./newest";
-import { refreshVerdict } from "./refresh";
+import { alreadyHave, refreshVerdict } from "./refresh";
 import { settleSaves } from "./settle";
 import type { ModeStore } from "./useMode";
 import type { UndoEntry } from "./useUndo";
@@ -161,6 +161,10 @@ export function useSceneDocument(path: string, opts: {
   // isn't the version it already has. Otherwise it waits: the person's change is never thrown away
   // for someone else's, and when it saves against the old version the conflict screen takes over.
   const version = useLive((l) => l.versions[path] ?? 0);
+  /** The file's hash as the server read it after its last change, when it said. */
+  const reported = useLive((l) => l.hashes[path]);
+  const reportedRef = useRef(reported);
+  reportedRef.current = reported;
   const seen = useRef(version);
   const free = () => canReloadIn(mode.now()) && !saver.busy() && o.current.quiet();
   const refreshRef = useRef(async () => {});
@@ -169,6 +173,11 @@ export function useSceneDocument(path: string, opts: {
     clearTimeout(outsideTimer.current);
     // Before the first version is open there's nothing to compare with: the first load checks again when it lands.
     if (!alive.current || !outside.current || !baseRef.current) return;
+    // The server's hash says it's the version open here (the editor's own save): nothing to read.
+    if (alreadyHave(reportedRef.current, baseRef.current)) {
+      outside.current = false;
+      return;
+    }
     // The editor's own saves land first (free() waits for them): their new versions aren't someone else's change.
     if (!free()) return recheck(OUTSIDE_RETRY_MS);
     outside.current = false;

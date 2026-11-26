@@ -3,13 +3,31 @@
 import type { Stats } from "node:fs";
 import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { applyEdits, canRemove, EditError, isLibraryUrl, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, canRemove, EditError, isLibraryUrl, isViewPath, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 
 /** Identifies one version of a file's text. */
 export const sceneHash = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex").slice(0, 20);
+
+/** How many changed views a library change hashes; a bigger batch (a git pull, a sync) is left to the pages to read. */
+export const HASHED_CHANGES = 20;
+
+/**
+ * The hash of each view in `paths` (library paths) that can be read, inside the library: what an
+ * editor that has it open compares with its own version. Views and transitions only; a path that isn't one, is
+ * gone or leads outside the library is left out, and so is everything past HASHED_CHANGES views.
+ */
+export async function viewHashes(root: string, paths: string[]): Promise<Record<string, string>> {
+  const editable = (p: string) => {
+    const at = parseLibraryPath(p);
+    return isViewPath(at) || at.kind === "transition";
+  };
+  const views = paths.filter(editable).slice(0, HASHED_CHANGES);
+  const read = await Promise.all(views.map((p) => realScene(root, p, false).then((abs) => readFile(abs, "utf8")).then((t) => [p, sceneHash(t)] as const, () => null)));
+  return Object.fromEntries(read.filter((r) => r !== null));
+}
 
 /** A scene file, by its library path (which starts with the org id). */
 export function scenePath(root: string, path: unknown): string {

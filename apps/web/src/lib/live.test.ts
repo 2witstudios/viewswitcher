@@ -34,7 +34,7 @@ describe("a change in a _shared/ folder reloads the views that use it", () => {
     otherOrg: "grace/templates/brb.html",
     otherOrgProject: "grace/projects/sunday/scenes/live.html",
   };
-  const empty: Live = { connected: true, state: null, versions: {} };
+  const empty: Live = { connected: true, state: null, versions: {}, hashes: {} };
   /** Which views' urls change when `paths` change. */
   const reloaded = (paths: string[]) => {
     const after = nextLive(empty, { t: "library:changed", paths, seq: 1 });
@@ -71,5 +71,17 @@ describe("a change in a _shared/ folder reloads the views that use it", () => {
       seen.add(sceneUrl(VIEWS.neonView, live.versions));
     }
     expect(seen.size).toBe(4);
+  });
+});
+
+describe("a change's hashes", () => {
+  const empty: Live = { connected: true, state: null, versions: {}, hashes: {} };
+  test("are kept per view, and a later change without one forgets the old one", () => {
+    let live = nextLive(empty, { t: "library:changed", paths: ["d/templates/a.html", "d/templates/b.html"], seq: 1, hashes: { "d/templates/a.html": "h1" } });
+    expect(live.hashes).toEqual({ "d/templates/a.html": "h1" });
+    live = nextLive(live, { t: "library:changed", paths: ["d/templates/a.html"], seq: 2, hashes: { "d/templates/a.html": "h2" } });
+    expect(live.hashes["d/templates/a.html"]).toBe("h2");
+    live = nextLive(live, { t: "library:changed", paths: ["d/templates/a.html"], seq: 3 });
+    expect(live.hashes["d/templates/a.html"]).toBeUndefined();
   });
 });
