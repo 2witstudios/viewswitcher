@@ -318,6 +318,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func showLog() {
+        // A server this app attached to (bun run dev, another build's) writes its own log, not this
+        // build's: show the logs folder, where the installed app's and a Debug build's are, rather than a file it doesn't use.
+        if supervisor.state == .attached {
+            let folder = Env.logFile.deletingLastPathComponent()
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            Outside.openFolder(folder)
+            return
+        }
         capLog(Env.logFile)
         if !FileManager.default.fileExists(atPath: Env.logFile.path) { FileManager.default.createFile(atPath: Env.logFile.path, contents: nil) }
         Outside.openFolder(Env.logFile)

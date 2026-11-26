@@ -126,7 +126,8 @@ export function caughtUp(versions: Record<string, number>): Record<string, numbe
  * null for anything else.
  */
 export function sharedRootOf(path: string): string | null {
-  const m = /^([^/]+)\/templates\/(?:([^/]+)\/)?_shared(?:\/|$)/.exec(path);
+  // A set's folder never starts with "_" (isListedFolder), so templates/_shared/_shared/… is the org's.
+  const m = /^([^/]+)\/templates\/(?:([^/_][^/]*)\/)?_shared(?:\/|$)/.exec(path);
   if (!m) return null;
   return m[2] ? `${m[1]}/templates/${m[2]}/_shared` : `${m[1]}/templates/_shared`;
 }

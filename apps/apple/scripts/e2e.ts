@@ -445,6 +445,10 @@ try {
   check(await until(async () => (await state()).server?.owned === false), "the app attaches instead of starting another");
   check(listeners().length === 1 && listeners()[0] === own.pid, "only that server listens");
   check((await state()).menu.includes("Quit ViewSwitcher (server keeps running)"), "menu says Quit leaves it running");
+  // An attached server writes its own log, not this build's: Show Server Log opens the logs folder instead.
+  const openedBeforeLog = (await state()).opened.length;
+  await cmd("menu", { item: "Show Server Log" });
+  check(await until(async () => (await state()).opened.slice(openedBeforeLog).some((p) => resolve(p) === resolve(control)), 5000), "attached: Show Server Log opens the logs folder, not this build's log");
   check(await quit(app), "Quit ends the app");
   await sleep(800);
   check(await answers(), "after Quit, the server it didn't start is still running");

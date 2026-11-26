@@ -31,8 +31,16 @@ export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Bl
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
 const tokenOk = (t: unknown): t is string => typeof t === "string" && STAGING_TOKEN.test(t);
-/** A staged pack's folder: in the org's staging folder, which is never a link (contain.ts stagingIn). */
-const stageDir = async (libraryRoot: string, orgId: string, token: string) => inside(await stagingIn(libraryRoot, plainName(orgId)), token);
+/**
+ * A staged pack's folder: in the org's staging folder, which is never a link (contain.ts stagingIn),
+ * and never a link itself: install reads, writes and deletes in it.
+ */
+async function stageDir(libraryRoot: string, orgId: string, token: string): Promise<string> {
+  const dir = inside(await stagingIn(libraryRoot, plainName(orgId)), token);
+  const s = await lstat(dir).catch(() => null);
+  if (s && !s.isDirectory()) throw new PackError("That pack isn't ready to install any more. Drop it again.");
+  return dir;
+}
 
 /** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
 function plainFsError(e: unknown, doing: string): Error {
@@ -207,11 +215,13 @@ export async function cancelPack(libraryRoot: string, orgId: string, token: unkn
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
-async function scenesUsing(libraryRoot: string, orgDir: string, orgId: string, set: string): Promise<number> {
+async function scenesUsing(libraryRoot: string, orgId: string, set: string): Promise<number> {
   // As written by hand or by the switcher: plain, or with each segment encoded (libraryUrl).
   const needle = `/library/${orgId}/templates/${set}/`;
   const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
-  const projects = join(orgDir, "projects");
+  // A projects/ that leads outside the library isn't walked at all (contain.ts); one inside is walked where it really is.
+  const projects = await resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects`).catch(() => null);
+  if (projects === null) return 0;
   const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
   // Linked scenes too: a scene that is a link still uses the set through it. One that leads outside the library isn't read (contain.ts).
   const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
@@ -231,7 +241,7 @@ export async function removeSet(libraryRoot: string, orgId: string, set: string)
   // What it deletes must really be in the library, not wherever a linked templates/ leads.
   await resolveInLibrary(libraryRoot, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
   if (!(await exists(join(dir, "pack.json")))) throw new PathError("That isn't an installed template set");
-  const kept = await scenesUsing(libraryRoot, orgDir, orgId, set);
+  const kept = await scenesUsing(libraryRoot, orgId, set);
   if (kept === 0) {
     await rm(dir, { recursive: true, force: true });
     return { kept };

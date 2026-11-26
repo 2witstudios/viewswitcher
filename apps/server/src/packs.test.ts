@@ -236,6 +236,22 @@ describe("removing a set", () => {
     }
   });
 
+  test("a projects/ folder linked outside the library isn't walked or read to count scenes", async () => {
+    await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
+    const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await rename(join(root, org, "projects"), join(away, "projects"));
+      await symlink(join(away, "projects"), join(root, org, "projects"));
+      const before = await listing(away);
+      expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
+      expect(await listing(away)).toEqual(before);
+      expect(await readFile(join(away, "projects", projectId, "scenes/teaching.html"), "utf8")).toContain("/templates/starter/");
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
   test("refuses what isn't a set", async () => {
     await expect(removeSet(root, org, "_shared")).rejects.toThrow();
     await expect(removeSet(root, org, "../projects")).rejects.toThrow();
@@ -376,6 +392,24 @@ describe("an org's .viewswitcher/ or staging/ linked outside the library", () =>
       const before = await outsideListing(away);
       await sweepStaging(root);
       expect(await outsideListing(away)).toEqual(before);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a staged pack's own folder that is a link: install and cancel never read, write or delete there", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const staged = join(root, org, ".viewswitcher/staging", s.token);
+      await rename(staged, join(away, "moved"));
+      await mkdir(join(away, "moved/final/keep"), { recursive: true });
+      await symlink(join(away, "moved"), staged);
+      const before = await listing(away);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("isn't ready");
+      await cancelPack(root, org, s.token).catch(() => {});
+      expect(await listing(away)).toEqual(before);
+      expect((await scanOrg(root, org)).sets).toEqual([]);
     } finally {
       await rm(away, { recursive: true, force: true });
     }

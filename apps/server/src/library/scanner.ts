@@ -20,7 +20,8 @@
 // switcher's routes and the MCP server, so both share them and their lifetime is the server's; a
 // test makes its own and shares nothing with another.
 import type { Dirent } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
@@ -36,6 +37,16 @@ const KINDS: Record<string, AssetKind> = {
   ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video",
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
+
+/** A file's text, refusing a link at its last segment (O_NOFOLLOW): ELOOP instead of reading through it. */
+async function readNoFollow(abs: string): Promise<string> {
+  const f = await open(abs, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    return await f.readFile("utf8");
+  } finally {
+    await f.close();
+  }
+}
 
 /** How long a finished scan answers later requests for its org, unless a change drops it first. */
 export const KEEP_MS = 2_000;
@@ -64,7 +75,9 @@ export class LibraryScanner {
     this.io = io;
     this.keepMs = keepMs;
     this.now = now;
-    this.titles = createSceneTitles({ stat: (abs) => io(() => stat(abs)), read: (abs) => io(() => readFile(abs, "utf8")) });
+    // Titles are read from the file the scan checked (scenesIn: a plain file, or a link's real target),
+    // never through a link: one swapped in after the check reads as no title.
+    this.titles = createSceneTitles({ stat: (abs) => io(() => lstat(abs)), read: (abs) => io(() => readNoFollow(abs)) });
   }
 
   /**
@@ -127,8 +140,14 @@ export class LibraryScanner {
   /** The entries of the folder `rel`, when it's in the library; none when it isn't or can't be read. */
   private entries = async (orgDir: string, rel: string): Promise<Dirent[]> =>
     (await this.inLibrary(orgDir, rel)) ? this.io(() => readdir(join(orgDir, rel), { withFileTypes: true })).catch(() => []) : [];
-  /** Entries of a folder that's inside the library: a plain file is inside too; a link is checked. */
-  private plainOrInside = (orgDir: string, rel: string, e: Dirent) => (e.isSymbolicLink() ? this.inLibrary(orgDir, `${rel}/${e.name}`) : Promise.resolve(true));
+  /**
+   * The file an entry of a folder that's inside the library really is: a plain file is itself, a
+   * link its real target when that's in the library too, else null.
+   */
+  private realFile = (orgDir: string, rel: string, e: Dirent): Promise<string | null> =>
+    e.isSymbolicLink()
+      ? this.io(() => resolveInLibrary(this.libraryRoot, `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}/${e.name}`)).catch(() => null)
+      : Promise.resolve(join(orgDir, rel, e.name));
   private readJson = async <T>(orgDir: string, rel: string, fallback: T) => ((await this.inLibrary(orgDir, rel)) ? readJsonFile(join(orgDir, rel), fallback, this.io) : fallback);
   /** `url` when the file `rel` is there, in the library, else null (a transition, for the library listing). */
   private urlIfThere = async (orgDir: string, rel: string, url: string) =>
@@ -136,11 +155,11 @@ export class LibraryScanner {
 
   private async scenesIn(orgDir: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
     const listed = (await this.entries(orgDir, rel)).filter((e) => isViewFile(e.name) && !e.isDirectory());
-    const files = (await Promise.all(listed.map(async (e) => ((await this.plainOrInside(orgDir, rel, e)) ? e.name : null)))).filter((f): f is string => f !== null);
+    const files = (await Promise.all(listed.map(async (e) => ({ f: e.name, real: await this.realFile(orgDir, rel, e) })))).filter((x): x is { f: string; real: string } => x.real !== null);
     const scenes = await Promise.all(
-      files.map(async (f) => {
+      files.map(async ({ f, real }) => {
         const name = f.slice(0, -5);
-        const title = await this.titles.titleOf(join(orgDir, rel, f));
+        const title = await this.titles.titleOf(real);
         return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
       }),
     );
@@ -152,7 +171,7 @@ export class LibraryScanner {
   private async listAssets(orgDir: string, prefix: string): Promise<Asset[]> {
     try {
       const listed = (await this.entries(orgDir, "assets")).filter((e) => !e.name.startsWith("."));
-      const names = (await Promise.all(listed.map(async (e) => ((await this.plainOrInside(orgDir, "assets", e)) ? e.name : null)))).filter((n): n is string => n !== null);
+      const names = (await Promise.all(listed.map(async (e) => ((await this.realFile(orgDir, "assets", e)) ? e.name : null)))).filter((n): n is string => n !== null);
       const assets = await Promise.all(
         names.map(async (name) => {
           // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.

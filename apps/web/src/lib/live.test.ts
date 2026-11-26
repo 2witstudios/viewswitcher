@@ -60,6 +60,8 @@ describe("a change in a _shared/ folder reloads the views that use it", () => {
     expect(sharedRootOf("daisy/templates/_shared")).toBe("daisy/templates/_shared");
     expect(sharedRootOf("daisy/templates/neon/_shared/brand/mark.svg")).toBe("daisy/templates/neon/_shared");
     expect(sharedRootOf("daisy/templates/_sharedx/a.css")).toBeNull();
+    expect(sharedRootOf("daisy/templates/_shared/_shared/theme.css")).toBe("daisy/templates/_shared");
+    expect(sharedRootOf("daisy/templates/_drafts/_shared/theme.css")).toBeNull(); // not a set: the scan doesn't list it
     expect(sharedRootOf("daisy/projects/p/_shared/a.css")).toBeNull();
   });
 

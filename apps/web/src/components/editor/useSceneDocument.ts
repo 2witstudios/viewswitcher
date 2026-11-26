@@ -57,6 +57,10 @@ export function useSceneDocument(path: string, opts: {
   /** A 409 whose latest version hasn't loaded yet. */
   const pendingConflict = useRef<{ edits: SceneEdit[]; prev: SceneBase } | null>(null);
   /** A change made elsewhere is waiting until the editor is free to load it. */
+  /** The file's hash as the server read it after its last change, when it said. */
+  const reported = useLive((l) => l.hashes[path]);
+  const reportedRef = useRef(reported);
+  reportedRef.current = reported;
   const outside = useRef(false);
   const outsideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** Look at a change made elsewhere again in `ms`. */
@@ -91,6 +95,9 @@ export function useSceneDocument(path: string, opts: {
       const b = toBase(await api.sceneForEdit(path));
       if (!isNewest()) return null;
       if (ifChanged) {
+        // A newer report says the version open is the file's now (it changed back while this was read):
+        // what this read found is older than that report, so it's never shown.
+        if (alreadyHave(reportedRef.current, baseRef.current)) return baseRef.current;
         const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, free: ifChanged.stillFree() });
         if (verdict === "same") return baseRef.current;
         if (verdict === "retry") {
@@ -161,10 +168,6 @@ export function useSceneDocument(path: string, opts: {
   // isn't the version it already has. Otherwise it waits: the person's change is never thrown away
   // for someone else's, and when it saves against the old version the conflict screen takes over.
   const version = useLive((l) => l.versions[path] ?? 0);
-  /** The file's hash as the server read it after its last change, when it said. */
-  const reported = useLive((l) => l.hashes[path]);
-  const reportedRef = useRef(reported);
-  reportedRef.current = reported;
   const seen = useRef(version);
   const free = () => canReloadIn(mode.now()) && !saver.busy() && o.current.quiet();
   const refreshRef = useRef(async () => {});
