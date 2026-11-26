@@ -12,7 +12,7 @@ import { createPreviewer } from "./preview";
 const PORT = 7433;
 const names = {
   url: "ws://127.0.0.1:4455", password: () => undefined as string | undefined,
-  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"],
+  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"],
   previewScene: "ViewSwitcher Preview", previewSource: "ViewSwitcher Preview Render",
 };
 const SCENE = "daisy/projects/p1/Title.html";

@@ -1,8 +1,8 @@
 // OBS setup: the "ViewSwitcher" scene with the ground color at the bottom, the program browser
-// source on top, and the devices in between; then OBS switches to it. Run from the switcher's
+// source on top, and the sources views place (Camera, Screen…) in between; then OBS switches to it. Run from the switcher's
 // "Set up OBS" (POST /api/obs/setup) or `bun run obs:setup`. Safe to run again (e.g. after adding
-// devices, to put the browser source back on top). Renames the old Daisy-era scene and sources if
-// it finds them, so devices placed in them carry over. It also makes the preview scene that renders
+// sources, to put the browser source back on top). Renames the old Daisy-era scene and sources if
+// it finds them, so sources placed in them carry over. It also makes the preview scene that renders
 // scenes for agents (preview.ts), which is never switched to.
 import type { ObsSetup } from "@viewswitcher/shared";
 import { OBSRequestError } from "./obs";
@@ -14,7 +14,7 @@ export type SetupNames = {
   scene: string;
   programSource: string;
   groundSource: string;
-  devices: string[];
+  sources: string[];
 } & PreviewNames;
 
 export type PreviewNames = { previewScene: string; previewSource: string };
@@ -41,7 +41,7 @@ const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy G
 export const programUrl = (port: number) => `http://127.0.0.1:${port}/program`;
 
 export async function setupObs(obs: ObsRequester, names: SetupNames, port: number, { switchProgram = true }: SetupOptions = {}): Promise<SetupReport> {
-  const { scene, programSource, groundSource, devices } = names;
+  const { scene, programSource, groundSource, sources } = names;
   const url = programUrl(port);
   const log: string[] = [];
 
@@ -87,7 +87,7 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
   const ground = { color: 0xff130f0e /* #0e0f13, the default ground */, width: 1920, height: 1080 };
   const groundId = await ensure({ inputName: groundSource, inputKind: "color_source_v3", inputSettings: ground }, { width: ground.width, height: ground.height }, `color source "${groundSource}"`);
 
-  // Ground at the bottom, program browser source on top, devices in between.
+  // Ground at the bottom, program browser source on top, the placed sources in between.
   const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: scene });
   await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: groundId, sceneItemIndex: 0 });
   await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: itemId, sceneItemIndex: sceneItems.length - 1 });
@@ -110,7 +110,7 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
   }
 
   const present = new Set(sceneItems.map((i) => i.sourceName));
-  return { log, missing: devices.filter((d) => !present.has(d)), switched: switchProgram, warnings };
+  return { log, missing: sources.filter((d) => !present.has(d)), switched: switchProgram, warnings };
 }
 
 // The preview browser source lives in a scene of its own that is never the program, so nothing it
@@ -167,12 +167,12 @@ async function addToScene(obs: ObsRequester, sceneName: string, input: { inputNa
 }
 
 /**
- * Whether OBS has what the switcher needs: the scene, both sources (the program pointing here), and the devices.
+ * Whether OBS has what the switcher needs: the scene, both of its own sources (the program pointing here), and the sources views place.
  * The preview scene isn't part of it: previews create it when they need it, so it never holds up setup.
  */
 export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: number): Promise<ObsSetup> {
   const { scenes } = await obs.request<{ scenes: { sceneName: string }[] }>("GetSceneList");
-  if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, ordered: false, missingDevices: names.devices };
+  if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, ordered: false, missingDevices: names.sources };
   // Bottom first, as OBS lists them.
   const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: names.scene });
   const present = new Set(sceneItems.map((i) => i.sourceName));
@@ -182,7 +182,7 @@ export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: 
     const { inputSettings } = await obs.request<{ inputSettings: { url?: string } }>("GetInputSettings", { inputName: names.programSource });
     program = inputSettings.url === programUrl(port);
   }
-  return { scene: true, program, ground: present.has(names.groundSource), ordered, missingDevices: names.devices.filter((d) => !present.has(d)) };
+  return { scene: true, program, ground: present.has(names.groundSource), ordered, missingDevices: names.sources.filter((d) => !present.has(d)) };
 }
 
 if (import.meta.main) {
@@ -198,7 +198,7 @@ if (import.meta.main) {
       console.log(`\nAdd these sources to "${config.obs.scene}" (names must match exactly), then run this again:`);
       for (const d of missing) console.log(`  • ${d}`);
     } else {
-      console.log(`Devices found: ${config.obs.devices.join(", ")}.`);
+      console.log(`Sources found: ${config.obs.sources.join(", ")}.`);
     }
   } catch (e) {
     console.error((e as Error).message);

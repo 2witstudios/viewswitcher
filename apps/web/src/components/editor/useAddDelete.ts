@@ -4,7 +4,7 @@
 // and the frame loaded again if they don't). The stream gets the saved file, which swaps in without
 // a transition. Undo entries below it were made in the ids from before it, and are only reached once
 // Undo has taken it back out, so they stay right.
-import { canRemove, DEVICE_SLOTS, freeSlotName, idsAfter, markupFor, movableIn, posIn, restoreFor, sceneRoot, slotsIn } from "@viewswitcher/shared";
+import { canRemove, SOURCE_SLOTS, freeSlotName, idsAfter, markupFor, movableIn, posIn, restoreFor, sceneRoot, slotsIn } from "@viewswitcher/shared";
 import type { AddKind, InsertEdit, RemoveEdit, SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { type RefObject, useRef } from "react";
 import { openAgentSheet } from "../AgentSheet";
@@ -100,10 +100,10 @@ export function useAddDelete(opts: {
     const root = sceneRoot(b.source);
     if (root === null) return toast("This scene can't take new items", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
-    const slot = DEVICE_SLOTS[kind] ? freeSlotName(DEVICE_SLOTS[kind]!, slots) : null;
+    const slot = SOURCE_SLOTS[kind] ? freeSlotName(SOURCE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {
       if (done && slot && o.current.onAir()) toast(`On air · OBS source "${slot}"`);
-      else if (done && slot && slot !== DEVICE_SLOTS[kind]) toast(`OBS source "${slot}"`);
+      else if (done && slot && slot !== SOURCE_SLOTS[kind]) toast(`OBS source "${slot}"`);
     });
   };
 

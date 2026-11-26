@@ -1,7 +1,7 @@
 // Places OBS sources into the data-slot boxes of the scene the program page is showing, and recolors
 // the ground for its org.
 //
-// Only sources ViewSwitcher manages are touched: the configured devices (OBS_DEVICES), any source a
+// Only sources ViewSwitcher manages are touched: the configured sources (OBS_SOURCES), any source a
 // scene has ever placed (a Guest or Camera 2 box from the editor; remembered across restarts), and
 // the current scene's slots. Anything else people put in the ViewSwitcher scene by hand (a mic, a
 // music input, a watermark) is never hidden: a hidden audio input is silent on air.
@@ -15,7 +15,7 @@ import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
 
-export type PlacementNames = { scene: string; programSource: string; groundSource: string; /** Sources scenes may place (OBS_DEVICES). */ devices: string[] };
+export type PlacementNames = { scene: string; programSource: string; groundSource: string; /** Sources views may place (OBS_SOURCES). */ sources: string[] };
 
 /** What placement needs from OBSClient. */
 export type PlacementObs = {
@@ -59,7 +59,7 @@ export function planPlacement(
     if (item.sourceName === names.programSource || item.sourceName === names.groundSource) continue;
     const slot = inSlots.get(item.sceneItemId);
     if (!slot) {
-      if (!names.devices.includes(item.sourceName) && !placed.has(item.sourceName)) continue; // not ours
+      if (!names.sources.includes(item.sourceName) && !placed.has(item.sourceName)) continue; // not ours
       hide.push({ requestType: "SetSceneItemEnabled", requestData: { sceneName, sceneItemId: item.sceneItemId, sceneItemEnabled: false } });
       continue;
     }

@@ -56,7 +56,7 @@ cleanup() { for p in "${PIDS[@]}"; do pkill -TERM -P "$p" 2>/dev/null || true; k
 trap cleanup EXIT
 
 # The fake OBS and the switcher get the same scene and devices, whatever the shell exports.
-export OBS_SCENE=ViewSwitcher OBS_DEVICES=Camera,Guest,Screen,iPad
+export OBS_SCENE=ViewSwitcher OBS_SOURCES=Camera,Guest,Screen,iPad
 FAKE_OBS_STREAMING=1 bun scripts/fake-obs-server.ts "$OBS_PORT" >"$TMP/obs.log" 2>&1 &
 PIDS+=($!)
 (cd ../web && bunx vite build >/dev/null) # every run: a stale build would show an old layout

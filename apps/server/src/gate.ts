@@ -62,18 +62,18 @@ export const Audience = { Mac: "mac", MacOrUsb: "macOrUsb", Paired: "paired", Pu
 export type Audience = (typeof Audience)[keyof typeof Audience];
 
 /** Who is asking. `device`: the paired device's id. */
-export type Caller = { kind: "mac" } | { kind: "usb" } | { kind: "device"; device: string } | { kind: "stranger" };
+export type Caller = { kind: "mac" } | { kind: "usb" } | { kind: "remote"; remote: string } | { kind: "stranger" };
 
 /**
  * Who sent a request. `onLan`: it came in on the Wi-Fi listener, which is never this Mac whatever the
  * peer says. `device` looks up a paired device by the request's cookie, and is only asked for remote ones.
  */
 export function callerOf(
-  { onLan, peer, headers, device, bridged = bridgePorts }: { onLan: boolean; peer: Peer; headers: Headers; device: () => string | null; bridged?: ReadonlySet<number> },
+  { onLan, peer, headers, remote, bridged = bridgePorts }: { onLan: boolean; peer: Peer; headers: Headers; remote: () => string | null; bridged?: ReadonlySet<number> },
 ): Caller {
   if (!onLan && isMacOrUsb(peer, headers)) return bridgedPeer(peer, bridged) ? { kind: "usb" } : { kind: "mac" };
-  const id = device();
-  return id ? { kind: "device", device: id } : { kind: "stranger" };
+  const id = remote();
+  return id ? { kind: "remote", remote: id } : { kind: "stranger" };
 }
 
 /** Whether `caller` is in `audience`. */

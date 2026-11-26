@@ -35,7 +35,7 @@ export class HttpError extends Error {
 }
 
 /** A live socket's data: the paired device it belongs to, and whether it came over the Wi-Fi. */
-export type SocketData = { device: string | null; lan: boolean };
+export type SocketData = { remote: string | null; lan: boolean };
 
 /** What a handler gets. */
 export type Ctx = {
@@ -75,9 +75,9 @@ export type DispatchOptions = {
   /** Whether a request came in on the Wi-Fi listener. */
   onLan: (srv: Server<SocketData>) => boolean;
   /** The paired device a request's token belongs to, or null. */
-  device: (req: Request) => string | null;
+  remote: (req: Request) => string | null;
   /** After a paired device's request: a Set-Cookie that renews its pairing, or null. */
-  renew: (device: string, c: Ctx) => string | null;
+  renew: (remote: string, c: Ctx) => string | null;
   /** The pairing page, for a stranger's page load. */
   pairPage: (req: Request) => Response;
   /** Takes absolute paths out of error messages (scrub.ts). */
@@ -158,7 +158,7 @@ export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<Socke
       const lan = o.onLan(srv);
       // Remote access off: nothing from elsewhere, not even the pairing page, whatever token it has.
       if ((lan || !isMacOrUsb(peer, req.headers)) && !o.remoteAccess()) return json({ error: REMOTE_OFF }, 403);
-      caller = callerOf({ onLan: lan, peer, headers: req.headers, bridged: o.bridged, device: () => o.device(req) });
+      caller = callerOf({ onLan: lan, peer, headers: req.headers, bridged: o.bridged, remote: () => o.remote(req) });
 
       const route = o.routes.find((r) => matches(r, req.method, path)) ?? NOT_FOUND;
       if (!admits(route.audience ?? "mac", caller)) {
@@ -195,7 +195,7 @@ export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<Socke
       };
       const res = await route.handler(c);
       // A device in use gets its cookie again once a day, so it stays paired 400 days from its last use.
-      const cookie = res && caller.kind === "device" ? o.renew(caller.device, c) : null;
+      const cookie = res && caller.kind === "remote" ? o.renew(caller.remote, c) : null;
       return res && cookie ? withHeaders(res, (h) => h.append("set-cookie", cookie)) : res;
     };
 

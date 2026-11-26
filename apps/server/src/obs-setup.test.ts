@@ -5,7 +5,7 @@ import { obsReady } from "@viewswitcher/shared";
 import { checkObsSetup, type ObsRequester, programUrl, setupObs } from "./obs-setup";
 
 const names = {
-  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"],
+  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"],
   previewScene: "ViewSwitcher Preview", previewSource: "ViewSwitcher Preview Render",
 };
 const PORT = 7433;

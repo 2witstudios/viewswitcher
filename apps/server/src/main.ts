@@ -70,7 +70,7 @@ type Socket = ServerWebSocket<SocketData>;
 const sockets = new Set<Socket>();
 // A removed device's token stops at once: its next request is refused, and its live sockets close now.
 pairing.onRemoved = (id) => {
-  for (const ws of sockets) if (ws.data.device === id) ws.close(4401, "This device was removed");
+  for (const ws of sockets) if (ws.data.remote === id) ws.close(4401, "This device was removed");
 };
 
 /** The main listener on 127.0.0.1, from the end of startup on. */
@@ -192,7 +192,7 @@ function remoteStatus() {
   const mac = thisMac();
   const addresses = pairingOrder(mac.addresses, mac.vpn);
   const connected = new Map<string, number>();
-  for (const ws of sockets) if (ws.data.device) connected.set(ws.data.device, (connected.get(ws.data.device) ?? 0) + 1);
+  for (const ws of sockets) if (ws.data.remote) connected.set(ws.data.remote, (connected.get(ws.data.remote) ?? 0) + 1);
   return {
     enabled: !!lanServer,
     port: config.port,
@@ -220,7 +220,7 @@ function setLan(on: boolean): string | null {
     lanServer = null;
     // Off means off: the port closes and every paired device is cut off now, on the Wi-Fi or through
     // tailscale serve (they stay paired). Only this Mac's and the USB-C device's sockets have no device.
-    for (const ws of sockets) if (ws.data.lan || ws.data.device) ws.close(1001, "Wi-Fi connections were turned off");
+    for (const ws of sockets) if (ws.data.lan || ws.data.remote) ws.close(1001, "Wi-Fi connections were turned off");
     s.stop(true);
     console.log("[wifi] network listener closed; 127.0.0.1 only");
   }
@@ -289,7 +289,7 @@ const handle = dispatcher({
   // One setting for everything not from this Mac or the USB-C bridge: the Wi-Fi listener and tailscale serve.
   remoteAccess: () => !!lanServer,
   onLan: (srv) => srv === lanServer,
-  device: (req) => pairing.check(tokenFromCookie(req.headers.get("cookie")))?.id ?? null,
+  remote: (req) => pairing.check(tokenFromCookie(req.headers.get("cookie")))?.id ?? null,
   renew: (device, c) => {
     const token = tokenFromCookie(c.req.headers.get("cookie"));
     return token && pairing.renew(device) ? tokenCookie(token, secure(c)) : null;

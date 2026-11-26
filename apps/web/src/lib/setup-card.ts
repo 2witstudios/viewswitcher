@@ -12,7 +12,7 @@ export type SetupCard =
   | { kind: "setup" }
   /** Set up, but out of order: a source above the program page (it covers every scene) or below the ground. */
   | { kind: "order" }
-  /** Set up; these device sources still need adding in OBS by hand. */
+  /** Set up; these sources still need adding in OBS by hand. */
   | { kind: "devices"; missing: string[] };
 
 export function setupCard(state: Pick<LiveState, "obs" | "obsSetup">): SetupCard | null {

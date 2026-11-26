@@ -28,7 +28,7 @@ import { checkObsSetup, setupObs } from "../obs-setup";
 import { cancelPack, installPack, removeSet, stagePack } from "../packs";
 import { pageProto } from "../origin";
 import { PAIR_PAGE_CSP, pairPage } from "../pair-page";
-import { deviceName, guessName, type Pairing, tokenCookie } from "../pairing";
+import { remoteName, guessName, type Pairing, tokenCookie } from "../pairing";
 import { inside, PathError, plainName } from "../paths";
 import { withBridge } from "../scene-bridge";
 import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "../scene-edit";
@@ -180,13 +180,13 @@ export function routes(d: RouteDeps): Route[] {
         const size = Number(c.req.headers.get("content-length"));
         if (!(size > 0 && size <= 2048)) return json({ error: "Too large" }, 413);
         const b = await c.json();
-        const r = d.pairing.pair(b.code, deviceName(b.name, c.req.headers.get("user-agent") ?? ""), rateKey(c.peer?.address, c.req.headers));
+        const r = d.pairing.pair(b.code, remoteName(b.name, c.req.headers.get("user-agent") ?? ""), rateKey(c.peer?.address, c.req.headers));
         if (!r.ok) {
           console.log(`[pairing] refused a code from ${c.peer?.address} (${r.reason})`);
           return json({ error: r.error }, r.reason === "limited" ? 429 : 403);
         }
-        console.log(`[pairing] paired "${r.device.name}"`);
-        return Response.json({ ok: true, name: r.device.name }, { headers: { "cache-control": "no-store", "set-cookie": tokenCookie(r.token, secure(c)) } });
+        console.log(`[pairing] paired "${r.remote.name}"`);
+        return Response.json({ ok: true, name: r.remote.name }, { headers: { "cache-control": "no-store", "set-cookie": tokenCookie(r.token, secure(c)) } });
       },
     },
 
@@ -257,7 +257,7 @@ export function routes(d: RouteDeps): Route[] {
       path: "/ws",
       audience: Audience.Paired,
       handler: (c) =>
-        c.srv.upgrade(c.req, { data: { device: c.caller.kind === "device" ? c.caller.device : null, lan: c.lan } }) ? undefined : new Response("Upgrade failed", { status: 400 }),
+        c.srv.upgrade(c.req, { data: { remote: c.caller.kind === "remote" ? c.caller.remote : null, lan: c.lan } }) ? undefined : new Response("Upgrade failed", { status: 400 }),
     },
     post("/api/log", (b) => {
       console.log("[client]", JSON.stringify(b));

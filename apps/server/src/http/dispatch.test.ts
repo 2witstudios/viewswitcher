@@ -30,7 +30,7 @@ function make(o: Partial<DispatchOptions> = {}) {
     lan: () => ({ localName: "studio.local", addresses: ["192.168.1.68"] }),
     remoteAccess: () => true,
     onLan: (s) => (s.requestIP({} as Request) as { address: string }).address !== "127.0.0.1",
-    device: (req) => (req.headers.get("cookie") === "vs_device=good" ? "phone-1" : null),
+    remote: (req) => (req.headers.get("cookie") === "vs_device=good" ? "phone-1" : null),
     renew: () => null,
     pairPage: () => new Response("pair", { status: 401 }),
     scrub: (m) => m.split(`${LIBRARY}/`).join("").split(LIBRARY).join("the library"),

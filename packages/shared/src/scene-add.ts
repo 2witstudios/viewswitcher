@@ -5,8 +5,8 @@ import { SCENE } from "./snap";
 
 export type AddKind = "text" | "title" | "image" | "camera" | "screen" | "guest";
 
-/** Device boxes and the OBS source each one asks for. */
-export const DEVICE_SLOTS: Partial<Record<AddKind, string>> = { camera: "Camera", screen: "Screen", guest: "Guest" };
+/** Camera boxes and the OBS source each one asks for. */
+export const SOURCE_SLOTS: Partial<Record<AddKind, string>> = { camera: "Camera", screen: "Screen", guest: "Guest" };
 
 
 /** A box of `w`×`h` in the middle of the scene, or centred on `at` and kept inside the scene. */
@@ -54,7 +54,7 @@ export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src
     case "camera":
     case "guest":
     case "screen": {
-      const name = freeSlotName(DEVICE_SLOTS[kind]!, opts.slots ?? []);
+      const name = freeSlotName(SOURCE_SLOTS[kind]!, opts.slots ?? []);
       const b = kind === "screen" ? middle(1280, 720) : middle(640, 360);
       return `<div class="slot" data-slot="${escapeHtml(name)}" style="${box(b)}"></div>`;
     }
