@@ -283,7 +283,7 @@ function remoteScripts(html: string): string[] {
 const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
 
 /**
- * Text placeholders in code: an inline <script> or <style>, an on… attribute, or a .js file. A
+ * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, or a .js file. A
  * value is HTML-escaped in a page and as typed in .js (TEXT_TYPES), right for text and attributes
  * but not inside code: "O'Brien" ends a JS string, "R&amp;B" shows in a CSS content string.
  */
@@ -298,7 +298,8 @@ function textInCode(texts: Record<string, string>): { placeholder: string; where
     if (e !== ".html" && e !== ".svg") continue;
     for (const el of scanElements(text)) {
       if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
-      for (const a of el.attrs) if (/^on/i.test(a.name) && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
+      // An on… or style attribute is HTML-decoded, then read as JS or CSS: the same as code.
+      for (const a of el.attrs) if ((/^on/i.test(a.name) || a.name.toLowerCase() === "style") && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
     }
   }
   return found;
@@ -343,7 +344,7 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
     const names = [...new Set(coded.map((c) => `{{${c.placeholder}}}`))].join(", ");
     const where = [...new Set(coded.map((c) => c.where))];
     warnings.push(
-      `${names} ${coded.length === 1 ? "is" : "are"} in a script, a style or an on… attribute (${where.slice(0, 5).join("; ")}${where.length > 5 ? "…" : ""}): ` +
+      `${names} ${coded.length === 1 ? "is" : "are"} in a script, a style, or an on… or style attribute (${where.slice(0, 5).join("; ")}${where.length > 5 ? "…" : ""}): ` +
         "a show's name is filled in there as text for the page, so a name like O'Brien or R&B can break that view for that show. Keep placeholders in text and attributes.",
     );
   }

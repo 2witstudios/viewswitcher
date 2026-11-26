@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readSettings, writeSettings } from "./settings";
+import { readSettings, widens, writeSettings } from "./settings";
 
 const roots: string[] = [];
 const temp = () => {
@@ -54,4 +54,12 @@ describe("settings.json", () => {
     expect(results.map((r) => r.agentOnAir)).toEqual([...picks]);
     expect((await readSettings(root)).agentOnAir).toBe("never");
   });
+});
+
+test("widens: a choice that lets agents put more on air than before", () => {
+  expect(widens("never", "not-live")).toBe(true);
+  expect(widens("not-live", "always")).toBe(true);
+  expect(widens("never", "always")).toBe(true);
+  expect(widens("always", "never")).toBe(false);
+  expect(widens("not-live", "not-live")).toBe(false);
 });

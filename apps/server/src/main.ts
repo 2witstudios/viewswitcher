@@ -26,7 +26,7 @@ import { Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 import { createPreviewer } from "./preview";
 import { viewHashes } from "./scene-edit";
 import { pathScrub } from "./scrub";
-import { followSettings, readSettings } from "./settings";
+import { followSettings, readSettings, widens } from "./settings";
 import { createSlotOrder } from "./slot-order";
 import { startUsbBridge, usbAvailable } from "./usb-bridge";
 
@@ -169,9 +169,15 @@ let changed = new Set<string>();
 const serverRun = crypto.randomUUID();
 let librarySeq = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
+/** The last flush of library changes; each waits for the one before it. */
+let flushing: Promise<void> = Promise.resolve();
 // settings.json changed outside the switcher (by hand, a git checkout): agents follow what it says now.
+// The guard limits MCP tools; an agent that can write the library folder can write this file too, so a
+// change that lets agents do more is logged where a person can see it.
 const settingsChanged = followSettings(config.library, (s) => {
-  if (s.agentOnAir !== state.agent.onAir) store.update({ agent: { ...state.agent, onAir: s.agentOnAir } });
+  if (s.agentOnAir === state.agent.onAir) return;
+  if (widens(state.agent.onAir, s.agentOnAir)) console.log(`[settings] settings.json changed outside the switcher: agents may now put things on air "${s.agentOnAir}" (was "${state.agent.onAir}")`);
+  store.update({ agent: { ...state.agent, onAir: s.agentOnAir } });
 });
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
@@ -181,15 +187,19 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   changed.add(rel);
   scanner.touched(rel);
   clearTimeout(flushTimer);
-  flushTimer = setTimeout(async () => {
+  flushTimer = setTimeout(() => {
     const paths = [...changed];
     changed = new Set();
     scanner.forget(paths);
-    // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
-    await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
-    // The views' hashes, so an editor sees that a change is its own save without reading it again.
-    const hashes = await viewHashes(config.library, paths);
-    publish({ t: "library:changed", paths, seq: ++librarySeq, ...(Object.keys(hashes).length ? { hashes } : {}) });
+    // One flush at a time, in the order they fired: a slow one (its hashes read before a newer change)
+    // must never publish after the flush for that change, or a client would keep the older hash.
+    flushing = flushing.then(async () => {
+      // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
+      await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
+      // The views' hashes, so an editor sees that a change is its own save without reading it again.
+      const hashes = await viewHashes(config.library, paths).catch(() => ({}));
+      publish({ t: "library:changed", paths, seq: ++librarySeq, ...(Object.keys(hashes).length ? { hashes } : {}) });
+    });
   }, 120);
 });
 

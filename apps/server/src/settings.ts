@@ -12,6 +12,9 @@ export const DEFAULT_SETTINGS: Settings = { agentOnAir: "not-live" };
 
 export const isAgentOnAir = (v: unknown): v is AgentOnAir => AGENT_ON_AIR.includes(v as AgentOnAir);
 
+/** Whether `to` lets agents put more on air than `from` (AGENT_ON_AIR is strictest first). */
+export const widens = (from: AgentOnAir, to: AgentOnAir) => AGENT_ON_AIR.indexOf(to) > AGENT_ON_AIR.indexOf(from);
+
 const file = (root: string) => join(root, ".viewswitcher", "settings.json");
 
 /** The file's keys (none for a missing file), or why it can't be read as a JSON object. */
