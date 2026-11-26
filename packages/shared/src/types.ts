@@ -180,8 +180,12 @@ export type LiveState = {
 /** Server → client WebSocket messages. */
 export type ServerMessage =
   | { t: "state"; state: LiveState }
-  /** `seq` numbers the server's library changes, from 1 since it started. */
-  | { t: "library:changed"; paths: string[]; seq: number }
+  /**
+   * `seq` numbers the server's library changes, from 1 since it started. `hashes`: for the changed
+   * views it could read, each one's hash (the scene editor's version) as it was then, so an editor
+   * that saved it can tell its own save from someone else's without reading it again.
+   */
+  | { t: "library:changed"; paths: string[]; seq: number; hashes?: Record<string, string> }
   /**
    * Sent on every connect, after the state and build: which server this is (a new id after a restart) and how many library
    * changes it has sent. A client coming back compares them with what it last heard to know whether

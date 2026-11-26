@@ -5,17 +5,31 @@
 // and dropped for the paths the watcher reports (scene-titles.ts); folders are walked side by side.
 // File reads and stats go through one bounded queue, so a big library can't run out of open files.
 //
+// Nothing outside the library is read, even through a link (contain.ts, the rule every read follows):
+// a folder the scan reads, a JSON file, or a view or picture that is a link is checked first, and one
+// that leads outside is left out. Plain files in a folder that's inside are inside, so most files cost
+// no extra check.
+//
+// A finished scan is kept too, briefly, per org: every client (and an agent) lists the library right
+// after the same change, and they share one scan, even one still in flight. It's dropped for the orgs
+// the watcher sees change and whenever the switcher or an agent changes something (changed()), so a
+// listing asked for after a change always reads after it. Kept only KEEP_MS past its end, so a change
+// the watcher missed shows at most that much later than it would without the cache.
+//
 // The cache and the queue belong to one LibraryScanner, which main.ts makes and hands to the
 // switcher's routes and the MCP server, so both share them and their lifetime is the server's; a
 // test makes its own and shares nothing with another.
-import { readdir, readFile, stat } from "node:fs/promises";
-import { extname, join } from "node:path";
+import type { Dirent } from "node:fs";
+import { realpathSync } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { exists, readOrg } from "../library";
 import { limit } from "../limit";
 import { inside, plainName } from "../paths";
 import { createSceneTitles } from "../scene-titles";
+import { readNoFollow, resolveInLibrary, withNoLinks } from "./contain";
 import { dirs as listDirs, type Io, readJson as readJsonFile } from "./read";
 
 const KINDS: Record<string, AssetKind> = {
@@ -24,53 +38,147 @@ const KINDS: Record<string, AssetKind> = {
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
 
+/**
+ * The scene-title cache's file access: the stamp and the text both through a no-link open, so a title
+ * kept from before (a cache hit) is never returned for a path that has since become a link.
+ */
+export const noLinkFiles = { stat: (abs: string) => withNoLinks(abs, (f) => f.stat()), read: readNoFollow };
+
+/** How long a finished scan answers later requests for its org, unless a change drops it first. */
+export const KEEP_MS = 2_000;
+
+type Kept = { content: Promise<OrgContent>; done: number | null };
+
+/** `value`, and everything in it, made read-only: one scan is shared by every request, so none may change it. */
+function frozen<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const v of Object.values(value)) frozen(v);
+  }
+  return value;
+}
+
 export class LibraryScanner {
   /** File reads and stats for this scanner's scans: at most `concurrency` at once, across every scan. */
   private readonly io: Io;
   private readonly titles;
+  private readonly kept = new Map<string, Kept>();
+  private readonly keepMs: number;
+  private readonly now: () => number;
 
-  constructor(readonly libraryRoot: string, { concurrency = 32 }: { concurrency?: number } = {}) {
+  constructor(readonly libraryRoot: string, { concurrency = 32, keepMs = KEEP_MS, now = Date.now }: { concurrency?: number; keepMs?: number; now?: () => number } = {}) {
     const io = limit(concurrency);
     this.io = io;
-    this.titles = createSceneTitles({ stat: (abs) => io(() => stat(abs)), read: (abs) => io(() => readFile(abs, "utf8")) });
+    this.keepMs = keepMs;
+    this.now = now;
+    // Titles are read from the real path the scan checked (scenesIn: a plain file in its folder's real
+    // path, or a link's real target), never through a link: a file or a folder swapped for one after the
+    // check reads as no title (readNoFollow).
+    this.titles = createSceneTitles({ stat: (abs) => io(() => noLinkFiles.stat(abs)), read: (abs) => io(() => noLinkFiles.read(abs)) });
   }
 
-  /** Library paths the watcher reported (library-relative): their titles are read again on the next scan. */
+  /**
+   * Library paths the watcher reported (library-relative): their titles are read again, and their
+   * orgs scanned again, on the next request.
+   */
   forget(paths: string[]) {
     this.titles.forget(this.libraryRoot, paths);
+    // Titles are kept by real path (readNoFollow), so under the library's real root too when it differs.
+    const real = (() => {
+      try {
+        return realpathSync(this.libraryRoot);
+      } catch {
+        return this.libraryRoot;
+      }
+    })();
+    if (real !== this.libraryRoot) this.titles.forget(real, paths);
+    for (const p of paths) this.kept.delete(p.split("/")[0]!);
   }
 
-  /** One org's content; every returned path starts with the org id. */
-  async scanOrg(orgId: string): Promise<OrgContent> {
+  /**
+   * A path the watcher just saw change (library-relative): its org is scanned again on the next
+   * request, from now on rather than from the report a little later (forget).
+   */
+  touched(path: string) {
+    this.kept.delete(path.split("/")[0]!);
+  }
+
+  /** The switcher or an agent changed the library: every org is scanned again on the next request. */
+  changed() {
+    this.kept.clear();
+  }
+
+  /**
+   * One org's content; every returned path starts with the org id. Requests for the same org share
+   * a scan in flight, and one finished less than KEEP_MS ago with nothing changed since. Read-only.
+   */
+  scanOrg(orgId: string): Promise<OrgContent> {
+    const known = this.kept.get(orgId);
+    if (known && (known.done === null || this.now() - known.done < this.keepMs)) return known.content;
+    const entry: Kept = { content: this.scan(orgId).then(frozen), done: null };
+    this.kept.set(orgId, entry);
+    const drop = () => this.kept.get(orgId) === entry && this.kept.delete(orgId);
+    entry.content.then(() => {
+      entry.done = this.now();
+      // Gone once it can't answer any more, so asking for many org ids (real or not) keeps nothing.
+      setTimeout(drop, this.keepMs).unref?.();
+    }, drop);
+    return entry.content;
+  }
+
+  private async scan(orgId: string): Promise<OrgContent> {
     const orgDir = inside(this.libraryRoot, plainName(orgId));
     const prefix = `${orgId}/`; // readOrg's id is the one asked for, so nothing waits for org.json
     const [org, templates, sets, assets, projects, transition] = await Promise.all([
       readOrg(this.libraryRoot, orgId),
-      this.readJson(join(orgDir, "templates/_shared/order.json"), { order: [] as string[] }).then((meta) => this.scenesIn(orgDir, "templates", "template", meta.order, prefix)),
+      this.readJson(orgDir, "templates/_shared/order.json", { order: [] as string[] }).then((meta) => this.scenesIn(orgDir, "templates", "template", meta.order, prefix)),
       this.listSets(orgDir, prefix),
       this.listAssets(orgDir, prefix),
-      this.dirs(join(orgDir, "projects")).then((ids) => Promise.all(ids.map((id) => this.scanProject(orgDir, prefix, id)))),
-      this.urlIfThere(join(orgDir, ORG_TRANSITION), `${prefix}${ORG_TRANSITION}`),
+      this.dirs(orgDir, "projects").then((ids) => Promise.all(ids.map((id) => this.scanProject(orgDir, prefix, id)))),
+      this.urlIfThere(orgDir, ORG_TRANSITION, `${prefix}${ORG_TRANSITION}`),
     ]);
     return { org, templates, sets, assets, projects, transition };
   }
 
-  private dirs = (path: string) => listDirs(path, this.io);
-  private readJson = <T>(path: string, fallback: T) => readJsonFile(path, fallback, this.io);
-  /** `url` when the file `abs` is there, else null (a transition, for the library listing). */
-  private urlIfThere = (abs: string, url: string) => this.io(() => exists(abs)).then((t) => (t ? url : null));
+  /** Whether `rel` in the org folder `orgDir` is really in the library, through any links (contain.ts). */
+  private inLibrary = (orgDir: string, rel: string) => this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).then(() => true, () => false);
+  /** The folders the library lists in `rel`, when `rel` itself is in the library (a listed folder is never a link: isDirectory). */
+  private dirs = async (orgDir: string, rel: string) => ((await this.inLibrary(orgDir, rel)) ? listDirs(join(orgDir, rel), this.io) : []);
+  /** The library path of `rel` in the org folder `orgDir`. */
+  private libraryPath = (orgDir: string, rel: string) => `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}`;
+  /**
+   * The folder `rel` as its real path (no links in it), when it's in the library, and its entries;
+   * none when it isn't or can't be read.
+   */
+  private entries = async (orgDir: string, rel: string): Promise<{ dir: string; list: Dirent[] }> => {
+    const dir = await this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).catch(() => null);
+    if (dir === null) return { dir: "", list: [] };
+    return { dir, list: await this.io(() => readdir(dir, { withFileTypes: true })).catch(() => []) };
+  };
+  /**
+   * The real path of an entry of a folder that's inside the library (`dir`, that folder's real path):
+   * a plain file is itself in `dir`, a link its real target when that's in the library too, else null.
+   */
+  private realFile = (orgDir: string, rel: string, dir: string, e: Dirent): Promise<string | null> =>
+    e.isSymbolicLink() ? this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, `${rel}/${e.name}`))).catch(() => null) : Promise.resolve(join(dir, e.name));
+  /** Where `rel` really is, when that's in the library; null otherwise. */
+  private realPath = (orgDir: string, rel: string) => this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).catch(() => null);
+  private readJson = async <T>(orgDir: string, rel: string, fallback: T) => {
+    const real = await this.realPath(orgDir, rel);
+    return real === null ? fallback : readJsonFile(real, fallback, this.io);
+  };
+  /** `url` when the file `rel` is there, in the library, else null (a transition, for the library listing). */
+  private urlIfThere = async (orgDir: string, rel: string, url: string) =>
+    (await this.io(() => exists(join(orgDir, rel)))) && (await this.inLibrary(orgDir, rel)) ? url : null;
 
   private async scenesIn(orgDir: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
-    let files: string[] = [];
-    try {
-      files = (await this.io(() => readdir(join(orgDir, rel)))).filter(isViewFile);
-    } catch {
-      return [];
-    }
+    const { dir, list } = await this.entries(orgDir, rel);
+    const listed = list.filter((e) => isViewFile(e.name) && !e.isDirectory());
+    const files = (await Promise.all(listed.map(async (e) => ({ f: e.name, real: await this.realFile(orgDir, rel, dir, e) })))).filter((x): x is { f: string; real: string } => x.real !== null);
     const scenes = await Promise.all(
-      files.map(async (f) => {
+      files.map(async ({ f, real }) => {
         const name = f.slice(0, -5);
-        const title = await this.titles.titleOf(join(orgDir, rel, f));
+        const title = await this.titles.titleOf(real);
         return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
       }),
     );
@@ -81,7 +189,9 @@ export class LibraryScanner {
 
   private async listAssets(orgDir: string, prefix: string): Promise<Asset[]> {
     try {
-      const names = (await this.io(() => readdir(join(orgDir, "assets")))).filter((n) => !n.startsWith("."));
+      const { dir, list } = await this.entries(orgDir, "assets");
+      const listed = list.filter((e) => !e.name.startsWith("."));
+      const names = (await Promise.all(listed.map(async (e) => ((await this.realFile(orgDir, "assets", dir, e)) ? e.name : null)))).filter((n): n is string => n !== null);
       const assets = await Promise.all(
         names.map(async (name) => {
           // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.
@@ -96,20 +206,19 @@ export class LibraryScanner {
   }
 
   private async scanProject(orgDir: string, prefix: string, id: string): Promise<Project> {
-    const dir = join(orgDir, "projects", id);
-    const p = await this.readJson(join(dir, "project.json"), { name: id, order: [] as string[] });
+    const p = await this.readJson(orgDir, `projects/${id}/project.json`, { name: id, order: [] as string[] });
     const [scenes, streams, transition] = await Promise.all([
       this.scenesIn(orgDir, `projects/${id}/scenes`, "project", p.order, prefix),
-      this.dirs(join(dir, "streams")).then((ids) =>
+      this.dirs(orgDir, `projects/${id}/streams`).then((ids) =>
         Promise.all(
           ids.map(async (sid): Promise<Stream> => {
             const rel = `projects/${id}/streams/${sid}`;
-            const [s, scenes] = await Promise.all([this.readJson(join(orgDir, rel, "stream.json"), { name: sid, date: "" }), this.scenesIn(orgDir, rel, "stream", p.order, prefix)]);
+            const [s, scenes] = await Promise.all([this.readJson(orgDir, `${rel}/stream.json`, { name: sid, date: "" }), this.scenesIn(orgDir, rel, "stream", p.order, prefix)]);
             return { id: sid, name: s.name, date: s.date, scenes };
           }),
         ),
       ),
-      this.urlIfThere(join(dir, TRANSITION), `${prefix}projects/${id}/${TRANSITION}`),
+      this.urlIfThere(orgDir, `projects/${id}/${TRANSITION}`, `${prefix}projects/${id}/${TRANSITION}`),
     ]);
     streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
     return { id, name: p.name, scenes, streams, transition };
@@ -121,8 +230,10 @@ export class LibraryScanner {
   /** The org's template sets: folders in templates/ that have a pack.json. */
   private async listSets(orgDir: string, prefix: string): Promise<TemplateSet[]> {
     const found = await Promise.all(
-      (await this.dirs(join(orgDir, "templates"))).map(async (id): Promise<TemplateSet | null> => {
-        const text = await this.io(() => readFile(join(orgDir, "templates", id, "pack.json"), "utf8")).catch(() => null);
+      (await this.dirs(orgDir, "templates")).map(async (id): Promise<TemplateSet | null> => {
+        const manifest = `templates/${id}/pack.json`;
+        const real = await this.realPath(orgDir, manifest);
+        const text = real === null ? null : await this.io(() => readNoFollow(real)).catch(() => null);
         if (text === null) return null;
         const read = readManifest(text);
         // A pack.json someone edited by hand into something odd: still list the set, by its folder.
@@ -130,7 +241,7 @@ export class LibraryScanner {
         const rel = `templates/${id}`;
         const [templates, transition] = await Promise.all([
           this.scenesIn(orgDir, rel, "template", m.views, prefix, id),
-          this.urlIfThere(join(orgDir, rel, "_shared", TRANSITION), `${prefix}${rel}/_shared/${TRANSITION}`),
+          this.urlIfThere(orgDir, `${rel}/_shared/${TRANSITION}`, `${prefix}${rel}/_shared/${TRANSITION}`),
         ]);
         return { id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}), templates, transition };
       }),

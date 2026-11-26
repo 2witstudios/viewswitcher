@@ -1,6 +1,6 @@
 // The library's one real-path rule (contain.ts), on a real folder with real links.
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { realLibraryPath, resolveInLibrary } from "./contain";
@@ -67,5 +67,22 @@ describe("realLibraryPath", () => {
     expect(realLibraryPath(library, "daisy/templates/alias.html")).toBe("daisy/templates/brb.html");
     expect(realLibraryPath(library, "daisy/templates/new.html")).toBe("daisy/templates/new.html");
     expect(realLibraryPath(library, "daisy/templates/away.html")).toBe("daisy/templates/away.html");
+  });
+});
+
+describe("a path that can't be read", () => {
+  test("a file or a folder with no permission is refused as that, not as a link", async () => {
+    put("daisy/locked/x.css");
+    put("daisy/assets/sealed.png");
+    chmodSync(join(library, "daisy/assets/sealed.png"), 0o000);
+    chmodSync(join(library, "daisy/locked"), 0o600);
+    try {
+      for (const p of ["daisy/assets/sealed.png", "daisy/locked/x.css"]) {
+        await expect(resolveInLibrary(library, p)).rejects.toThrow("can't be read (no permission)");
+      }
+    } finally {
+      chmodSync(join(library, "daisy/locked"), 0o755);
+      chmodSync(join(library, "daisy/assets/sealed.png"), 0o644);
+    }
   });
 });

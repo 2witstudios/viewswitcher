@@ -357,5 +357,18 @@ final class ServerControllerTests: XCTestCase {
         capLog(log, max: 1000)
         XCTAssertEqual(try Data(contentsOf: log).count, 0, "a big log starts over")
     }
+
+    func testEachBuildHasItsOwnServerLog() {
+        let home = URL(fileURLWithPath: "/Users/someone")
+        let logs = "/Users/someone/Library/Logs/ViewSwitcher/"
+        XCTAssertEqual(serverLogFile(home: home, bundleID: releaseBundleID, e2eDir: nil).path, logs + "server.log", "the installed app")
+        XCTAssertEqual(serverLogFile(home: home, bundleID: releaseBundleID + ".dev", e2eDir: nil).path, logs + "server-dev.log", "bun run mac:dev")
+        XCTAssertEqual(serverLogFile(home: home, bundleID: nil, e2eDir: nil).path, logs + "server.log")
+        XCTAssertEqual(serverLogFile(home: home, bundleID: "org.example/odd", e2eDir: nil).path, logs + "server-org.example-odd.log", "never a path out of the folder")
+        let e2e = URL(fileURLWithPath: "/tmp/vs-e2e-control")
+        XCTAssertEqual(serverLogFile(home: home, bundleID: releaseBundleID, e2eDir: e2e).path, "/tmp/vs-e2e-control/server.log", "an end-to-end run, whatever its build")
+        let all = [serverLogFile(home: home, bundleID: releaseBundleID, e2eDir: nil), serverLogFile(home: home, bundleID: releaseBundleID + ".dev", e2eDir: nil), serverLogFile(home: home, bundleID: releaseBundleID, e2eDir: e2e)]
+        XCTAssertEqual(Set(all).count, all.count)
+    }
 }
 #endif

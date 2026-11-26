@@ -10,7 +10,7 @@ import { createSceneSaver } from "../../lib/scene-saver";
 import { toast } from "../ui";
 import { canReloadIn } from "./mode";
 import { newestOnly } from "./newest";
-import { refreshVerdict } from "./refresh";
+import { alreadyHave, refreshVerdict } from "./refresh";
 import { settleSaves } from "./settle";
 import type { ModeStore } from "./useMode";
 import type { UndoEntry } from "./useUndo";
@@ -56,6 +56,10 @@ export function useSceneDocument(path: string, opts: {
   const layout = useRef(0);
   /** A 409 whose latest version hasn't loaded yet. */
   const pendingConflict = useRef<{ edits: SceneEdit[]; prev: SceneBase } | null>(null);
+  /** The file's hash as the server read it after its last change, when it said. */
+  const reported = useLive((l) => l.hashes[path]);
+  const reportedRef = useRef(reported);
+  reportedRef.current = reported;
   /** A change made elsewhere is waiting until the editor is free to load it. */
   const outside = useRef(false);
   const outsideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -91,7 +95,7 @@ export function useSceneDocument(path: string, opts: {
       const b = toBase(await api.sceneForEdit(path));
       if (!isNewest()) return null;
       if (ifChanged) {
-        const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, free: ifChanged.stillFree() });
+        const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, reportedHash: reportedRef.current, free: ifChanged.stillFree() });
         if (verdict === "same") return baseRef.current;
         if (verdict === "retry") {
           outside.current = true;
@@ -169,6 +173,11 @@ export function useSceneDocument(path: string, opts: {
     clearTimeout(outsideTimer.current);
     // Before the first version is open there's nothing to compare with: the first load checks again when it lands.
     if (!alive.current || !outside.current || !baseRef.current) return;
+    // The server's hash says it's the version open here (the editor's own save): nothing to read.
+    if (alreadyHave(reportedRef.current, baseRef.current)) {
+      outside.current = false;
+      return;
+    }
     // The editor's own saves land first (free() waits for them): their new versions aren't someone else's change.
     if (!free()) return recheck(OUTSIDE_RETRY_MS);
     outside.current = false;

@@ -276,6 +276,80 @@ function remoteScripts(html: string): string[] {
 }
 
 /**
+ * The placeholders whose value is free text a person typed (a show's name and its initial), which
+ * can hold quotes, "&" or "<". The others are a slug, a color or a URL the switcher makes, which
+ * read the same in any of these places.
+ */
+const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
+
+/**
+ * A .css file without its comments, where a value is safe: the fill breaks up a comment's end there
+ * (TEXT_TYPES), and the starter names the show in one. Quoted strings are kept and skipped while
+ * comments are taken out, so a comment's start inside one isn't a comment; a string ends at its line's
+ * end at the latest, as CSS ends an unclosed one, unless a backslash continues it. Linear in the text,
+ * whatever it holds (an unclosed comment is looked for once).
+ */
+function cssCode(css: string): string {
+  // One pass, as CSS tokenizes it: newlines normalized first (CRLF, CR and form feed are newlines there).
+  const text = css.replace(/\r\n?|\f/g, "\n");
+  const kept: string[] = [];
+  let from = 0;
+  for (let i = 0; i < text.length; ) {
+    const c = text[i]!;
+    if (c === '"' || c === "'") {
+      // A string runs to its closing quote, or to the end of its line; a backslash takes the next character with it.
+      let j = i + 1;
+      while (j < text.length && text[j] !== c && text[j] !== "\n") j += text[j] === "\\" ? 2 : 1;
+      i = Math.min(text[j] === c ? j + 1 : j, text.length);
+    } else if (c === "\\") {
+      i += 2; // an escape (\/, \", \'): the character after it is code, never a comment or a string's start
+    } else if (/url\(/iy.test(text.slice(i, i + 4)) && !/[\w-]/.test(text[i - 1] ?? "")) {
+      // An unquoted url(…) runs to its ")": a "/*" in it is part of the URL. A quoted one is a string, as above.
+      let j = i + 4;
+      while (j < text.length && /\s/.test(text[j]!)) j++;
+      if (text[j] !== '"' && text[j] !== "'") {
+        while (j < text.length && text[j] !== ")") j += text[j] === "\\" ? 2 : 1;
+        i = Math.min(j + 1, text.length);
+      } else i = j;
+    } else if (c === "/" && text[i + 1] === "*") {
+      kept.push(text.slice(from, i));
+      const close = text.indexOf("*/", i + 2);
+      from = i = close < 0 ? text.length : close + 2; // an unclosed comment runs to the end
+    } else i++;
+  }
+  kept.push(text.slice(from));
+  return kept.join("");
+}
+
+/**
+ * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, a .js file, or a
+ * .css file outside its comments (the starter's theme.css names the show in one, where it's safe). A
+ * value is HTML-escaped in a page and as typed in .js (TEXT_TYPES), right for text and attributes
+ * but not inside code: "O'Brien" ends a JS string, "R&amp;B" shows in a CSS content string.
+ */
+function textInCode(texts: Record<string, string>): { placeholder: string; where: string }[] {
+  const found: { placeholder: string; where: string }[] = [];
+  const note = (text: string, where: string) => {
+    for (const p of placeholdersIn(text)) if ((TEXT_PLACEHOLDERS as readonly string[]).includes(p)) found.push({ placeholder: p, where });
+  };
+  for (const [path, text] of Object.entries(texts)) {
+    const e = extensionOf(path);
+    if (e === ".js") note(text, path);
+    // In a .css file a value is as typed (only a comment's end is broken up), so outside comments it's in code.
+    if (e === ".css") note(cssCode(text), path);
+    if (e !== ".html" && e !== ".svg") continue;
+    for (const el of scanElements(text)) {
+      // A <style>'s comments count too: a page's values are HTML-escaped, which leaves a comment's end
+      // alone, so a name can close the comment it's in (only a .css file's fill breaks that up).
+      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
+      // An on… or style attribute is HTML-decoded, then read as JS or CSS: the same as code.
+      for (const a of el.attrs) if ((/^on/i.test(a.name) || a.name.toLowerCase() === "style") && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
+    }
+  }
+  return found;
+}
+
+/**
  * Whether the planned files make a pack: pack.json, a view for each name it lists, and placeholders
  * ViewSwitcher fills. `texts` holds the text of pack.json, every .html and every .css/.js/.svg.
  * Problems a person can live with (a view not listed, a placeholder not declared) are warnings.
@@ -308,6 +382,16 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   if (unknown.length) warnings.push(`${unknown.map((p) => `{{${p}}}`).join(", ")} ${unknown.length === 1 ? "isn't a placeholder" : "aren't placeholders"} ViewSwitcher fills, so ${unknown.length === 1 ? "it stays" : "they stay"} as typed`);
   const undeclared = [...used].filter((p) => (PACK_PLACEHOLDERS as readonly string[]).includes(p) && !manifest.placeholders.includes(p as PackPlaceholder));
   if (undeclared.length) warnings.push(`pack.json doesn't list ${undeclared.map((p) => `{{${p}}}`).join(", ")} in placeholders (filled anyway)`);
+
+  const coded = textInCode(texts);
+  if (coded.length) {
+    const names = [...new Set(coded.map((c) => `{{${c.placeholder}}}`))].join(", ");
+    const where = [...new Set(coded.map((c) => c.where))];
+    warnings.push(
+      `${names} ${coded.length === 1 ? "is" : "are"} in a script, a style, or an on… or style attribute (${where.slice(0, 5).join("; ")}${where.length > 5 ? "…" : ""}): ` +
+        "a show's name is filled in there as text for the page, so a name like O'Brien or R&B can break that view for that show. Keep placeholders in text and attributes.",
+    );
+  }
 
   // Links to the pack's own files that aren't in it.
   const missing = new Set<string>();

@@ -46,5 +46,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
+      # Swift 6 language mode makes a possible data race (a captured var mutated from another
+      # thread, say) a build error, where the package's own mode only warns.
+      - run: swift build --build-tests -Xswiftc -swift-version -Xswiftc 6 -Xswiftc -warnings-as-errors
+        working-directory: apps/apple/Kit
       - run: swift test
         working-directory: apps/apple/Kit

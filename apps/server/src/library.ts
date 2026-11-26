@@ -1,11 +1,11 @@
-import { constants as fsConstants } from "node:fs";
-import { copyFile, cp, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { chmod, cp, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
-import { resolveInLibrary } from "./library/contain";
+import { libraryStaging, readNoFollow, resolveInLibrary, withNoLinks } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
 
@@ -19,8 +19,10 @@ import { inside, PathError, plainName } from "./paths";
 const ORG_DEFAULTS = { accent: "#8b7bff", ground: "#0e0f13" };
 
 export async function readOrg(libraryRoot: string, id: string): Promise<Org> {
-  const dir = inside(libraryRoot, plainName(id));
-  const meta = await readJson(join(dir, "org.json"), { name: id, ...ORG_DEFAULTS });
+  const fallback = { name: id, ...ORG_DEFAULTS };
+  // An org.json that is a link outside the library isn't read (contain.ts): the org reads as unnamed.
+  const file = await resolveInLibrary(libraryRoot, `${plainName(id)}/org.json`).catch(() => null);
+  const meta = file ? await readJson(file, fallback) : fallback;
   return { id, name: meta.name, accent: meta.accent, ground: meta.ground };
 }
 
@@ -31,26 +33,66 @@ export async function listOrgs(libraryRoot: string): Promise<Org[]> {
   return orgs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** A new org from the starter kit: neutral templates that use the org's own name and colors. */
+/**
+ * A new org from the starter kit: neutral templates that use the org's own name and colors. It's
+ * filled in a staging folder and renamed into place, so the watcher and a client scanning meanwhile
+ * never see raw {{ORG_NAME}} placeholders or half an org; a create that fails leaves nothing behind.
+ */
 export async function createOrg(libraryRoot: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
   if (!name?.trim()) throw new PathError("A show needs a name");
   const base = slugify(name);
-  let id = base, n = 2;
-  while (await exists(join(libraryRoot, id))) id = `${base}-${n++}`;
-  const dir = join(libraryRoot, id);
-  await cp(starter, dir, { recursive: true });
-  const vars = placeholderVars({ id, name, accent, ground });
+  const staging = await libraryStaging(libraryRoot);
+  await mkdir(staging, { recursive: true });
+  const work = join(staging, randomBytes(12).toString("hex"));
+  try {
+    for (let n = 1; ; n++) {
+      const id = n === 1 ? base : `${base}-${n}`;
+      const dir = join(libraryRoot, id);
+      if (await taken(dir)) continue; // a dangling link counts: copying through it could land anywhere
+      // The org id goes into its files ({{ORG_ID}}), so an id taken meanwhile is filled again for the next.
+      await rm(work, { recursive: true, force: true });
+      await fillStarter(starter, work, placeholderVars({ id, name, accent, ground }));
+      // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
+      // creates at once, an agent), where rename alone would quietly replace an empty one.
+      try {
+        await mkdir(dir);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "EEXIST") continue;
+        throw e;
+      }
+      await rename(work, dir).catch(async (e) => {
+        await rmdir(dir).catch(() => {}); // only if still empty: never someone else's files
+        throw e;
+      });
+      return { orgId: id };
+    }
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+}
+
+/** The starter kit copied to `dest` with every text file filled in, plus the empty folders an org has. */
+async function fillStarter(starter: string, dest: string, vars: ReturnType<typeof placeholderVars>) {
+  await cp(starter, dest, { recursive: true });
+  // The org's files and folders are its own to edit: an installed app's starter may be read-only, and cp keeps
+  // its modes. Folders first, so files (and the folders made below) can be written in them.
+  const writable = async (abs: string) => {
+    const s = await lstat(abs);
+    if (s.isDirectory() || s.isFile()) await chmod(abs, (s.mode & 0o777) | (s.isDirectory() ? 0o700 : 0o600));
+  };
+  await writable(dest);
+  for (const rel of await readdir(dest, { recursive: true })) await writable(join(dest, String(rel)));
+  const files = await walkFiles(dest);
   await Promise.all(
-    (await walkFiles(dir)).filter(isTextFile).map(async (rel) => {
-      const p = join(dir, rel);
+    files.filter(isTextFile).map(async (rel) => {
+      const p = join(dest, rel);
       const text = await readFile(p, "utf8");
       const filled = fillPlaceholders(rel, text, vars);
-      if (filled !== text) await writeAtomic(p, filled);
+      if (filled !== text) await writeAtomic(p, filled); // a new file: the starter's own may be read-only
     }),
   );
-  await mkdir(join(dir, "assets"), { recursive: true });
-  await mkdir(join(dir, "projects"), { recursive: true });
-  return { orgId: id };
+  await mkdir(join(dest, "assets"), { recursive: true });
+  await mkdir(join(dest, "projects"), { recursive: true });
 }
 
 // ---------------------------------------------------------------- templates
@@ -84,9 +126,9 @@ export async function customizeTransition(orgDir: string, projectId: string) {
   if (await exists(dest)) return;
   const src = join(orgDir, ORG_TRANSITION);
   if (!(await exists(src))) throw new PathError("This show has no transition to start from yet");
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dest);
-  await copyNew(src, dest);
+  await copyNew(real, dest);
 }
 
 /** Back to the org's transition: deletes the project's own. */
@@ -115,12 +157,21 @@ export async function isFile(path: string) {
  */
 const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgDir), relative(dirname(orgDir), abs), { forWrite: true });
 
-/** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
-async function copyNew(src: string, dest: string) {
+/**
+ * Copy `real` (a real path, as contained() gives) to a new file only: read through the no-link open (so a
+ * link or a pipe swapped in since the check is refused), and written exclusively, never through a link
+ * already at `dest` (a dangling one could point outside the library).
+ */
+async function copyNew(real: string, dest: string) {
+  const { bytes, mode } = await withNoLinks(real, async (f) => ({ bytes: new Uint8Array(await f.readFile()), mode: (await f.stat()).mode & 0o777 }));
   try {
-    await copyFile(src, dest, fsConstants.COPYFILE_EXCL);
+    // The source's permissions through the umask, as cp gives them: a private view's copy stays private,
+    // and a world-writable one doesn't make a world-writable copy.
+    await writeFile(dest, bytes, { flag: "wx", mode });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PathError("Something is already there (a link to somewhere else?). Remove it, then try again.");
+    // A copy that failed partway (a full disk) must not stay behind as the stream's own: the next try would keep it.
+    await rm(dest, { force: true }).catch(() => {});
     throw e;
   }
 }
@@ -181,7 +232,7 @@ export async function createProject(orgDir: string, name: string, templates: str
   const order: string[] = [];
   for (const { file, name: view } of sources) {
     if (!(await exists(file))) continue;
-    order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readFile(file, "utf8"), check));
+    order.push(await writeFresh(join(dir, "scenes"), view, ".html", await readNoFollow(await contained(orgDir, file)), check));
   }
   await writeAtomic(join(dir, "project.json"), JSON.stringify({ name: name.trim(), order }, null, 2) + "\n");
   return { projectId: id };
@@ -205,10 +256,10 @@ export async function createStream(orgDir: string, projectId: string, name: stri
 export async function addFromTemplate(orgDir: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
   const { file: src, name: view } = templateFile(orgDir, template);
   const dir = streamId ? streamDir(orgDir, projectId, streamId) : join(projectDir(orgDir, projectId), "scenes");
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dir);
   await mkdir(dir, { recursive: true });
-  return { name: await writeFresh(dir, view, ".html", await readFile(src, "utf8"), check) };
+  return { name: await writeFresh(dir, view, ".html", await readNoFollow(real), check) };
 }
 
 /** Copy a project scene into a stream so the stream can change it on its own. */
@@ -216,9 +267,9 @@ export async function customize(orgDir: string, projectId: string, streamId: str
   const src = join(projectDir(orgDir, projectId), "scenes", `${plainName(name)}.html`);
   const dest = join(streamDir(orgDir, projectId, streamId), `${name}.html`);
   if (await exists(dest)) return { name };
-  await contained(orgDir, src);
+  const real = await contained(orgDir, src);
   await contained(orgDir, dirname(dest));
-  await copyNew(src, dest);
+  await copyNew(real, dest);
   return { name };
 }
 
@@ -236,7 +287,8 @@ export async function duplicate(libraryRoot: string, path: string, check?: Befor
   const src = inside(libraryRoot, path);
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
-  const html = await readFile(src, "utf8");
+  // What it copies must really be in the library: a view that is a link outside isn't read (contain.ts).
+  const html = await readNoFollow(await resolveInLibrary(libraryRoot, path));
   return { name: await writeFresh(dir, `${base}-copy`, ".html", titledCopy(html), check) };
 }
 

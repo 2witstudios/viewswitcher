@@ -4,7 +4,8 @@ import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanElements, textOf, untagForEdit } from "@viewswitcher/shared";
-import { editScene, readForEdit, sceneHash } from "./scene-edit";
+import { PathError } from "./paths";
+import { editScene, HASHED_CHANGES, readForEdit, sceneHash, viewHashes } from "./scene-edit";
 
 const starter = join(import.meta.dir, "../starter");
 const SCENE = "acme/templates/teaching.html";
@@ -33,6 +34,50 @@ describe("readForEdit", () => {
   test("refuses anything that isn't a scene inside the library", async () => {
     for (const p of ["../etc/passwd.html", "acme/org.json", "/acme/../../x.html", ".hidden/x.html"]) {
       await expect(readForEdit(root, p)).rejects.toThrow();
+    }
+  });
+});
+
+describe("viewHashes (sent with a library change)", () => {
+  test("a saved view's hash is the one the editor gets for it, so it knows its own save", async () => {
+    const copy = "acme/templates/hash-copy.html";
+    await cp(join(root, SCENE), join(root, copy));
+    const opened = await readForEdit(root, copy);
+    const r = await editScene(root, copy, opened.hash, [{ id: titleId(opened.html), text: "Hashed topic" }]);
+    if (!r.ok) throw new Error("conflict");
+    expect(r.hash).not.toBe(opened.hash);
+    expect(await viewHashes(root, [copy])).toEqual({ [copy]: r.hash });
+    await rm(join(root, copy));
+  });
+  test("a named pipe named like a view gives no hash and never hangs (the watcher's flush waits on this)", async () => {
+    const pipe = "acme/templates/pipe.html";
+    expect(Bun.spawnSync(["mkfifo", join(root, pipe)]).exitCode).toBe(0);
+    try {
+      const h = await Promise.race([viewHashes(root, [pipe, SCENE]), Bun.sleep(3000).then(() => null)]);
+      expect(h).not.toBeNull();
+      expect(Object.keys(h!)).toEqual([SCENE]);
+      await expect(Promise.race([readForEdit(root, pipe), Bun.sleep(3000).then(() => "hung")])).rejects.toThrow();
+      // Refused as a bad path (a 400 for the editor), not an unexpected error.
+      await expect(editScene(root, pipe, "x", [{ id: 1, text: "y" }])).rejects.toBeInstanceOf(PathError);
+    } finally {
+      await rm(join(root, pipe), { force: true });
+    }
+  });
+
+  test("only views and transitions it can read inside the library; a big batch only up to its limit", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-edit-away-"));
+    try {
+      await writeFile(join(away, "x.html"), "<title>outside</title>");
+      await symlink(join(away, "x.html"), join(root, "acme/templates/linked.html"));
+      await writeFile(join(root, "acme/templates/_shared/transition.html"), "<title>wipe</title>");
+      const h = await viewHashes(root, ["acme/templates/_shared/theme.css", "acme/templates/_shared/transition.html", "acme/templates/gone.html", "acme/templates/linked.html", "acme/org.json", SCENE]);
+      expect(Object.keys(h).sort()).toEqual(["acme/templates/_shared/transition.html", SCENE]);
+      const many = Array.from({ length: HASHED_CHANGES + 5 }, () => SCENE).map((p, i) => (i === HASHED_CHANGES + 4 ? "acme/templates/brb.html" : p));
+      expect(Object.keys(await viewHashes(root, many))).toEqual([SCENE]); // brb.html is past the limit
+    } finally {
+      await rm(join(root, "acme/templates/linked.html"), { force: true });
+      await rm(join(root, "acme/templates/_shared/transition.html"), { force: true });
+      await rm(away, { recursive: true, force: true });
     }
   });
 });

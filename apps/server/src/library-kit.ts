@@ -3,9 +3,10 @@
 // a library that already has everything is left exactly as it is. See library-kit/README.md.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile } from "node:fs/promises";
+import { lstat, mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { writeAtomic } from "./atomic";
+import { readPlainText } from "./library/contain";
 import { createOrg, listOrgs } from "./library";
 
 /** Kit file (in the repo's library-kit/) → where it goes in the library. */
@@ -50,14 +51,20 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
 
   // Kit files: add what's missing; update only what the kit wrote and nobody changed since.
   const statePath = join(root, KIT_STATE);
-  const state: { files?: Record<string, string> } = await readFile(statePath, "utf8").then((t) => JSON.parse(t), () => ({}));
+  const state: { files?: Record<string, string> } = await readPlainText(statePath).then((t) => JSON.parse(t), () => ({}));
   const written: Record<string, string> = { ...(state.files ?? {}) };
   for (const { from, to } of KIT_FILES) {
-    const text = await readFile(join(kit, from), "utf8");
+    const text = await readPlainText(join(kit, from));
     const dest = join(root, to);
     // A kit file someone made a link (AGENTS.md → CLAUDE.md) is their arrangement: never replaced.
     if (await lstat(dest).then((s) => s.isSymbolicLink(), () => false)) continue;
-    const current = await readFile(dest, "utf8").catch(() => null);
+    // Missing: copy it. Anything else that can't be read (a pipe, a folder, no permission) is the person's: leave it.
+    let unreadable = false;
+    const current = await readPlainText(dest).catch((e) => {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") unreadable = true;
+      return null;
+    });
+    if (unreadable) continue;
     if (current === null) {
       await writeAtomic(dest, text);
       result.copied.push(to);

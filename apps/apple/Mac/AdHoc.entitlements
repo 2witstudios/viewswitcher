@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- mac:build --unsigned only (scripts/build.sh). An ad hoc signature has no team, and the hardened
+     runtime's library validation refuses a framework (Sparkle) whose team doesn't match the app's,
+     so an ad hoc app on the runtime can't launch without this. A Developer ID build never has it. -->
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

@@ -130,6 +130,56 @@ describe("checkPack", () => {
     expect(r.ok && r.scripts.remote).toEqual(["https://cdn.example/a.js", "https://cdn.example/b.js"]);
   });
 
+  test("a show's name or initial in a script, a style, an on… attribute or a .js file is a warning", () => {
+    const r = checkPack(planned(basic), texts({
+      "templates/main.html": `<html><head><style>.n::after { content: "{{ORG_NAME}}" }</style></head><body><h1>{{ORG_NAME}}</h1><button onclick="say('{{ORG_INITIAL}}')">x</button><p style="--n: '{{ORG_NAME}}'">y</p><script>const show = "{{ORG_NAME}}";</script></body></html>`,
+      "_shared/scene.js": `document.title = "{{ORG_NAME}}";`,
+    }));
+    if (!r.ok) throw new Error(r.error);
+    const w = r.warnings.find((x) => x.includes("in a script, a style, or an on… or style attribute"));
+    expect(w).toBeDefined();
+    expect(w).toStartWith("{{ORG_NAME}}, {{ORG_INITIAL}} are in a script");
+    for (const where of ["templates/main.html <style>", "templates/main.html onclick", "templates/main.html style", "templates/main.html <script>", "_shared/scene.js"]) expect(w).toContain(where);
+    expect(w).toContain("Keep placeholders in text and attributes");
+    // A .css file counts outside its comments: the starter names the show in one, where it's safe.
+    const css = checkPack(planned(basic), texts({ "_shared/theme.css": `/* {{ORG_NAME}} theme */ .n::after { content: "{{ORG_NAME}}" }` }));
+    expect(css.ok && css.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // A "/*" inside a CSS string doesn't open a comment that would hide what follows.
+    const quoted = checkPack(planned(basic), texts({ "_shared/theme.css": `.a::before { content: "/*" } .n::after { content: "{{ORG_NAME}}" } /* end */` }));
+    expect(quoted.ok && quoted.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // An unclosed string ends at its line, as CSS ends it: a later comment stays a comment.
+    const unclosed = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x }\n/* {{ORG_NAME}} */\n.b { content: "y" }` }));
+    expect(unclosed.ok && unclosed.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+    // A backslash-newline continues a CSS string: what follows on the next line is still in it.
+    const continued = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\n/* {{ORG_NAME}} */" }` }));
+    expect(continued.ok && continued.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // CSS reads CRLF (and CR, and form feed) as one newline, so a backslash-CRLF continues the string too.
+    const crlf = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\r\n/* {{ORG_NAME}} */" }` }));
+    expect(crlf.ok && crlf.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // An escaped slash and an unquoted url(…) are code in CSS, not a comment's start.
+    for (const css of [`.a\\/* {{ORG_NAME}} */ {}`, `.a { background: url(/x/* {{ORG_NAME}} */.png) }`]) {
+      const r = checkPack(planned(basic), texts({ "_shared/theme.css": css }));
+      expect({ css, warned: !!(r.ok && r.warnings.find((x) => x.includes("in a script"))) }).toEqual({ css, warned: true });
+    }
+    // Many unclosed comment starts stay fast (one pass), and what follows the first is a comment.
+    const t0 = performance.now();
+    const many = checkPack(planned(basic), texts({ "_shared/theme.css": `.a {}\n${"/* ".repeat(30000)}{{ORG_NAME}}` }));
+    expect(performance.now() - t0).toBeLessThan(500);
+    expect(many.ok && many.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+    // A view's <style> comment isn't safe the way a .css one is: a page's fill doesn't break "*/" up, so it warns.
+    const styled = checkPack(planned(basic), texts({ "templates/main.html": `<html><head><style>/* {{ORG_NAME}} */ .a { color: red }</style></head><body></body></html>` }));
+    expect(styled.ok && styled.warnings.find((x) => x.includes("in a script"))).toContain("templates/main.html <style>");
+  });
+
+  test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {
+    const r = checkPack(planned(basic), texts({
+      "templates/main.html": `<html><head><style>:root { --accent: {{ACCENT}}; --ground: {{GROUND}} }</style><div style="color: {{ACCENT}}"></div></head><body><h1 title="{{ORG_NAME}}">{{ORG_NAME}}</h1><img alt="{{ORG_INITIAL}}" src="{{PACK}}/_shared/x.png" onerror="this.src='{{PACK}}/_shared/y.png'"><script>const org = "{{ORG_ID}}";</script></body></html>`,
+      "_shared/scene.js": `fetch("{{PACK}}/_shared/data.json");`,
+      "_shared/theme.css": `/* {{ORG_NAME}}, made for the show */ :root { --accent: {{ACCENT}} }`,
+    }));
+    expect(r.ok && r.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+  });
+
   test("javascript: links count as code", () => {
     const r = checkPack(planned(basic), texts({ "templates/main.html": `<a href=" JavaScript:alert(1)">x</a>` }));
     expect(r.ok && r.scripts.inline).toEqual(["templates/main.html"]);

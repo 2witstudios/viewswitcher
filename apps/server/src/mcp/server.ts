@@ -2,8 +2,8 @@
 // library, change scenes under the switcher's own rules, look at its work, and go on air when that's
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
-import { readFileSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -13,7 +13,7 @@ import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
 import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import * as lib from "../library";
-import { realLibraryPath } from "../library/contain";
+import { readNoFollowSync, readPlainText, realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { cancelPack, installPack, PackError, stagePack } from "../packs";
@@ -66,7 +66,7 @@ const GUIDE = "skills/viewswitcher-scenes/SKILL.md";
 
 /** The scene rules: the library's own copy of the skill (people's edits win), else the kit's. */
 export async function readGuide(root: string, kit: string): Promise<string> {
-  return readFile(join(root, ".claude", GUIDE), "utf8").catch(() => readFile(join(kit, GUIDE), "utf8"));
+  return readPlainText(join(root, ".claude", GUIDE)).catch(() => readPlainText(join(kit, GUIDE)));
 }
 
 /** A refusal the agent can act on (shown as the tool's error text). */
@@ -89,6 +89,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const { root, port } = deps;
   const { scanner } = deps;
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
+  // A tool that isn't read-only may change the library: once it's done, the next listing (the
+  // agent's or a page's) is scanned afresh, never kept from before it (scanner.ts).
+  const register = server.registerTool.bind(server);
+  server.registerTool = ((name: string, config: { annotations?: { readOnlyHint?: boolean } }, cb: (...a: unknown[]) => unknown) =>
+    register(name, config as never, (config.annotations?.readOnlyHint
+      ? cb
+      : async (...a: unknown[]) => {
+          try {
+            return await cb(...a);
+          } finally {
+            scanner.changed();
+          }
+        }) as never)) as typeof server.registerTool;
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
   const scrub = pathScrub(root);
@@ -118,7 +131,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const guardNow = (action: GuardAction, loads?: OnAirLoads) => {
     const s = deps.state();
     const files = loads?.files.flatMap((p) => [p, realRel(p)]);
-    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads: files, loadsComplete: loads?.complete };
+    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads: files, loadsComplete: loads?.complete, loadsUnreadable: loads?.unreadable };
     // A link to the scene on air is the scene on air.
     const checked: GuardAction = action.kind === "write" ? { kind: "write", paths: action.paths.flatMap((p) => [p, realRel(p)]) } : action;
     const g = agentGuard({ setting: s.agent.onAir, live: isLive(s), onAir, action: checked });
@@ -142,7 +155,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const unchanged = (loads: OnAirLoads) =>
     Object.entries(loads.read).every(([p, h]) => {
       try {
-        return textHash(readFileSync(inside(root, p), "utf8")) === h;
+        // Non-blocking and plain files only: this runs on the event loop, where a named pipe would stop the server.
+        return textHash(readNoFollowSync(realpathSync(inside(root, p)))) === h;
       } catch {
         return false;
       }

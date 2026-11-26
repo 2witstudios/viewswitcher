@@ -9,13 +9,13 @@
 // 3. remove a set: delete its folder, unless scenes made from it still use its theme and pictures:
 //    then only its views and pack.json go, so those scenes keep their look.
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
-import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
+import { libraryStaging, readNoFollow, readNoFollowBytes, resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
 import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
@@ -31,7 +31,16 @@ export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Bl
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
 const tokenOk = (t: unknown): t is string => typeof t === "string" && STAGING_TOKEN.test(t);
-const stageDir = (libraryRoot: string, orgId: string, token: string) => inside(libraryRoot, `${plainName(orgId)}/${STAGING}/${token}`);
+/**
+ * A staged pack's folder: in the org's staging folder, which is never a link (contain.ts stagingIn),
+ * and never a link itself: install reads, writes and deletes in it.
+ */
+async function stageDir(libraryRoot: string, orgId: string, token: string): Promise<string> {
+  const dir = inside(await stagingIn(libraryRoot, plainName(orgId)), token);
+  const s = await lstat(dir).catch(() => null);
+  if (s && !s.isDirectory()) throw new PackError("That pack isn't ready to install any more. Drop it again.");
+  return dir;
+}
 
 /** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
 function plainFsError(e: unknown, doing: string): Error {
@@ -50,25 +59,39 @@ async function freeSet(orgDir: string, id: string) {
   return plainName(name);
 }
 
-/** Copy `raw` to `dest` with every text file filled in. */
+/**
+ * Copy `raw` to `dest` with every text file filled in. Staging wrote plain files and folders only, so
+ * each is read with no link anywhere in its path (contain.ts readNoFollowBytes): a file or folder
+ * swapped for a link since is refused, never followed.
+ */
 async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
+  const changed = (f: string) => new PackError(`"${f}" changed in staging. Drop the pack again.`);
+  // `raw` is already a real path (the staging folder is, and the token folder isn't a link), so on macOS
+  // the no-link open refuses a link at raw or anywhere below it, at the moment each file is opened
+  // (O_NOFOLLOW_ANY); elsewhere only a link at the file itself (contain.ts NO_LINKS).
+  if (!(await lstat(raw)).isDirectory()) throw changed("raw");
   for (const f of files) {
-    const from = inside(raw, f);
+    const bytes = await readNoFollowBytes(inside(raw, f), { single: true }).catch(() => {
+      throw changed(f);
+    });
     const to = inside(dest, installedPath(f));
     await mkdir(dirname(to), { recursive: true });
-    if (isTextFile(f)) await writeFile(to, fillPlaceholders(f, await readFile(from, "utf8"), vars), { flag: "wx" });
-    else await writeFile(to, new Uint8Array(await readFile(from)), { flag: "wx" });
+    await writeFile(to, isTextFile(f) ? fillPlaceholders(f, new TextDecoder().decode(bytes), vars) : bytes, { flag: "wx" });
   }
 }
 
-/** Clear staged packs older than an hour (a closed tab never cancels its own). */
+/** Clear staged packs (and new orgs) older than an hour: a closed tab never cancels its own, a crash never finishes. */
 export async function sweepStaging(libraryRoot: string) {
   const now = Date.now();
-  for (const org of await readdir(libraryRoot).catch(() => [] as string[])) {
-    if (org.startsWith(".")) continue;
-    const dir = join(libraryRoot, org, STAGING);
+  const orgs = (await readdir(libraryRoot).catch(() => [] as string[])).filter((org) => !org.startsWith("."));
+  // Each org's, and the library's own (a new org being filled in, library.ts createOrg). One that
+  // leads outside the library is left alone: nothing there is ours to delete.
+  const folders = [libraryStaging(libraryRoot), ...orgs.map((org) => stagingIn(libraryRoot, org))];
+  for (const dir of await Promise.all(folders.map((f) => f.catch(() => null)))) {
+    if (!dir) continue;
     for (const name of await readdir(dir).catch(() => [] as string[])) {
-      const s = await stat(join(dir, name)).catch(() => null);
+      // lstat: a link in staging is judged (and removed) as the link, never followed.
+      const s = await lstat(join(dir, name)).catch(() => null);
       if (s && now - s.mtimeMs > STAGE_TTL_MS) await rm(join(dir, name), { recursive: true, force: true });
     }
   }
@@ -109,7 +132,9 @@ export async function stagePack(libraryRoot: string, orgId: string, source: Pack
 
   // 2. Unpack into staging (only the planned files, each checked to land inside it once more).
   const token = randomBytes(12).toString("hex");
-  const dir = stageDir(libraryRoot, orgId, token);
+  const dir = await stageDir(libraryRoot, orgId, token).catch((e) => {
+    throw plainFsError(e, "Unpacking it");
+  });
   const raw = join(dir, "raw");
   try {
     const texts: Record<string, string> = {};
@@ -160,8 +185,8 @@ const hash = (s: string) => createHash("sha256").update(s.replace(/\r\n/g, "\n")
 /** Install a staged pack into its org as templates/<set>/. Returns the set's folder name. */
 export async function installPack(libraryRoot: string, orgId: string, token: unknown): Promise<{ set: string }> {
   if (!tokenOk(token)) throw new PackError("That pack isn't ready to install any more. Drop it again.");
-  const dir = stageDir(libraryRoot, orgId, token);
-  const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
+  const dir = await stageDir(libraryRoot, orgId, token);
+  const meta = await readNoFollow(join(dir, "meta.json")).then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   if (meta.org !== orgId) throw new PackError("That pack was checked for another show. Drop it again here.");
   const orgDir = inside(libraryRoot, plainName(orgId));
@@ -196,19 +221,23 @@ export async function installPack(libraryRoot: string, orgId: string, token: unk
 }
 
 export async function cancelPack(libraryRoot: string, orgId: string, token: unknown) {
-  if (tokenOk(token)) await rm(stageDir(libraryRoot, orgId, token), { recursive: true, force: true });
+  if (tokenOk(token)) await rm(await stageDir(libraryRoot, orgId, token), { recursive: true, force: true });
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
-async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<number> {
+async function scenesUsing(libraryRoot: string, orgId: string, set: string): Promise<number> {
   // As written by hand or by the switcher: plain, or with each segment encoded (libraryUrl).
   const needle = `/library/${orgId}/templates/${set}/`;
   const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
-  const projects = join(orgDir, "projects");
+  // A projects/ that leads outside the library isn't walked at all (contain.ts); one inside is walked where it really is.
+  const projects = await resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects`).catch(() => null);
+  if (projects === null) return 0;
   const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
-  // Linked scenes too: a scene that is a link still uses the set through it.
+  // Linked scenes too: a scene that is a link still uses the set through it. One that leads outside the library isn't read (contain.ts).
   const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
-  const uses = await Promise.all(scenes.map((rel) => read(() => readFile(join(projects, rel), "utf8").catch(() => "")).then((t) => t.includes(needle) || t.includes(encoded))));
+  const textOf = (rel: string) =>
+    resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects/${rel}`).then((abs) => readNoFollow(abs)).catch(() => "");
+  const uses = await Promise.all(scenes.map((rel) => read(() => textOf(rel)).then((t) => t.includes(needle) || t.includes(encoded))));
   return uses.filter(Boolean).length;
 }
 
@@ -222,7 +251,7 @@ export async function removeSet(libraryRoot: string, orgId: string, set: string)
   // What it deletes must really be in the library, not wherever a linked templates/ leads.
   await resolveInLibrary(libraryRoot, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
   if (!(await exists(join(dir, "pack.json")))) throw new PathError("That isn't an installed template set");
-  const kept = await scenesUsing(orgDir, orgId, set);
+  const kept = await scenesUsing(libraryRoot, orgId, set);
   if (kept === 0) {
     await rm(dir, { recursive: true, force: true });
     return { kept };

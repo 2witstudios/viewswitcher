@@ -1,15 +1,33 @@
 // The scene editor's file side: serve a scene tagged with element ids, and patch source ranges
 // back into the file, refusing when the file changed since the editor loaded it.
 import type { Stats } from "node:fs";
-import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, lstat, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { applyEdits, canRemove, EditError, isLibraryUrl, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, canRemove, EditError, isLibraryUrl, isViewPath, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
-import { resolveInLibrary } from "./library/contain";
+import { readNoFollow, resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 
 /** Identifies one version of a file's text. */
 export const sceneHash = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex").slice(0, 20);
+
+/** How many changed views a library change hashes; a bigger batch (a git pull, a sync) is left to the pages to read. */
+export const HASHED_CHANGES = 20;
+
+/**
+ * The hash of each view in `paths` (library paths) that can be read, inside the library: what an
+ * editor that has it open compares with its own version. Views and transitions only; a path that isn't one, is
+ * gone or leads outside the library is left out, and so is everything past HASHED_CHANGES views.
+ */
+export async function viewHashes(root: string, paths: string[]): Promise<Record<string, string>> {
+  const editable = (p: string) => {
+    const at = parseLibraryPath(p);
+    return isViewPath(at) || at.kind === "transition";
+  };
+  const views = paths.filter(editable).slice(0, HASHED_CHANGES);
+  const read = await Promise.all(views.map((p) => realScene(root, p, false).then((abs) => readNoFollow(abs)).then((t) => [p, sceneHash(t)] as const, () => null)));
+  return Object.fromEntries(read.filter((r) => r !== null));
+}
 
 /** A scene file, by its library path (which starts with the org id). */
 export function scenePath(root: string, path: unknown): string {
@@ -27,7 +45,7 @@ async function realScene(root: string, path: unknown, forWrite: boolean) {
 
 /** The scene with data-vs ids for the editor (and the program page). Reads only; never writes. */
 export async function readForEdit(root: string, path: string) {
-  const text = await readFile(await realScene(root, path, false), "utf8");
+  const text = await readNoFollow(await realScene(root, path, false));
   const hash = sceneHash(text);
   return { html: tagForEdit(text, hash), hash };
 }
@@ -109,10 +127,10 @@ export async function replaceChecked(real: string, read: Stats, current: string,
     // write landing between this check and the rename itself can't be caught without a lock the agent
     // would also have to honour; this leaves only that instant.)
     const now = await stat(real).catch(() => null);
-    const there = now && now.mtimeMs === read.mtimeMs && now.size === read.size ? await readFile(real, "utf8").catch(() => null) : null;
+    const there = now && now.mtimeMs === read.mtimeMs && now.size === read.size ? await readNoFollow(real).catch(() => null) : null;
     if (there === null || sceneHash(there) !== current) {
       await rm(tmp, { force: true });
-      const latest = there ?? (await readFile(real, "utf8").catch(() => ""));
+      const latest = there ?? (await readNoFollow(real).catch(() => ""));
       return { ok: false as const, hash: sceneHash(latest) };
     }
     hooks.atRename?.(); // synchronously, in the same tick as the rename: a last refusal (the MCP guard)
@@ -147,7 +165,7 @@ export function editScene(
     const parsed = edits.map(parseEdit);
     const real = await realScene(root, path, true);
     const read = await stat(real);
-    const text = await readFile(real, "utf8");
+    const text = await readNoFollow(real);
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
     // A delete only of what the editor could put back exactly (its Undo is an insert, which refuses scripts).
@@ -172,7 +190,7 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
   return serial(async (): Promise<RenameResult> => {
     const real = await realScene(root, path, true);
     const read = await stat(real);
-    const text = await readFile(real, "utf8");
+    const text = await readNoFollow(real);
     const current = sceneHash(text);
     if (current !== hash) return { ok: false, conflict: true, hash: current };
     const was = readTitle(text);

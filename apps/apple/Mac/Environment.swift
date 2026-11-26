@@ -11,7 +11,8 @@ enum Env {
     static var e2e: Bool { e2eDir != nil }
     static let updatesEnabled = vars["VIEWSWITCHER_UPDATES"] != "0"
     static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-    static let logFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/ViewSwitcher/server.log")
+    /// This build's own server log (serverLogFile): the installed app's, Debug's or an e2e run's.
+    static let logFile = serverLogFile(home: FileManager.default.homeDirectoryForCurrentUser, bundleID: Bundle.main.bundleIdentifier, e2eDir: e2eDir)
     /// A new secret each launch, for the pairing endpoints only this app may call (apps/server: /api/remote…).
     /// It goes to the server in its environment and never leaves this Mac.
     static let adminToken: String = {

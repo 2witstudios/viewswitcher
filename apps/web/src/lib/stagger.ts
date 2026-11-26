@@ -1,4 +1,4 @@
-// A change to an org's shared theme changes every tile's url at once. Reloading them all together
+// A change to a shared theme changes the url of every tile that uses it at once. Reloading them all together
 // would start every scene on the page in the same moment (on an iPad, a stall of several seconds),
 // so they go one at a time, a short gap apart, the ones on screen first.
 

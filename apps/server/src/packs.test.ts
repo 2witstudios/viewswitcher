@@ -1,13 +1,13 @@
 // Staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, link, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { addFromTemplate, createOrg, createProject } from "./library";
 import { LibraryScanner } from "./library/scanner";
-import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
+import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { SHOWS, SHOWS_DIR, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
@@ -222,6 +222,36 @@ describe("removing a set", () => {
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
 
+  test("a scene that is a link outside the library isn't read to count it", async () => {
+    await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
+    const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      const real = join(root, org, "projects", projectId, "scenes/teaching.html");
+      await rename(real, join(away, "teaching.html"));
+      await symlink(join(away, "teaching.html"), real);
+      expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a projects/ folder linked outside the library isn't walked or read to count scenes", async () => {
+    await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
+    const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await rename(join(root, org, "projects"), join(away, "projects"));
+      await symlink(join(away, "projects"), join(root, org, "projects"));
+      const before = await listing(away);
+      expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
+      expect(await listing(away)).toEqual(before);
+      expect(await readFile(join(away, "projects", projectId, "scenes/teaching.html"), "utf8")).toContain("/templates/starter/");
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
   test("refuses what isn't a set", async () => {
     await expect(removeSet(root, org, "_shared")).rejects.toThrow();
     await expect(removeSet(root, org, "../projects")).rejects.toThrow();
@@ -311,5 +341,132 @@ describe("a templates/ folder linked outside the library", () => {
     } finally {
       await rm(away, { recursive: true, force: true });
     }
+  });
+});
+
+describe("an org's .viewswitcher/ or staging/ linked outside the library", () => {
+  const HOUR_AND_A_BIT = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+  /** A folder outside the library with an old file and an old folder in it, as a sweep would see them. */
+  async function awayWithOldFiles() {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    await mkdir(join(away, "staging/old-folder"), { recursive: true });
+    await writeFile(join(away, "staging/old-file"), "keep me");
+    await writeFile(join(away, "old-file"), "keep me");
+    for (const p of ["staging/old-folder", "staging/old-file", "old-file", "staging"]) await utimes(join(away, p), HOUR_AND_A_BIT, HOUR_AND_A_BIT);
+    return away;
+  }
+  const outsideListing = (away: string) => listing(away);
+
+  for (const [what, link] of [[".viewswitcher/", ".viewswitcher"], ["staging/", ".viewswitcher/staging"]] as const) {
+    test(`${what}: staging a pack is refused and writes nothing there; the sweep deletes nothing there`, async () => {
+      const away = await awayWithOldFiles();
+      try {
+        const before = await outsideListing(away);
+        await rm(join(root, org, ".viewswitcher"), { recursive: true, force: true });
+        await mkdir(join(root, org, ".viewswitcher"), { recursive: true });
+        await rm(join(root, org, link), { recursive: true, force: true });
+        await symlink(link === ".viewswitcher" ? away : join(away, "staging"), join(root, org, link));
+        await expect(stagePack(root, org, { zip: starterZip }, await starterJs())).rejects.toThrow("link");
+        await sweepStaging(root);
+        expect(await outsideListing(away)).toEqual(before);
+        expect(await readFile(join(away, "staging/old-file"), "utf8")).toBe("keep me");
+        // Install and cancel with a token that would name a folder there touch nothing either.
+        const token = "a".repeat(24);
+        await mkdir(join(away, "staging", token), { recursive: true });
+        await writeFile(join(away, "staging", token, "meta.json"), JSON.stringify({ org, set: "x", manifest: { id: "x" }, files: [], created: 0 }));
+        await expect(installPack(root, org, token)).rejects.toThrow("link");
+        await cancelPack(root, org, token).catch(() => {});
+        expect(await readFile(join(away, "staging", token, "meta.json"), "utf8")).toContain(org);
+      } finally {
+        await rm(away, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("an org folder that is a link outside the library: the sweep leaves it alone", async () => {
+    const away = await awayWithOldFiles();
+    try {
+      await mkdir(join(away, ".viewswitcher"), { recursive: true });
+      await rename(join(away, "staging"), join(away, ".viewswitcher/staging"));
+      await symlink(away, join(root, "elsewhere"));
+      const before = await outsideListing(away);
+      await sweepStaging(root);
+      expect(await outsideListing(away)).toEqual(before);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a staged pack's own folder that is a link: install and cancel never read, write or delete there", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const staged = join(root, org, ".viewswitcher/staging", s.token);
+      await rename(staged, join(away, "moved"));
+      await mkdir(join(away, "moved/final/keep"), { recursive: true });
+      await symlink(join(away, "moved"), staged);
+      const before = await listing(away);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("isn't ready");
+      await cancelPack(root, org, s.token).catch(() => {});
+      expect(await listing(away)).toEqual(before);
+      expect((await scanOrg(root, org)).sets).toEqual([]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a staged file swapped for a link (a file outside the library): install refuses and copies nothing", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await writeFile(join(away, "secret.css"), "outside secret");
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const raw = join(root, org, ".viewswitcher/staging", s.token, "raw/_shared/theme.css");
+      await rm(raw);
+      await symlink(join(away, "secret.css"), raw);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("changed in staging");
+      expect((await scanOrg(root, org)).sets).toEqual([]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a staged folder swapped for a link (raw/_shared, or raw itself): install refuses and copies nothing from outside", async () => {
+    for (const swap of ["raw/_shared", "raw"]) {
+      const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+      try {
+        const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+        const at = join(root, org, ".viewswitcher/staging", s.token, swap);
+        await rename(at, join(away, "moved"));
+        await writeFile(join(away, "moved", swap === "raw" ? "_shared/theme.css" : "theme.css"), "outside secret");
+        await symlink(join(away, "moved"), at);
+        await expect(installPack(root, org, s.token)).rejects.toThrow("changed in staging");
+        expect((await scanOrg(root, org)).sets).toEqual([]);
+      } finally {
+        await rm(away, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test("a staged file swapped for a hard link to a file outside the library: install refuses", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await writeFile(join(away, "secret.css"), "outside secret");
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const raw = join(root, org, ".viewswitcher/staging", s.token, "raw/_shared/theme.css");
+      await rm(raw);
+      await link(join(away, "secret.css"), raw);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("changed in staging");
+      expect((await scanOrg(root, org)).sets).toEqual([]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a plain staging folder is still swept: a pack staged over an hour ago goes, a new one stays", async () => {
+    const old = await stagePack(root, org, { zip: starterZip }, await starterJs());
+    const fresh = await stagePack(root, org, { zip: starterZip }, await starterJs());
+    await utimes(join(root, org, ".viewswitcher/staging", old.token), HOUR_AND_A_BIT, HOUR_AND_A_BIT);
+    await sweepStaging(root);
+    expect(await readdir(join(root, org, ".viewswitcher/staging"))).toEqual([fresh.token]);
   });
 });
