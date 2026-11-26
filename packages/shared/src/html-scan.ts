@@ -234,13 +234,14 @@ export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").
 
 /**
  * The page's <title> element: the first closed one that isn't inside a <template>, an <svg> or
- * <math> (the browser never shows those as the page's title). The one readTitle reads and setTitle writes, so the two can't disagree.
+ * <math>. An SVG or MathML title is one document.title ignores; the rare HTML title inside an SVG
+ * foreignObject is skipped too, which is harmless: a rename adds a head <title>, which comes first. The one readTitle reads and setTitle writes, so the two can't disagree.
  */
 function titleElement(els: ScannedElement[]): ScannedElement | undefined {
   // One forward pass: a parent always comes before its children in `els`, so each element's answer is
   // its parent's, known already (no walk up the tree per title, which nesting made quadratic). A
-  // title inside a <template>, an <svg> or <math> isn't the page's: document.title ignores those, and
-  // an SVG <title/> really is self-closed, so writing the page's name there would be wrong.
+  // title in a <template>, an <svg> or <math> isn't taken: an SVG <title/> really is self-closed, so
+  // writing the page's name there would be wrong.
   const outside = new Uint8Array(els.length);
   for (const e of els) {
     const p = e.parent === null ? null : els[e.parent]!;
