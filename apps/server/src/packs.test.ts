@@ -415,6 +415,21 @@ describe("an org's .viewswitcher/ or staging/ linked outside the library", () =>
     }
   });
 
+  test("a staged file swapped for a link (a file outside the library): install refuses and copies nothing", async () => {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      await writeFile(join(away, "secret.css"), "outside secret");
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      const raw = join(root, org, ".viewswitcher/staging", s.token, "raw/_shared/theme.css");
+      await rm(raw);
+      await symlink(join(away, "secret.css"), raw);
+      await expect(installPack(root, org, s.token)).rejects.toThrow("changed in staging");
+      expect((await scanOrg(root, org)).sets).toEqual([]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
   test("a plain staging folder is still swept: a pack staged over an hour ago goes, a new one stays", async () => {
     const old = await stagePack(root, org, { zip: starterZip }, await starterJs());
     const fresh = await stagePack(root, org, { zip: starterZip }, await starterJs());

@@ -45,10 +45,15 @@ const KINDS: Record<string, AssetKind> = {
  */
 export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
 
-/** `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS): `abs` must be a real path. */
+/**
+ * `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS) and it's a plain
+ * file: `abs` must be a real path. O_NONBLOCK so a named pipe or a device named like a view can't hang
+ * the open; it's refused right after, by its type.
+ */
 async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
-  const f = await open(abs, constants.O_RDONLY | NO_LINKS);
+  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
   try {
+    if (!(await f.stat()).isFile()) throw new Error("not a plain file");
     return await use(f);
   } finally {
     await f.close();

@@ -59,10 +59,11 @@ async function freeSet(orgDir: string, id: string) {
   return plainName(name);
 }
 
-/** Copy `raw` to `dest` with every text file filled in. */
+/** Copy `raw` to `dest` with every text file filled in. Only plain files: staging wrote them so, never links. */
 async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
   for (const f of files) {
     const from = inside(raw, f);
+    if (!(await lstat(from)).isFile()) throw new PackError(`"${f}" changed in staging. Drop the pack again.`);
     const to = inside(dest, installedPath(f));
     await mkdir(dirname(to), { recursive: true });
     if (isTextFile(f)) await writeFile(to, fillPlaceholders(f, await readFile(from, "utf8"), vars), { flag: "wx" });

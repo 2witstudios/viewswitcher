@@ -144,6 +144,9 @@ describe("checkPack", () => {
     // A .css file counts outside its comments: the starter names the show in one, where it's safe.
     const css = checkPack(planned(basic), texts({ "_shared/theme.css": `/* {{ORG_NAME}} theme */ .n::after { content: "{{ORG_NAME}}" }` }));
     expect(css.ok && css.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // A "/*" inside a CSS string doesn't open a comment that would hide what follows.
+    const quoted = checkPack(planned(basic), texts({ "_shared/theme.css": `.a::before { content: "/*" } .n::after { content: "{{ORG_NAME}}" } /* end */` }));
+    expect(quoted.ok && quoted.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
   });
 
   test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {

@@ -297,7 +297,8 @@ function textInCode(texts: Record<string, string>): { placeholder: string; where
     const e = extensionOf(path);
     if (e === ".js") note(text, path);
     // In a .css file a value is as typed (only a comment's end is broken up), so outside comments it's in code.
-    if (e === ".css") note(text.replace(/\/\*[\s\S]*?\*\//g, ""), path);
+    // Quoted strings are skipped while comments are taken out, so a "/*" inside one isn't a comment.
+    if (e === ".css") note(text.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|\/\*[\s\S]*?\*\//g, (m, quoted: string | undefined) => quoted ?? ""), path);
     if (e !== ".html" && e !== ".svg") continue;
     for (const el of scanElements(text)) {
       if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
