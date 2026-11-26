@@ -58,6 +58,7 @@ describe("resolveInLibrary", () => {
     await refused(`daisy/.viewswitcher/staging/${TOKEN}/meta.json`);
     await refused(`daisy/.viewswitcher/staging/abc/preview/brb.html`);
     await refused(`daisy/.viewswitcher/staging/${TOKEN}/preview/.hidden`);
+    await refused(`.git/.viewswitcher/staging/${TOKEN}/preview/brb.html`);
   });
 });
 

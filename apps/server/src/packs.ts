@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, PACK_TEXT, planPack } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, PackPlaceholder, PackScripts } from "@viewswitcher/shared";
 import { exists, readOrg } from "./library";
-import { STAGING, STAGING_TOKEN } from "./library/contain";
+import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, ZipError } from "./zip";
 
@@ -181,6 +181,8 @@ export async function installPack(root: string, orgId: string, token: unknown): 
   const final = join(dir, "final");
   try {
     const set = await freeSet(orgDir, meta.manifest.id);
+    // Where the set goes must really be in the library: templates/ may be a link to somewhere else.
+    await resolveInLibrary(root, `${plainName(orgId)}/templates/${set}`, { forWrite: true });
     await rm(final, { recursive: true, force: true });
     await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, `/library/${orgId}/templates/${set}`));
     await mkdir(join(orgDir, "templates"), { recursive: true });
@@ -237,6 +239,8 @@ async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<
 export async function removeSet(root: string, orgId: string, set: string): Promise<{ kept: number }> {
   const orgDir = inside(root, plainName(orgId));
   const dir = inside(orgDir, `templates/${plainName(set)}`);
+  // What it deletes must really be in the library, not wherever a linked templates/ leads.
+  await resolveInLibrary(root, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
   if (!(await exists(join(dir, "pack.json")))) throw new PathError("That isn't an installed template set");
   const kept = await scenesUsing(orgDir, orgId, set);
   if (kept === 0) {

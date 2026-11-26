@@ -85,6 +85,26 @@ describe("library changes through a folder linked outside", () => {
   });
 });
 
+describe("deletions through a folder linked outside", () => {
+  test("Revert (a stream's own copy) and Revert transition never delete outside the library", async () => {
+    const { projectId } = await lib.createProject(org, "Del", ["brb"]);
+    const { streamId } = await lib.createStream(org, projectId, "Del", "2026-12-08");
+    // The stream's folder links outside, where a file has the copy's name.
+    const st = away("del-stream");
+    writeFileSync(join(st, "brb.html"), "outside");
+    rmSync(join(org, "projects", projectId, "streams", streamId), { recursive: true, force: true });
+    symlinkSync(st, join(org, "projects", projectId, "streams", streamId));
+    await expect(lib.revert(org, projectId, streamId, "brb")).rejects.toThrow(OUTSIDE);
+    expect(readdirSync(st)).toEqual(["brb.html"]);
+    // The project's transition is a link to a file outside.
+    const t = join(away("del-transition"), "transition.html");
+    writeFileSync(t, "outside");
+    symlinkSync(t, join(org, "projects", projectId, "transition.html"));
+    await expect(lib.revertTransition(org, projectId)).rejects.toThrow(OUTSIDE);
+    expect(readdirSync(join(outside, "del-transition"))).toEqual(["transition.html"]);
+  });
+});
+
 describe("links that stay in the library still work", () => {
   test("assets/ linked to another org's assets, and a template linked to another template", async () => {
     const o = join(library, "o3");

@@ -193,7 +193,9 @@ export async function customizeTransition(root: string, projectId: string) {
 
 /** Back to the org's transition: deletes the project's own. */
 export async function revertTransition(root: string, projectId: string) {
-  await rm(join(projectDir(root, projectId), TRANSITION), { force: true });
+  const file = join(projectDir(root, projectId), TRANSITION);
+  await contained(root, file);
+  await rm(file, { force: true });
 }
 
 // ---------------------------------------------------------------- mutations
@@ -326,7 +328,9 @@ export async function customize(root: string, projectId: string, streamId: strin
 export async function revert(root: string, projectId: string, streamId: string, name: string) {
   const projectScene = join(projectDir(root, projectId), "scenes", `${plainName(name)}.html`);
   if (!(await exists(projectScene))) throw new PathError("Only an override can go back to the project version");
-  await rm(join(streamDir(root, projectId, streamId), `${name}.html`));
+  const copy = join(streamDir(root, projectId, streamId), `${name}.html`);
+  await contained(root, copy);
+  await rm(copy);
 }
 
 export async function duplicate(root: string, path: string, check?: BeforeCreate) {

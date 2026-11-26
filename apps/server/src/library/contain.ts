@@ -31,9 +31,9 @@ const outside = () => new PathError("That path is a link to somewhere outside th
 function plainPath(p: string, forWrite: boolean): boolean {
   const parts = p.split("/");
   if (parts.some((s) => !s || s.includes("\\") || s.includes("\0") || s.length > 255)) return false;
-  // The staging preview's own segments are fixed; what follows them obeys the rule like anything else.
+  // The staging preview's own segments are fixed; the org before them and what follows them obey the rule like anything else.
   const skip = !forWrite && STAGING_PREVIEW.test(p) ? 4 : 0;
-  return parts.slice(1 + skip).every((s) => !s.startsWith(".")) && !(skip === 0 && parts[0]!.startsWith("."));
+  return !parts[0]!.startsWith(".") && parts.slice(1 + skip).every((s) => !s.startsWith("."));
 }
 
 /**

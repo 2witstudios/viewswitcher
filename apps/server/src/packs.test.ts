@@ -294,3 +294,26 @@ test("an existing library without sets reads as before", async () => {
   expect(lib.sets).toEqual([]);
   expect(lib.templates).toHaveLength(5);
 });
+
+describe("a templates/ folder linked outside the library", () => {
+  test("install and remove never write or delete there", async () => {
+    const { symlink } = await import("node:fs/promises");
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      // Install: the org's templates/ is a link outside.
+      const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
+      await rm(join(root, org, "templates"), { recursive: true, force: true });
+      await symlink(away, join(root, org, "templates"));
+      await expect(installPack(root, org, s.token)).rejects.toThrow("outside the library");
+      expect(await readdir(away)).toEqual([]);
+      // Remove: a set that looks installed there.
+      await mkdir(join(away, "neon"), { recursive: true });
+      await writeFile(join(away, "neon/pack.json"), "{}");
+      await writeFile(join(away, "neon/theme.css"), "x");
+      await expect(removeSet(root, org, "neon")).rejects.toThrow("outside the library");
+      expect((await readdir(join(away, "neon"))).sort()).toEqual(["pack.json", "theme.css"]);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+});
