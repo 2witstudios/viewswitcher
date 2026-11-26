@@ -70,7 +70,7 @@ export type TemplateSet = {
 };
 
 /** One org's content. */
-export type Library = {
+export type OrgContent = {
   org: Org;
   /** The org's own templates (templates/*.html). */
   templates: Scene[];

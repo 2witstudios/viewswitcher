@@ -1,5 +1,5 @@
 import { libraryUrl } from "@viewswitcher/shared";
-import type { AgentClients, AgentOnAir, BuiltinPack, Library, LiveState, Org, SceneEdit, StagedPack } from "@viewswitcher/shared";
+import type { AgentClients, AgentOnAir, BuiltinPack, OrgContent, LiveState, Org, SceneEdit, StagedPack } from "@viewswitcher/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryClient } from "./live";
 
@@ -56,7 +56,7 @@ async function upload(org: string, files: FileList | File[]): Promise<{ saved: {
 export const api = {
   orgs: async (): Promise<Org[]> => (await fetch("/api/orgs")).json(),
   createOrg: (name: string, accent?: string) => change<{ orgId: string }>("/api/orgs", { name, accent }),
-  library: async (org: string): Promise<Library> => {
+  library: async (org: string): Promise<OrgContent> => {
     const res = await fetch(`/api/library?org=${encodeURIComponent(org)}`);
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
     return res.json();

@@ -265,7 +265,7 @@ export function routes(d: RouteDeps): Route[] {
     }),
     get("/api/orgs", () => lib.listOrgs(root)),
     post("/api/orgs", (b) => lib.createOrg(root, d.starter, b.name, b.accent, b.ground)),
-    get("/api/library", (c) => d.scanner.scan(plainName(c.url.searchParams.get("org") ?? ""))),
+    get("/api/library", (c) => d.scanner.scanOrg(plainName(c.url.searchParams.get("org") ?? ""))),
     get("/api/state", () => store.state),
     post("/api/onair", (b) => store.goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId })),
     // What agents connected over MCP may put on air (agent-guard.ts); people in the switcher are never limited.

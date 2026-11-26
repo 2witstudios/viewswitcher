@@ -31,7 +31,7 @@ export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Bl
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
 const tokenOk = (t: unknown): t is string => typeof t === "string" && STAGING_TOKEN.test(t);
-const stageDir = (root: string, orgId: string, token: string) => inside(root, `${plainName(orgId)}/${STAGING}/${token}`);
+const stageDir = (libraryRoot: string, orgId: string, token: string) => inside(libraryRoot, `${plainName(orgId)}/${STAGING}/${token}`);
 
 /** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
 function plainFsError(e: unknown, doing: string): Error {
@@ -41,7 +41,7 @@ function plainFsError(e: unknown, doing: string): Error {
 }
 
 /** The placeholders for `org`, with {{PACK}} pointing at `packUrl`. */
-const varsFor = async (root: string, orgId: string, packUrl: string) => placeholderVars(await readOrg(root, orgId), packUrl);
+const varsFor = async (libraryRoot: string, orgId: string, packUrl: string) => placeholderVars(await readOrg(libraryRoot, orgId), packUrl);
 
 /** A set folder name the org doesn't have yet (a set someone removed but scenes still use counts as taken). */
 async function freeSet(orgDir: string, id: string) {
@@ -62,11 +62,11 @@ async function fillCopy(raw: string, dest: string, files: string[], vars: Return
 }
 
 /** Clear staged packs older than an hour (a closed tab never cancels its own). */
-export async function sweepStaging(root: string) {
+export async function sweepStaging(libraryRoot: string) {
   const now = Date.now();
-  for (const org of await readdir(root).catch(() => [] as string[])) {
+  for (const org of await readdir(libraryRoot).catch(() => [] as string[])) {
     if (org.startsWith(".")) continue;
-    const dir = join(root, org, STAGING);
+    const dir = join(libraryRoot, org, STAGING);
     for (const name of await readdir(dir).catch(() => [] as string[])) {
       const s = await stat(join(dir, name)).catch(() => null);
       if (s && now - s.mtimeMs > STAGE_TTL_MS) await rm(join(dir, name), { recursive: true, force: true });
@@ -74,10 +74,10 @@ export async function sweepStaging(root: string) {
   }
 }
 
-export async function stagePack(root: string, orgId: string, source: PackSource, starterScript: string | null): Promise<StagedPack> {
-  const orgDir = inside(root, plainName(orgId));
+export async function stagePack(libraryRoot: string, orgId: string, source: PackSource, starterScript: string | null): Promise<StagedPack> {
+  const orgDir = inside(libraryRoot, plainName(orgId));
   if (!(await exists(join(orgDir, "org.json")))) throw new PathError("That org doesn't exist");
-  await sweepStaging(root);
+  await sweepStaging(libraryRoot);
 
   // 1. What's in it, before anything is unpacked or written.
   let entries: PackEntry[];
@@ -109,7 +109,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
   // 2. Unpack into staging (only the planned files, each checked to land inside it once more).
   const token = randomBytes(12).toString("hex");
-  const dir = stageDir(root, orgId, token);
+  const dir = stageDir(libraryRoot, orgId, token);
   const raw = join(dir, "raw");
   try {
     const texts: Record<string, string> = {};
@@ -132,7 +132,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
     // 4. A preview copy for the covers, filled in for this org.
     const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
-    const previewVars = await varsFor(root, orgId, libraryUrl(previewRel));
+    const previewVars = await varsFor(libraryRoot, orgId, libraryUrl(previewRel));
     await fillCopy(raw, join(dir, "preview"), files, previewVars);
     // A cover's caption is the filled view's title, as the cover above it shows it ("Daisy Debate · Live").
     const label = (v: { file: string; name: string }) => readTitle(fillPlaceholders(v.file, texts[v.file] ?? "", previewVars)) ?? v.name.replace(/-/g, " ");
@@ -158,20 +158,20 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 const hash = (s: string) => createHash("sha256").update(s.replace(/\r\n/g, "\n").trim()).digest("hex");
 
 /** Install a staged pack into its org as templates/<set>/. Returns the set's folder name. */
-export async function installPack(root: string, orgId: string, token: unknown): Promise<{ set: string }> {
+export async function installPack(libraryRoot: string, orgId: string, token: unknown): Promise<{ set: string }> {
   if (!tokenOk(token)) throw new PackError("That pack isn't ready to install any more. Drop it again.");
-  const dir = stageDir(root, orgId, token);
+  const dir = stageDir(libraryRoot, orgId, token);
   const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   if (meta.org !== orgId) throw new PackError("That pack was checked for another org. Drop it again here.");
-  const orgDir = inside(root, plainName(orgId));
+  const orgDir = inside(libraryRoot, plainName(orgId));
   const final = join(dir, "final");
   try {
     const set = await freeSet(orgDir, meta.manifest.id);
     // Where the set goes must really be in the library: templates/ may be a link to somewhere else.
-    await resolveInLibrary(root, `${plainName(orgId)}/templates/${set}`, { forWrite: true });
+    await resolveInLibrary(libraryRoot, `${plainName(orgId)}/templates/${set}`, { forWrite: true });
     await rm(final, { recursive: true, force: true });
-    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, libraryUrl(`${orgId}/templates/${set}`)));
+    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(libraryRoot, orgId, libraryUrl(`${orgId}/templates/${set}`)));
     await mkdir(join(orgDir, "templates"), { recursive: true });
     // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
     // installs at once, an agent), where rename alone would quietly replace an empty one.
@@ -195,8 +195,8 @@ export async function installPack(root: string, orgId: string, token: unknown): 
   }
 }
 
-export async function cancelPack(root: string, orgId: string, token: unknown) {
-  if (tokenOk(token)) await rm(stageDir(root, orgId, token), { recursive: true, force: true });
+export async function cancelPack(libraryRoot: string, orgId: string, token: unknown) {
+  if (tokenOk(token)) await rm(stageDir(libraryRoot, orgId, token), { recursive: true, force: true });
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
@@ -216,11 +216,11 @@ async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<
  * Remove a template set. Scenes already made from it are never touched: if any use its theme or
  * pictures, those files stay (its views and pack.json go, so it leaves Templates) and `kept` says how many.
  */
-export async function removeSet(root: string, orgId: string, set: string): Promise<{ kept: number }> {
-  const orgDir = inside(root, plainName(orgId));
+export async function removeSet(libraryRoot: string, orgId: string, set: string): Promise<{ kept: number }> {
+  const orgDir = inside(libraryRoot, plainName(orgId));
   const dir = inside(orgDir, `templates/${plainName(set)}`);
   // What it deletes must really be in the library, not wherever a linked templates/ leads.
-  await resolveInLibrary(root, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
+  await resolveInLibrary(libraryRoot, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
   if (!(await exists(join(dir, "pack.json")))) throw new PathError("That isn't an installed template set");
   const kept = await scenesUsing(orgDir, orgId, set);
   if (kept === 0) {

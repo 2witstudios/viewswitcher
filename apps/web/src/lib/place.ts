@@ -1,11 +1,11 @@
 // Where a scene lives in the library, in words, for the editor's crumb and title.
 import { shortDate } from "@viewswitcher/shared";
-import type { Library } from "@viewswitcher/shared";
+import type { OrgContent } from "@viewswitcher/shared";
 
 const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.html$/, "");
 
 /** "Bible Study · Day 1 · Nov 24" and the scene's label; its file name until the library is known. */
-export function placeOf(lib: Library | undefined, path: string): { crumb: string; title: string } {
+export function placeOf(lib: OrgContent | undefined, path: string): { crumb: string; title: string } {
   if (!lib) return { crumb: "", title: fileName(path) };
   const t = lib.templates.find((s) => s.path === path);
   if (t) return { crumb: `${lib.org.name} · Templates`, title: t.label };

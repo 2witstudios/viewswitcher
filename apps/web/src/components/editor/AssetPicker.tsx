@@ -1,5 +1,5 @@
 import { libraryUrl } from "@viewswitcher/shared";
-import type { Library } from "@viewswitcher/shared";
+import type { OrgContent } from "@viewswitcher/shared";
 import { useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { inApp } from "../../lib/live";
@@ -8,7 +8,7 @@ import { attempt } from "../ui";
 /** The org's images to choose from, and Upload. */
 export function AssetPicker({ org, library, replacing, onPick, onClose }: {
   org: string;
-  library: Library | undefined;
+  library: OrgContent | undefined;
   replacing: boolean;
   onPick: (asset: { path: string }) => void;
   onClose: () => void;

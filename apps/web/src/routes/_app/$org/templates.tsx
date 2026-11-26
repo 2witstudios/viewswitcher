@@ -1,5 +1,5 @@
 import { libraryUrl, templateId } from "@viewswitcher/shared";
-import type { Library, Scene, StagedPack, TemplateSet } from "@viewswitcher/shared";
+import type { OrgContent, Scene, StagedPack, TemplateSet } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { AskAgent } from "../../../components/AgentSheet";
 import { type DragEvent, useEffect, useRef, useState } from "react";
@@ -58,7 +58,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
       });
     };
 
-    const tile = (lib: Library, t: Scene) => {
+    const tile = (lib: OrgContent, t: Scene) => {
       const menu: MenuItem[] = [
         ...lib.projects.flatMap((p): MenuItem[] => [{
           label: `Add to ${p.name}`,
