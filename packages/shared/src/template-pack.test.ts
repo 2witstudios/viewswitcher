@@ -202,4 +202,5 @@ test("placeholderVars: the org's values, its initial upper-case, {{PACK}} only f
   expect(placeholderVars(org)).toEqual({ ORG_ID: "rb", ORG_NAME: "r&b night", ORG_INITIAL: "R", ACCENT: "#f00", GROUND: "#000" });
   expect(placeholderVars(org, "/library/rb/templates/neon").PACK).toBe("/library/rb/templates/neon");
   expect(placeholderVars({ ...org, name: " " }).ORG_INITIAL).toBe("?");
+  expect(placeholderVars({ ...org, name: "🎸 Band" }).ORG_INITIAL).toBe("🎸");
 });

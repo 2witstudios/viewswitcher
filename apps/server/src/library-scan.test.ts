@@ -108,6 +108,10 @@ describe("titledCopy (Duplicate)", () => {
     const out = titledCopy(`<head><title>${"x".repeat(120)}</title></head>`);
     expect(out).toBe(`<head><title>${"x".repeat(115)} copy</title></head>`);
   });
+  test("an emoji at the cut is kept whole", () => {
+    expect(titledCopy(`<head><title>${"x".repeat(113)}🎸🎸</title></head>`)).toBe(`<head><title>${"x".repeat(113)}🎸 copy</title></head>`);
+    expect(titledCopy(`<head><title>${"x".repeat(114)}🎸</title></head>`)).toBe(`<head><title>${"x".repeat(114)} copy</title></head>`); // the emoji won't fit whole
+  });
   test("a page without a title, or with an empty one, is copied as it is", () => {
     expect(titledCopy("<main></main>")).toBe("<main></main>");
     expect(titledCopy("<head><title> </title></head>")).toBe("<head><title> </title></head>");

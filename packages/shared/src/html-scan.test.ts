@@ -445,6 +445,11 @@ describe("readTitle", () => {
     "a title's own close tag with a slash": "<head><title>Real</title/></head>",
     "a title closed at the end of the file": "<head><title>Real</title ",
     "a title inside an end tag": "<head></x <title>><title>Real</title></head>",
+    "a title in a quoted attribute": '<head><meta content="<title>Fake</title>"><title>Real</title></head>',
+    "a > in the title's own attribute": '<head><title data-x="a>b">Real</title></head>',
+    "nested templates": "<head><template><template></template><title>Inner</title></template><title>Real</title></head>",
+    "a bogus comment": "<head><!x <title>><title>Real</title></head>",
+    "a processing instruction": "<head><?x <title>?><title>Real</title></head>",
   };
   test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
     expect(readTitle(html)).toBe("Real");

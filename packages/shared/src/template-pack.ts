@@ -32,8 +32,9 @@ const asTyped = (v: string) => v;
  * The library's text files (the ones placeholders are filled in, and the ones agents may read and
  * write), each with how a placeholder's value is escaped in it. HTML in .html and .svg, so an org
  * named "R&B <Live>" reads as text and can't add markup; a JSON string in .json, like org.json's
- * name; in .css a value can't close the comment it's in (the starter's theme.css has the name in
- * one); as typed in .js, .md and .txt. A new text type has to say how it's escaped.
+ * name; in .css only a comment's end (star, slash) gets a space put in it, so a value can't close the comment it's in (the
+ * starter's theme.css has the name in one; a value inside a CSS string isn't escaped for it); as
+ * typed in .js, .md and .txt. A new text type has to say how it's escaped.
  */
 const TEXT_TYPES = {
   ".html": (v: string) => escapeHtml(v),
@@ -351,7 +352,8 @@ export const placeholdersIn = (text: string): string[] => [...new Set(Array.from
 /** The placeholders' values for an org: its id, name, initial and colors, and {{PACK}} when a set is filled in. */
 export function placeholderVars(org: { id: string; name: string; accent: string; ground: string }, packUrl?: string): Partial<Record<PackPlaceholder, string>> {
   const name = org.name.trim();
-  return { ORG_ID: org.id, ORG_NAME: name, ORG_INITIAL: (name[0] ?? "?").toUpperCase(), ACCENT: org.accent, GROUND: org.ground, ...(packUrl === undefined ? {} : { PACK: packUrl }) };
+  // The first character, not the first UTF-16 unit: "🎸 Band" starts with 🎸, not half of it.
+  return { ORG_ID: org.id, ORG_NAME: name, ORG_INITIAL: ([...name][0] ?? "?").toUpperCase(), ACCENT: org.accent, GROUND: org.ground, ...(packUrl === undefined ? {} : { PACK: packUrl }) };
 }
 
 /**

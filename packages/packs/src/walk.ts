@@ -5,10 +5,11 @@ import { join } from "node:path";
 
 /**
  * Every file under `dir`, as paths relative to it ("a/b.css"), sorted. Dot-files and dot-folders
- * (.DS_Store, .git) are left out; links are neither followed nor listed. A folder that can't be read
- * is skipped, not an error, unless it is `dir` itself.
+ * (.DS_Store, .git) are left out. Links are never followed into; with `links: true` they're listed
+ * too (a linked scene, which a caller reads through its link), else they're left out. A folder that
+ * can't be read is skipped, not an error, unless it is `dir` itself.
  */
-export async function walkFiles(dir: string): Promise<string[]> {
+export async function walkFiles(dir: string, { links = false }: { links?: boolean } = {}): Promise<string[]> {
   const out: string[] = [];
   const walk = async (abs: string, rel: string, top: boolean) => {
     let entries;
@@ -22,7 +23,7 @@ export async function walkFiles(dir: string): Promise<string[]> {
       if (e.name.startsWith(".")) continue;
       const path = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) await walk(join(abs, e.name), path, false);
-      else if (e.isFile()) out.push(path);
+      else if (e.isFile() || (links && e.isSymbolicLink())) out.push(path);
     }
   };
   await walk(dir, "", true);

@@ -3,7 +3,7 @@
 // a library that already has everything is left exactly as it is. See library-kit/README.md.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { writeAtomic } from "./atomic";
 import { createOrg, listOrgs } from "./library";
@@ -55,6 +55,8 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
   for (const { from, to } of KIT_FILES) {
     const text = await readFile(join(kit, from), "utf8");
     const dest = join(root, to);
+    // A kit file someone made a link (AGENTS.md → CLAUDE.md) is their arrangement: never replaced.
+    if (await lstat(dest).then((s) => s.isSymbolicLink(), () => false)) continue;
     const current = await readFile(dest, "utf8").catch(() => null);
     if (current === null) {
       await writeAtomic(dest, text);

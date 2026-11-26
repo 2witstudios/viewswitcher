@@ -64,7 +64,7 @@ Every `.html`, `.css`, `.js`, `.json`, `.svg`, `.md` and `.txt` file is filled i
 
 Anything else in `{{LIKE_THIS}}` stays as typed (with a warning).
 
-Values are escaped for the file they land in: in `.html` and `.svg` they're HTML-escaped (an org named `R&B <Live>` reads as text and can't add markup), in `.json` they're escaped for a JSON string, and elsewhere (`.css`, `.js`, `.md`, `.txt`) they're as typed. So in a view, put `{{ORG_NAME}}` in text or an attribute, not inside an inline `<script>`; a script that needs the name can read it from the page.
+Values are escaped for the file they land in: in `.html` and `.svg` they're HTML-escaped (an org named `R&B <Live>` reads as text and can't add markup), in `.json` they're escaped for a JSON string, in `.css` only `*/` is broken up (so a value can't close a comment), and elsewhere (`.js`, `.md`, `.txt`) they're as typed. So in a view, put `{{ORG_NAME}}` in text or an attribute, not inside an inline `<script>`; a script that needs the name can read it from the page.
 
 **Link the pack's own files through `{{PACK}}`:** `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg`, `{{PACK}}/_shared/brand/mark.svg`. Views are installed at the set's top level, beside `_shared/`, so another view is `{{PACK}}/<view>.html`. Absolute URLs keep working when a view is copied into a project or stream, which relative ones wouldn't. A link to a pack file that isn't in the pack is a warning. A view may also link the org's own files (`/library/{{ORG_ID}}/assets/…`).
 

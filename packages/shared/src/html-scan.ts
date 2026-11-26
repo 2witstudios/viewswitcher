@@ -233,30 +233,22 @@ const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
 /**
- * The first <title> outside comments, raw-text content (the scanner's RAW elements: script, style,
- * noscript, textarea…) and <template> content: the one the browser shows, and the one setTitle
- * writes. It reads a page as the scanner does: a comment ends at the first "-->" after "<!--"; an end
- * tag is skipped whole (so a "<title>" inside "</x <title>>" is part of that tag); a tag
- * name, opening or closing, ends at a space, "/" or ">" (so <style-box> is an element of its own, and
- * </script/> closes a script); and an element, a tag or a comment that never ends runs to the end of
- * the file. Every part can end at the end of the file, so each match either succeeds or fails at once
- * and the read stays linear, however a page (an untrusted pack's, say) is cut short.
+ * The page's <title> element: the first closed one that isn't inside a <template> (the browser
+ * never shows that one). The one readTitle reads and setTitle writes, so the two can't disagree.
  */
-const TITLE = new RegExp(
-  "<!--[\\s\\S]*?(?:-->|$)|<\\/[a-z][^>]*(?:>|$)" +
-    `|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*(?:>|$)[\\s\\S]*?(?:<\\/\\1(?=[\\s/>])[^>]*(?:>|$)|$)` +
-    "|<title(?=[\\s/>])[^>]*(?:>|$)([\\s\\S]*?)(?:(<\\/title)(?=[\\s/>])[^>]*(?:>|$)|$)",
-  "gi",
-);
+function titleElement(els: ScannedElement[]): ScannedElement | undefined {
+  const inTemplate = (e: ScannedElement): boolean => e.parent !== null && (els[e.parent]!.tag === "template" || inTemplate(els[e.parent]!));
+  return els.find((e) => e.tag === "title" && e.closed && !inTemplate(e));
+}
 
-/** A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it has none or it's empty. */
-export function readTitle(html: string): string | null {
-  for (const m of html.matchAll(TITLE)) {
-    if (m[2] === undefined) continue;
-    // A title that never closes runs to the end of the file, and the scanner (so setTitle) doesn't take it.
-    return m[3] === undefined ? null : collapseHtmlSpace(decodeEntities(m[2])) || null;
-  }
-  return null;
+/**
+ * A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it
+ * has none or it's empty. Read with the scanner, which knows comments, raw text, quoted attributes
+ * and templates, and stays linear on untrusted pages; `els` is its scan when the caller has one.
+ */
+export function readTitle(html: string, els: ScannedElement[] = scanElements(html)): string | null {
+  const t = titleElement(els);
+  return t ? textOf(html, t) || null : null;
 }
 
 /** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
@@ -632,9 +624,7 @@ export function setTitle(html: string, name: string): string {
   if (!clean.trim()) throw new EditError("A scene needs a name");
   if (clean.length > 120) throw new EditError("That name is too long");
   const els = scanElements(html);
-  // Not one inside a <template>: the browser never shows that one (and readTitle skips it too).
-  const inTemplate = (e: ScannedElement): boolean => e.parent !== null && (els[e.parent]!.tag === "template" || inTemplate(els[e.parent]!));
-  const title = els.find((e) => e.tag === "title" && e.closed && !inTemplate(e));
+  const title = titleElement(els);
   const text = escapeText(clean);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);

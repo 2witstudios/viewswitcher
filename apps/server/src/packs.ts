@@ -132,8 +132,11 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
     // 4. A preview copy for the covers, filled in for this org.
     const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
-    await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, libraryUrl(previewRel)));
-    const views = report.views.map((v) => ({ name: v.name, label: readTitle(texts[v.file] ?? "") ?? v.name.replace(/-/g, " "), path: `${previewRel}/${installedPath(v.file)}` }));
+    const previewVars = await varsFor(root, orgId, libraryUrl(previewRel));
+    await fillCopy(raw, join(dir, "preview"), files, previewVars);
+    // A cover's caption is the filled view's title, as the cover above it shows it ("Daisy Debate · Live").
+    const label = (v: { file: string; name: string }) => readTitle(fillPlaceholders(v.file, texts[v.file] ?? "", previewVars)) ?? v.name.replace(/-/g, " ");
+    const views = report.views.map((v) => ({ name: v.name, label: label(v), path: `${previewRel}/${installedPath(v.file)}` }));
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
     const meta: StageMeta = { org: orgId, set, manifest: report.manifest, files, created: Date.now() };
@@ -203,7 +206,8 @@ async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<
   const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
   const projects = join(orgDir, "projects");
   const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
-  const scenes = (await walkFiles(projects).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
+  // Linked scenes too: a scene that is a link still uses the set through it.
+  const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
   const uses = await Promise.all(scenes.map((rel) => read(() => readFile(join(projects, rel), "utf8").catch(() => "")).then((t) => t.includes(needle) || t.includes(encoded))));
   return uses.filter(Boolean).length;
 }

@@ -32,7 +32,7 @@ export const isSlot = (b: SceneBase, id: number) => attrIn(b, id, "data-slot") !
 /** An image a picture can replace: one from the library, without a srcset that would still show the old one. */
 export const replaceableImage = (b: SceneBase, id: number) => b.els[id]?.tag === "img" && isLibraryUrl(attrIn(b, id, "src") ?? "") && attrIn(b, id, "srcset") === null;
 /** The scene's own <title>, as the browser shows it. */
-export const titleIn = (b: SceneBase) => readTitle(b.source);
+export const titleIn = (b: SceneBase) => readTitle(b.source, b.els);
 export const slotsIn = (b: SceneBase) => b.els.flatMap((e) => attrIn(b, e.id, "data-slot") ?? []);
 
 /** The value an edit would put back: the element's text, picture, size or position in `b`. */

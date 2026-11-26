@@ -243,7 +243,14 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
 /** A copy's page: its <title> with " copy" after it, kept within a title's 120 characters; as it was when it has none. */
 export function titledCopy(html: string): string {
   const title = readTitle(html);
-  return title ? setTitle(html, `${title.slice(0, 120 - " copy".length).trimEnd()} copy`) : html;
+  if (!title) return html;
+  // Whole characters only (an emoji at the cut isn't split in half), within setTitle's 120 UTF-16 units.
+  let kept = "";
+  for (const ch of title) {
+    if (kept.length + ch.length > 120 - " copy".length) break;
+    kept += ch;
+  }
+  return setTitle(html, `${kept.trimEnd()} copy`);
 }
 
 export async function saveAsset(root: string, file: File, check?: BeforeCreate) {

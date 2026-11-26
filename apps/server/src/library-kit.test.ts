@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureLibrary, findGit, FIRST_ORG, KIT_FILES } from "./library-kit";
@@ -91,6 +91,23 @@ describe("ensureLibrary", () => {
     expect(r.copied).toEqual(KIT_FILES.map((f) => f.to));
     expect(r.org).toBeNull();
     expect(r.git).toBe(false);
+  });
+
+  test("a kit file someone made a link stays a link, even when the kit has a newer version", async () => {
+    const root = await tempDir();
+    const oldKit = await tempDir();
+    for (const { from } of KIT_FILES) {
+      await mkdir(join(oldKit, from, ".."), { recursive: true });
+      await writeFile(join(oldKit, from), `old ${from}`);
+    }
+    await ensureLibrary(root, { kit: oldKit, starter, gitInit: fakeGit });
+    // AGENTS.md → CLAUDE.md, the way some people keep one file for both.
+    await rm(join(root, "AGENTS.md"));
+    await symlink("CLAUDE.md", join(root, "AGENTS.md"));
+    const r = await ensureLibrary(root, { kit, starter, gitInit: fakeGit });
+    expect(r.updated).not.toContain("AGENTS.md");
+    expect((await lstat(join(root, "AGENTS.md"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(join(root, "CLAUDE.md"), "utf8")).toBe(await readFile(join(kit, "library-CLAUDE.md"), "utf8"));
   });
 
   test("a newer kit updates the files it wrote, never ones someone edited", async () => {

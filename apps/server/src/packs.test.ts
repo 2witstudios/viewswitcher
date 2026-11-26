@@ -1,7 +1,7 @@
 // EDIT-24 · EDIT-25 · EDIT-27 · EDIT-29: staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
@@ -200,6 +200,16 @@ describe("removing a set (EDIT-25)", () => {
     expect(await removeSet(root, org, "starter")).toEqual({ kept: 1 });
     expect((await scanLibrary(root, org)).sets).toEqual([]);
     expect(await readFile(scene, "utf8")).toBe(before);
+    expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
+  });
+
+  test("counts a scene that is a link to one made from it (the set's files stay)", async () => {
+    await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
+    const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
+    const real = join(root, org, "projects", projectId, "scenes/teaching.html");
+    await rename(real, join(root, `${org}-teaching.html`)); // the scene's file lives elsewhere; the project has a link to it
+    await symlink(join(root, `${org}-teaching.html`), real);
+    expect(await removeSet(root, org, "starter")).toEqual({ kept: 1 });
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
 
