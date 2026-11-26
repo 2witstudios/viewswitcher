@@ -1,6 +1,7 @@
 // The stdio relay against a stub /mcp, and `index.ts --mcp-stdio` as a process: it only relays,
 // never sets up a library or starts a server of its own.
 import { afterAll, describe, expect, test } from "bun:test";
+import { TEST_STATE_ROOT } from "../test-server";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -188,7 +189,7 @@ describe("index.ts --mcp-stdio", () => {
   test("relays to the switcher on --port (not the agent's PORT), prints only JSON-RPC, and never starts a server or touches the library", async () => {
     const s = stub();
     const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio", "--port", String(s.port)], {
-      env: { ...process.env, PORT: "1", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_USB: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_LOG: "1" },
+      env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, PORT: "1", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_USB: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_LOG: "1" },
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
@@ -213,7 +214,7 @@ describe("index.ts --mcp-stdio", () => {
     let proxied = 0;
     const proxy = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => (proxied++, new Response("proxy", { status: 502 })) });
     const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio", "--port", String(s.port)], {
-      env: { ...process.env, HTTP_PROXY: `http://127.0.0.1:${proxy.port}`, http_proxy: `http://127.0.0.1:${proxy.port}`, ALL_PROXY: `http://127.0.0.1:${proxy.port}`, VIEWSWITCHER_LIBRARY: library },
+      env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, HTTP_PROXY: `http://127.0.0.1:${proxy.port}`, http_proxy: `http://127.0.0.1:${proxy.port}`, ALL_PROXY: `http://127.0.0.1:${proxy.port}`, VIEWSWITCHER_LIBRARY: library },
       stdin: new Blob([JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) + "\n"]),
       stdout: "pipe",
       stderr: "pipe",
@@ -239,7 +240,7 @@ describe("index.ts --mcp-stdio", () => {
       { jsonrpc: "2.0", id: 2, method: "tools/list" },
     ].map((m) => JSON.stringify(m) + "\n").join("");
     const proc = Bun.spawn([process.execPath, join(import.meta.dir, "..", "index.ts"), "--mcp-stdio"], {
-      env: { ...process.env, VIEWSWITCHER_PORT: String(s.port), VIEWSWITCHER_LIBRARY: library },
+      env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, VIEWSWITCHER_PORT: String(s.port), VIEWSWITCHER_LIBRARY: library },
       stdin: new Blob([input]),
       stdout: "pipe",
       stderr: "pipe",

@@ -1,5 +1,7 @@
 // Starts the real server in a subprocess for the end-to-end tests (http-guard, remote, agent-endpoints, mcp/http).
 import { createServer } from "node:net";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Subprocess } from "bun";
 
@@ -8,6 +10,13 @@ import type { Subprocess } from "bun";
  * (a CI runner, a Mac building Xcode) can take well over the 5 s hook default.
  */
 export const SERVER_START_MS = 30_000;
+
+/**
+ * The machine-state root every server these tests start uses (VIEWSWITCHER_STATE; the test preload,
+ * test-setup.ts, sets it for the whole run), so no test reads or writes this Mac's real Application Support. A server's own folder
+ * under it is machineStateDir(TEST_STATE_ROOT, <its library>).
+ */
+export const TEST_STATE_ROOT = (process.env.VIEWSWITCHER_STATE ||= mkdtempSync(join(tmpdir(), "vs-machine-state-")));
 
 /**
  * startServer gives up this long before SERVER_START_MS, so its own error wins over the hook timeout:
@@ -43,7 +52,7 @@ export async function startServer(
   { readyMs = READY_MS, entry = join(import.meta.dir, "index.ts") }: { readyMs?: number; entry?: string } = {},
 ): Promise<Subprocess> {
   const proc = Bun.spawn([process.execPath, entry], {
-    env: { ...process.env, ...env },
+    env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, ...env },
     stdout: "ignore",
     stderr: "pipe",
   });

@@ -110,9 +110,7 @@ describe("plainStateFolder", () => {
     const aside = await plainStateFolder(root, at);
     expect(aside).toStartWith(join(root, ".viewswitcher.moved-aside-2026-11-26T08-00-00-000Z-"));
     expect(lstatSync(aside!).isSymbolicLink()).toBe(true); // kept, as the link it was
-    // A plain folder takes its place, and it fails closed: agents may put nothing on air until the person chooses again.
-    expect(lstatSync(join(root, ".viewswitcher")).isDirectory()).toBe(true);
-    expect(JSON.parse(readFileSync(join(root, ".viewswitcher", "settings.json"), "utf8"))).toEqual({ agentOnAir: "never" });
+    expect(existsSync(join(root, ".viewswitcher"))).toBe(false); // the next write makes a plain one
     expect(readFileSync(join(elsewhere, "keep.txt"), "utf8")).toBe("mine");
   });
 
@@ -121,6 +119,6 @@ describe("plainStateFolder", () => {
     writeFileSync(join(root, ".viewswitcher"), "not a folder");
     const aside = await plainStateFolder(root, at);
     expect(readFileSync(aside!, "utf8")).toBe("not a folder");
-    expect(lstatSync(join(root, ".viewswitcher")).isDirectory()).toBe(true);
+    expect(existsSync(join(root, ".viewswitcher"))).toBe(false);
   });
 });

@@ -62,11 +62,11 @@ PIDS+=($!)
 (cd ../web && bunx vite build >/dev/null) # every run: a stale build would show an old layout
 mkdir -p "$LIB"
 PORT=$PORT OBS_URL="ws://127.0.0.1:$OBS_PORT" OBS_PASSWORD= VIEWSWITCHER_USB=0 \
-  VIEWSWITCHER_LIBRARY="$LIB" bun ../server/src/index.ts >"$TMP/server.log" 2>&1 &
+  VIEWSWITCHER_STATE="$TMP/state" VIEWSWITCHER_LIBRARY="$LIB" bun ../server/src/index.ts >"$TMP/server.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 75); do curl -sf "http://127.0.0.1:$PORT/api/state" | grep -q '"connected":true' && break; sleep 0.2; done
 curl -sf "http://127.0.0.1:$PORT/api/state" | grep -q '"connected":true' || { cat "$TMP/obs.log" "$TMP/server.log" >&2; echo "The scratch server didn't start on $PORT with OBS connected (bun install?)." >&2; exit 1; }
-seed="$(VIEWSWITCHER_LIBRARY="$LIB" bun scripts/shots-seed.ts "http://127.0.0.1:$PORT")" # stops here if seeding fails
+seed="$(VIEWSWITCHER_STATE="$TMP/state" VIEWSWITCHER_LIBRARY="$LIB" bun scripts/shots-seed.ts "http://127.0.0.1:$PORT")" # stops here if seeding fails
 eval "$seed"
 [ -n "${FULLCOUNT:-}" ] && [ -n "${GRACE:-}" ] || { echo "Seeding printed no stream pages." >&2; exit 1; }
 

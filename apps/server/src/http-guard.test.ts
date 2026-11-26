@@ -8,7 +8,7 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { starterPack, zipPack } from "@viewswitcher/packs";
-import { freePort, SERVER_START_MS, startServer } from "./test-server";
+import { SERVER_START_MS, TEST_STATE_ROOT, freePort, startServer } from "./test-server";
 
 let port = 0;
 let proc: Subprocess;
@@ -91,7 +91,7 @@ describe("the live socket", () => {
 describe("HOST", () => {
   test("a non-loopback HOST is refused at start (the Wi-Fi setting is the way onto the network)", async () => {
     const p = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-      env: { ...process.env, PORT: "1", HOST: "0.0.0.0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
+      env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, PORT: "1", HOST: "0.0.0.0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library },
       stdout: "ignore",
       stderr: "pipe",
     });

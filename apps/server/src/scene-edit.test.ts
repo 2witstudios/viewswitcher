@@ -1,5 +1,6 @@
 // The editor's file endpoints, as functions and over HTTP against a real server.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { TEST_STATE_ROOT } from "./test-server";
 import { chmod, cp, lstat, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -178,7 +179,7 @@ describe("over HTTP", () => {
   let base = "";
   beforeAll(async () => {
     proc = Bun.spawn(["bun", join(import.meta.dir, "index.ts")], {
-      env: { ...process.env, HOST: "127.0.0.1", PORT: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: root, VIEWSWITCHER_LOG: "" },
+      env: { ...process.env, VIEWSWITCHER_STATE: TEST_STATE_ROOT, HOST: "127.0.0.1", PORT: "0", OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: root, VIEWSWITCHER_LOG: "" },
       stdout: "pipe", stderr: "ignore",
     });
     const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();

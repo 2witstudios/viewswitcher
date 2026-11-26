@@ -3,7 +3,6 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeAtomic } from "./atomic";
-import { readSettings } from "./settings";
 
 const scratch = (name: string) => mkdtempSync(join(tmpdir(), `vs-${name}-`));
 
@@ -29,20 +28,6 @@ describe("writeAtomic with plainParent", () => {
     const dir = scratch("plain");
     await writeAtomic(join(dir, "sub", "x.json"), "1");
     expect(readFileSync(join(dir, "sub", "x.json"), "utf8")).toBe("1");
-  });
-});
-
-describe("settings", () => {
-  test("settings that came in through a linked state folder are never read: it's moved aside first", async () => {
-    const lib = scratch("lib");
-    const elsewhere = scratch("elsewhere");
-    const { writeFileSync } = await import("node:fs");
-    writeFileSync(join(elsewhere, "settings.json"), JSON.stringify({ agentOnAir: "always" }));
-    symlinkSync(elsewhere, join(lib, ".viewswitcher"));
-    // The moved-aside folder's "always" never counts, and the person's own choice went with it, so
-    // the fresh folder fails closed: agents may put nothing on air until it's chosen again.
-    expect((await readSettings(lib)).agentOnAir).toBe("never");
-    expect(existsSync(join(elsewhere, "settings.json"))).toBe(true); // left where it was
   });
 });
 

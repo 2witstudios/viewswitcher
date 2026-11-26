@@ -1,5 +1,5 @@
 // What an AI agent connected over MCP may do to the show, by the agent on-air setting
-// (.viewswitcher/settings.json). "Live" means OBS is streaming or recording. Only MCP tools ask;
+// (this Mac's settings.json for the library, machine-state.ts). "Live" means OBS is streaming or recording. Only MCP tools ask;
 // people in the switcher are never blocked.
 import { parseLibraryPath, transitionCandidates } from "@viewswitcher/shared";
 import type { AgentOnAir } from "@viewswitcher/shared";

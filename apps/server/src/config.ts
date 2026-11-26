@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { machineStateDir } from "./machine-state";
 import { join, resolve } from "node:path";
 
 const env = process.env;
@@ -19,6 +20,17 @@ export const config = {
   port: Number(env.PORT ?? 7420),
   /** The content library agents edit: one folder per org, each with templates, assets, projects. */
   library: resolve(env.VIEWSWITCHER_LIBRARY ?? join(homedir(), "ViewSwitcher Library")),
+  /**
+   * This Mac's own state for that library (paired devices, the agents' on-air setting), outside it so
+   * nothing that travels with the library can carry them (machine-state.ts). VIEWSWITCHER_STATE moves
+   * the root (tests and e2e use a temp folder).
+   */
+  get machineState() {
+    // A server a test starts (NODE_ENV=test, which bun test sets and children inherit) must name its
+    // own state root: it may never fall back to this Mac's real pairings and setting.
+    if (!env.VIEWSWITCHER_STATE && env.NODE_ENV === "test") throw new Error("VIEWSWITCHER_STATE must be set under bun test (test-server.ts TEST_STATE_ROOT), so a test never touches this Mac's real state");
+    return machineStateDir(env.VIEWSWITCHER_STATE ?? join(homedir(), "Library/Application Support/ViewSwitcher"), this.library);
+  },
   // The next three default to the repo; the Mac app's compiled server (where import.meta.dir is
   // inside the binary) passes the copies in its Resources folder.
   /** Copied into each new org: neutral templates and theme. */

@@ -1,6 +1,6 @@
 // ViewSwitcher server: the switcher API, the library files, live state, OBS, and the MCP server for agents.
 import { watch } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { ServerMessage } from "@viewswitcher/shared";
 import type { Server, ServerWebSocket } from "bun";
@@ -15,6 +15,7 @@ import { pairingOrder, thisMac } from "./lan";
 import { appParent, watchParent } from "./parent-watch";
 import { plainStateFolder } from "./library/contain";
 import { LibraryScanner } from "./library/scanner";
+import { migrateMachineState } from "./machine-state";
 import { ensureLibrary } from "./library-kit";
 import { createPlacer } from "./live/placement";
 import { LiveStore } from "./live/store";
@@ -35,6 +36,12 @@ import { startUsbBridge, usbAvailable } from "./usb-bridge";
 // The state folder must be a plain folder before anything writes state or pairings into it (contain.ts).
 await plainStateFolder(config.library);
 const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
+// After the library exists, so it's keyed by its real path. This Mac's pairings and agent setting, outside the library (machine-state.ts); the old copies in the library go.
+const machineState = config.machineState;
+await mkdir(machineState, { recursive: true });
+const migrated = await migrateMachineState(config.library, machineState);
+if (migrated.devices) console.log("[pairing] paired phones and tablets now belong to this Mac, not the library: pair them again from Phones and Tablets");
+if (migrated.settings === "dropped") console.log("[settings] the agent setting now belongs to this Mac, not the library: it's back to the default (When not live); set it again in Edit with AI if you'd changed it");
 if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
   const did = [
     firstRun.copied.length && `added ${firstRun.copied.join(", ")}`,
@@ -69,8 +76,8 @@ if (!loopbackAddress(config.host) && config.host !== "localhost") {
 }
 
 // Phones and tablets: before anything else awaits, so publish() can always reach them.
-/** Paired devices and the open pairing code (pairing.ts); devices.json sits with state.json, outside git (.viewswitcher/ is ignored). */
-const pairing = await new Pairing({ file: join(config.library, ".viewswitcher", "devices.json"), ttlMs: Number(process.env.VIEWSWITCHER_PAIR_TTL_MS) || undefined }).load();
+/** Paired devices and the open pairing code (pairing.ts); devices.json is this Mac's (machine-state.ts), never in the library. */
+const pairing = await new Pairing({ file: join(machineState, "devices.json"), ttlMs: Number(process.env.VIEWSWITCHER_PAIR_TTL_MS) || undefined }).load();
 type Socket = ServerWebSocket<SocketData>;
 const sockets = new Set<Socket>();
 // A removed device's token stops at once: its next request is refused, and its live sockets close now.
@@ -105,7 +112,7 @@ const store = await LiveStore.open({
     obs: { connected: false, recording: false, streaming: false },
     obsSetup: null,
     usb: { enabled: false, attached: false, connected: false },
-    agent: { onAir: (await readSettings(config.library)).agentOnAir, lastSeen: null, client: null },
+    agent: { onAir: (await readSettings(machineState)).agentOnAir, lastSeen: null, client: null },
   },
 });
 const state = store.state;
@@ -174,18 +181,20 @@ let librarySeq = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 /** The last flush of library changes; each waits for the one before it. */
 let flushing: Promise<void> = Promise.resolve();
-// settings.json changed outside the switcher (by hand, a git checkout): agents follow what it says now.
-// The guard limits MCP tools; an agent that can write the library folder can write this file too, so a
-// change that lets agents do more is logged where a person can see it.
-const settingsChanged = followSettings(config.library, (s) => {
+// settings.json changed outside the switcher (by hand): agents follow what it says now. The guard limits
+// MCP tools; anything running as this user can write this file too, so a change that lets agents do
+// more is logged where a person can see it.
+const settingsChanged = followSettings(machineState, (s) => {
   if (s.agentOnAir === state.agent.onAir) return;
   if (widens(state.agent.onAir, s.agentOnAir)) console.log(`[settings] settings.json changed outside the switcher: agents may now put things on air "${s.agentOnAir}" (was "${state.agent.onAir}")`);
   store.update({ agent: { ...state.agent, onAir: s.agentOnAir } });
 });
+watch(machineState, (_event, filename) => {
+  if (!filename || filename === "settings.json") settingsChanged();
+});
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
   const rel = filename.split(sep).join("/");
-  if (rel === ".viewswitcher" || rel === ".viewswitcher/settings.json") settingsChanged();
   if (rel.startsWith(".git") || rel.startsWith(".viewswitcher") || rel.includes("/.") || rel.endsWith("~")) return;
   changed.add(rel);
   scanner.touched(rel);
@@ -286,6 +295,7 @@ function agentSeen(client: string | null) {
 const handle = dispatcher({
   routes: routes({
     root: config.library,
+    machineState,
     scanner,
     starter: config.starter,
     webDist: config.webDist,
