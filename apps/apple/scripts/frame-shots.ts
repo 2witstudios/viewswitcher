@@ -1,4 +1,4 @@
-// The App Store versions of the screenshots (scripts/ipad-shots.sh). Each raw capture is shown in a
+// The App Store versions of the screenshots (scripts/ipad-shots.sh). With --phone, the iPhone set: frame-phone.ts. Each raw capture is shown in a
 // realistic device, all of it inside the canvas (a sideways iPad for a landscape iPad capture; an upright
 // iPhone with the capture turned to fill it for a sideways iPhone one) on a portrait canvas: ViewSwitcher's
 // dark ground with a soft lift and a faint red glow behind the device, the white logo at the top, a two-line
@@ -28,17 +28,17 @@ export const IPAD: Record<string, Copy> = {
   "4-sermon-portrait": { head: ["Tap a view.", "OBS switches."], sub: "Your camera, screen and titles move into place." },
   "5-pastor-landscape": { head: ["Run the service", "without a crew."], sub: "Welcome, worship, sermon, giving: one tap each." },
 };
-export const IPHONE: Record<string, Copy> = {
-  "1-deck-landscape": { head: ["Tap a view.", "OBS switches."], sub: "Turn your iPhone sideways and run the show like a deck." },
-  "2-sermon-portrait": { head: ["Always know", "what's on air."], sub: "What your viewers see stays on top, marked in red." },
-  "3-pair-portrait": { head: ["Scan the code.", "You're connected."], sub: "Pair with your Mac over Wi-Fi, or plug in with USB-C." },
-  "4-pastor-landscape": { head: ["Your whole show,", "in your pocket."], sub: "Every view one tap away, from the pulpit to the press box." },
-};
 
 const args = process.argv.slice(2);
 const phone = args.includes("--phone");
 const dir = resolve(args.find((a) => !a.startsWith("--")) ?? join(import.meta.dir, "../AppStore/screenshots", phone ? "iphone" : ""));
-const copy = phone ? IPHONE : IPAD;
+// The iPhone set is its own layouts (frame-phone.ts).
+if (phone) {
+  const { framePhone } = await import("./frame-phone.ts");
+  await framePhone(dir);
+  process.exit(0);
+}
+const copy = IPAD;
 const canvases = phone ? [{ W: 1320, H: 2868, out: dir }, { W: 1206, H: 2622, out: `${dir}-6.3` }] : [{ W: 2064, H: 2752, out: dir }];
 /** A PNG's pixel size, from its IHDR chunk. */
 const size = (png: Buffer) => [png.readUInt32BE(16), png.readUInt32BE(20)] as const;
