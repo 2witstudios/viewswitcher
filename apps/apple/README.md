@@ -42,7 +42,7 @@ bun apps/apple/AppStore/check.ts              # App Store listing lengths
   Server calls go through ViewSwitcherKit's `ServerAPI`. Its output goes to a log of
   that build's own (Kit's `serverLogFile`), restarted past 5 MB: the installed app's is
   `~/Library/Logs/ViewSwitcher/server.log`, a Debug build's (`bun run mac:dev`) `server-dev.log` beside it,
-  and an e2e run's `server.log` in its control folder. Show Server Log opens this build's.
+  and an e2e run's `server.log` in its control folder. Show Server Log opens this build's (the logs folder while attached to a server it didn't start).
 - `StatusMenuBuilder.swift`: the menu-bar menu, from ViewSwitcherKit's `StatusMenu` (what it lists for a state).
 - Debug builds have their own bundle id, so `bun run mac:dev` runs beside an installed ViewSwitcher
   (one at a time is per bundle id) with its own settings, login item and notification permission;

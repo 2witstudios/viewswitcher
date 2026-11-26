@@ -199,7 +199,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
       // The views' hashes, so an editor sees that a change is its own save without reading it again.
       const hashes = await viewHashes(config.library, paths).catch(() => ({}));
       publish({ t: "library:changed", paths, seq: ++librarySeq, ...(Object.keys(hashes).length ? { hashes } : {}) });
-    });
+    }).catch((e) => console.error("[library]", (e as Error).message)); // one bad flush must never stall the ones after it
   }, 120);
 });
 

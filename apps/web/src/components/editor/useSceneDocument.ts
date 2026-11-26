@@ -56,11 +56,11 @@ export function useSceneDocument(path: string, opts: {
   const layout = useRef(0);
   /** A 409 whose latest version hasn't loaded yet. */
   const pendingConflict = useRef<{ edits: SceneEdit[]; prev: SceneBase } | null>(null);
-  /** A change made elsewhere is waiting until the editor is free to load it. */
   /** The file's hash as the server read it after its last change, when it said. */
   const reported = useLive((l) => l.hashes[path]);
   const reportedRef = useRef(reported);
   reportedRef.current = reported;
+  /** A change made elsewhere is waiting until the editor is free to load it. */
   const outside = useRef(false);
   const outsideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** Look at a change made elsewhere again in `ms`. */
@@ -95,10 +95,7 @@ export function useSceneDocument(path: string, opts: {
       const b = toBase(await api.sceneForEdit(path));
       if (!isNewest()) return null;
       if (ifChanged) {
-        // A newer report says the version open is the file's now (it changed back while this was read):
-        // what this read found is older than that report, so it's never shown.
-        if (alreadyHave(reportedRef.current, baseRef.current)) return baseRef.current;
-        const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, free: ifChanged.stillFree() });
+        const verdict = refreshVerdict({ readFrom, now: baseRef.current, readHash: b.hash, reportedHash: reportedRef.current, free: ifChanged.stillFree() });
         if (verdict === "same") return baseRef.current;
         if (verdict === "retry") {
           outside.current = true;

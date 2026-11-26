@@ -26,6 +26,17 @@ describe("a change made elsewhere, once read", () => {
   });
 });
 
+describe("a read that lands after the file changed back (A → B → A)", () => {
+  test("is never shown when the newest report says the version open is the file's now", () => {
+    // Open at v1; a change to v2 started a read; the file went back to v1 (reported) before the read landed with v2.
+    expect(refreshVerdict({ readFrom: v1, now: v1, readHash: "2", reportedHash: "1", free: true })).toBe("same");
+  });
+  test("is shown when the report is that newer version, or there's none", () => {
+    expect(refreshVerdict({ readFrom: v1, now: v1, readHash: "2", reportedHash: "2", free: true })).toBe("show");
+    expect(refreshVerdict({ readFrom: v1, now: v1, readHash: "2", free: true })).toBe("show");
+  });
+});
+
 describe("a change the server reported with its hash", () => {
   test("is nothing to read when the hash is the version open (the editor's own save, coming back)", () => {
     expect(alreadyHave("1", v1)).toBe(true);

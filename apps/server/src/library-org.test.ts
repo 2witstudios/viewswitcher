@@ -1,7 +1,7 @@
 // A new org from the starter kit, on a real (temporary) library: it appears whole, filled in for
 // its name, or not at all.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createOrg, listOrgs } from "./library";
@@ -66,6 +66,16 @@ describe("createOrg", () => {
     await symlink(join(away, "nowhere"), join(root, "daisy"));
     expect((await createOrg(root, starter, "Daisy")).orgId).toBe("daisy-2");
     expect(await readdir(away)).toEqual([]);
+  });
+
+  test("a read-only starter kit (as an installed app's can be) still makes a filled org", async () => {
+    const ro = await mkdtemp(join(tmpdir(), "vs-org-starter-"));
+    dirs.push(ro);
+    await cp(starter, ro, { recursive: true });
+    // Its files read-only (its folders aren't, in an app bundle copied by the person).
+    for (const f of await readdir(ro, { recursive: true })) if ((await stat(join(ro, String(f)))).isFile()) await chmod(join(ro, String(f)), 0o444);
+    const { orgId } = await createOrg(root, ro, "Daisy");
+    expect(await readFile(join(root, orgId, "templates/ending.html"), "utf8")).toContain("Daisy");
   });
 
   test("a create that fails leaves nothing behind", async () => {
