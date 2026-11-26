@@ -98,7 +98,7 @@ export function useAddDelete(opts: {
     const b = o.current.current();
     if (!b) return;
     const root = sceneRoot(b.source);
-    if (root === null) return toast("This scene can't take new items", { label: "Edit with AI", run: openAgentSheet });
+    if (root === null) return toast("This view can't take new items", { label: "Edit with AI", run: openAgentSheet });
     const slots = slotsIn(b);
     const slot = SOURCE_SLOTS[kind] ? freeSlotName(SOURCE_SLOTS[kind]!, slots) : null;
     void structural({ id: root, insert: markupFor(kind, { slots, image, at }) }).then((done) => {

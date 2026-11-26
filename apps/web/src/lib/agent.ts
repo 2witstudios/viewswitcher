@@ -128,9 +128,9 @@ export const shownChoice = (p: PendingChoice, published: AgentOnAir | undefined)
 export const ON_AIR_SCOPE = "This applies to agents working through ViewSwitcher's tools. An agent that edits the library's files directly isn't held to it.";
 
 export const ON_AIR_CHOICES: { value: AgentOnAir; label: string; hint: string }[] = [
-  { value: "never", label: "Never", hint: "Agents never put scenes on air, and can't change what's on air while you're live." },
-  { value: "not-live", label: "When not live", hint: "Agents put scenes on air only while OBS isn't streaming or recording." },
-  { value: "always", label: "Always", hint: "Agents may put scenes on air and change them at any time, even while you're live." },
+  { value: "never", label: "Never", hint: "Agents never put views on air, and can't change what's on air while you're live." },
+  { value: "not-live", label: "When not live", hint: "Agents put views on air only while OBS isn't streaming or recording." },
+  { value: "always", label: "Always", hint: "Agents may put views on air and change them at any time, even while you're live." },
 ];
 
 /** The sheet opens on its own for /?ai or #ai: the Mac app's Edit with AI… menu item. */

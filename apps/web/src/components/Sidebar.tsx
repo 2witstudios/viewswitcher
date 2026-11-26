@@ -189,13 +189,13 @@ function OrgSwitcher({ current }: { current?: string }) {
     <div className="org">
       <button type="button" className="org-switch" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="org-dot" aria-hidden="true">{org?.name[0]?.toUpperCase() ?? "?"}</span>
-        <span className="name">{org?.name ?? "Choose an org"}</span>
+        <span className="name">{org?.name ?? "Choose a show"}</span>
         <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ICON} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 10l5 5 5-5" /></svg>
       </button>
       {open && (
         <>
           <button type="button" className="backdrop" aria-label="Close menu" onClick={() => setOpen(false)} />
-          <div className="org-menu" role="menu" aria-label="Orgs">
+          <div className="org-menu" role="menu" aria-label="Shows">
             {orgs?.map((o) => (
               <button key={o.id} type="button" role="menuitem" aria-current={o.id === current} onClick={() => go(o)}>
                 <span className="org-dot" aria-hidden="true">{o.name[0]?.toUpperCase()}</span>
@@ -205,7 +205,7 @@ function OrgSwitcher({ current }: { current?: string }) {
             ))}
             <hr />
             <button type="button" role="menuitem" onClick={() => (setOpen(false), setCreating(true))}>
-              <PlusIcon />New org
+              <PlusIcon />New show
             </button>
           </div>
         </>
@@ -240,7 +240,7 @@ function NewOrg({ onClose, onCreated }: { onClose: () => void; onCreated: (id: s
   const [name, setName] = useState("");
   const [accent, setAccent] = useState("#d4a548");
   return (
-    <Modal title="New org" submitLabel="Create org" onClose={onClose}
+    <Modal title="New show" submitLabel="Create show" onClose={onClose}
       onSubmit={async () => onCreated((await api.createOrg(name, accent)).orgId, name.trim())}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Bible Study" /></label>
       <label className="field">Accent color<input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} /></label>
@@ -254,9 +254,9 @@ function NewProject({ org, groups, onClose }: { org: string; groups: ReturnType<
   const [picked, setPicked] = useState<string[]>(groups[0]?.set === null ? groups[0].templates.map(templateId).filter((t) => t !== "chapter") : []);
   return (
     <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => api.createProject(org, name, picked).then(() => {})}>
-      <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Spring series" /></label>
+      <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Sunday mornings" /></label>
       <div className="field">
-        Scenes
+        Views
         {groups.map((g) => (
           <div key={g.set?.id ?? ""} className="checks">
             {groups.length > 1 && <span className="checks-head">{g.name}</span>}
@@ -281,7 +281,7 @@ function NewStream({ onClose, onSubmit }: { onClose: () => void; onSubmit: (name
   const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   return (
     <Modal title="New stream" submitLabel="Create stream" onClose={onClose} onSubmit={() => onSubmit(name, date)}>
-      <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Episode 1" /></label>
+      <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Week 1" /></label>
       <label className="field">Date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
     </Modal>
   );

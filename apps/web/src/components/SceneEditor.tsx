@@ -447,7 +447,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
                 if (b && stamp !== undefined && stamp !== b.hash) {
                   // Once is a file that just changed; again means it keeps changing: stop and offer Reload.
                   if (frameMismatches.current++ === 0) void doc.load();
-                  else doc.setStuck("This scene keeps changing while it opens.");
+                  else doc.setStuck("This view keeps changing while it opens.");
                   return;
                 }
                 frameMismatches.current = 0;

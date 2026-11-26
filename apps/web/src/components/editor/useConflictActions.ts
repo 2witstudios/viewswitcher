@@ -29,7 +29,7 @@ export function useConflictActions(opts: {
     // The ones that can be placed go through; the others are said so. (Their earlier live previews
     // were on the old version, which the stream already replaced.)
     const lost = pairs.filter((p) => p.m === null).length;
-    if (lost) toast(lost === pairs.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
+    if (lost) toast(lost === pairs.length ? "That part of the view isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
     // Several lost changes of one kind to one element (a drag, then a nudge) become its last one.
     // Each goes as its own save: a move and a resize of one box both change its left.
     const last = new Map<string, SceneEdit>();

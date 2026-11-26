@@ -39,7 +39,7 @@ const change = <T = unknown>(path: string, body?: unknown) => refreshed(post<T>(
 async function rename(path: string, hash: string, name: string): Promise<{ hash: string; path: string }> {
   const res = await fetch("/api/scene/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, name }) });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+  if (res.status === 409) throw new SceneConflict(data.error ?? "This view changed");
   if (!res.ok) throw new Error(data.error ?? res.statusText);
   return data;
 }
@@ -80,16 +80,16 @@ export const api = {
   /** The scene tagged with data-vs ids, and the hash of the file it came from. */
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
     const res = await fetch(`${libraryUrl(path)}?edit`, { cache: "no-store" });
-    if (!res.ok) throw new Error(res.status === 404 ? "This scene doesn't exist any more" : res.statusText);
+    if (!res.ok) throw new Error(res.status === 404 ? "This view doesn't exist any more" : res.statusText);
     const hash = res.headers.get("x-scene-hash");
-    if (!hash) throw new Error("This scene can't be edited here. Open the file instead.");
+    if (!hash) throw new Error("This view can't be edited here. Open the file instead.");
     return { html: await res.text(), hash };
   },
   /** Save edits made against the version `hash`. Throws SceneConflict if the file changed since. */
   editScene: async (path: string, hash: string, edits: SceneEdit[]): Promise<{ hash: string }> => {
     const res = await fetch("/api/scene/edit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, edits }) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+    if (res.status === 409) throw new SceneConflict(data.error ?? "This view changed");
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data;
   },

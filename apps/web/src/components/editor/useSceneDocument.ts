@@ -106,7 +106,7 @@ export function useSceneDocument(path: string, opts: {
       // With a scene already open, a failed reload is a message, not the end of the editor.
       if (baseRef.current) {
         o.current.onStuck();
-        setStuck(`Couldn't read the scene again: ${(e as Error).message}`);
+        setStuck(`Couldn't read the view again: ${(e as Error).message}`);
       } else setLoadError((e as Error).message);
       return null;
     }
@@ -141,7 +141,7 @@ export function useSceneDocument(path: string, opts: {
       onStale: (edits) => {
         if (mode.now().kind === "conflict") mode.dispatch({ t: "conflict:edits", edits });
         else if (pendingConflict.current) pendingConflict.current.edits.push(...edits);
-        else toast("The scene reloaded, so your last change didn't save");
+        else toast("The view reloaded, so your last change didn't save");
       },
       onError: async (e) => {
         toast(`Couldn't save: ${(e as Error).message}`);

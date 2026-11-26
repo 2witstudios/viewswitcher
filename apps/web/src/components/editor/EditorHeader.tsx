@@ -60,7 +60,7 @@ export function EditorHeader({ crumb, title, onBack, open }: {
             {open.addOpen && (
               <>
                 <button type="button" className="backdrop" aria-label="Close menu" onClick={() => open.setAddOpen(false)} />
-                <div role="menu" aria-label="Add to the scene" className="ed-menu add-menu">
+                <div role="menu" aria-label="Add to the view" className="ed-menu add-menu">
                   {ADD_ITEMS.map((it) => (
                     <button key={it.kind} type="button" role="menuitem" onClick={() => open.onAdd(it.kind)}>
                       {Icon[it.kind]}<span>{it.label}{it.hint && <small>{it.hint}</small>}</span>
@@ -85,7 +85,7 @@ export function EditorBanner({ isTemplate, onAir, onEditCopy }: { isTemplate: bo
     return (
       <div className="live-banner" role="status">
         <span className="dot" />
-        <span><b>Live.</b> Changes show on stream as you make them.</span>
+        <span><b>Live.</b> Changes show on air as you make them.</span>
         <div style={{ flex: 1 }} />
         <button type="button" className="btn" onClick={onEditCopy}>Edit a copy instead</button>
       </div>
@@ -93,7 +93,7 @@ export function EditorBanner({ isTemplate, onAir, onEditCopy }: { isTemplate: bo
   }
   return isTemplate ? (
     <div className="note-banner" role="note">
-      <b>Template.</b> Existing scenes made from it won't change.
+      <b>Template.</b> Existing views made from it won't change.
     </div>
   ) : null;
 }

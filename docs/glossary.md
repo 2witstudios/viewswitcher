@@ -34,5 +34,5 @@ One word for each thing. **People read** is the word in the app, the site, the R
 - **scene** in anything people read: say *view*. In code, a bare "scene" is a ViewSwitcher view; OBS's is always `obsScene`.
 - **org**, **brand**, **channel** in anything people read: say *show*.
 - **episode** in the app: say *stream*. (The site may say "episode 112" in a show's own text.)
-- **device** for a paired phone: say *remote*. *Device* is only USB hardware.
+- **device** for a paired phone: say *phone or tablet* (a `remote` in code). *Device* is only USB hardware.
 - **series**: say *project*.

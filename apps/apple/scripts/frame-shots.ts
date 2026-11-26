@@ -23,7 +23,7 @@ type Copy = { head: [string, string]; sub: string };
 /** What each raw screenshot says, by its name; a raw shot with none is left out. */
 export const IPAD: Record<string, Copy> = {
   "1-stream-landscape": { head: ["Look professional", "when you go live."], sub: "Tap a view on the iPad beside you and OBS switches." },
-  "2-editor-landscape": { head: ["Change titles", "while you're live."], sub: "Retype a title right on the view. It's on stream as you type." },
+  "2-editor-landscape": { head: ["Change titles", "while you're live."], sub: "Retype a title right on the view. It's on air as you type." },
   "3-templates-landscape": { head: ["Your show's look,", "ready to go."], sub: "Free template sets for church, sports and more, in your colors." },
   "4-sermon-portrait": { head: ["Tap a view.", "OBS switches."], sub: "Your camera, screen and titles move into place." },
   "5-pastor-landscape": { head: ["Run the service", "without a crew."], sub: "Welcome, worship, sermon, giving: one tap each." },

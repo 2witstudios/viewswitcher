@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_app/$org")({
     const { org } = Route.useParams();
     const { error } = useLibrary(org);
     useEffect(() => lastOrg.set(org), [org]);
-    if (error) return <p className="empty">There's no org called “{org}”. Pick one from the org menu.</p>;
+    if (error) return <p className="empty">There's no show called “{org}”. Pick one from the show menu.</p>;
     return <Outlet />;
   },
 });

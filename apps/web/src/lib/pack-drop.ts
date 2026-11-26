@@ -51,7 +51,7 @@ export function describeScripts(s: PackScripts & { standard: boolean }): string[
   const out: string[] = [];
   if (!s.files.length && !s.inline.length && !s.remote.length) return ["It runs no scripts."];
   const own = s.files.filter((f) => !(s.standard && f === "_shared/scene.js"));
-  if (s.standard && s.files.includes("_shared/scene.js")) out.push("ViewSwitcher's standard scene script (countdowns, transition effects).");
+  if (s.standard && s.files.includes("_shared/scene.js")) out.push("ViewSwitcher's standard view script (countdowns, transition effects).");
   if (own.length) out.push(`Its own scripts: ${own.join(", ")}.`);
   if (s.inline.length) out.push(`Code written into ${s.inline.map((p) => p.replace(/^templates\//, "")).join(", ")}.`);
   if (s.remote.length) out.push(`Scripts from other sites: ${s.remote.join(", ")}.`);

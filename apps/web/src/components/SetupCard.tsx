@@ -91,7 +91,7 @@ export function SetupCard() {
       )}
       {card.kind === "devices" && (
         <div className="setup-text">
-          <h2>Add your devices in OBS</h2>
+          <h2>Add your sources in OBS</h2>
           <p>Add these sources to the ViewSwitcher scene, named exactly, then press Set up OBS again:</p>
           <ul>
             {card.missing.map((d) => <li key={d}><b>{d}</b>{DEVICE_KIND[d] ? `: ${DEVICE_KIND[d]}` : ""}</li>)}

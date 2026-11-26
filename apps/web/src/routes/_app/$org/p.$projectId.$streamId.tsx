@@ -73,11 +73,11 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
             <div className="tile new-scene">
               <button type="button" className="add-tile" aria-haspopup="menu" aria-expanded={adding} onClick={() => setAdding(true)}>
                 <PlusIcon size={26} />
-                New scene
+                New view
               </button>
               {adding && (
                 <Menu
-                  label="New scene from a template"
+                  label="New view from a template"
                   onClose={() => setAdding(false)}
                   // By set (EDIT-25): the org's own templates, then each template pack's.
                   items={templateGroups(data).filter((g) => g.templates.length).flatMap((g, i, all): MenuItem[] => [
@@ -96,7 +96,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
         <section className="section">
           <div className="section-head"><h2>FROM THE PROJECT</h2></div>
           <div className="grid">
-            {shared.length === 0 && <p className="empty">No shared scenes. Add from Templates.</p>}
+            {shared.length === 0 && <p className="empty">No shared views. Add from Templates.</p>}
             {shared.map((s) => (
               <SceneTile
                 key={s.path}
@@ -138,11 +138,11 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 menu={[
                   ...(project.transition
                     ? [{
-                        label: "Go back to the org's transition",
+                        label: "Go back to the show's transition",
                         hint: "Deletes this project's copy",
                         run: async () => {
-                          if (!confirm(`Delete ${project.name}'s own transition and use the org's?`)) return;
-                          await attempt(() => api.revertTransition(org, projectId), "Back to the org's transition");
+                          if (!confirm(`Delete ${project.name}'s own transition and use the show's?`)) return;
+                          await attempt(() => api.revertTransition(org, projectId), "Back to the show's transition");
                         },
                       }]
                     : [{
@@ -154,7 +154,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 ]}
               />
             ) : (
-              <p className="empty">None. Scenes fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
+              <p className="empty">None. Views fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
             )}
           </div>
         </section>
