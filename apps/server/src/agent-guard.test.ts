@@ -57,6 +57,13 @@ describe("agentGuard", () => {
     expect(agentGuard({ setting: "not-live", live: false, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
     expect(agentGuard({ setting: "always", live: true, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
   });
+  test("when the view on air loads a file the scan couldn't read, every write is refused while live, naming that file", () => {
+    const blind = { ...onAir, loadsUnreadable: ["daisy/templates/_shared/linked.css"] };
+    const g = agentGuard({ setting: "not-live", live: true, onAir: blind, action: write("daisy/assets/anything.png") });
+    expect(g.ok).toBe(false);
+    expect(g.ok ? "" : g.reason).toContain("loads daisy/templates/_shared/linked.css, which ViewSwitcher can't read");
+    expect(agentGuard({ setting: "not-live", live: false, onAir: blind, action: write("daisy/assets/anything.png") }).ok).toBe(true);
+  });
   test("a template set's view on air: its set's transition and _shared/ are on stream, another set's aren't", () => {
     const setView = { path: "daisy/templates/neon/brb.html", transition: "daisy/templates/neon/_shared/transition.html" };
     const ok = (path: string) => agentGuard({ setting: "not-live", live: true, onAir: setView, action: write(path) }).ok;

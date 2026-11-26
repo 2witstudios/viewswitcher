@@ -13,7 +13,7 @@ export type GuardInput = {
    * The scene on air, the transition that plays for it, and the library files those load (their
    * stylesheets, scripts, pictures, video, fonts: scene-refs.ts loadedFiles).
    */
-  onAir: { path: string; transition?: string | null; loads?: string[]; loadsComplete?: boolean } | null;
+  onAir: { path: string; transition?: string | null; loads?: string[]; loadsComplete?: boolean; loadsUnreadable?: string[] } | null;
   action: GuardAction;
 };
 
@@ -24,7 +24,7 @@ export type GuardResult = { ok: true } | { ok: false; reason: string };
  * org's shared files, and anything else those load. Compared without case, as the Mac's disk does
  * ("Templates/_Shared" is the same folder).
  */
-function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene" | "transition" | "shared" | "loaded" | "tooMany" | null {
+function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene" | "transition" | "shared" | "loaded" | "tooMany" | "unreadable" | null {
   const p = path.toLowerCase();
   const scene = onAir.path.toLowerCase();
   if (p === scene) return "scene";
@@ -36,10 +36,14 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
   if (onAir.loads?.some((l) => l.toLowerCase() === p)) return "loaded";
   // The scan of what the scene loads stopped at its limit: anything might be on stream.
   if (onAir.loadsComplete === false) return "tooMany";
+  // It loads a file the scan couldn't read: what that loads is unknown, so anything might be.
+  if (onAir.loadsUnreadable?.length) return "unreadable";
   return null;
 }
 
-const REASONS = {
+const REASONS: Record<Exclude<ReturnType<typeof onStream>, null>, string | ((onAir: NonNullable<GuardInput["onAir"]>) => string)> = {
+  unreadable: (onAir) =>
+    `The view on air loads ${onAir.loadsUnreadable!.slice(0, 3).join(", ")}, which ViewSwitcher can't read (a link outside the library, or not a plain file), so while you're live agents can't change library files. Fix that file, or wait until you're off air.`,
   scene: "That view is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until you're off air (OBS stops streaming and recording).",
   transition: "That is the transition for the view on air, and you're live. Wait until you're off air to change it.",
   shared: "Files in templates/_shared/ (and a template set's own _shared/) shape the view on air, and you're live. Wait until you're off air, or put the change in a stream copy of the view (customize_scene).",
@@ -57,7 +61,10 @@ export function agentGuard({ setting, live, onAir, action }: GuardInput): GuardR
   if (!live || !onAir) return { ok: true };
   for (const p of action.paths) {
     const hit = onStream(onAir, p);
-    if (hit) return { ok: false, reason: REASONS[hit] };
+    if (hit) {
+      const reason = REASONS[hit];
+      return { ok: false, reason: typeof reason === "string" ? reason : reason(onAir) };
+    }
   }
   return { ok: true };
 }

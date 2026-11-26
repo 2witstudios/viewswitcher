@@ -131,7 +131,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const guardNow = (action: GuardAction, loads?: OnAirLoads) => {
     const s = deps.state();
     const files = loads?.files.flatMap((p) => [p, realRel(p)]);
-    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads: files, loadsComplete: loads?.complete };
+    const onAir = s.onAir && { path: realRel(s.onAir.path), transition: s.onAir.transition && realRel(s.onAir.transition), loads: files, loadsComplete: loads?.complete, loadsUnreadable: loads?.unreadable };
     // A link to the scene on air is the scene on air.
     const checked: GuardAction = action.kind === "write" ? { kind: "write", paths: action.paths.flatMap((p) => [p, realRel(p)]) } : action;
     const g = agentGuard({ setting: s.agent.onAir, live: isLive(s), onAir, action: checked });

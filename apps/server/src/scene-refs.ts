@@ -88,6 +88,8 @@ export type Loaded = {
   complete: boolean;
   /** Every file it read (the pages too), with a hash of the text it read, to tell later if any changed. */
   read: Record<string, string>;
+  /** Files that are there but couldn't be read (a link out of the library, a named pipe): what they load is unknown. */
+  unreadable: string[];
 };
 
 /** A hash of a file's text, for Loaded.read. */
@@ -103,6 +105,7 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
   const queue = [...pages];
   const found: string[] = [];
   const read: Record<string, string> = {};
+  const unreadable: string[] = [];
   let complete = true;
   while (queue.length) {
     const file = queue.shift()!;
@@ -112,8 +115,8 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
       .catch(() => null);
     if (text === null) {
       // Something is there that couldn't be read (a link out, a pipe): what it loads is unknown, so the
-      // list isn't complete. A file that isn't there loads nothing.
-      if (await Promise.resolve().then(() => lstat(inside(root, file))).then(() => true, () => false)) complete = false;
+      // guard treats the list as not all (agent-guard.ts "unreadable"). A file that isn't there loads nothing.
+      if (await Promise.resolve().then(() => lstat(inside(root, file))).then(() => true, () => false)) unreadable.push(file);
       continue;
     }
     read[file] = textHash(text);
@@ -129,5 +132,5 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
     }
     if (!complete) break;
   }
-  return { files: found, complete, read };
+  return { files: found, complete, read, unreadable };
 }

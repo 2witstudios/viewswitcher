@@ -134,7 +134,7 @@ describe("loadedFiles", () => {
     ]);
   });
   test("a scene that can't be read loads nothing; the limit holds", async () => {
-    expect(await loadedFiles(root, ["daisy/nope.html", "../outside.html"])).toEqual({ files: [], complete: true, read: {} });
+    expect(await loadedFiles(root, ["daisy/nope.html", "../outside.html"])).toEqual({ files: [], complete: true, read: {}, unreadable: [] });
     put("daisy/many.html", Array.from({ length: 50 }, (_, i) => `<img src="${i}.png">`).join(""));
     const capped = await loadedFiles(root, ["daisy/many.html"], 10);
     expect(capped.files.length).toBe(10);

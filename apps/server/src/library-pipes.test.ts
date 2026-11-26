@@ -76,8 +76,8 @@ describe("a named pipe in the library", () => {
     const r = await settled(loadedFiles(root, ["daisy/templates/brb.html"]));
     expect(r).not.toBe("hung");
     expect((r as { v: { read: Record<string, string> } }).v.read).not.toHaveProperty("daisy/templates/_shared/theme.css");
-    // What a file that's there but can't be read loads is unknown: the list isn't complete, so the guard treats it so.
-    expect((r as { v: { complete: boolean } }).v.complete).toBe(false);
+    // What a file that's there but can't be read loads is unknown: it's named, so the guard can say which.
+    expect((r as { v: { unreadable: string[] } }).v.unreadable).toEqual(["daisy/templates/_shared/theme.css"]);
   });
 
   test("duplicating it refuses", async () => {
