@@ -3,7 +3,8 @@ import { api } from "../lib/api";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { appLink, useLive } from "../lib/live";
 import { openAgentSheet, SparkleIcon } from "./AgentSheet";
-import { PencilIcon, useOpenEditor } from "./SceneTile";
+import { PencilIcon } from "./icons";
+import { useOpenEditor } from "./SceneTile";
 import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
 

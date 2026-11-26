@@ -155,12 +155,12 @@ export const packs = {
 export type BuiltinPack = { id: string; name: string; description: string; views: string[] };
 
 /** Copy text; falls back to a prompt where the clipboard API is unavailable (plain http on the iPad). */
-export async function copy(text: string) {
+export async function copy(text: string, ask = "Copy this path:") {
   try {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    window.prompt("Copy this path:", text);
+    window.prompt(ask, text);
     return false;
   }
 }
