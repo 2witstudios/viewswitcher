@@ -5,6 +5,7 @@
 // a stylesheet the scene on air shows. Anything outside the library (other sites, data: URLs, the
 // switcher's own routes) is left out. Reading text, not running it: a URL a script builds at run time
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
+import { libraryUrl } from "@viewswitcher/shared";
 import { readFile } from "node:fs/promises";
 import { inside } from "./paths";
 
@@ -17,7 +18,7 @@ export function resolveRef(ref: string, file: string): string | null {
   if (!r || r.startsWith("#")) return null;
   let u: URL;
   try {
-    u = new URL(r, `http://${BASE_HOST}/library/${file.split("/").map(encodeURIComponent).join("/")}`);
+    u = new URL(r, `http://${BASE_HOST}${libraryUrl(file)}`);
   } catch {
     return null;
   }

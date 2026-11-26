@@ -1,3 +1,4 @@
+import { libraryUrl, templateId } from "@viewswitcher/shared";
 import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { AskAgent } from "../../../components/AgentSheet";
@@ -7,7 +8,7 @@ import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { TemplatePicker } from "../../../components/TemplatePicker";
 import { attempt, type MenuItem, PlusIcon, toast } from "../../../components/ui";
 import { api, copy, packs, type StagedPack } from "../../../lib/api";
-import { templateGroups, templateId, useLibrary } from "../../../lib/library";
+import { templateGroups, useLibrary } from "../../../lib/library";
 import { describeScripts, type DroppedPack, fromPicker, readDrop } from "../../../lib/pack-drop";
 import { SCENE_SANDBOX } from "../../../lib/scene-frame";
 
@@ -189,13 +190,13 @@ function PackPreview({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel
         <div className="pack-covers">
           {pack.views.map((v) => (
             <figure key={v.name}>
-              <div className="cover"><iframe title={v.label} src={`/library/${v.path.split("/").map(encodeURIComponent).join("/")}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} /></div>
+              <div className="cover"><iframe title={v.label} src={`${libraryUrl(v.path)}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} /></div>
               <figcaption>{v.label}</figcaption>
             </figure>
           ))}
           {pack.transition && (
             <figure>
-              <div className="cover"><iframe title="Transition" src={`/library/${pack.transition.split("/").map(encodeURIComponent).join("/")}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} /></div>
+              <div className="cover"><iframe title="Transition" src={`${libraryUrl(pack.transition)}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} /></div>
               <figcaption>Transition</figcaption>
             </figure>
           )}

@@ -1,6 +1,7 @@
+import { libraryUrl } from "@viewswitcher/shared";
 import type { AgentClients, AgentOnAir, Library, LiveState, Org, PackManifest, PackScripts, SceneEdit } from "@viewswitcher/shared";
 import type { QueryClient } from "@tanstack/react-query";
-import { libraryUrl, queryClient } from "./live";
+import { queryClient } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
 const previewSession = Math.random().toString(36).slice(2);

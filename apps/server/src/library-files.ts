@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
-import { slugify } from "@viewswitcher/shared";
+import { isViewPath, orgOf, parseLibraryPath, slugify } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
@@ -22,7 +22,7 @@ export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 export async function checked(root: string, path: unknown): Promise<{ path: string; abs: string }> {
   const p = String(path ?? "").replace(/\/+$/, "");
   await resolveInLibrary(root, p, { forWrite: true });
-  await existingOrg(root, p.split("/")[0]);
+  await existingOrg(root, orgOf(p));
   return { path: p, abs: inside(root, p) };
 }
 
@@ -30,14 +30,6 @@ const isText = (path: string) => TEXT_TYPES.includes(extname(path).toLowerCase()
 
 /** A scene's name, as a template pack's views and the switcher's own new scenes have them (slugify). */
 const SCENE_NAME = /^[a-z0-9][a-z0-9-]{0,60}$/;
-/** Where scenes live in an org, by the path after the org id: the folders the switcher lists. */
-const SCENE_HOMES = [
-  /^templates\/[^/]+\.html$/, // the org's own templates
-  /^templates\/[^/_][^/]*\/[^/]+\.html$/, // a template set's views
-  /^projects\/[^/]+\/scenes\/[^/]+\.html$/,
-  /^projects\/[^/]+\/streams\/[^/]+\/[^/]+\.html$/,
-];
-const TRANSITIONS = [/^templates\/_shared\/transition\.html$/, /^templates\/[^/_][^/]*\/_shared\/transition\.html$/, /^projects\/[^/]+\/transition\.html$/];
 
 /**
  * Why a page (an .html) an agent writes can't be written there, or null. Scenes follow the template
@@ -51,15 +43,15 @@ export function pageProblem(path: string, exists: boolean, isSet: (dir: string) 
   const ext = extname(path);
   if (ext.toLowerCase() !== ".html" || exists) return null;
   if (ext !== ".html") return `Name it with a lower-case .html (${path.slice(0, -ext.length)}.html): the switcher only lists those.`;
-  const rest = path.split("/").slice(1).join("/");
+  // Where it goes, by the folders the switcher lists scenes from (parseLibraryPath).
+  const where = parseLibraryPath(path);
   // A folder in templates/ is a template set only with its pack.json (library.ts listSets).
-  const set = /^templates\/([^/_][^/]*)\//.exec(rest)?.[1];
-  if (set && !isSet(set)) {
-    return `templates/${set}/ isn't a template set (it has no pack.json), so the switcher doesn't list scenes in it. Put the scene in templates/, or add a set with add_template_set.`;
+  if (where.set && !isSet(where.set)) {
+    return `templates/${where.set}/ isn't a template set (it has no pack.json), so the switcher doesn't list scenes in it. Put the scene in templates/, or add a set with add_template_set.`;
   }
-  if (TRANSITIONS.some((r) => r.test(rest))) return null;
-  const name = rest.split("/").pop()!.slice(0, -".html".length);
-  if (!SCENE_HOMES.some((r) => r.test(rest))) {
+  if (where.kind === "transition") return null;
+  const name = where.name;
+  if (!isViewPath(where)) {
     return `${path} isn't where scenes go. A new scene goes in templates/, a template set's folder, projects/<id>/scenes/ or projects/<id>/streams/<id>/ (assets/ and _shared/ hold no pages, except _shared/transition.html). Prefer scene_from_template, which picks the place and name.`;
   }
   if (!SCENE_NAME.test(name)) return `Name new scenes with lower-case letters, numbers and dashes, like "${slugify(name) || "my-scene"}.html"; its <title> is the name people see.`;
@@ -121,8 +113,7 @@ export function writeText(root: string, path: unknown, text: unknown, hash?: unk
     if (!isText(p)) throw new PathError(`Only text files can be written (${TEXT_TYPES.join(", ")}). Add images and other media with add_asset.`);
     if (Buffer.byteLength(text) > MAX_TEXT_BYTES) throw new PathError("That's over 2 MB, too big for a library text file");
     const real = await realpath(abs).catch(() => null);
-    const org = p.split("/")[0]!;
-    const page = pageProblem(p, !!real, (set) => existsSync(inside(root, `${org}/templates/${set}/pack.json`)));
+    const page = pageProblem(p, !!real, (set) => existsSync(inside(root, `${orgOf(p)}/templates/${set}/pack.json`)));
     if (page) throw new PathError(page);
     if (real) {
       const read = await stat(real);

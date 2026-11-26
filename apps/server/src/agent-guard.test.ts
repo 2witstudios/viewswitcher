@@ -57,6 +57,16 @@ describe("agentGuard", () => {
     expect(agentGuard({ setting: "not-live", live: false, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
     expect(agentGuard({ setting: "always", live: true, onAir: partial, action: write("daisy/assets/anything.png") }).ok).toBe(true);
   });
+  test("a template set's view on air: its set's transition and _shared/ are on stream, another set's aren't", () => {
+    const setView = { path: "daisy/templates/neon/brb.html", transition: "daisy/templates/neon/_shared/transition.html" };
+    const ok = (path: string) => agentGuard({ setting: "not-live", live: true, onAir: setView, action: write(path) }).ok;
+    expect(ok("daisy/templates/neon/_shared/transition.html")).toBe(false);
+    expect(ok("daisy/templates/neon/_shared/theme.css")).toBe(false);
+    expect(ok("daisy/templates/_shared/theme.css")).toBe(false);
+    expect(ok("daisy/templates/_shared/transition.html")).toBe(false); // would take over if the set's went away
+    expect(ok("daisy/templates/disco/_shared/theme.css")).toBe(true);
+    expect(ok("daisy/templates/disco/_shared/transition.html")).toBe(true);
+  });
   test("nothing on air: writes are fine even while live", () => {
     expect(agentGuard({ setting: "not-live", live: true, onAir: null, action: write("daisy/templates/_shared/theme.css") })).toEqual({ ok: true });
   });

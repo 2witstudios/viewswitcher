@@ -2,6 +2,7 @@
 // covers in this org's own name and colors. Used for a new org ("Pick your templates") and on the
 // Templates page ("Add templates"). Each one is staged and installed through the same path as a
 // dropped template pack (EDIT-24), so it lands as its own set; nothing changes until "Add".
+import { libraryUrl } from "@viewswitcher/shared";
 import { useEffect, useRef, useState } from "react";
 import { type BuiltinPack, packs, type StagedPack } from "../lib/api";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
@@ -128,7 +129,7 @@ export function TemplatePicker({ org, have, title, intro, skipLabel, onClose, on
               <button key={pack.id} type="button" className={`builtin${on ? " on" : ""}`} aria-pressed={on} disabled={!staged || busy}
                 onClick={() => setPicked(on ? picked.filter((x) => x !== pack.id) : [...picked, pack.id])}>
                 <div className="cover">
-                  {v && <iframe title={`${pack.name}: ${v.label}`} src={`/library/${v.path.split("/").map(encodeURIComponent).join("/")}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} />}
+                  {v && <iframe title={`${pack.name}: ${v.label}`} src={`${libraryUrl(v.path)}?preview`} sandbox={SCENE_SANDBOX} tabIndex={-1} />}
                   {on && <span className="badge">SELECTED</span>}
                   {!on && have.includes(pack.id) && <span className="badge quiet">ADDED</span>}
                 </div>

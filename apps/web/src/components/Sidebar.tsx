@@ -1,9 +1,9 @@
-import { shortDate } from "@viewswitcher/shared";
+import { shortDate, templateId } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { templateGroups, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { DECK, UPRIGHT, useMedia } from "../lib/media";
 import { useLive } from "../lib/live";

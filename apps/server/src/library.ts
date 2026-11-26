@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
+import { parseTemplateId, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { resolveInLibrary } from "./library/contain";
@@ -190,10 +190,10 @@ async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {
  * "neon/teaching" is in the set "neon" (templates/neon/teaching.html).
  */
 export function templateFile(root: string, template: string): { file: string; name: string } {
-  const parts = String(template ?? "").split("/");
-  if (parts.length > 2) throw new PathError(`Bad template: ${template}`);
-  const name = plainName(parts.at(-1)!);
-  const set = parts.length === 2 ? plainName(parts[0]!) : null;
+  const t = parseTemplateId(template);
+  if (!t) throw new PathError(`Bad template: ${template}`);
+  const name = plainName(t.name);
+  const set = t.set === null ? null : plainName(t.set);
   return { file: inside(root, set ? `templates/${set}/${name}.html` : `templates/${name}.html`), name };
 }
 

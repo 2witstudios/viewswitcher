@@ -6,11 +6,11 @@
 // An upload takes a while, and the scene can change meanwhile (an add, a delete, a newer version).
 // The image a picture replaces is the one it was dropped on: its id is checked against the version
 // it came from, followed into the scene as it is now, and refused when it can't be found there.
-import { replaceableImage, retarget, valueIn } from "@viewswitcher/shared";
+import { libraryUrl, replaceableImage, retarget, valueIn } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit, SrcEdit } from "@viewswitcher/shared";
 import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { libraryUrl } from "../../lib/live";
+
 import { toast } from "../ui";
 import { canStart, idsUnsettled, type Made } from "./mode";
 import type { ModeStore } from "./useMode";

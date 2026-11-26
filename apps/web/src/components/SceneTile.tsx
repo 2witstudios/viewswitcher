@@ -1,3 +1,4 @@
+import { orgOf } from "@viewswitcher/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
@@ -11,7 +12,7 @@ import { Menu, type MenuItem, MoreIcon } from "./ui";
 export function useOpenEditor(): (path: string, opts?: { rename?: boolean; replace?: boolean }) => void {
   const navigate = useNavigate();
   return (path, { rename, replace } = {}) =>
-    void navigate({ to: "/$org/edit", params: { org: path.split("/")[0]! }, search: rename ? { path, rename: true } : { path }, replace });
+    void navigate({ to: "/$org/edit", params: { org: orgOf(path) }, search: rename ? { path, rename: true } : { path }, replace });
 }
 
 /** The 1920×1080 scene scaled to `el`'s width: 280 px on a desktop, half a phone's width (MAC-27).

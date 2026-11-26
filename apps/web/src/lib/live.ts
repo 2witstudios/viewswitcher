@@ -1,4 +1,5 @@
 // One WebSocket to the server: live state (on air, OBS, warnings) and file-change versions.
+import { libraryUrl } from "@viewswitcher/shared";
 import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useRef, useSyncExternalStore } from "react";
@@ -177,7 +178,3 @@ export function sceneUrl(path: string, versions: Record<string, number>, preview
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;
 }
 
-/** /library/<path> with each segment encoded, so a "#", "?" or "%" in a file name survives. */
-export function libraryUrl(path: string) {
-  return `/library/${path.split("/").map(encodeURIComponent).join("/")}`;
-}

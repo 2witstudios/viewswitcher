@@ -3,7 +3,7 @@
 import type { Stats } from "node:fs";
 import { chmod, lstat, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
+import { applyEdits, canRemove, decodeEntities, EditError, isLibraryUrl, orgOf, parseLibraryPath, projectViewOf, scanElements, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
@@ -15,7 +15,7 @@ export const sceneHash = (text: string) => new Bun.CryptoHasher("sha256").update
 export function scenePath(root: string, path: unknown): string {
   const p = String(path ?? "");
   if (!p.endsWith(".html")) throw new PathError("Only scenes can be edited");
-  plainName(p.split("/")[0] ?? "");
+  plainName(orgOf(p));
   return inside(root, p);
 }
 
@@ -62,7 +62,7 @@ export function parseEdit(e: any): SceneEdit {
     } catch {
       throw new EditError("That isn't an image the scene can show");
     }
-    plainName(rel.split("/")[0] ?? "");
+    plainName(orgOf(rel));
     if (rel.split("/").some((part) => part === ".." || part.startsWith("."))) throw new EditError("Images come from the library");
     return { id, src };
   }
@@ -182,11 +182,11 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
       const r = await replaceChecked(real, read, current, next, {});
       if (!r.ok) return { ok: false, conflict: true, hash: r.hash };
     }
-    const parts = path.split("/");
-    const file = parts[parts.length - 1]!.slice(0, -5);
-    // <org>/projects/<project>/streams/<stream>/<file>.html
-    const inStream = parts.length === 6 && parts[1] === "projects" && parts[3] === "streams";
-    const override = inStream && (await stat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${file}.html`)).then(() => true, () => false));
+    const where = parseLibraryPath(path);
+    const file = where.name;
+    const inStream = where.kind === "stream";
+    const projectView = projectViewOf(path);
+    const override = !!projectView && (await stat(inside(root, projectView)).then(() => true, () => false));
     const base = slugify(String(name));
     if (!inStream || override || !base || base === file) return { ok: true, hash: sceneHash(next), path, was };
     // Never over another scene in the folder, nor onto a name the project uses (that would make it an override).
@@ -198,12 +198,12 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
       if (free === file) return { ok: true, hash: sceneHash(next), path, was }; // its own name already
       // lstat: a link (even a broken one) takes the name too.
       const taken = await lstat(join(dir, `${free}.html`)).then(() => true, () => false);
-      const shadows = await lstat(inside(root, `${parts[0]}/projects/${parts[2]}/scenes/${free}.html`)).then(() => true, () => false);
+      const shadows = await lstat(inside(root, `${where.org}/projects/${where.project}/scenes/${free}.html`)).then(() => true, () => false);
       if (!taken && !shadows) break;
       free = `${base}-${n}`;
     }
     plainName(`${free}.html`);
     await rename(own, join(dir, `${free}.html`));
-    return { ok: true, hash: sceneHash(next), path: [...parts.slice(0, -1), `${free}.html`].join("/"), was };
+    return { ok: true, hash: sceneHash(next), path: `${path.slice(0, path.lastIndexOf("/"))}/${free}.html`, was };
   });
 }
