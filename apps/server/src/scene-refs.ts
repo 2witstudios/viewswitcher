@@ -99,7 +99,7 @@ export const textHash = (text: string) => Bun.hash(text).toString(36);
  * fonts and pictures, a module's imports), at most `limit` files. Files that can't be read are still
  * listed: a missing logo the scene asks for would show the moment an agent created it.
  */
-export async function loadedFiles(root: string, pages: string[], limit = 200): Promise<Loaded> {
+export async function loadedFiles(root: string, pages: string[], limit = 200, { read: readText = readNoFollow }: { read?: (real: string) => Promise<string> } = {}): Promise<Loaded> {
   const seen = new Set<string>(pages);
   const queue = [...pages];
   const found: string[] = [];
@@ -110,7 +110,7 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
     const file = queue.shift()!;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
     const text = await Promise.resolve()
-      .then(() => resolveInLibrary(root, file).then(readNoFollow))
+      .then(() => resolveInLibrary(root, file).then(readText))
       .catch(() => null);
     if (text === null) {
       // Would /library/ serve it? The same two checks it makes (http/routes/files.ts): resolveInLibrary, then

@@ -49,6 +49,18 @@ describe("ensureLibrary", () => {
     expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".viewswitcher/");
   });
 
+  test("a kit file that's there but can't be read (a folder, a named pipe) is the person's: left alone, and the start settles", async () => {
+    const root = await tempDir();
+    await mkdir(join(root, "CLAUDE.md"));
+    expect(Bun.spawnSync(["mkfifo", join(root, "AGENTS.md")]).exitCode).toBe(0);
+    const r = await Promise.race([ensureLibrary(root, { kit, starter, gitInit: fakeGit }), Bun.sleep(5000).then(() => null)]);
+    expect(r).not.toBeNull();
+    expect([...r!.copied, ...r!.updated]).not.toContain("CLAUDE.md");
+    expect([...r!.copied, ...r!.updated]).not.toContain("AGENTS.md");
+    expect((await lstat(join(root, "CLAUDE.md"))).isDirectory()).toBe(true);
+    expect((await lstat(join(root, "AGENTS.md"))).isFIFO()).toBe(true);
+  });
+
   test("a second start changes nothing", async () => {
     const root = await tempDir();
     await ensureLibrary(root, { kit, starter, gitInit: fakeGit });
