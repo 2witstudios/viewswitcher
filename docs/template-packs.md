@@ -15,7 +15,7 @@ neon-night/                         the pack (a folder, or a .zip of it)
 ├─ _shared/                         the pack's own shared files
 │  ├─ theme.css                     tokens and classes (see the starter kit's)
 │  ├─ scene.js                      the starter kit's, or the pack's own
-│  ├─ transition.html               optional: its transition page
+│  ├─ transition.html               optional: its transition, played when one of its views goes on air
 │  └─ brand/…, fonts/…              pictures and fonts the theme uses
 ├─ assets/                          optional: pictures, video, audio, fonts the views use
 ├─ README.md, LICENSE               optional, installed alongside
@@ -64,6 +64,8 @@ Every `.html`, `.css`, `.js`, `.json`, `.svg`, `.md` and `.txt` file is filled i
 
 Anything else in `{{LIKE_THIS}}` stays as typed (with a warning).
 
+Values are escaped for the file they land in: in `.html` and `.svg` they're HTML-escaped (an org named `R&B <Live>` reads as text and can't add markup), in `.json` they're escaped for a JSON string, and elsewhere (`.css`, `.js`, `.md`, `.txt`) they're as typed. So in a view, put `{{ORG_NAME}}` in text or an attribute, not inside an inline `<script>`; a script that needs the name can read it from the page.
+
 **Link the pack's own files through `{{PACK}}`:** `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg`, `{{PACK}}/_shared/brand/mark.svg`. Views are installed at the set's top level, beside `_shared/`, so another view is `{{PACK}}/<view>.html`. Absolute URLs keep working when a view is copied into a project or stream, which relative ones wouldn't. A link to a pack file that isn't in the pack is a warning. A view may also link the org's own files (`/library/{{ORG_ID}}/assets/…`).
 
 ## Views
@@ -92,6 +94,8 @@ Scripts may only be in `_shared/`, so what a pack runs is in one place.
 2. The zip is read by `packages/packs/src/zip.ts`: entries are inflated one at a time and never past the size they declare (a zip bomb that lies about its sizes stops there), checked against their CRC, and encrypted entries, ZIP64 and other compression methods are refused.
 3. Accepted files are unpacked into `<org>/.viewswitcher/staging/<token>/`. pack.json and the views are checked (`checkPack`). A copy filled in for the org is the preview the switcher shows: covers of every view and the transition, what the pack runs, and any warnings.
 4. **Install** fills the files in again with the set's real URL in a staging folder, then renames that folder to `<org>/templates/<set>/`. That rename is the only step that touches the org, so a failed install leaves nothing behind. **Cancel** (or an hour without either) deletes the staging folder.
+
+**Its transition.** When one of the set's views goes on air, the switcher plays the set's own `_shared/transition.html` if it has one, else the org's (`templates/_shared/transition.html`), else a blank fade. A scene made from the set's view in a project plays its project's transition, else the org's: it's the project's now.
 
 **Removing a set** (Templates → Remove set) deletes its folder. If scenes made from it still link its files, only its views and pack.json go: its `_shared/` and `assets/` stay so those scenes keep their look, and the switcher says how many use them. Scenes are never touched.
 
