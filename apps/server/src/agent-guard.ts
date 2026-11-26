@@ -32,7 +32,7 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
   if (p === onAir.transition?.toLowerCase() || transitionCandidates(scene).includes(p)) return "transition";
   // The org's _shared/ styles every scene; a set's styles its own views.
   const file = parseLibraryPath(p), view = parseLibraryPath(scene);
-  if (file.org === view.org && (file.kind === "shared" || (file.kind === "transition" && !file.project)) && (!file.set || file.set === view.set)) return "shared";
+  if (file.org === view.org && file.kind === "shared" && (!file.set || file.set === view.set)) return "shared";
   if (onAir.loads?.some((l) => l.toLowerCase() === p)) return "loaded";
   // The scan of what the scene loads stopped at its limit: anything might be on stream.
   if (onAir.loadsComplete === false) return "tooMany";

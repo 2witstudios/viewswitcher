@@ -5,7 +5,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
-import { isTextFile, isViewPath, orgOf, parseLibraryPath, slugify, TEXT_EXTENSIONS } from "@viewswitcher/shared";
+import { isTextFile, isViewPath, libraryUrl, orgOf, parseLibraryPath, slugify, TEXT_EXTENSIONS } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
 import { resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
@@ -47,11 +47,10 @@ export function pageProblem(path: string, exists: boolean, isSet: (dir: string) 
     return `templates/${where.set}/ isn't a template set (it has no pack.json), so the switcher doesn't list scenes in it. Put the scene in templates/, or add a set with add_template_set.`;
   }
   if (where.kind === "transition") return null;
-  const name = where.name;
   if (!isViewPath(where)) {
     return `${path} isn't where scenes go. A new scene goes in templates/, a template set's folder, projects/<id>/scenes/ or projects/<id>/streams/<id>/ (assets/ and _shared/ hold no pages, except _shared/transition.html). Prefer scene_from_template, which picks the place and name.`;
   }
-  if (!SCENE_NAME.test(name)) return `Name new scenes with lower-case letters, numbers and dashes, like "${slugify(name) || "my-scene"}.html"; its <title> is the name people see.`;
+  if (!SCENE_NAME.test(where.name)) return `Name new scenes with lower-case letters, numbers and dashes, like "${slugify(where.name) || "my-scene"}.html"; its <title> is the name people see.`;
   return null;
 }
 
@@ -81,7 +80,7 @@ export async function readText(root: string, path: unknown, port: number): Promi
   const s = await stat(abs).catch(() => null);
   if (!s) throw new PathError(`There's no file at ${p}`);
   if (s.isDirectory()) throw new PathError(`${p} is a folder. Use list_files for it.`);
-  if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Scenes use it as /library/${p}, and it's at http://127.0.0.1:${port}/library/${encodeURI(p)}.`);
+  if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Scenes use it as ${libraryUrl(p)}, and it's at http://127.0.0.1:${port}${libraryUrl(p)}.`);
   if (s.size > MAX_TEXT_BYTES) throw new PathError(`${p} is over 2 MB, too big to read here`);
   const text = await readFile(abs, "utf8");
   return { text, hash: sceneHash(text) };

@@ -33,10 +33,17 @@ export type LibraryPath = {
 };
 
 /** A folder the scan lists (a set, a project, a stream): never a dot-folder or one starting with "_". */
-const listed = (segment: string | undefined): segment is string => !!segment && !segment.startsWith(".") && !segment.startsWith("_");
-/** A view's file: exactly ".html" (the scan skips "brb.HTML"), never a dot-file. */
-const viewFile = (segment: string | undefined): segment is string => !!segment && segment.endsWith(".html") && segment.length > 5 && !segment.startsWith(".");
-const TRANSITION = "transition.html";
+export const isListedFolder = (name: string | undefined): name is string => !!name && !name.startsWith(".") && !name.startsWith("_");
+/** A view's file name as the scan lists it: exactly ".html" ("brb.HTML" sits unseen), never a dot-file. */
+export const isViewFile = (name: string | undefined): name is string => !!name && name.endsWith(".html") && name.length > 5 && !name.startsWith(".");
+const listed = isListedFolder;
+const viewFile = isViewFile;
+
+/** A transition's file name, in a project's folder or a _shared/ folder. */
+export const TRANSITION_FILE = "transition.html";
+/** The org's own transition, after the org id. */
+export const ORG_TRANSITION = `templates/_shared/${TRANSITION_FILE}`;
+const TRANSITION = TRANSITION_FILE;
 
 /** What `path` names in its org. A trailing "/" is ignored; an empty segment makes it `other`. */
 export function parseLibraryPath(path: string): LibraryPath {
@@ -53,8 +60,8 @@ export function parseLibraryPath(path: string): LibraryPath {
   if (top === "templates") {
     if (rest.length === 2 && viewFile(a)) return view("template", a);
     if (a === "_shared") return rest.length === 3 && b === TRANSITION ? out("transition") : out(rest.length > 2 ? "shared" : "other");
-    // A set's folder is named by its pack id (a slug), so "brb.HTML" here is a file, not a set.
-    if (!listed(a) || a.includes(".")) return out("other");
+    // Right in templates/, "brb.HTML" is a file the scan skips, not a set; deeper, any listed folder is one.
+    if (!listed(a) || (rest.length === 2 && a.includes("."))) return out("other");
     const set = { set: a };
     if (rest.length === 2 || (rest.length === 3 && b === "pack.json")) return out("set", set);
     if (rest.length === 3 && viewFile(b)) return view("template", b, set);
@@ -81,7 +88,11 @@ export function parseLibraryPath(path: string): LibraryPath {
 export const isViewPath = (p: LibraryPath): p is LibraryPath & { kind: SceneOrigin } => p.kind === "template" || p.kind === "project" || p.kind === "stream";
 
 /** The org a library path belongs to: its first segment. */
-export const orgOf = (path: string) => parseLibraryPath(path).org;
+export const orgOf = (path: string) => {
+  const p = String(path ?? "");
+  const slash = p.indexOf("/");
+  return slash < 0 ? p : p.slice(0, slash);
+};
 
 /** For a stream's view, the project view it is a copy of (same file name), whether or not that exists; else null. */
 export function projectViewOf(path: string): string | null {

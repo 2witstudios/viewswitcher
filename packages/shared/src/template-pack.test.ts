@@ -1,6 +1,6 @@
 // EDIT-23: the template pack format's validator.
 import { describe, expect, test } from "bun:test";
-import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, placeholdersIn, planPack, readManifest } from "./template-pack";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, placeholdersIn, placeholderVars, planPack, readManifest } from "./template-pack";
 
 const file = (path: string, size = 100): PackEntry => ({ path, size, type: "file" });
 const manifest = (over: Record<string, unknown> = {}) => JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "Bright.", views: ["main", "brb"], placeholders: ["ORG_NAME", "PACK"], ...over });
@@ -180,6 +180,9 @@ test("fillPlaceholders escapes values for the file they land in", () => {
   expect(JSON.parse(json).name).toBe(vars.ORG_NAME);
   expect(fillPlaceholders("BRAND.md", "# {{ORG_NAME}}", vars)).toBe(`# ${vars.ORG_NAME}`);
   expect(fillPlaceholders("_shared/theme.css", "/* {{ORG_NAME}} */", vars)).toBe(`/* ${vars.ORG_NAME} */`);
+  // A name can't close the CSS comment it's in and swallow the next rule.
+  expect(fillPlaceholders("_shared/theme.css", "/* {{ORG_NAME}} */ :root { --x: 1 }", { ORG_NAME: "A*/B" })).toBe("/* A* /B */ :root { --x: 1 }");
+  expect(fillPlaceholders("dir.html/notes", "{{ORG_NAME}}", { ORG_NAME: "<b>" })).toBe("<b>"); // not an .html file
 });
 
 test("isTextFile: the library's text files, by extension in any case", () => {
@@ -191,4 +194,11 @@ test("placeholdersIn names each placeholder once, known or not, and only upper-c
   const text = "{{ORG_NAME}} {{PACK}}/x {{ORG_NAME}} {{HOST}} {{lower}} {ORG_ID}";
   expect(placeholdersIn(text)).toEqual(["ORG_NAME", "PACK", "HOST"]);
   expect(placeholdersIn(text)).toEqual(["ORG_NAME", "PACK", "HOST"]); // the same again: no state between calls
+});
+
+test("placeholderVars: the org's values, its initial upper-case, {{PACK}} only for a set", () => {
+  const org = { id: "rb", name: "  r&b night ", accent: "#f00", ground: "#000" };
+  expect(placeholderVars(org)).toEqual({ ORG_ID: "rb", ORG_NAME: "r&b night", ORG_INITIAL: "R", ACCENT: "#f00", GROUND: "#000" });
+  expect(placeholderVars(org, "/library/rb/templates/neon").PACK).toBe("/library/rb/templates/neon");
+  expect(placeholderVars({ ...org, name: " " }).ORG_INITIAL).toBe("?");
 });

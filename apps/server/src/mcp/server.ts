@@ -7,7 +7,7 @@ import { readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
+import { EditError, orgOf, resolveStream, slugify, templateId } from "@viewswitcher/shared";
 import type { LiveState } from "@viewswitcher/shared";
 import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
@@ -22,13 +22,13 @@ import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
 import { type Loaded, loadedFiles, textHash } from "../scene-refs";
 import { pathScrub } from "../scrub";
-import { LibraryScanner } from "../library/scanner";
+import type { LibraryScanner } from "../library/scanner";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
   root: string;
-  /** Reads an org's content: the switcher's own scanner, so both share its cache (a test may leave it out). */
-  scanner?: LibraryScanner;
+  /** Reads an org's content: the switcher's own scanner, so both share its cache and the watcher's reports. */
+  scanner: LibraryScanner;
   /** The library kit (config.libraryKit), for the guide when the library has no copy of the skill. */
   kit: string;
   port: number;
@@ -87,7 +87,7 @@ const today = () => {
 
 export function createMcpServer(deps: McpDeps): McpServer {
   const { root, port } = deps;
-  const scanner = deps.scanner ?? new LibraryScanner(root);
+  const { scanner } = deps;
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
@@ -395,7 +395,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
       await cancelPack(root, plainName(org), staged.token).catch(() => {});
       throw e;
     }
-    return text({ set: installed.set, name: b.name, templates: staged.views.map((v) => `${installed.set}/${v.name}`), ...(staged.warnings.length ? { warnings: staged.warnings } : {}) });
+    return text({ set: installed.set, name: b.name, templates: staged.views.map((v) => templateId({ set: installed.set, name: v.name })), ...(staged.warnings.length ? { warnings: staged.warnings } : {}) });
   }));
 
   server.registerTool("create_project", {

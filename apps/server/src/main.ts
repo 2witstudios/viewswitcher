@@ -1,5 +1,5 @@
 // ViewSwitcher server: the switcher API, the library files, live state, OBS, and the MCP server for agents.
-import { existsSync, watch } from "node:fs";
+import { watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { ServerMessage } from "@viewswitcher/shared";

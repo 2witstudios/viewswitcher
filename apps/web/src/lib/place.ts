@@ -1,8 +1,8 @@
 // Where a scene lives in the library, in words, for the editor's crumb and title.
-import { parseLibraryPath, shortDate } from "@viewswitcher/shared";
+import { shortDate } from "@viewswitcher/shared";
 import type { Library } from "@viewswitcher/shared";
 
-const fileName = (path: string) => parseLibraryPath(path).name.replace(/\.html$/, "");
+const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.html$/, "");
 
 /** "Bible Study · Day 1 · Nov 24" and the scene's label; its file name until the library is known. */
 export function placeOf(lib: Library | undefined, path: string): { crumb: string; title: string } {

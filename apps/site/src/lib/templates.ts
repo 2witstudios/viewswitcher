@@ -6,14 +6,14 @@ import { parseCredits, fontsFromCss, type Credit } from "./credits";
 import credits from "../../CREDITS.md?raw";
 import { SHOWS, type Show } from "@viewswitcher/packs/shows";
 
-const SHOWS_GLOB = "../../../../packages/packs/shows";
+// Vite needs the glob written out: packages/packs/shows/<id>/theme.css.
 const themes = import.meta.glob<string>("../../../../packages/packs/shows/*/theme.css", { query: "?raw", import: "default", eager: true });
 
 const CREDITS = parseCredits(credits);
 
 /** The fonts a set loads from Google Fonts, from its theme.css. */
 export function fontsOf(id: string): string[] {
-  const css = themes[`${SHOWS_GLOB}/${id}/theme.css`];
+  const css = Object.entries(themes).find(([path]) => path.endsWith(`/shows/${id}/theme.css`))?.[1];
   if (css === undefined) throw new Error(`packages/packs/shows/${id}/theme.css is missing`);
   return fontsFromCss(css);
 }

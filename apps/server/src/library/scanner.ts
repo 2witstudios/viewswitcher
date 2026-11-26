@@ -10,7 +10,7 @@
 // test makes its own and shares nothing with another.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { readManifest } from "@viewswitcher/shared";
+import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { exists, readOrg } from "../library";
 import { limit } from "../limit";
@@ -23,9 +23,6 @@ const KINDS: Record<string, AssetKind> = {
   ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video",
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
-
-const TRANSITION = "transition.html";
-const ORG_TRANSITION = `templates/_shared/${TRANSITION}`;
 
 export class LibraryScanner {
   /** File reads and stats for this scanner's scans: at most `concurrency` at once, across every scan. */
@@ -45,10 +42,10 @@ export class LibraryScanner {
 
   /** One org's content; every returned path starts with the org id. */
   async scan(orgId: string): Promise<Library> {
-    const org = await readOrg(this.libraryRoot, orgId);
     const orgDir = inside(this.libraryRoot, plainName(orgId));
-    const prefix = `${org.id}/`;
-    const [templates, sets, assets, projects, transition] = await Promise.all([
+    const prefix = `${orgId}/`; // readOrg's id is the one asked for, so nothing waits for org.json
+    const [org, templates, sets, assets, projects, transition] = await Promise.all([
+      readOrg(this.libraryRoot, orgId),
       this.readJson(join(orgDir, "templates/_shared/order.json"), { order: [] as string[] }).then((meta) => this.scenesIn(orgDir, "templates", "template", meta.order, prefix)),
       this.listSets(orgDir, prefix),
       this.listAssets(orgDir, prefix),
@@ -66,7 +63,7 @@ export class LibraryScanner {
   private async scenesIn(orgDir: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
     let files: string[] = [];
     try {
-      files = (await this.io(() => readdir(join(orgDir, rel)))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
+      files = (await this.io(() => readdir(join(orgDir, rel)))).filter(isViewFile);
     } catch {
       return [];
     }
@@ -77,7 +74,8 @@ export class LibraryScanner {
         return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
       }),
     );
-    const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length);
+    const ranks = new Map(order.map((n, i) => [n, i] as const).reverse()); // a name listed twice ranks by its first place
+    const rank = (n: string) => ranks.get(n) ?? order.length;
     return scenes.sort((a, b) => rank(a.name) - rank(b.name) || a.label.localeCompare(b.label));
   }
 

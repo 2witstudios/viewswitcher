@@ -56,12 +56,8 @@ export function buildPack(m: Manifest, views: [string, string][], shared: [strin
 
 /** _shared/ files of a folder, text as text (so it's relinked), everything else as bytes. */
 async function sharedOf(dir: string, skip: string[] = []): Promise<[string, Uint8Array | string][]> {
-  const out: [string, Uint8Array | string][] = [];
-  for (const f of await walkFiles(dir)) {
-    if (skip.includes(f)) continue;
-    out.push([f, isTextFile(f) ? await readFile(join(dir, f), "utf8") : new Uint8Array(await readFile(join(dir, f)))]);
-  }
-  return out;
+  const files = (await walkFiles(dir)).filter((f) => !skip.includes(f));
+  return Promise.all(files.map(async (f): Promise<[string, Uint8Array | string]> => [f, isTextFile(f) ? await readFile(join(dir, f), "utf8") : new Uint8Array(await readFile(join(dir, f)))]));
 }
 
 /** The starter kit (apps/server/starter, at `starter`) as a pack. */
@@ -143,22 +139,24 @@ export function genericTheme(css: string, show: Show): string {
  * placeholders with the show's (apps/site/scripts/library.ts). Its views in the show's order, its
  * theme.css, and the shared base.css and view.js.
  */
-export async function showPacks(onError?: (id: string, e: Error) => void, shows: Show[] = SHOWS, dir = SHOWS_DIR): Promise<{ id: string; files: PackFileOut[] }[]> {
+export async function showPacks({ onError, dir = SHOWS_DIR }: { onError?: (id: string, e: Error) => void; dir?: string } = {}): Promise<{ id: string; files: PackFileOut[] }[]> {
   const common = await sharedOf(join(dir, "_shared"));
-  const out = [];
-  for (const s of shows) {
-    try {
-      const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, genericView(await readFile(join(dir, s.id, `${v.file}.html`), "utf8"), s)] as [string, string]));
-      const theme = genericTheme(await readFile(join(dir, s.id, "theme.css"), "utf8"), s);
-      const id = s.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-      out.push({ id, files: buildPack({ id, name: s.name, description: `${s.kind} templates, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) });
-    } catch (e) {
-      // packs:export and the site build fail on any bad show; the app (onError) skips just that one.
-      if (!onError) throw e;
-      onError(s.id, e as Error);
-    }
-  }
-  return out;
+  const built = await Promise.all(
+    SHOWS.map(async (s) => {
+      try {
+        const views: [string, string][] = await Promise.all(s.views.map(async (v) => [v.file, genericView(await readFile(join(dir, s.id, `${v.file}.html`), "utf8"), s)] as [string, string]));
+        const theme = genericTheme(await readFile(join(dir, s.id, "theme.css"), "utf8"), s);
+        const id = s.id.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+        return { id, files: buildPack({ id, name: s.name, description: `${s.kind} templates, from viewswitcher.com's examples. ${s.blurb}` }, views, [...common, ["theme.css", theme]]) };
+      } catch (e) {
+        // packs:export and the site build fail on any bad show; the app (onError) skips just that one.
+        if (!onError) throw e;
+        onError(s.id, e as Error);
+        return null;
+      }
+    }),
+  );
+  return built.filter((p) => p !== null); // in the shows' order
 }
 
 /** A pack's files as a zip with one wrapping folder, the way Finder's Compress makes one. */

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  applyEdits, changedElements, decodeEntities, positionOf, retarget, scanElements, setPosition, setText, snapMove, tagForEdit, textOf, untagForEdit,
+  applyEdits, changedElements, decodeEntities, positionOf, readTitle, retarget, scanElements, setPosition, setText, setTitle, snapMove, tagForEdit, textOf, untagForEdit,
 } from "./index";
 
 const starter = join(import.meta.dir, "../../../apps/server/starter/templates");
@@ -421,5 +421,24 @@ describe("round 5 on PR #1", () => {
     expect(decodeEntities("&toString; &constructor; &amp;")).toBe("&toString; &constructor; &");
     const html = `<p>&toString;</p>`;
     expect(textOf(html, scanElements(html)[0]!)).toBe("&toString;");
+  });
+});
+
+describe("readTitle", () => {
+  test("the page's title, decoded and collapsed", () => {
+    expect(readTitle("<head><title>  R&amp;B\n night </title></head>")).toBe("R&B night");
+    expect(readTitle("<head><title></title></head>")).toBeNull();
+    expect(readTitle("<main></main>")).toBeNull();
+  });
+  test("skips a title in a comment, a script, a style or a template, as the browser and setTitle do", () => {
+    expect(readTitle("<head><!-- <title>Old</title> --><title>Real</title></head>")).toBe("Real");
+    expect(readTitle("<head><script>const t = '<title>Code</title>';</script><title>Real</title></head>")).toBe("Real");
+    expect(readTitle("<head><style>/* <title>x</title> */</style><title>Real</title></head>")).toBe("Real");
+    expect(readTitle("<head><template><title>Inner</title></template><title>Real</title></head>")).toBe("Real");
+    expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
+  });
+  test("agrees with setTitle on which title it is", () => {
+    const html = "<head><!-- <title>Old</title> --><title>Real</title></head>";
+    expect(readTitle(setTitle(html, "New"))).toBe("New");
   });
 });

@@ -1,3 +1,4 @@
+import { libraryUrl } from "@viewswitcher/shared";
 import type { AssetKind } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { type DragEvent, useRef, useState } from "react";
@@ -46,7 +47,7 @@ export const Route = createFileRoute("/_app/$org/assets")({
             <input ref={input} type="file" multiple accept="image/*,video/*,audio/*" hidden onChange={(e) => (upload(e.target.files), (e.target.value = ""))} />
           </div>
           {assets.filter((a) => filter === "all" || a.kind === filter).map((a) => {
-            const url = `/library/${a.path}`;
+            const url = libraryUrl(a.path);
             return (
               <div key={a.path} className="tile">
                 <button type="button" className="asset-cover" aria-label={`Options for ${a.name}`} onClick={() => setMenu(a.path)}

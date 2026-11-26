@@ -16,7 +16,7 @@ export async function writeAtomic(file: string, data: string | Uint8Array, { mod
   await mkdir(dirname(file), { recursive: true });
   const tmp = `${file}.${crypto.randomUUID().slice(0, 8)}.tmp`;
   try {
-    await writeFile(tmp, data, mode === undefined ? {} : { mode });
+    await writeFile(tmp, data, { mode });
     if (mode !== undefined) await chmod(tmp, mode); // past the umask
     await rename(tmp, file);
   } catch (e) {

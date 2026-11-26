@@ -9,6 +9,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { LiveState } from "@viewswitcher/shared";
 import { type BuiltinPackFiles, buildBuiltins } from "../builtin-packs";
+import { LibraryScanner } from "../library/scanner";
 import { config } from "../config";
 import { onAirFor } from "../library-actions";
 import { LiveStore } from "../live/store";
@@ -60,6 +61,7 @@ beforeAll(async () => {
   state = store.state;
   const server = createMcpServer({
     root,
+    scanner: new LibraryScanner(root),
     kit: config.libraryKit,
     port: PORT,
     state: () => (onStateRead?.(), state),

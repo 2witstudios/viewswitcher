@@ -232,12 +232,15 @@ const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
 /**
- * A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it
- * has none or it's empty. Read without scanning the whole page, so listing many scenes stays cheap.
+ * The first <title> outside comments and <script>, <style> or <template> content, the one the
+ * browser (and setTitle) uses; one pass, no element scan, so listing many big scenes stays cheap.
  */
+const TITLE = /<!--[\s\S]*?(?:-->|$)|<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)|<title\b[^>]*>([\s\S]*?)<\/title\s*>/gi;
+
+/** A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it has none or it's empty. */
 export function readTitle(html: string): string | null {
-  const m = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(html);
-  return m ? collapseHtmlSpace(decodeEntities(m[1]!)) || null : null;
+  for (const m of html.matchAll(TITLE)) if (m[2] !== undefined) return collapseHtmlSpace(decodeEntities(m[2])) || null;
+  return null;
 }
 
 /** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */

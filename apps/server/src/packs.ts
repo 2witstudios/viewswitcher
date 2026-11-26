@@ -11,11 +11,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, planPack, readTitle } from "@viewswitcher/shared";
-import type { PackEntry, PackFile, PackManifest, PackPlaceholder, StagedPack } from "@viewswitcher/shared";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
+import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
 import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
+import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
 
@@ -40,10 +41,7 @@ function plainFsError(e: unknown, doing: string): Error {
 }
 
 /** The placeholders for `org`, with {{PACK}} pointing at `packUrl`. */
-async function varsFor(root: string, orgId: string, packUrl: string): Promise<Record<PackPlaceholder, string>> {
-  const o = await readOrg(root, orgId);
-  return { ORG_ID: o.id, ORG_NAME: o.name, ORG_INITIAL: (o.name.trim()[0] ?? "?").toUpperCase(), ACCENT: o.accent, GROUND: o.ground, PACK: packUrl };
-}
+const varsFor = async (root: string, orgId: string, packUrl: string) => placeholderVars(await readOrg(root, orgId), packUrl);
 
 /** A set folder name the org doesn't have yet (a set someone removed but scenes still use counts as taken). */
 async function freeSet(orgDir: string, id: string) {
@@ -53,7 +51,7 @@ async function freeSet(orgDir: string, id: string) {
 }
 
 /** Copy `raw` to `dest` with every text file filled in. */
-async function fillCopy(raw: string, dest: string, files: string[], vars: Record<string, string>) {
+async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
   for (const f of files) {
     const from = inside(raw, f);
     const to = inside(dest, installedPath(f));
@@ -134,7 +132,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
     // 4. A preview copy for the covers, filled in for this org.
     const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
-    await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, `/library/${previewRel}`));
+    await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, libraryUrl(previewRel)));
     const views = report.views.map((v) => ({ name: v.name, label: readTitle(texts[v.file] ?? "") ?? v.name.replace(/-/g, " "), path: `${previewRel}/${installedPath(v.file)}` }));
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
@@ -170,7 +168,7 @@ export async function installPack(root: string, orgId: string, token: unknown): 
     // Where the set goes must really be in the library: templates/ may be a link to somewhere else.
     await resolveInLibrary(root, `${plainName(orgId)}/templates/${set}`, { forWrite: true });
     await rm(final, { recursive: true, force: true });
-    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, `/library/${orgId}/templates/${set}`));
+    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, libraryUrl(`${orgId}/templates/${set}`)));
     await mkdir(join(orgDir, "templates"), { recursive: true });
     // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
     // installs at once, an agent), where rename alone would quietly replace an empty one.
@@ -200,16 +198,14 @@ export async function cancelPack(root: string, orgId: string, token: unknown) {
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
 async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<number> {
+  // As written by hand or by the switcher: plain, or with each segment encoded (libraryUrl).
   const needle = `/library/${orgId}/templates/${set}/`;
-  const encoded = `/library/${encodeURIComponent(orgId)}/templates/${encodeURIComponent(set)}/`;
+  const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
   const projects = join(orgDir, "projects");
-  let n = 0;
-  for (const rel of await walkFiles(projects).catch(() => [] as string[])) {
-    if (!rel.endsWith(".html")) continue;
-    const text = await readFile(join(projects, rel), "utf8").catch(() => "");
-    if (text.includes(needle) || text.includes(encoded)) n++;
-  }
-  return n;
+  const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
+  const scenes = (await walkFiles(projects).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
+  const uses = await Promise.all(scenes.map((rel) => read(() => readFile(join(projects, rel), "utf8").catch(() => "")).then((t) => t.includes(needle) || t.includes(encoded))));
+  return uses.filter(Boolean).length;
 }
 
 /**

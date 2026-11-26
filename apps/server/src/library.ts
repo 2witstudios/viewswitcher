@@ -1,7 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { fillPlaceholders, isTextFile, parseTemplateId, readTitle, setTitle, slugify, transitionCandidates } from "@viewswitcher/shared";
+import { fillPlaceholders, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
@@ -39,12 +39,15 @@ export async function createOrg(root: string, starter: string, name: string, acc
   while (await exists(join(root, id))) id = `${base}-${n++}`;
   const dir = join(root, id);
   await cp(starter, dir, { recursive: true });
-  const vars = { ORG_ID: id, ORG_NAME: name.trim(), ORG_INITIAL: name.trim()[0]!.toUpperCase(), ACCENT: accent, GROUND: ground };
-  for (const rel of await walkFiles(dir)) {
-    if (!isTextFile(rel)) continue;
-    const p = join(dir, rel);
-    await writeAtomic(p, fillPlaceholders(rel, await readFile(p, "utf8"), vars));
-  }
+  const vars = placeholderVars({ id, name, accent, ground });
+  await Promise.all(
+    (await walkFiles(dir)).filter(isTextFile).map(async (rel) => {
+      const p = join(dir, rel);
+      const text = await readFile(p, "utf8");
+      const filled = fillPlaceholders(rel, text, vars);
+      if (filled !== text) await writeAtomic(p, filled);
+    }),
+  );
   await mkdir(join(dir, "assets"), { recursive: true });
   await mkdir(join(dir, "projects"), { recursive: true });
   return { orgId: id };
@@ -68,8 +71,6 @@ export function templateFile(root: string, template: string): { file: string; na
 // A transition is an HTML page shown full screen while scenes switch. The org's default lives in
 // templates/_shared/transition.html; a project can have its own projects/<id>/transition.html.
 
-const TRANSITION = "transition.html";
-const ORG_TRANSITION = `templates/_shared/${TRANSITION}`;
 
 /** The transition to play when `scenePath` goes on air, or null for a plain ground-color wipe. */
 export async function resolveTransition(libraryRoot: string, scenePath: string): Promise<string | null> {

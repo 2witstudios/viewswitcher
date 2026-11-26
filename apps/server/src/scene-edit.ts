@@ -181,13 +181,14 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
       const r = await replaceChecked(real, read, current, next, {});
       if (!r.ok) return { ok: false, conflict: true, hash: r.hash };
     }
-    const where = parseLibraryPath(path);
-    const file = where.name;
-    const inStream = where.kind === "stream";
+    const file = parseLibraryPath(path).name;
+    /** The same view under another file name in this stream's folder. */
+    const named = (n: string) => `${path.slice(0, path.lastIndexOf("/"))}/${n}.html`;
+    // Only a stream's own view is renamed on disk; projectViewOf is null for anything else.
     const projectView = projectViewOf(path);
     const override = !!projectView && (await stat(inside(root, projectView)).then(() => true, () => false));
     const base = slugify(String(name));
-    if (!inStream || override || !base || base === file) return { ok: true, hash: sceneHash(next), path, was };
+    if (!projectView || override || !base || base === file) return { ok: true, hash: sceneHash(next), path, was };
     // Never over another scene in the folder, nor onto a name the project uses (that would make it an override).
     // The scene's own entry in the folder (a link is renamed as a link).
     const own = scenePath(root, path);
@@ -197,12 +198,12 @@ export function renameScene(root: string, path: string, hash: string, name: unkn
       if (free === file) return { ok: true, hash: sceneHash(next), path, was }; // its own name already
       // lstat: a link (even a broken one) takes the name too.
       const taken = await lstat(join(dir, `${free}.html`)).then(() => true, () => false);
-      const shadows = await lstat(inside(root, `${where.org}/projects/${where.project}/scenes/${free}.html`)).then(() => true, () => false);
+      const shadows = await lstat(inside(root, projectViewOf(named(free))!)).then(() => true, () => false);
       if (!taken && !shadows) break;
       free = `${base}-${n}`;
     }
     plainName(`${free}.html`);
     await rename(own, join(dir, `${free}.html`));
-    return { ok: true, hash: sceneHash(next), path: `${path.slice(0, path.lastIndexOf("/"))}/${free}.html`, was };
+    return { ok: true, hash: sceneHash(next), path: named(free), was };
   });
 }

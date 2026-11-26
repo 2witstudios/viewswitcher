@@ -6,14 +6,13 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { SHOWS, SHOWS_DIR, type Show } from "@viewswitcher/packs";
-import { fillPlaceholders } from "@viewswitcher/shared";
+import { fillPlaceholders, placeholderVars } from "@viewswitcher/shared";
 
 const starter = resolve(import.meta.dir, "../../server/starter");
-const styles = SHOWS_DIR;
 export const LIBRARY = resolve(process.env.SHOTS_LIBRARY ?? join(tmpdir(), "viewswitcher-site-library"));
 
 /** A show's files filled in as the app fills an org's (the same placeholders, escaped the same way). */
-const fill = (path: string, text: string, s: Show) => fillPlaceholders(path, text, { ORG_ID: s.id, ORG_NAME: s.name, ORG_INITIAL: s.initial, ACCENT: s.accent, GROUND: s.ground });
+const fill = (path: string, text: string, s: Show) => fillPlaceholders(path, text, placeholderVars(s));
 
 export async function buildLibrary(only?: string[]): Promise<string> {
   if (LIBRARY.includes("ViewSwitcher Library")) throw new Error("never write into the real library");
@@ -26,11 +25,11 @@ export async function buildLibrary(only?: string[]): Promise<string> {
     for (const f of await readdir(templates)) if (f.endsWith(".html")) await rm(join(templates, f));
     await rm(join(templates, "_shared/theme.css"));
     await rm(join(templates, "_shared/scene.js"));
-    await cp(join(styles, "_shared"), join(templates, "_shared"), { recursive: true });
-    await cp(join(styles, s.id, "theme.css"), join(templates, "_shared/theme.css"));
-    const views = (await readdir(join(styles, s.id))).filter((f) => f.endsWith(".html"));
+    await cp(join(SHOWS_DIR, "_shared"), join(templates, "_shared"), { recursive: true });
+    await cp(join(SHOWS_DIR, s.id, "theme.css"), join(templates, "_shared/theme.css"));
+    const views = (await readdir(join(SHOWS_DIR, s.id))).filter((f) => f.endsWith(".html"));
     for (const v of s.views) if (!views.includes(`${v.file}.html`)) throw new Error(`${s.id}: packages/packs/shows/${s.id}/${v.file}.html is missing`);
-    for (const f of views) await cp(join(styles, s.id, f), join(templates, f));
+    for (const f of views) await cp(join(SHOWS_DIR, s.id, f), join(templates, f));
     await writeFile(join(templates, "_shared/order.json"), JSON.stringify({ order: s.views.map((v) => v.file) }) + "\n");
     for (const f of ["org.json", "BRAND.md", "templates/_shared/brand/mark.svg", ...views.map((v) => `templates/${v}`)]) {
       const p = join(dir, f);

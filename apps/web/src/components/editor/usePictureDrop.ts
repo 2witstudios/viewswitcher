@@ -10,7 +10,6 @@ import { libraryUrl, replaceableImage, retarget, valueIn } from "@viewswitcher/s
 import type { SceneBase, SceneEdit, SrcEdit } from "@viewswitcher/shared";
 import { type DragEvent as ReactDragEvent, useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
-
 import { toast } from "../ui";
 import { canStart, idsUnsettled, type Made } from "./mode";
 import type { ModeStore } from "./useMode";

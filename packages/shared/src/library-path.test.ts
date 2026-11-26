@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isViewPath, orgOf, parseLibraryPath, projectViewOf, transitionCandidates } from "./index";
+import { isListedFolder, isViewFile, isViewPath, orgOf, parseLibraryPath, projectViewOf, transitionCandidates } from "./index";
 
 const kind = (p: string) => parseLibraryPath(p).kind;
 
@@ -18,6 +18,13 @@ describe("parseLibraryPath", () => {
     expect(parseLibraryPath("daisy/templates/neon/_shared/transition.html")).toMatchObject({ kind: "transition", set: "neon" });
     expect(parseLibraryPath("daisy/templates/neon/assets/bg.jpg")).toMatchObject({ kind: "asset", set: "neon", name: "bg.jpg" });
     expect(parseLibraryPath("daisy/templates/neon/notes/a.html")).toMatchObject({ kind: "other", set: "neon" });
+  });
+
+  test("a hand-made set folder with a dot in its name is still a set (the scan lists it)", () => {
+    expect(parseLibraryPath("daisy/templates/my.set/brb.html")).toMatchObject({ kind: "template", set: "my.set", name: "brb" });
+    expect(parseLibraryPath("daisy/templates/my.set/pack.json")).toMatchObject({ kind: "set", set: "my.set" });
+    expect(parseLibraryPath("daisy/templates/my.set/_shared/transition.html")).toMatchObject({ kind: "transition", set: "my.set" });
+    expect(transitionCandidates("daisy/templates/my.set/brb.html")[0]).toBe("daisy/templates/my.set/_shared/transition.html");
   });
 
   test("the org's _shared files and transition", () => {
@@ -83,6 +90,8 @@ describe("orgOf and projectViewOf", () => {
   test("orgOf is the first segment", () => {
     expect(orgOf("daisy/projects/ld/scenes/teaching.html")).toBe("daisy");
     expect(orgOf("daisy")).toBe("daisy");
+    expect(orgOf("")).toBe("");
+    for (const p of ["daisy/templates/brb.html", "/x", "a//b", "daisy/"]) expect(orgOf(p)).toBe(parseLibraryPath(p).org);
   });
 
   test("a stream's view names the project view it copies; nothing else does", () => {
@@ -103,5 +112,16 @@ describe("transitionCandidates", () => {
 
   test("a template set's view: the set's own first, then the org's", () => {
     expect(transitionCandidates("daisy/templates/neon/brb.html")).toEqual(["daisy/templates/neon/_shared/transition.html", "daisy/templates/_shared/transition.html"]);
+  });
+});
+
+describe("isListedFolder and isViewFile: the scan's own rules", () => {
+  test("folders the scan lists", () => {
+    for (const n of ["neon", "ld-2026", "my.set"]) expect(isListedFolder(n)).toBe(true);
+    for (const n of [".git", "_shared", "_old", "", undefined]) expect(isListedFolder(n)).toBe(false);
+  });
+  test("view files the scan lists", () => {
+    for (const n of ["brb.html", "a.html"]) expect(isViewFile(n)).toBe(true);
+    for (const n of ["brb.HTML", ".brb.html", ".html", "brb.htm", "", undefined]) expect(isViewFile(n)).toBe(false);
   });
 });

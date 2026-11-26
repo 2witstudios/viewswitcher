@@ -60,10 +60,10 @@ describe("showPacks", () => {
     await cp(SHOWS_DIR, dir, { recursive: true });
     await writeFile(join(dir, "nova/main.html"), "<p>NOVA PLAYS</p><p>nova_plays</p>"); // a name it can't make generic
     const left: string[] = [];
-    const packs = await showPacks((id) => left.push(id), SHOWS, dir);
+    const packs = await showPacks({ onError: (id) => left.push(id), dir });
     expect(left).toEqual(["nova"]);
     expect(packs.map((p) => p.id)).toEqual(["fullcount", "grace", "remi", "riverside", "kitchen"]);
-    await expect(showPacks(undefined, SHOWS, dir)).rejects.toThrow(/nova/); // packs:export and the site build still fail on it
+    await expect(showPacks({ dir })).rejects.toThrow(/nova/); // packs:export and the site build still fail on it
     await rm(dir, { recursive: true, force: true });
   });
 });
