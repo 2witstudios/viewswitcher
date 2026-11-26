@@ -6,6 +6,7 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { chmod, mkdir, readdir, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentGuard } from "./agent-guard";
 import { addFromTemplate, customize, duplicate } from "./library";
 import { readNoFollowSync } from "./library/contain";
 import { readGuide } from "./mcp/server";
@@ -94,7 +95,10 @@ describe("a named pipe in the library", () => {
       const r = await loadedFiles(root, ["daisy/templates/stale.html"]);
       expect(r.unreadable).toEqual([]);
       expect(r.complete).toBe(true);
-      expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css", "daisy/templates/shut/x.css"]);
+      // The dangling link's target is listed too: an agent creating it while live is refused as "loaded".
+      expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css", "daisy/templates/_shared/nowhere.css", "daisy/templates/shut/x.css"]);
+      const g = agentGuard({ setting: "not-live", live: true, onAir: { path: "daisy/templates/stale.html", loads: r.files, loadsComplete: r.complete, loadsUnreadable: r.unreadable }, action: { kind: "write", paths: ["daisy/templates/_shared/nowhere.css"] } });
+      expect(g.ok).toBe(false);
     } finally {
       await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o644).catch(() => {});
       await chmod(join(root, "daisy/templates/shut"), 0o755).catch(() => {});
@@ -114,11 +118,16 @@ test("duplicating a view that is a link outside the library is refused, and noth
   expect((await readdir(join(root, "daisy/templates"))).filter((f) => f.includes("copy"))).toEqual([]);
 });
 
-test("a stream's copy of a view keeps the view's permissions", async () => {
+test("a stream's copy of a view keeps the view's permissions, through the umask as cp gives them", async () => {
   await mkdir(join(root, "daisy/projects/q/scenes"), { recursive: true });
   await mkdir(join(root, "daisy/projects/q/streams/s"), { recursive: true });
+  // A mode the umask changes (0o666): the copy has it through the umask, as cp gives it, never looser.
   await writeFile(join(root, "daisy/projects/q/scenes/private.html"), "<title>Private</title>");
-  await chmod(join(root, "daisy/projects/q/scenes/private.html"), 0o600);
+  await chmod(join(root, "daisy/projects/q/scenes/private.html"), 0o666);
   await customize(join(root, "daisy"), "q", "s", "private");
-  expect((await stat(join(root, "daisy/projects/q/streams/s/private.html"))).mode & 0o777).toBe(0o600);
+  expect((await stat(join(root, "daisy/projects/q/streams/s/private.html"))).mode & 0o777).toBe(0o666 & ~process.umask());
+  await writeFile(join(root, "daisy/projects/q/scenes/secret.html"), "<title>Secret</title>");
+  await chmod(join(root, "daisy/projects/q/scenes/secret.html"), 0o600);
+  await customize(join(root, "daisy"), "q", "s", "secret");
+  expect((await stat(join(root, "daisy/projects/q/streams/s/secret.html"))).mode & 0o777).toBe(0o600);
 });

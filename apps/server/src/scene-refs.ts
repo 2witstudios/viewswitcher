@@ -6,9 +6,10 @@
 // switcher's own routes) is left out. Reading text, not running it: a URL a script builds at run time
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
-import { stat } from "node:fs/promises";
+import { lstat, readlink, realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
-import { PathError } from "./paths";
+import { inside, PathError } from "./paths";
 
 const BASE_HOST = "scene.invalid";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -95,13 +96,35 @@ export type Loaded = {
 /** A hash of a file's text, for Loaded.read. */
 export const textHash = (text: string) => Bun.hash(text).toString(36);
 
+/** File-system answers that say for certain a path isn't served (it isn't there, or can't be). */
+const DEFINITE = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG", "EACCES", "EPERM"]);
+
+/**
+ * Where a ref that is a link leads, as library paths, link by link (at most 8): a dangling link's
+ * target would be served for the ref the moment someone created it, like a missing file is. A hop out of
+ * the library ends the chain (/library/ never serves through it).
+ */
+async function linkTargets(root: string, file: string): Promise<string[]> {
+  const out: string[] = [];
+  const realRoot = await realpath(root).catch(() => root);
+  let abs = await Promise.resolve().then(() => inside(root, file)).catch(() => null);
+  for (let hops = 0; abs && hops < 8; hops++) {
+    const s = await lstat(abs).catch(() => null);
+    if (!s?.isSymbolicLink()) break;
+    const next = resolve(dirname(abs), await readlink(abs));
+    const rel = [relative(root, next), relative(realRoot, next)].find((r) => r && !r.startsWith("..") && !isAbsolute(r));
+    if (!rel) break;
+    out.push(rel.split(sep).join("/"));
+    abs = next;
+  }
+  return out;
+}
+
 /**
  * Everything `pages` load, following the pages, stylesheets and scripts they load in turn (a theme's
  * fonts and pictures, a module's imports), at most `limit` files. Files that can't be read are still
  * listed: a missing logo the scene asks for would show the moment an agent created it.
  */
-/** File-system answers that say for certain a path isn't served (it isn't there, or can't be). */
-const DEFINITE = new Set(["ENOENT", "ENOTDIR", "ENAMETOOLONG", "EACCES", "EPERM"]);
 
 export async function loadedFiles(
   root: string, pages: string[], limit = 200,
@@ -135,6 +158,12 @@ export async function loadedFiles(
           (e) => !(e instanceof PathError || DEFINITE.has((e as NodeJS.ErrnoException)?.code ?? "")),
         );
       if (served) unreadable.push(file);
+      // A link that leads nowhere yet: where it points is listed too, so creating that is guarded like the ref.
+      for (const target of await linkTargets(root, file)) {
+        if (seen.has(target) || found.length >= limit) continue;
+        seen.add(target);
+        found.push(target);
+      }
       continue;
     }
     read[file] = textHash(text);
