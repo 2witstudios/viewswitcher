@@ -1,7 +1,8 @@
 import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { api } from "./api";
+import { queryClient } from "./live";
 
 export function useOrgs() {
   return useQuery({ queryKey: ["library", "orgs"], queryFn: api.orgs });
@@ -14,6 +15,17 @@ export function useOrgId(): string | undefined {
 
 export function useLibrary(org: string | undefined) {
   return useQuery({ queryKey: ["library", org], queryFn: () => api.library(org!), enabled: !!org });
+}
+
+/**
+ * A change made here (a new stream, project or view, a copy, a rename, a revert), then the library
+ * as it is after it. Await this before going to what changed: the watcher's own refresh comes a
+ * moment later, and until then the page would say the new stream or view doesn't exist.
+ */
+export async function refreshed<T>(change: Promise<T>, client: QueryClient = queryClient): Promise<T> {
+  const result = await change;
+  await client.invalidateQueries({ queryKey: ["library"] });
+  return result;
 }
 
 const LAST_ORG = "viewswitcher.org";

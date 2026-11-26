@@ -3,7 +3,7 @@ import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { refreshed, templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { DECK, UPRIGHT, useMedia } from "../lib/media";
 import { queryClient, useLive } from "../lib/live";
@@ -135,7 +135,7 @@ export function Sidebar() {
         <NewStream
           onClose={() => setDialog(null)}
           onSubmit={async (name, date) => {
-            const r = await api.createStream(org, dialog.projectId, name, date);
+            const r = await refreshed(api.createStream(org, dialog.projectId, name, date));
             navigate({ to: "/$org/p/$projectId/$streamId", params: { org, ...r } });
           }}
         />
@@ -255,7 +255,7 @@ function NewProject({ org, groups, onClose }: { org: string; groups: ReturnType<
   // The org's own templates start ticked (not "chapter", a one-off); a template pack's, unticked.
   const [picked, setPicked] = useState<string[]>(groups[0]?.set === null ? groups[0].templates.map(templateId).filter((t) => t !== "chapter") : []);
   return (
-    <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => api.createProject(org, name, picked).then(() => {})}>
+    <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => refreshed(api.createProject(org, name, picked)).then(() => {})}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Spring series" /></label>
       <div className="field">
         Scenes

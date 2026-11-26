@@ -7,7 +7,7 @@ import { PageHead } from "../../../components/PageHead";
 import { OnAirHero, SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
-import { templateGroups, templateId, useLibrary } from "../../../lib/library";
+import { refreshed, templateGroups, templateId, useLibrary } from "../../../lib/library";
 import { useLive } from "../../../lib/live";
 
 export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
@@ -53,7 +53,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 menu={[
                   {
                     label: "Duplicate and edit",
-                    run: () => attempt(async () => openEditor((await api.duplicate(s.path)).path, { rename: true })),
+                    run: () => attempt(async () => openEditor((await refreshed(api.duplicate(s.path))).path, { rename: true })),
                   },
                   "divider",
                   ...fileItems(s.path, "This stream only"),
@@ -63,7 +63,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                         hint: "Deletes this stream's copy",
                         run: async () => {
                           if (!confirm(`Delete this stream's ${s.label} and use the project's?`)) return;
-                          await attempt(() => api.revert(org, projectId, streamId, s.name), "Back to the project version");
+                          await attempt(() => refreshed(api.revert(org, projectId, streamId, s.name)), "Back to the project version");
                         },
                       }]
                     : []),
@@ -84,7 +84,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                     ...(all.length > 1 ? [{ heading: g.name }] : []),
                     ...g.templates.map((t) => ({
                       label: t.label,
-                      run: () => attempt(async () => openEditor((await api.addFromTemplate(org, templateId(t), projectId, streamId)).path)),
+                      run: () => attempt(async () => openEditor((await refreshed(api.addFromTemplate(org, templateId(t), projectId, streamId))).path)),
                     })),
                   ])}
                 />
@@ -107,14 +107,14 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                 editChoices={[
                   {
                     label: "Edit for this stream",
-                    run: () => attempt(async () => openEditor((await api.customize(org, projectId, streamId, s.name)).path)),
+                    run: () => attempt(async () => openEditor((await refreshed(api.customize(org, projectId, streamId, s.name))).path)),
                   },
                   { label: "Edit for every stream", run: () => openEditor(s.path) },
                 ]}
                 menu={[
                   {
                     label: "Customize for this stream",
-                    run: () => attempt(() => api.customize(org, projectId, streamId, s.name), `${s.label} is now this stream's own copy`),
+                    run: () => attempt(() => refreshed(api.customize(org, projectId, streamId, s.name)), `${s.label} is now this stream's own copy`),
                   },
                   "divider",
                   ...fileItems(s.path, "Every stream"),
@@ -142,12 +142,12 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
                         hint: "Deletes this project's copy",
                         run: async () => {
                           if (!confirm(`Delete ${project.name}'s own transition and use the org's?`)) return;
-                          await attempt(() => api.revertTransition(org, projectId), "Back to the org's transition");
+                          await attempt(() => refreshed(api.revertTransition(org, projectId)), "Back to the org's transition");
                         },
                       }]
                     : [{
                         label: "Customize for this project",
-                        run: () => attempt(() => api.customizeTransition(org, projectId), `${project.name} now has its own transition`),
+                        run: () => attempt(() => refreshed(api.customizeTransition(org, projectId)), `${project.name} now has its own transition`),
                       }]),
                   "divider",
                   ...fileItems(transition, project.transition ? "This project" : "All projects without their own"),
