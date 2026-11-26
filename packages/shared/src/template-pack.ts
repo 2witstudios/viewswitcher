@@ -276,6 +276,35 @@ function remoteScripts(html: string): string[] {
 }
 
 /**
+ * The placeholders whose value is free text a person typed (a show's name and its initial), which
+ * can hold quotes, "&" or "<". The others are a slug, a color or a URL the switcher makes, which
+ * read the same in any of these places.
+ */
+const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
+
+/**
+ * Text placeholders in code: an inline <script> or <style>, an on… attribute, or a .js file. A
+ * value is HTML-escaped in a page and as typed in .js (TEXT_TYPES), right for text and attributes
+ * but not inside code: "O'Brien" ends a JS string, "R&amp;B" shows in a CSS content string.
+ */
+function textInCode(texts: Record<string, string>): { placeholder: string; where: string }[] {
+  const found: { placeholder: string; where: string }[] = [];
+  const note = (text: string, where: string) => {
+    for (const p of placeholdersIn(text)) if ((TEXT_PLACEHOLDERS as readonly string[]).includes(p)) found.push({ placeholder: p, where });
+  };
+  for (const [path, text] of Object.entries(texts)) {
+    const e = extensionOf(path);
+    if (e === ".js") note(text, path);
+    if (e !== ".html" && e !== ".svg") continue;
+    for (const el of scanElements(text)) {
+      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
+      for (const a of el.attrs) if (/^on/i.test(a.name) && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
+    }
+  }
+  return found;
+}
+
+/**
  * Whether the planned files make a pack: pack.json, a view for each name it lists, and placeholders
  * ViewSwitcher fills. `texts` holds the text of pack.json, every .html and every .css/.js/.svg.
  * Problems a person can live with (a view not listed, a placeholder not declared) are warnings.
@@ -308,6 +337,16 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   if (unknown.length) warnings.push(`${unknown.map((p) => `{{${p}}}`).join(", ")} ${unknown.length === 1 ? "isn't a placeholder" : "aren't placeholders"} ViewSwitcher fills, so ${unknown.length === 1 ? "it stays" : "they stay"} as typed`);
   const undeclared = [...used].filter((p) => (PACK_PLACEHOLDERS as readonly string[]).includes(p) && !manifest.placeholders.includes(p as PackPlaceholder));
   if (undeclared.length) warnings.push(`pack.json doesn't list ${undeclared.map((p) => `{{${p}}}`).join(", ")} in placeholders (filled anyway)`);
+
+  const coded = textInCode(texts);
+  if (coded.length) {
+    const names = [...new Set(coded.map((c) => `{{${c.placeholder}}}`))].join(", ");
+    const where = [...new Set(coded.map((c) => c.where))];
+    warnings.push(
+      `${names} ${coded.length === 1 ? "is" : "are"} in a script, a style or an on… attribute (${where.slice(0, 5).join("; ")}${where.length > 5 ? "…" : ""}): ` +
+        "a show's name is filled in there as text for the page, so a name like O'Brien or R&B can break that view for that show. Keep placeholders in text and attributes.",
+    );
+  }
 
   // Links to the pack's own files that aren't in it.
   const missing = new Set<string>();

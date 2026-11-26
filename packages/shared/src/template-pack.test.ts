@@ -130,6 +130,27 @@ describe("checkPack", () => {
     expect(r.ok && r.scripts.remote).toEqual(["https://cdn.example/a.js", "https://cdn.example/b.js"]);
   });
 
+  test("a show's name or initial in a script, a style, an on… attribute or a .js file is a warning", () => {
+    const r = checkPack(planned(basic), texts({
+      "templates/main.html": `<html><head><style>.n::after { content: "{{ORG_NAME}}" }</style></head><body><h1>{{ORG_NAME}}</h1><button onclick="say('{{ORG_INITIAL}}')">x</button><script>const show = "{{ORG_NAME}}";</script></body></html>`,
+      "_shared/scene.js": `document.title = "{{ORG_NAME}}";`,
+    }));
+    if (!r.ok) throw new Error(r.error);
+    const w = r.warnings.find((x) => x.includes("in a script, a style or an on… attribute"));
+    expect(w).toBeDefined();
+    expect(w).toStartWith("{{ORG_NAME}}, {{ORG_INITIAL}} are in a script");
+    for (const where of ["templates/main.html <style>", "templates/main.html onclick", "templates/main.html <script>", "_shared/scene.js"]) expect(w).toContain(where);
+    expect(w).toContain("Keep placeholders in text and attributes");
+  });
+
+  test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {
+    const r = checkPack(planned(basic), texts({
+      "templates/main.html": `<html><head><style>:root { --accent: {{ACCENT}}; --ground: {{GROUND}} }</style></head><body><h1 title="{{ORG_NAME}}">{{ORG_NAME}}</h1><img alt="{{ORG_INITIAL}}" src="{{PACK}}/_shared/x.png" onerror="this.src='{{PACK}}/_shared/y.png'"><script>const org = "{{ORG_ID}}";</script></body></html>`,
+      "_shared/scene.js": `fetch("{{PACK}}/_shared/data.json");`,
+    }));
+    expect(r.ok && r.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+  });
+
   test("javascript: links count as code", () => {
     const r = checkPack(planned(basic), texts({ "templates/main.html": `<a href=" JavaScript:alert(1)">x</a>` }));
     expect(r.ok && r.scripts.inline).toEqual(["templates/main.html"]);
