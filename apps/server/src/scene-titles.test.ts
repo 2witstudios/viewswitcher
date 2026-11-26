@@ -6,6 +6,8 @@ import { createSceneTitles, type FileStamp } from "./scene-titles";
 function disk() {
   const files = new Map<string, { text: string; stamp: FileStamp }>();
   const reads = new Map<string, number>();
+  /** Paths whose next read fails (EACCES, EMFILE under load) though their stat works. */
+  const failNextRead = new Set<string>();
   let ino = 1;
   const titles = createSceneTitles({
     stat: async (abs) => {
@@ -15,6 +17,7 @@ function disk() {
     },
     read: async (abs) => {
       reads.set(abs, (reads.get(abs) ?? 0) + 1);
+      if (failNextRead.delete(abs)) throw new Error("EMFILE");
       const f = files.get(abs);
       if (!f) throw new Error("ENOENT");
       return f.text;
@@ -30,6 +33,7 @@ function disk() {
       files.set(abs, { text: `<title>${title}</title>`, stamp: { ...f.stamp, ...change } });
     },
     reads: (abs: string) => reads.get(abs) ?? 0,
+    failNextRead: (abs: string) => failNextRead.add(abs),
   };
 }
 
@@ -95,8 +99,16 @@ describe("scene titles", () => {
     expect(await d.titles.titleOf("/lib/o/streams/s8/c.html")).toBe("changed");
   });
 
-  test("a file that can't be stat'ed or read has no title", async () => {
+  test("a file that can't be stat'ed has no title", async () => {
     const d = disk();
     expect(await d.titles.titleOf("/lib/o/gone.html")).toBe("");
+  });
+
+  test("a read that fails isn't kept: the next scan reads the file again and gets its title", async () => {
+    const d = disk();
+    d.put("/lib/o/a.html", "Intro");
+    d.failNextRead("/lib/o/a.html");
+    expect(await d.titles.titleOf("/lib/o/a.html")).toBe("");
+    expect(await d.titles.titleOf("/lib/o/a.html")).toBe("Intro"); // same stamp, read again
   });
 });
