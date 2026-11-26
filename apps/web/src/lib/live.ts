@@ -1,19 +1,86 @@
 // One WebSocket to the server: live state (on air, OBS, warnings) and file-change versions.
 import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { clientKind, connectorUrl } from "./client-kind";
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } } });
 
-type Live = {
+export type Live = {
   connected: boolean;
   state: LiveState | null;
   /** Bumped per library path when its file changes; `*` bumps when any org's shared theme changes. */
   versions: Record<string, number>;
 };
 
-let live: Live = { connected: false, state: null, versions: {} };
+/** A value that changes over time, read by components a part at a time (useStore). */
+export type Store<T> = { get: () => T; set: (next: T) => void; subscribe: (listener: () => void) => () => void };
+
+export function createStore<T>(initial: T): Store<T> {
+  let value = initial;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next) => {
+      value = next;
+      listeners.forEach((l) => l());
+    },
+    subscribe: (l) => (listeners.add(l), () => void listeners.delete(l)),
+  };
+}
+
+/**
+ * The part of a store's value a component uses: it re-renders only when that part changes (by
+ * `isEqual`, Object.is unless given). The selector may be a new function on every render.
+ */
+export function useStore<T, S>(store: Store<T>, selector: (value: T) => S, isEqual: (a: S, b: S) => boolean = Object.is): S {
+  const last = useRef<{ value: T; selector: (value: T) => S; selected: S } | null>(null);
+  const read = () => {
+    const value = store.get();
+    const l = last.current;
+    if (l && l.value === value && l.selector === selector) return l.selected;
+    const next = selector(value);
+    // An equal selection keeps the one returned before, so React sees nothing changed and skips the render.
+    const selected = l && isEqual(l.selected, next) ? l.selected : next;
+    last.current = { value, selector, selected };
+    return selected;
+  };
+  return useSyncExternalStore(store.subscribe, read, read);
+}
+
+/** Equal when both have the same keys with Object.is-equal values: for a selector that picks several parts. */
+export function shallow<S>(a: S, b: S): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is((a as any)[k], (b as any)[k]));
+}
+
+/**
+ * `next`, keeping each part of `prev` that's equal to its counterpart in `next` (values as JSON
+ * carries them). Every state message is a new object from the socket; this way a part that didn't
+ * change (OBS's status, what's on air) is the same object as before, so a component that reads only
+ * that part doesn't re-render.
+ */
+export function keepUnchanged<T>(prev: T, next: T): T {
+  if (Object.is(prev, next)) return prev;
+  if (typeof prev !== "object" || typeof next !== "object" || !prev || !next || Array.isArray(prev) !== Array.isArray(next)) return next;
+  if (Array.isArray(next)) {
+    const p = prev as unknown[];
+    const merged = next.map((v, i) => keepUnchanged(p[i], v));
+    return (merged.length === p.length && merged.every((v, i) => v === p[i]) ? p : merged) as T;
+  }
+  const p = prev as Record<string, unknown>, n = next as Record<string, unknown>;
+  const merged: Record<string, unknown> = {};
+  let same = Object.keys(p).length === Object.keys(n).length;
+  for (const k of Object.keys(n)) {
+    merged[k] = keepUnchanged(p[k], n[k]);
+    if (merged[k] !== p[k] || !(k in p)) same = false;
+  }
+  return (same ? p : merged) as T;
+}
+
+const store = createStore<Live>({ connected: false, state: null, versions: {} });
 
 type PreviewListener = (path: string, hash: string, edit: SceneEdit, order: { session: string; seq: number }) => void;
 const previewListeners = new Set<PreviewListener>();
@@ -22,11 +89,7 @@ export function onScenePreview(listener: PreviewListener) {
   previewListeners.add(listener);
   return () => void previewListeners.delete(listener);
 }
-const listeners = new Set<() => void>();
-const set = (patch: Partial<Live>) => {
-  live = { ...live, ...patch };
-  listeners.forEach((l) => l());
-};
+const set = (patch: Partial<Live>) => store.set({ ...store.get(), ...patch });
 
 /** Running inside the ViewSwitcher iPad app (by its user agent; the Mac app's window is not this). */
 export const inApp = typeof navigator !== "undefined" && clientKind(navigator.userAgent) === "ipad";
@@ -59,6 +122,18 @@ export function caughtUp(versions: Record<string, number>): Record<string, numbe
   return { ...versions, "*": (versions["*"] ?? 0) + 1 };
 }
 
+/** Live state after a state message or a library change from the socket. */
+export function nextLive(live: Live, msg: Extract<ServerMessage, { t: "state" | "library:changed" }>): Live {
+  if (msg.t === "state") return { ...live, state: keepUnchanged(live.state, msg.state) };
+  const versions = { ...live.versions };
+  for (const p of msg.paths) {
+    versions[p] = (versions[p] ?? 0) + 1;
+    // An org's or a template set's shared theme: every cover may use it.
+    if (p.includes("/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
+  }
+  return { ...live, versions };
+}
+
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -76,22 +151,15 @@ function connect() {
     const msg = JSON.parse(e.data) as ServerMessage;
     if (msg.t === "hello") {
       if (missedChanges(heard, msg)) {
-        set({ versions: caughtUp(live.versions) });
+        set({ versions: caughtUp(store.get().versions) });
         queryClient.invalidateQueries({ queryKey: ["library"] });
       }
       heard = { server: msg.server, seq: msg.seq };
     }
-    if (msg.t === "state") set({ state: msg.state });
+    if (msg.t === "state" || msg.t === "library:changed") store.set(nextLive(store.get(), msg));
     if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.hash, msg.edit, { session: msg.session, seq: msg.seq }));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
     if (msg.t === "library:changed") {
-      const versions = { ...live.versions };
-      for (const p of msg.paths) {
-        versions[p] = (versions[p] ?? 0) + 1;
-        // An org's or a template set's shared theme: every cover may use it.
-        if (p.includes("/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
-      }
-      set({ versions });
       queryClient.invalidateQueries({ queryKey: ["library"] });
       if (heard) heard = { ...heard, seq: msg.seq };
     }
@@ -99,11 +167,17 @@ function connect() {
 }
 if (typeof window !== "undefined") connect();
 
-export function useLive(): Live {
-  return useSyncExternalStore(
-    (l) => (listeners.add(l), () => listeners.delete(l)),
-    () => live,
-  );
+/**
+ * The part of live state a component uses, e.g. `useLive((l) => l.state?.onAir)`: it re-renders only
+ * when that part changes, not for every state message (warnings, OBS, the agent) or file change.
+ */
+export function useLive<S>(selector: (live: Live) => S, isEqual?: (a: S, b: S) => boolean): S {
+  return useStore(store, selector, isEqual);
+}
+
+/** The part of a scene url that changes with the file and the shared theme: a tile selects only this. */
+export function sceneVersion(path: string, versions: Record<string, number>) {
+  return `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
 }
 
 /**
@@ -112,7 +186,7 @@ export function useLive(): Live {
  */
 /** `bridge`: with the bridge the program page talks to the sandboxed scene through. */
 export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
-  const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
+  const v = sceneVersion(path, versions);
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;
 }
 

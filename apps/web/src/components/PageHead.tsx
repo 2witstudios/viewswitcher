@@ -9,9 +9,10 @@ import { SetupCard } from "./SetupCard";
 import { attempt } from "./ui";
 
 export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) {
-  const { state, connected } = useLive();
-  const obs = state?.obs;
-  const onAir = state?.onAir;
+  const connected = useLive((l) => l.connected);
+  const obs = useLive((l) => l.state?.obs);
+  const onAir = useLive((l) => l.state?.onAir);
+  const usb = useLive((l) => l.state?.usb);
   const openEditor = useOpenEditor();
   const libraryOpen = useLibraryOpen();
   return (
@@ -53,21 +54,28 @@ export function PageHead({ crumb, title }: { crumb: ReactNode; title: string }) 
               <span className="dot" />{obs?.auth === "missing" ? "OBS needs a password" : obs?.auth === "wrong" ? "OBS refused the password" : "OBS offline"}
             </span>
           )}
-          {!appLink && state?.usb.attached && (
+          {!appLink && usb?.attached && (
             // Named for the device plugged in (iPhone or iPad); an unknown one reads as before.
-            <span className={`pill link${state.usb.connected ? "" : " off"}`} title={state.usb.connected ? "USB-C" : `Open ViewSwitcher on the ${state.usb.device ?? "iPad"}`}>
-              {(state.usb.device ?? "iPad").toUpperCase()} · {state.usb.connected ? "USB" : "OPEN APP"}
+            <span className={`pill link${usb.connected ? "" : " off"}`} title={usb.connected ? "USB-C" : `Open ViewSwitcher on the ${usb.device ?? "iPad"}`}>
+              {(usb.device ?? "iPad").toUpperCase()} · {usb.connected ? "USB" : "OPEN APP"}
             </span>
           )}
         </div>
       </header>
-      {!!state?.warnings.length && (
-        <div className="warnings" role="alert">
-          {state.warnings.map((w) => <span key={w}>{w}</span>)}
-        </div>
-      )}
+      <Warnings />
       <SetupCard />
     </>
+  );
+}
+
+/** Its own component: placement warnings come and go while a box is dragged, and only this needs them. */
+function Warnings() {
+  const warnings = useLive((l) => l.state?.warnings);
+  if (!warnings?.length) return null;
+  return (
+    <div className="warnings" role="alert">
+      {warnings.map((w) => <span key={w}>{w}</span>)}
+    </div>
   );
 }
 

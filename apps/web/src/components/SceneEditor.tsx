@@ -43,8 +43,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const navigate = useNavigate();
   const router = useRouter();
   const { data: library } = useLibrary(org);
-  const { state } = useLive();
-  const onAir = state?.onAir?.path === path;
+  const onAir = useLive((l) => l.state?.onAir?.path === path);
   const onAirRef = useRef(onAir);
   onAirRef.current = onAir;
   const place = placeOf(library, path);

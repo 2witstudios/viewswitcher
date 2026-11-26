@@ -19,10 +19,12 @@ const dismissed = (key: string) => {
 
 /** Shown while OBS, or the switcher's scene and sources in it, are missing or out of order. */
 export function SetupCard() {
-  const { state, connected } = useLive();
+  const connected = useLive((l) => l.connected);
+  const obs = useLive((l) => l.state?.obs);
+  const obsSetup = useLive((l) => l.state?.obsSetup ?? null);
   const [busy, setBusy] = useState(false);
   const [, rerender] = useState(0);
-  const card = connected && state ? setupCard(state) : null;
+  const card = connected && obs ? setupCard({ obs, obsSetup }) : null;
   if (!card || dismissed(cardKey(card))) return null;
 
   const hide = () => {
@@ -32,8 +34,8 @@ export function SetupCard() {
     rerender((n) => n + 1);
   };
   const setUp = async () => {
-    const live = state?.obs.streaming || state?.obs.recording;
-    if (live && !confirm(`OBS is ${state?.obs.streaming ? "streaming" : "recording"}. Set up the ViewSwitcher scene anyway? OBS will stay on the scene it's showing now.`)) return;
+    const live = obs?.streaming || obs?.recording;
+    if (live && !confirm(`OBS is ${obs?.streaming ? "streaming" : "recording"}. Set up the ViewSwitcher scene anyway? OBS will stay on the scene it's showing now.`)) return;
     setBusy(true);
     try {
       const r = await api.setupObs();

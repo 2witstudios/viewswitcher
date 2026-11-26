@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
   component: function StreamPage() {
     const { org, projectId, streamId } = Route.useParams();
     const { data } = useLibrary(org);
-    const { state } = useLive();
+    const onAirPath = useLive((l) => l.state?.onAir?.path);
     const [adding, setAdding] = useState(false);
     const openEditor = useOpenEditor();
 
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({
 
     const { own, shared } = resolveStream(project, stream);
     const transition = project.transition ?? data.transition;
-    const onAirPath = state?.onAir?.path;
     const goLive = (s: Scene) => () =>
       attempt(() => api.putOnAir({ path: s.path, label: `${s.label} · ${stream.name}`, projectId, streamId }));
     const fileItems = (path: string, hint: string): MenuItem[] => [
