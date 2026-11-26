@@ -48,6 +48,19 @@ describe("viewHashes (sent with a library change)", () => {
     expect(await viewHashes(root, [copy])).toEqual({ [copy]: r.hash });
     await rm(join(root, copy));
   });
+  test("a named pipe named like a view gives no hash and never hangs (the watcher's flush waits on this)", async () => {
+    const pipe = "acme/templates/pipe.html";
+    expect(Bun.spawnSync(["mkfifo", join(root, pipe)]).exitCode).toBe(0);
+    try {
+      const h = await Promise.race([viewHashes(root, [pipe, SCENE]), Bun.sleep(3000).then(() => null)]);
+      expect(h).not.toBeNull();
+      expect(Object.keys(h!)).toEqual([SCENE]);
+      await expect(Promise.race([readForEdit(root, pipe), Bun.sleep(3000).then(() => "hung")])).rejects.toThrow();
+    } finally {
+      await rm(join(root, pipe), { force: true });
+    }
+  });
+
   test("only views and transitions it can read inside the library; a big batch only up to its limit", async () => {
     const away = await mkdtemp(join(tmpdir(), "vs-edit-away-"));
     try {

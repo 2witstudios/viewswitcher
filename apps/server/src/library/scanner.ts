@@ -20,8 +20,8 @@
 // switcher's routes and the MCP server, so both share them and their lifetime is the server's; a
 // test makes its own and shares nothing with another.
 import type { Dirent } from "node:fs";
-import { constants, realpathSync } from "node:fs";
-import { type FileHandle, open, readdir, readFile, stat } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
@@ -29,7 +29,10 @@ import { exists, readOrg } from "../library";
 import { limit } from "../limit";
 import { inside, plainName } from "../paths";
 import { createSceneTitles } from "../scene-titles";
+import { readNoFollow, withNoLinks } from "./contain";
 import { resolveInLibrary } from "./contain";
+
+export { readNoFollow };
 import { dirs as listDirs, type Io, readJson as readJsonFile } from "./read";
 
 const KINDS: Record<string, AssetKind> = {
@@ -37,31 +40,6 @@ const KINDS: Record<string, AssetKind> = {
   ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video",
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
-
-/**
- * No link anywhere in the path: macOS's O_NOFOLLOW_ANY (0x20000000, not in Node's constants), so a
- * folder swapped for a link after the scan checked it gives ELOOP too. Elsewhere, the last segment only.
- * (Together with O_NOFOLLOW, macOS refuses the open with EINVAL.)
- */
-export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
-
-/**
- * `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS) and it's a plain
- * file: `abs` must be a real path. O_NONBLOCK so a named pipe or a device named like a view can't hang
- * the open; it's refused right after, by its type.
- */
-async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
-  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
-  try {
-    if (!(await f.stat()).isFile()) throw new Error("not a plain file");
-    return await use(f);
-  } finally {
-    await f.close();
-  }
-}
-
-/** A file's text, read only when no part of `abs` is a link. */
-export const readNoFollow = (abs: string) => withNoLinks(abs, (f) => f.readFile("utf8"));
 
 /**
  * The scene-title cache's file access: the stamp and the text both through a no-link open, so a title

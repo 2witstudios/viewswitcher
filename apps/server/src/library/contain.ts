@@ -10,8 +10,8 @@
 //   folder that isn't there yet will be made inside.
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
-import { existsSync, realpathSync } from "node:fs";
-import { lstat, realpath } from "node:fs/promises";
+import { constants, existsSync, realpathSync } from "node:fs";
+import { type FileHandle, lstat, open, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
 
@@ -107,3 +107,32 @@ export function realLibraryPath(libraryRoot: string, path: string): string {
     return path;
   }
 }
+
+/**
+ * No link anywhere in the path: macOS's O_NOFOLLOW_ANY (0x20000000, not in Node's constants), so a
+ * folder swapped for a link after the scan checked it gives ELOOP too. Elsewhere, the last segment only.
+ * (Together with O_NOFOLLOW, macOS refuses the open with EINVAL.)
+ */
+export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
+
+/**
+ * `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS) and it's a plain
+ * file: `abs` must be a real path (resolveInLibrary gives one). O_NONBLOCK so a named pipe or a device
+ * named like a view can't hang the open; it's refused right after, by its type. Every read of a library
+ * file the switcher reads in full on its own (titles, hashes, the editor's copy, a pack install) uses this.
+ */
+export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
+  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
+  try {
+    if (!(await f.stat()).isFile()) throw new Error("not a plain file");
+    return await use(f);
+  } finally {
+    await f.close();
+  }
+}
+
+/** A file's text, read only when no part of `abs` is a link and it's a plain file. */
+export const readNoFollow = (abs: string) => withNoLinks(abs, (f) => f.readFile("utf8"));
+
+/** A file's bytes, the same way. */
+export const readNoFollowBytes = (abs: string) => withNoLinks(abs, async (f) => new Uint8Array(await f.readFile()));

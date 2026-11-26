@@ -9,13 +9,13 @@
 // 3. remove a set: delete its folder, unless scenes made from it still use its theme and pictures:
 //    then only its views and pack.json go, so those scenes keep their look.
 import { createHash, randomBytes } from "node:crypto";
-import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, realpath, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
-import { libraryStaging, resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
+import { libraryStaging, readNoFollow, readNoFollowBytes, resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
 import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
@@ -59,15 +59,22 @@ async function freeSet(orgDir: string, id: string) {
   return plainName(name);
 }
 
-/** Copy `raw` to `dest` with every text file filled in. Only plain files: staging wrote them so, never links. */
+/**
+ * Copy `raw` to `dest` with every text file filled in. Staging wrote plain files and folders only, so
+ * each is read from raw's real path with no link anywhere below it (contain.ts readNoFollowBytes): a
+ * file or folder swapped for a link since is refused, never followed.
+ */
 async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
+  const changed = (f: string) => new PackError(`"${f}" changed in staging. Drop the pack again.`);
+  if (!(await lstat(raw)).isDirectory()) throw changed("raw");
+  const realRaw = await realpath(raw);
   for (const f of files) {
-    const from = inside(raw, f);
-    if (!(await lstat(from)).isFile()) throw new PackError(`"${f}" changed in staging. Drop the pack again.`);
+    const bytes = await readNoFollowBytes(inside(realRaw, f)).catch(() => {
+      throw changed(f);
+    });
     const to = inside(dest, installedPath(f));
     await mkdir(dirname(to), { recursive: true });
-    if (isTextFile(f)) await writeFile(to, fillPlaceholders(f, await readFile(from, "utf8"), vars), { flag: "wx" });
-    else await writeFile(to, new Uint8Array(await readFile(from)), { flag: "wx" });
+    await writeFile(to, isTextFile(f) ? fillPlaceholders(f, new TextDecoder().decode(bytes), vars) : bytes, { flag: "wx" });
   }
 }
 
@@ -177,7 +184,7 @@ const hash = (s: string) => createHash("sha256").update(s.replace(/\r\n/g, "\n")
 export async function installPack(libraryRoot: string, orgId: string, token: unknown): Promise<{ set: string }> {
   if (!tokenOk(token)) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   const dir = await stageDir(libraryRoot, orgId, token);
-  const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
+  const meta = await readNoFollow(join(dir, "meta.json")).then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   if (meta.org !== orgId) throw new PackError("That pack was checked for another show. Drop it again here.");
   const orgDir = inside(libraryRoot, plainName(orgId));
@@ -227,7 +234,7 @@ async function scenesUsing(libraryRoot: string, orgId: string, set: string): Pro
   // Linked scenes too: a scene that is a link still uses the set through it. One that leads outside the library isn't read (contain.ts).
   const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
   const textOf = (rel: string) =>
-    resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects/${rel}`).then((abs) => readFile(abs, "utf8")).catch(() => "");
+    resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects/${rel}`).then((abs) => readNoFollow(abs)).catch(() => "");
   const uses = await Promise.all(scenes.map((rel) => read(() => textOf(rel)).then((t) => t.includes(needle) || t.includes(encoded))));
   return uses.filter(Boolean).length;
 }
