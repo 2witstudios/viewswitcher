@@ -1,9 +1,9 @@
 // The library's one real-path rule (contain.ts), on a real folder with real links.
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { realLibraryPath, resolveInLibrary } from "./contain";
+import { plainStateFolder, realLibraryPath, resolveInLibrary } from "./contain";
 
 const library = mkdtempSync(join(tmpdir(), "vs-contain-"));
 const outside = mkdtempSync(join(tmpdir(), "vs-contain-out-"));
@@ -84,5 +84,41 @@ describe("a path that can't be read", () => {
       chmodSync(join(library, "daisy/locked"), 0o755);
       chmodSync(join(library, "daisy/assets/sealed.png"), 0o644);
     }
+  });
+});
+
+describe("plainStateFolder", () => {
+  const lib = () => mkdtempSync(join(tmpdir(), "vs-state-"));
+  const at = new Date("2026-11-26T08:00:00.000Z");
+
+  test("a plain folder, or none yet, is left as it is", async () => {
+    const empty = lib();
+    expect(await plainStateFolder(empty, at)).toBeNull();
+    expect(existsSync(join(empty, ".viewswitcher"))).toBe(false);
+    const plain = lib();
+    mkdirSync(join(plain, ".viewswitcher"));
+    writeFileSync(join(plain, ".viewswitcher", "state.json"), "{}");
+    expect(await plainStateFolder(plain, at)).toBeNull();
+    expect(readFileSync(join(plain, ".viewswitcher", "state.json"), "utf8")).toBe("{}");
+  });
+
+  test("a link is moved aside, never followed: what it points at is untouched", async () => {
+    const root = lib();
+    const elsewhere = mkdtempSync(join(tmpdir(), "vs-elsewhere-"));
+    writeFileSync(join(elsewhere, "keep.txt"), "mine");
+    symlinkSync(elsewhere, join(root, ".viewswitcher"));
+    const aside = await plainStateFolder(root, at);
+    expect(aside).toBe(join(root, ".viewswitcher.moved-aside-2026-11-26T08-00-00-000Z"));
+    expect(lstatSync(aside!).isSymbolicLink()).toBe(true); // kept, as the link it was
+    expect(existsSync(join(root, ".viewswitcher"))).toBe(false); // the library makes a plain one next
+    expect(readFileSync(join(elsewhere, "keep.txt"), "utf8")).toBe("mine");
+  });
+
+  test("a file where the folder should be is moved aside too", async () => {
+    const root = lib();
+    writeFileSync(join(root, ".viewswitcher"), "not a folder");
+    const aside = await plainStateFolder(root, at);
+    expect(readFileSync(aside!, "utf8")).toBe("not a folder");
+    expect(existsSync(join(root, ".viewswitcher"))).toBe(false);
   });
 });

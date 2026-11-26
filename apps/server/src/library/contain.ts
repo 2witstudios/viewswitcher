@@ -11,7 +11,7 @@
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
 import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
-import { type FileHandle, lstat, open, realpath } from "node:fs/promises";
+import { type FileHandle, lstat, open, realpath, rename } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
 
@@ -116,6 +116,22 @@ async function plainStaging(dir: string): Promise<string> {
     if (s && !s.isDirectory()) throw new PathError("A staging folder (.viewswitcher/staging) is a link or a file; the switcher only stages into a plain folder in the library");
   }
   return at;
+}
+
+/**
+ * The library's own state folder (<library>/.viewswitcher: state.json, settings.json, devices.json,
+ * kit.json) as a plain folder, made so at startup before anything reads or writes it. A cloned library
+ * can carry a link (or a file) there; the switcher would write its state and pairings wherever it
+ * points. So a link or a file is moved aside, kept and named in the log, and the folder starts empty:
+ * never followed, never deleted. Returns where it was moved, or null when there was nothing to move.
+ */
+export async function plainStateFolder(libraryRoot: string, now = new Date()): Promise<string | null> {
+  const at = join(libraryRoot, ".viewswitcher");
+  const s = await lstat(at).catch(() => null);
+  if (!s || s.isDirectory()) return null;
+  const aside = `${at}.moved-aside-${now.toISOString().replace(/[:.]/g, "-")}`;
+  await rename(at, aside);
+  return aside;
 }
 
 /**
