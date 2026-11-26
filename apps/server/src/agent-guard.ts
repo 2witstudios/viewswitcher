@@ -43,7 +43,7 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
 
 const REASONS: Record<Exclude<ReturnType<typeof onStream>, null>, string | ((onAir: NonNullable<GuardInput["onAir"]>) => string)> = {
   unreadable: (onAir) =>
-    `The view on air loads ${onAir.loadsUnreadable!.slice(0, 3).join(", ")}, which ViewSwitcher couldn't read just now (a disk or permission error), so it can't tell what that file loads, and while you're live agents can't change library files. Check that file, or wait until you're off air.`,
+    `The view on air loads ${onAir.loadsUnreadable!.slice(0, 3).join(", ")}, which ViewSwitcher couldn't read just now (a disk error, or the file changed while it was checked), so it can't tell what that file loads, and while you're live agents can't change library files. Check that file, or wait until you're off air.`,
   scene: "That view is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until you're off air (OBS stops streaming and recording).",
   transition: "That is the transition for the view on air, and you're live. Wait until you're off air to change it.",
   shared: "Files in templates/_shared/ (and a template set's own _shared/) shape the view on air, and you're live. Wait until you're off air, or put the change in a stream copy of the view (customize_scene).",

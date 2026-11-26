@@ -6,8 +6,8 @@
 // switcher's own routes) is left out. Reading text, not running it: a URL a script builds at run time
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
+import { stat } from "node:fs/promises";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
-import { PathError } from "./paths";
 
 const BASE_HOST = "scene.invalid";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -87,7 +87,7 @@ export type Loaded = {
   complete: boolean;
   /** Every file it read (the pages too), with a hash of the text it read, to tell later if any changed. */
   read: Record<string, string>;
-  /** Files that are there but couldn't be read for a reason /library/ wouldn't refuse too (a disk or permission error): what they load is unknown. */
+  /** Files /library/ would serve but the scan couldn't read (a disk error, a link swapped in mid-scan): what they load is unknown. */
   unreadable: string[];
 };
 
@@ -109,16 +109,19 @@ export async function loadedFiles(root: string, pages: string[], limit = 200): P
   while (queue.length) {
     const file = queue.shift()!;
     if (!/\.(html?|css|m?js)$/i.test(file)) continue;
-    let failure: unknown = null;
     const text = await Promise.resolve()
       .then(() => resolveInLibrary(root, file).then(readNoFollow))
-      .catch((e) => ((failure = e), null));
+      .catch(() => null);
     if (text === null) {
-      // What /library/ refuses too (a link out, a dot-folder, a folder, a pipe: a PathError) or what isn't
-      // there loads nothing on the page. Any other failure (EACCES, EIO) leaves what it loads unknown, so the
-      // guard treats the list as not all (agent-guard.ts "unreadable").
-      const code = (failure as NodeJS.ErrnoException | null)?.code;
-      if (!(failure instanceof PathError) && code !== "ENOENT" && code !== "ENOTDIR") unreadable.push(file);
+      // Would /library/ serve it? The same two checks it makes (http/routes/files.ts): resolveInLibrary, then
+      // a plain file. If not (a link out, a dangling link, a dot-folder, a folder, a pipe, no permission, not
+      // there), the page loads nothing from it. If it would, but the no-link read failed (a disk error, or a
+      // link swapped in mid-scan), what it loads is unknown: the guard treats the list as not all ("unreadable").
+      const served = await Promise.resolve()
+        .then(() => resolveInLibrary(root, file))
+        .then((real) => stat(real))
+        .then((s) => s.isFile(), () => false);
+      if (served) unreadable.push(file);
       continue;
     }
     read[file] = textHash(text);

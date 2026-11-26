@@ -3,7 +3,7 @@
 // a view that is a link outside the library is never copied in.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { chmod, mkdir, readdir, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addFromTemplate, customize, duplicate } from "./library";
@@ -80,8 +80,11 @@ describe("a named pipe in the library", () => {
     expect((r as { v: { unreadable: string[] } }).v.unreadable).toEqual([]);
   });
 
-  test("stale references on the view on air (a dangling link, a folder named like a stylesheet, no permission) don't block agents", async () => {
-    await writeFile(join(root, "daisy/templates/stale.html"), ["gone", "folder", "locked"].map((n) => `<link rel="stylesheet" href="/library/daisy/templates/_shared/${n}.css">`).join(""));
+  test("references /library/ wouldn't serve either (a dangling link, a folder named like a stylesheet, a file or folder without permission) don't block agents", async () => {
+    await writeFile(join(root, "daisy/templates/stale.html"), [...["gone", "folder", "locked"].map((n) => `_shared/${n}.css`), "shut/x.css"].map((n) => `<link rel="stylesheet" href="/library/daisy/templates/${n}">`).join(""));
+    await mkdir(join(root, "daisy/templates/shut"), { recursive: true });
+    await writeFile(join(root, "daisy/templates/shut/x.css"), "body{}");
+    await chmod(join(root, "daisy/templates/shut"), 0o600);
     await symlink(join(root, "daisy/templates/_shared/nowhere.css"), join(root, "daisy/templates/_shared/gone.css"));
     await mkdir(join(root, "daisy/templates/_shared/folder.css"));
     await writeFile(join(root, "daisy/templates/_shared/locked.css"), "body{}");
@@ -91,9 +94,10 @@ describe("a named pipe in the library", () => {
       const r = await loadedFiles(root, ["daisy/templates/stale.html"]);
       expect(r.unreadable).toEqual([]);
       expect(r.complete).toBe(true);
-      expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css"]);
+      expect(r.files.sort()).toEqual(["daisy/templates/_shared/folder.css", "daisy/templates/_shared/gone.css", "daisy/templates/_shared/locked.css", "daisy/templates/shut/x.css"]);
     } finally {
       await chmod(join(root, "daisy/templates/_shared/locked.css"), 0o644);
+      await chmod(join(root, "daisy/templates/shut"), 0o755);
     }
   });
 
@@ -108,4 +112,13 @@ describe("a named pipe in the library", () => {
 test("duplicating a view that is a link outside the library is refused, and nothing is copied in", async () => {
   await expect(duplicate(root, "daisy/templates/linked.html")).rejects.toThrow("outside the library");
   expect((await readdir(join(root, "daisy/templates"))).filter((f) => f.includes("copy"))).toEqual([]);
+});
+
+test("a stream's copy of a view keeps the view's permissions", async () => {
+  await mkdir(join(root, "daisy/projects/q/scenes"), { recursive: true });
+  await mkdir(join(root, "daisy/projects/q/streams/s"), { recursive: true });
+  await writeFile(join(root, "daisy/projects/q/scenes/private.html"), "<title>Private</title>");
+  await chmod(join(root, "daisy/projects/q/scenes/private.html"), 0o600);
+  await customize(join(root, "daisy"), "q", "s", "private");
+  expect((await stat(join(root, "daisy/projects/q/streams/s/private.html"))).mode & 0o777).toBe(0o600);
 });

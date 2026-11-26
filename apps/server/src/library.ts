@@ -5,7 +5,7 @@ import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateI
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
-import { libraryStaging, readNoFollow, readNoFollowBytes, resolveInLibrary } from "./library/contain";
+import { libraryStaging, readNoFollow, resolveInLibrary, withNoLinks } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
 
@@ -163,13 +163,16 @@ const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgD
  * already at `dest` (a dangling one could point outside the library).
  */
 async function copyNew(real: string, dest: string) {
-  const bytes = await readNoFollowBytes(real);
+  const { bytes, mode } = await withNoLinks(real, async (f) => ({ bytes: new Uint8Array(await f.readFile()), mode: (await f.stat()).mode & 0o777 }));
   try {
-    await writeFile(dest, bytes, { flag: "wx" });
+    await writeFile(dest, bytes, { flag: "wx", mode });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PathError("Something is already there (a link to somewhere else?). Remove it, then try again.");
+    // A copy that failed partway (a full disk) must not stay behind as the stream's own: the next try would keep it.
+    await rm(dest, { force: true }).catch(() => {});
     throw e;
   }
+  await chmod(dest, mode); // the source's permissions, as a copy keeps them (writeFile's mode goes through the umask)
 }
 
 /** Whether anything at all is at `path`, a link included, even one that points nowhere (lstat, not stat). */
