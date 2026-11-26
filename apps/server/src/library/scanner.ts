@@ -5,17 +5,24 @@
 // and dropped for the paths the watcher reports (scene-titles.ts); folders are walked side by side.
 // File reads and stats go through one bounded queue, so a big library can't run out of open files.
 //
+// Nothing outside the library is read, even through a link (contain.ts, the rule every read follows):
+// a folder the scan reads, a JSON file, or a view or picture that is a link is checked first, and one
+// that leads outside is left out. Plain files in a folder that's inside are inside, so most files cost
+// no extra check.
+//
 // The cache and the queue belong to one LibraryScanner, which main.ts makes and hands to the
 // switcher's routes and the MCP server, so both share them and their lifetime is the server's; a
 // test makes its own and shares nothing with another.
+import type { Dirent } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { exists, readOrg } from "../library";
 import { limit } from "../limit";
 import { inside, plainName } from "../paths";
 import { createSceneTitles } from "../scene-titles";
+import { resolveInLibrary } from "./contain";
 import { dirs as listDirs, type Io, readJson as readJsonFile } from "./read";
 
 const KINDS: Record<string, AssetKind> = {
@@ -46,27 +53,33 @@ export class LibraryScanner {
     const prefix = `${orgId}/`; // readOrg's id is the one asked for, so nothing waits for org.json
     const [org, templates, sets, assets, projects, transition] = await Promise.all([
       readOrg(this.libraryRoot, orgId),
-      this.readJson(join(orgDir, "templates/_shared/order.json"), { order: [] as string[] }).then((meta) => this.scenesIn(orgDir, "templates", "template", meta.order, prefix)),
+      this.readJson(orgDir, "templates/_shared/order.json", { order: [] as string[] }).then((meta) => this.scenesIn(orgDir, "templates", "template", meta.order, prefix)),
       this.listSets(orgDir, prefix),
       this.listAssets(orgDir, prefix),
-      this.dirs(join(orgDir, "projects")).then((ids) => Promise.all(ids.map((id) => this.scanProject(orgDir, prefix, id)))),
-      this.urlIfThere(join(orgDir, ORG_TRANSITION), `${prefix}${ORG_TRANSITION}`),
+      this.dirs(orgDir, "projects").then((ids) => Promise.all(ids.map((id) => this.scanProject(orgDir, prefix, id)))),
+      this.urlIfThere(orgDir, ORG_TRANSITION, `${prefix}${ORG_TRANSITION}`),
     ]);
     return { org, templates, sets, assets, projects, transition };
   }
 
-  private dirs = (path: string) => listDirs(path, this.io);
-  private readJson = <T>(path: string, fallback: T) => readJsonFile(path, fallback, this.io);
-  /** `url` when the file `abs` is there, else null (a transition, for the library listing). */
-  private urlIfThere = (abs: string, url: string) => this.io(() => exists(abs)).then((t) => (t ? url : null));
+  /** Whether `rel` in the org folder `orgDir` is really in the library, through any links (contain.ts). */
+  private inLibrary = (orgDir: string, rel: string) =>
+    this.io(() => resolveInLibrary(this.libraryRoot, `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}`)).then(() => true, () => false);
+  /** The folders the library lists in `rel`, when `rel` itself is in the library (a listed folder is never a link: isDirectory). */
+  private dirs = async (orgDir: string, rel: string) => ((await this.inLibrary(orgDir, rel)) ? listDirs(join(orgDir, rel), this.io) : []);
+  /** The entries of the folder `rel`, when it's in the library; none when it isn't or can't be read. */
+  private entries = async (orgDir: string, rel: string): Promise<Dirent[]> =>
+    (await this.inLibrary(orgDir, rel)) ? this.io(() => readdir(join(orgDir, rel), { withFileTypes: true })).catch(() => []) : [];
+  /** Entries of a folder that's inside the library: a plain file is inside too; a link is checked. */
+  private kept = (orgDir: string, rel: string, e: Dirent) => (e.isSymbolicLink() ? this.inLibrary(orgDir, `${rel}/${e.name}`) : Promise.resolve(true));
+  private readJson = async <T>(orgDir: string, rel: string, fallback: T) => ((await this.inLibrary(orgDir, rel)) ? readJsonFile(join(orgDir, rel), fallback, this.io) : fallback);
+  /** `url` when the file `rel` is there, in the library, else null (a transition, for the library listing). */
+  private urlIfThere = async (orgDir: string, rel: string, url: string) =>
+    (await this.io(() => exists(join(orgDir, rel)))) && (await this.inLibrary(orgDir, rel)) ? url : null;
 
   private async scenesIn(orgDir: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
-    let files: string[] = [];
-    try {
-      files = (await this.io(() => readdir(join(orgDir, rel)))).filter(isViewFile);
-    } catch {
-      return [];
-    }
+    const listed = (await this.entries(orgDir, rel)).filter((e) => isViewFile(e.name) && !e.isDirectory());
+    const files = (await Promise.all(listed.map(async (e) => ((await this.kept(orgDir, rel, e)) ? e.name : null)))).filter((f): f is string => f !== null);
     const scenes = await Promise.all(
       files.map(async (f) => {
         const name = f.slice(0, -5);
@@ -81,7 +94,8 @@ export class LibraryScanner {
 
   private async listAssets(orgDir: string, prefix: string): Promise<Asset[]> {
     try {
-      const names = (await this.io(() => readdir(join(orgDir, "assets")))).filter((n) => !n.startsWith("."));
+      const listed = (await this.entries(orgDir, "assets")).filter((e) => !e.name.startsWith("."));
+      const names = (await Promise.all(listed.map(async (e) => ((await this.kept(orgDir, "assets", e)) ? e.name : null)))).filter((n): n is string => n !== null);
       const assets = await Promise.all(
         names.map(async (name) => {
           // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.
@@ -96,20 +110,19 @@ export class LibraryScanner {
   }
 
   private async scanProject(orgDir: string, prefix: string, id: string): Promise<Project> {
-    const dir = join(orgDir, "projects", id);
-    const p = await this.readJson(join(dir, "project.json"), { name: id, order: [] as string[] });
+    const p = await this.readJson(orgDir, `projects/${id}/project.json`, { name: id, order: [] as string[] });
     const [scenes, streams, transition] = await Promise.all([
       this.scenesIn(orgDir, `projects/${id}/scenes`, "project", p.order, prefix),
-      this.dirs(join(dir, "streams")).then((ids) =>
+      this.dirs(orgDir, `projects/${id}/streams`).then((ids) =>
         Promise.all(
           ids.map(async (sid): Promise<Stream> => {
             const rel = `projects/${id}/streams/${sid}`;
-            const [s, scenes] = await Promise.all([this.readJson(join(orgDir, rel, "stream.json"), { name: sid, date: "" }), this.scenesIn(orgDir, rel, "stream", p.order, prefix)]);
+            const [s, scenes] = await Promise.all([this.readJson(orgDir, `${rel}/stream.json`, { name: sid, date: "" }), this.scenesIn(orgDir, rel, "stream", p.order, prefix)]);
             return { id: sid, name: s.name, date: s.date, scenes };
           }),
         ),
       ),
-      this.urlIfThere(join(dir, TRANSITION), `${prefix}projects/${id}/${TRANSITION}`),
+      this.urlIfThere(orgDir, `projects/${id}/${TRANSITION}`, `${prefix}projects/${id}/${TRANSITION}`),
     ]);
     streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
     return { id, name: p.name, scenes, streams, transition };
@@ -121,8 +134,9 @@ export class LibraryScanner {
   /** The org's template sets: folders in templates/ that have a pack.json. */
   private async listSets(orgDir: string, prefix: string): Promise<TemplateSet[]> {
     const found = await Promise.all(
-      (await this.dirs(join(orgDir, "templates"))).map(async (id): Promise<TemplateSet | null> => {
-        const text = await this.io(() => readFile(join(orgDir, "templates", id, "pack.json"), "utf8")).catch(() => null);
+      (await this.dirs(orgDir, "templates")).map(async (id): Promise<TemplateSet | null> => {
+        const manifest = `templates/${id}/pack.json`;
+        const text = (await this.inLibrary(orgDir, manifest)) ? await this.io(() => readFile(join(orgDir, manifest), "utf8")).catch(() => null) : null;
         if (text === null) return null;
         const read = readManifest(text);
         // A pack.json someone edited by hand into something odd: still list the set, by its folder.
@@ -130,7 +144,7 @@ export class LibraryScanner {
         const rel = `templates/${id}`;
         const [templates, transition] = await Promise.all([
           this.scenesIn(orgDir, rel, "template", m.views, prefix, id),
-          this.urlIfThere(join(orgDir, rel, "_shared", TRANSITION), `${prefix}${rel}/_shared/${TRANSITION}`),
+          this.urlIfThere(orgDir, `${rel}/_shared/${TRANSITION}`, `${prefix}${rel}/_shared/${TRANSITION}`),
         ]);
         return { id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}), templates, transition };
       }),

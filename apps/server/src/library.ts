@@ -19,8 +19,10 @@ import { inside, PathError, plainName } from "./paths";
 const ORG_DEFAULTS = { accent: "#8b7bff", ground: "#0e0f13" };
 
 export async function readOrg(libraryRoot: string, id: string): Promise<Org> {
-  const dir = inside(libraryRoot, plainName(id));
-  const meta = await readJson(join(dir, "org.json"), { name: id, ...ORG_DEFAULTS });
+  const fallback = { name: id, ...ORG_DEFAULTS };
+  // An org.json that is a link outside the library isn't read (contain.ts): the org reads as unnamed.
+  const file = await resolveInLibrary(libraryRoot, `${plainName(id)}/org.json`).catch(() => null);
+  const meta = file ? await readJson(file, fallback) : fallback;
   return { id, name: meta.name, accent: meta.accent, ground: meta.ground };
 }
 

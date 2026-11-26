@@ -222,6 +222,20 @@ describe("removing a set", () => {
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
 
+  test("a scene that is a link outside the library isn't read to count it", async () => {
+    await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
+    const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    try {
+      const real = join(root, org, "projects", projectId, "scenes/teaching.html");
+      await rename(real, join(away, "teaching.html"));
+      await symlink(join(away, "teaching.html"), real);
+      expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
   test("refuses what isn't a set", async () => {
     await expect(removeSet(root, org, "_shared")).rejects.toThrow();
     await expect(removeSet(root, org, "../projects")).rejects.toThrow();

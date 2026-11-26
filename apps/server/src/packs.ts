@@ -206,15 +206,17 @@ export async function cancelPack(libraryRoot: string, orgId: string, token: unkn
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
-async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<number> {
+async function scenesUsing(libraryRoot: string, orgDir: string, orgId: string, set: string): Promise<number> {
   // As written by hand or by the switcher: plain, or with each segment encoded (libraryUrl).
   const needle = `/library/${orgId}/templates/${set}/`;
   const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
   const projects = join(orgDir, "projects");
   const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
-  // Linked scenes too: a scene that is a link still uses the set through it.
+  // Linked scenes too: a scene that is a link still uses the set through it. One that leads outside the library isn't read (contain.ts).
   const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
-  const uses = await Promise.all(scenes.map((rel) => read(() => readFile(join(projects, rel), "utf8").catch(() => "")).then((t) => t.includes(needle) || t.includes(encoded))));
+  const textOf = (rel: string) =>
+    resolveInLibrary(libraryRoot, `${plainName(orgId)}/projects/${rel}`).then((abs) => readFile(abs, "utf8")).catch(() => "");
+  const uses = await Promise.all(scenes.map((rel) => read(() => textOf(rel)).then((t) => t.includes(needle) || t.includes(encoded))));
   return uses.filter(Boolean).length;
 }
 
@@ -228,7 +230,7 @@ export async function removeSet(libraryRoot: string, orgId: string, set: string)
   // What it deletes must really be in the library, not wherever a linked templates/ leads.
   await resolveInLibrary(libraryRoot, `${plainName(orgId)}/templates/${plainName(set)}`, { forWrite: true });
   if (!(await exists(join(dir, "pack.json")))) throw new PathError("That isn't an installed template set");
-  const kept = await scenesUsing(orgDir, orgId, set);
+  const kept = await scenesUsing(libraryRoot, orgDir, orgId, set);
   if (kept === 0) {
     await rm(dir, { recursive: true, force: true });
     return { kept };

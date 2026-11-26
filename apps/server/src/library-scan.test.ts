@@ -100,6 +100,65 @@ describe("LibraryScanner", () => {
   });
 });
 
+describe("links out of the library are never read", () => {
+  let away: string;
+  beforeEach(async () => {
+    away = mkdtempSync(join(tmpdir(), "vs-scan-away-"));
+    roots.push(away);
+    await writeFile(join(away, "secret.html"), view("Outside secret"));
+    await writeFile(join(away, "secret.json"), JSON.stringify({ name: "Outside name", date: "2026-09-09", order: ["z"] }));
+    await writeFile(join(away, "secret.png"), "outside picture");
+    await mkdir(join(away, "folder"), { recursive: true });
+    await writeFile(join(away, "folder/inside.html"), view("Outside folder view"));
+  });
+  const everything = async () => JSON.stringify(await scanner.scanOrg(ORG));
+
+  test("a view that is a link to a file outside is left out, and its title isn't read", async () => {
+    await symlink(join(away, "secret.html"), join(root, ORG, "projects/p/scenes/leak.html"));
+    await symlink(join(away, "secret.html"), join(root, ORG, "templates/leak.html"));
+    const l = await scanner.scanOrg(ORG);
+    expect(l.templates.map((t) => t.name)).toEqual(["title"]);
+    expect(l.projects[0]!.scenes.map((s) => s.name)).toEqual(["intro", "brb"]);
+    expect(await everything()).not.toContain("Outside");
+  });
+
+  test("a view that is a link to another view in the library is listed with its title", async () => {
+    await symlink(join(root, ORG, "templates/title.html"), join(root, ORG, "projects/p/scenes/again.html"));
+    expect(await labels()).toContain("p/scenes/again.html=Title");
+  });
+
+  test("folders, JSON files and pictures linked outside are left out too", async () => {
+    await symlink(join(away, "folder"), join(root, ORG, "projects/p/streams/a-linked"));
+    await rm(join(root, ORG, "projects/p/scenes"), { recursive: true });
+    await symlink(join(away, "folder"), join(root, ORG, "projects/p/scenes"));
+    await rm(join(root, ORG, "projects/p/streams/b/stream.json"));
+    await symlink(join(away, "secret.json"), join(root, ORG, "projects/p/streams/b/stream.json"));
+    await put(`${ORG}/assets/logo.png`, "png");
+    await symlink(join(away, "secret.png"), join(root, ORG, "assets/leak.png"));
+    await mkdir(join(root, ORG, "templates/neon"), { recursive: true });
+    await symlink(join(away, "secret.json"), join(root, ORG, "templates/neon/pack.json"));
+    await rm(join(root, ORG, "org.json"));
+    await symlink(join(away, "secret.json"), join(root, ORG, "org.json"));
+    const l = await scanner.scanOrg(ORG);
+    expect(l.projects[0]!.scenes).toEqual([]);
+    expect(l.projects[0]!.streams.map((s) => `${s.id}=${s.name}`)).toEqual(["a=First", "b=b"]);
+    expect(l.assets.map((a) => a.name)).toEqual(["logo.png"]);
+    expect(l.sets).toEqual([]);
+    expect(l.org.name).toBe(ORG);
+    expect(await everything()).not.toContain("Outside");
+  });
+
+  test("an org folder that is a link outside the library lists nothing from there", async () => {
+    await mkdir(join(away, "org/projects/p/scenes"), { recursive: true });
+    await writeFile(join(away, "org/org.json"), JSON.stringify({ name: "Outside org" }));
+    await writeFile(join(away, "org/projects/p/scenes/x.html"), view("Outside view"));
+    await symlink(join(away, "org"), join(root, "linked"));
+    const l = await scanner.scanOrg("linked");
+    expect(l.projects).toEqual([]);
+    expect(JSON.stringify(l)).not.toContain("Outside");
+  });
+});
+
 describe("titledCopy (Duplicate)", () => {
   test("adds \" copy\" to the title, decoded and escaped again", () => {
     expect(titledCopy("<head><title>R&amp;B night</title></head>")).toBe("<head><title>R&amp;B night copy</title></head>");
