@@ -22,6 +22,7 @@ describe("parseLibraryPath", () => {
 
   test("a hand-made set folder with a dot in its name is still a set (the scan lists it)", () => {
     expect(parseLibraryPath("daisy/templates/my.set/brb.html")).toMatchObject({ kind: "template", set: "my.set", name: "brb" });
+    expect(parseLibraryPath("daisy/templates/my.set").kind).toBe("other"); // right in templates/, a dotted name reads as a file
     expect(parseLibraryPath("daisy/templates/my.set/pack.json")).toMatchObject({ kind: "set", set: "my.set" });
     expect(parseLibraryPath("daisy/templates/my.set/_shared/transition.html")).toMatchObject({ kind: "transition", set: "my.set" });
     expect(transitionCandidates("daisy/templates/my.set/brb.html")[0]).toBe("daisy/templates/my.set/_shared/transition.html");

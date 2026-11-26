@@ -11,7 +11,8 @@ import type { SceneOrigin } from "./types";
  *   or a project's (`projects/<p>/transition.html`).
  * - `shared`: anything else in the org's or a set's `_shared/` (its theme, scripts, brand files).
  * - `asset`: a file in the org's `assets/` or a set's.
- * - `set`: a template set's folder or its `pack.json`.
+ * - `set`: a template set's folder or its `pack.json`. A dotted name right in `templates/` (`brb.HTML`,
+ *   `my.set`) reads as a file, since a path alone can't tell; anything under `templates/my.set/` is in that set.
  * - `org`: the org's folder, or a file right in it (`org.json`, `BRAND.md`).
  * - `other`: anything else (a project's or a stream's folder or manifest, a folder the scan doesn't list).
  */

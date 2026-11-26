@@ -232,10 +232,16 @@ const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
 /**
- * The first <title> outside comments and <script>, <style> or <template> content, the one the
- * browser (and setTitle) uses; one pass, no element scan, so listing many big scenes stays cheap.
+ * The first <title> outside comments, raw-text content (the scanner's RAW elements: script, style,
+ * noscript, textarea…) and <template> content: the one the browser shows, and the one setTitle
+ * writes. One pass, no element scan, so listing many big scenes stays cheap. A comment ends at the
+ * first "-->" after "<!--", as the scanner reads it; a tag name ends at a space, "/" or ">", so
+ * <style-box> is an element of its own, not a <style>.
  */
-const TITLE = /<!--[\s\S]*?(?:-->|$)|<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)|<title\b[^>]*>([\s\S]*?)<\/title\s*>/gi;
+const TITLE = new RegExp(
+  `<!--[\\s\\S]*?(?:-->|$)|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*>[\\s\\S]*?(?:<\\/\\1\\s*>|$)|<title(?=[\\s/>])[^>]*>([\\s\\S]*?)<\\/title\\s*>`,
+  "gi",
+);
 
 /** A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it has none or it's empty. */
 export function readTitle(html: string): string | null {
@@ -616,7 +622,9 @@ export function setTitle(html: string, name: string): string {
   if (!clean.trim()) throw new EditError("A scene needs a name");
   if (clean.length > 120) throw new EditError("That name is too long");
   const els = scanElements(html);
-  const title = els.find((e) => e.tag === "title" && e.closed);
+  // Not one inside a <template>: the browser never shows that one (and readTitle skips it too).
+  const inTemplate = (e: ScannedElement): boolean => e.parent !== null && (els[e.parent]!.tag === "template" || inTemplate(els[e.parent]!));
+  const title = els.find((e) => e.tag === "title" && e.closed && !inTemplate(e));
   const text = escapeText(clean);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);

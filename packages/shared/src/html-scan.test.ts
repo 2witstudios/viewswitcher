@@ -430,15 +430,24 @@ describe("readTitle", () => {
     expect(readTitle("<head><title></title></head>")).toBeNull();
     expect(readTitle("<main></main>")).toBeNull();
   });
-  test("skips a title in a comment, a script, a style or a template, as the browser and setTitle do", () => {
-    expect(readTitle("<head><!-- <title>Old</title> --><title>Real</title></head>")).toBe("Real");
-    expect(readTitle("<head><script>const t = '<title>Code</title>';</script><title>Real</title></head>")).toBe("Real");
-    expect(readTitle("<head><style>/* <title>x</title> */</style><title>Real</title></head>")).toBe("Real");
-    expect(readTitle("<head><template><title>Inner</title></template><title>Real</title></head>")).toBe("Real");
-    expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
+  // Each page has its real title, "Real", after something that holds a title the browser doesn't show.
+  const pages: Record<string, string> = {
+    comment: "<head><!-- <title>Old</title> --><title>Real</title></head>",
+    script: "<head><script>const t = '<title>Code</title>';</script><title>Real</title></head>",
+    style: "<head><style>/* <title>x</title> */</style><title>Real</title></head>",
+    noscript: "<head><noscript><title>NS</title></noscript><title>Real</title></head>",
+    textarea: "<head></head><body><textarea><title>T</title></textarea></body><title>Real</title>",
+    template: "<head><template><title>Inner</title></template><title>Real</title></head>",
+    "a custom element named like one": "<head><style-box></style-box><title>Real</title></head>",
+    "a tagged title": '<head><title data-vs="1">Real</title></head>',
+  };
+  test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
+    expect(readTitle(html)).toBe("Real");
   });
-  test("agrees with setTitle on which title it is", () => {
-    const html = "<head><!-- <title>Old</title> --><title>Real</title></head>";
+  test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
     expect(readTitle(setTitle(html, "New"))).toBe("New");
+  });
+  test("an unclosed comment hides everything after it", () => {
+    expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
   });
 });
