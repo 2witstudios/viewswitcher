@@ -6,7 +6,7 @@ import { fakeObs, type FakeObsInit, serveFakeObs } from "../fake-obs";
 import { OBSClient } from "../obs";
 import { createPlacer, type PlacementObs } from "./placement";
 
-const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"] };
+const names = { obsScene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"] };
 // Guest and Camera 2 are boxes from the editor, not configured devices; Mic and Logo were added in OBS by hand.
 const SCENE_ITEMS = ["ViewSwitcher Ground", "Camera", "Screen", "Guest", "Camera 2", "Mic", "Logo", "ViewSwitcher Program"];
 const input = (kind: string) => ({ kind, settings: {} });

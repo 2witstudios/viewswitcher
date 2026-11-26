@@ -12,7 +12,7 @@ import { createPreviewer } from "./preview";
 const PORT = 7433;
 const names = {
   url: "ws://127.0.0.1:4455", password: () => undefined as string | undefined,
-  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"],
+  obsScene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"],
   previewScene: "ViewSwitcher Preview", previewSource: "ViewSwitcher Preview Render",
 };
 const SCENE = "daisy/projects/p1/Title.html";
@@ -112,7 +112,7 @@ describe("preview renderer", () => {
   test("never switches the program or touches the ViewSwitcher scene, even while live", async () => {
     const obs = rendering(1);
     await setupObs(obs, names, PORT, { switchProgram: true });
-    const items = structuredClone(obs.scenes.get(names.scene));
+    const items = structuredClone(obs.scenes.get(names.obsScene));
     const program = structuredClone(obs.inputs.get(names.programSource));
     obs.requests.length = 0;
 
@@ -122,12 +122,12 @@ describe("preview renderer", () => {
     await previewer.program();
 
     expect(obs.requests.map((r) => r.type).filter((t) => t === "SetCurrentProgramScene" || t === "SetCurrentPreviewScene" || t === "SetStudioModeEnabled")).toEqual([]);
-    const onProgramScene = obs.requests.filter((r) => r.data.sceneName === names.scene || r.data.sourceName === names.scene);
-    expect(onProgramScene).toEqual([{ type: "GetSourceScreenshot", data: { sourceName: names.scene, imageFormat: "png", imageWidth: 960, imageHeight: 540 } }]);
+    const onProgramScene = obs.requests.filter((r) => r.data.sceneName === names.obsScene || r.data.sourceName === names.obsScene);
+    expect(onProgramScene).toEqual([{ type: "GetSourceScreenshot", data: { sourceName: names.obsScene, imageFormat: "png", imageWidth: 960, imageHeight: 540 } }]);
     expect(obs.requests.filter((r) => r.data.inputName && r.data.inputName !== names.previewSource)).toEqual([]);
-    expect(obs.scenes.get(names.scene)).toEqual(items!);
+    expect(obs.scenes.get(names.obsScene)).toEqual(items!);
     expect(obs.inputs.get(names.programSource)).toEqual(program!);
-    expect(obs.program()).toBe(names.scene);
+    expect(obs.program()).toBe(names.obsScene);
   });
 
   test("refuses paths outside the library, and anything that isn't a scene, without asking OBS", async () => {
@@ -218,7 +218,7 @@ describe("preview renderer", () => {
 describe("program picture", () => {
   test("is one screenshot of the ViewSwitcher scene, camera and all, at 960×540 or full size", async () => {
     let frame = 0;
-    const obs = connected({ screenshot: (source, { width, height }) => (source === names.scene ? png([frame++, 99, 99, 255], width, height) : png([0, 0, 0, 0])) });
+    const obs = connected({ screenshot: (source, { width, height }) => (source === names.obsScene ? png([frame++, 99, 99, 255], width, height) : png([0, 0, 0, 0])) });
     await setupObs(obs, names, PORT);
     obs.requests.length = 0;
     const previewer = createPreviewer(obs, opts());
@@ -249,9 +249,9 @@ describe("program picture", () => {
     const obs = connected();
     const real = obs.request.bind(obs);
     // OBS names the ViewSwitcher scene as on program, but this fake has no such scene to screenshot.
-    obs.request = ((t: string, d?: object) => (t === "GetCurrentProgramScene" ? Promise.resolve({ currentProgramSceneName: names.scene }) : real(t, d))) as never;
-    expect(await createPreviewer(obs, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining(`couldn't take a picture of "${names.scene}"`), url: `http://127.0.0.1:${PORT}/program` });
-    obs.scenes.set(names.scene, []);
+    obs.request = ((t: string, d?: object) => (t === "GetCurrentProgramScene" ? Promise.resolve({ currentProgramSceneName: names.obsScene }) : real(t, d))) as never;
+    expect(await createPreviewer(obs, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining(`couldn't take a picture of "${names.obsScene}"`), url: `http://127.0.0.1:${PORT}/program` });
+    obs.scenes.set(names.obsScene, []);
     expect(await createPreviewer(obs, opts()).program()).toMatchObject({ ok: false, reason: expect.stringContaining("empty picture") });
   });
 });

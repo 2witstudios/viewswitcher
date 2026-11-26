@@ -52,7 +52,7 @@ export const config = {
      */
     password: (): string | undefined => env.OBS_PASSWORD ?? localObsPassword(),
     /** The one OBS scene ViewSwitcher drives (the obsScene): the program browser source, the ground and the sources views place. */
-    scene: env.OBS_SCENE ?? "ViewSwitcher",
+    obsScene: env.OBS_SCENE ?? "ViewSwitcher",
     programSource: env.OBS_PROGRAM_SOURCE ?? "ViewSwitcher Program",
     /** Color source under everything; set to the on-air org's ground color. */
     groundSource: env.OBS_GROUND_SOURCE ?? "ViewSwitcher Ground",

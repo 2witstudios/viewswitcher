@@ -15,7 +15,7 @@ import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
 
-export type PlacementNames = { scene: string; programSource: string; groundSource: string; /** Sources views may place (OBS_SOURCES). */ sources: string[] };
+export type PlacementNames = { obsScene: string; programSource: string; groundSource: string; /** Sources views may place (OBS_SOURCES). */ sources: string[] };
 
 /** What placement needs from OBSClient. */
 export type PlacementObs = {
@@ -50,7 +50,7 @@ export function planPlacement(
   const warnings: string[] = [];
   const hide: BatchRequest[] = [];
   const show: BatchRequest[] = [];
-  const sceneName = names.scene;
+  const sceneName = names.obsScene;
   const inSlots = slotted(items, slots);
   for (const source of new Set(slots.map((s) => s.source))) {
     if (!items.some((i) => i.sourceName === source)) warnings.push(`This scene has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
@@ -116,9 +116,9 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
 
   async function sceneItems() {
     if (items) return items;
-    const [list] = await obs.requestBatch([{ requestType: "GetSceneItemList", requestData: { sceneName: names.scene } }], { timeoutMs });
+    const [list] = await obs.requestBatch([{ requestType: "GetSceneItemList", requestData: { sceneName: names.obsScene } }], { timeoutMs });
     if (!list?.requestStatus.result) {
-      if (list?.requestStatus.code === 600) throw new Error(`OBS has no scene "${names.scene}". Press Set up OBS in the switcher.`);
+      if (list?.requestStatus.code === 600) throw new Error(`OBS has no scene "${names.obsScene}". Press Set up OBS in the switcher.`);
       throw fail(list, "GetSceneItemList");
     }
     items = ((list.responseData?.sceneItems ?? []) as SceneItem[]).map(({ sourceName, sceneItemId }) => ({ sourceName, sceneItemId }));
@@ -135,7 +135,7 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
     const read = ids.length
       ? await obs.requestBatch([
           { requestType: "GetVideoSettings" },
-          ...ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })),
+          ...ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.obsScene, sceneItemId } })),
         ], { timeoutMs })
       : [];
     const [video, ...transforms] = read;

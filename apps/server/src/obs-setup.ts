@@ -11,7 +11,8 @@ import { OBSRequestError } from "./obs";
 export type ObsRequester = { request<T = any>(requestType: string, requestData?: object): Promise<T> };
 
 export type SetupNames = {
-  scene: string;
+  /** The one OBS scene ViewSwitcher drives ("ViewSwitcher"). */
+  obsScene: string;
   programSource: string;
   groundSource: string;
   sources: string[];
@@ -22,7 +23,7 @@ export type PreviewNames = { previewScene: string; previewSource: string };
 export type SetupReport = {
   /** One line per thing done, for the CLI and the switcher. */
   log: string[];
-  /** Devices to add to the scene by hand (names must match exactly). */
+  /** Sources to add to the OBS scene by hand (names must match exactly). */
   missing: string[];
   /** Whether OBS was switched to the scene (never while it's streaming or recording). */
   switched: boolean;
@@ -41,7 +42,7 @@ const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy G
 export const programUrl = (port: number) => `http://127.0.0.1:${port}/program`;
 
 export async function setupObs(obs: ObsRequester, names: SetupNames, port: number, { switchProgram = true }: SetupOptions = {}): Promise<SetupReport> {
-  const { scene, programSource, groundSource, sources } = names;
+  const { obsScene: scene, programSource, groundSource, sources } = names;
   const url = programUrl(port);
   const log: string[] = [];
 
@@ -172,9 +173,9 @@ async function addToScene(obs: ObsRequester, sceneName: string, input: { inputNa
  */
 export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: number): Promise<ObsSetup> {
   const { scenes } = await obs.request<{ scenes: { sceneName: string }[] }>("GetSceneList");
-  if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, ordered: false, missingDevices: names.sources };
+  if (!scenes.some((s) => s.sceneName === names.obsScene)) return { scene: false, program: false, ground: false, ordered: false, missingDevices: names.sources };
   // Bottom first, as OBS lists them.
-  const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: names.scene });
+  const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: names.obsScene });
   const present = new Set(sceneItems.map((i) => i.sourceName));
   const ordered = sceneItems[0]?.sourceName === names.groundSource && sceneItems.at(-1)?.sourceName === names.programSource;
   let program = present.has(names.programSource);
@@ -195,7 +196,7 @@ if (import.meta.main) {
     for (const line of log) console.log(line);
     for (const line of warnings) console.log(`Warning: ${line}`);
     if (missing.length) {
-      console.log(`\nAdd these sources to "${config.obs.scene}" (names must match exactly), then run this again:`);
+      console.log(`\nAdd these sources to "${config.obs.obsScene}" (names must match exactly), then run this again:`);
       for (const d of missing) console.log(`  • ${d}`);
     } else {
       console.log(`Sources found: ${config.obs.sources.join(", ")}.`);
