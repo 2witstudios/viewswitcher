@@ -1,11 +1,15 @@
-// scanLibrary against a temp library: what it lists, and that a change is always picked up on the
-// next scan (titles are kept between scans while a file stays the same).
+// LibraryScanner against a temp library: what it lists, and that a change is always picked up on the
+// next scan by the same scanner (titles are kept between scans while a file stays the same).
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scanLibrary } from "./library";
+import { LibraryScanner } from "./library/scanner";
+
+/** One scanner per test, as the server has one: its title cache carries from scan to scan. */
+let scanner: LibraryScanner;
+const scanLibrary = (_root: string, org: string) => scanner.scan(org);
 
 const roots: string[] = [];
 afterAll(() => roots.forEach((r) => rmSync(r, { recursive: true, force: true })));
@@ -28,6 +32,7 @@ const labels = async () => {
 beforeEach(async () => {
   root = mkdtempSync(join(tmpdir(), "vs-scan-"));
   roots.push(root);
+  scanner = new LibraryScanner(root, { concurrency: 4 });
   await put(`${ORG}/org.json`, JSON.stringify({ name: "Show" }));
   await put(`${ORG}/templates/title.html`, view("Title"));
   await put(`${ORG}/projects/p/project.json`, JSON.stringify({ name: "Weekly", order: ["intro", "brb"] }));
@@ -38,7 +43,7 @@ beforeEach(async () => {
   await put(`${ORG}/projects/p/streams/a/brb.html`, view("BRB, week one"));
 });
 
-describe("scanLibrary", () => {
+describe("LibraryScanner", () => {
   test("lists projects, streams and views in their order", async () => {
     const l = await scanLibrary(root, ORG);
     expect(l.templates.map((t) => t.label)).toEqual(["Title"]);

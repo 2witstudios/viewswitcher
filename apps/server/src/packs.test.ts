@@ -5,11 +5,13 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
-import { addFromTemplate, createOrg, createProject, scanLibrary } from "./library";
+import { addFromTemplate, createOrg, createProject } from "./library";
+import { LibraryScanner } from "./library/scanner";
 import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
 import { SHOWS, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
+const scanLibrary = (root: string, org: string) => new LibraryScanner(root).scan(org);
 let root = "";
 let org = "";
 let starterZip: Uint8Array;

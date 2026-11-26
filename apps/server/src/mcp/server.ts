@@ -22,10 +22,13 @@ import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
 import { type Loaded, loadedFiles, textHash } from "../scene-refs";
 import { pathScrub } from "../scrub";
+import { LibraryScanner } from "../library/scanner";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
   root: string;
+  /** Reads an org's content: the switcher's own scanner, so both share its cache (a test may leave it out). */
+  scanner?: LibraryScanner;
   /** The library kit (config.libraryKit), for the guide when the library has no copy of the skill. */
   kit: string;
   port: number;
@@ -84,6 +87,7 @@ const today = () => {
 
 export function createMcpServer(deps: McpDeps): McpServer {
   const { root, port } = deps;
+  const scanner = deps.scanner ?? new LibraryScanner(root);
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
@@ -227,7 +231,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: READ,
   }, run(async ({ org }: { org: string }) => {
     await existingOrg(root, org);
-    const l = await lib.scanLibrary(root, plainName(org));
+    const l = await scanner.scan(plainName(org));
     const projects = l.projects.map((p) => ({
       ...p,
       streams: p.streams.map((s) => {
@@ -366,7 +370,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const sets = ((await deps.templateSets?.()) ?? []).map(setView);
     if (!org) return text(sets);
     await existingOrg(root, org);
-    const have = (await lib.scanLibrary(root, plainName(org))).sets.map((s) => s.id);
+    const have = (await scanner.scan(plainName(org))).sets.map((s) => s.id);
     // An added set's folder is its id, or "<id>-2"… when the org had one already.
     return text(sets.map((s) => ({ ...s, added: have.filter((h) => h === s.id || new RegExp(`^${s.id}-\\d+$`).test(h)) })));
   }));
@@ -530,7 +534,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ path, streamId }: { path: string; streamId?: string }) => {
     guardNow({ kind: "go_on_air" });
     await needScene(path);
-    const l = await lib.scanLibrary(root, plainName(orgOf(path)));
+    const l = await scanner.scan(plainName(orgOf(path)));
     let found: OnAirRequest | null = null;
     // The org's own templates and those of its installed template sets.
     const t = [...l.templates, ...l.sets.flatMap((set) => set.templates)].find((s) => s.path === path);

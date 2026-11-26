@@ -12,7 +12,7 @@ import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
 import { appParent, watchParent } from "./parent-watch";
-import { forgetScanned } from "./library";
+import { LibraryScanner } from "./library/scanner";
 import { ensureLibrary } from "./library-kit";
 import { createPlacer } from "./live/placement";
 import { LiveStore } from "./live/store";
@@ -87,6 +87,9 @@ function publish(msg: ServerMessage) {
   lanServer?.publish("all", text);
 }
 const log = process.env.VIEWSWITCHER_LOG ? (line: string) => console.log(line) : undefined;
+
+/** Reads an org's content for the switcher and agents; its scene-title cache lives as long as the server. */
+const scanner = new LibraryScanner(config.library);
 
 const store = await LiveStore.open({
   root: config.library,
@@ -173,7 +176,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   flushTimer = setTimeout(async () => {
     const paths = [...changed];
     changed = new Set();
-    forgetScanned(config.library, paths);
+    scanner.forget(paths);
     // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
     await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
     publish({ t: "library:changed", paths, seq: ++librarySeq });
@@ -237,6 +240,7 @@ const ownStdio = (port: number) => stdioLaunch(process.execPath, import.meta.dir
 // The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
 const mcp: McpDeps = {
   root: config.library,
+  scanner,
   kit: config.libraryKit,
   port: config.port,
   state: () => state,
@@ -259,6 +263,7 @@ function agentSeen(client: string | null) {
 const handle = dispatcher({
   routes: routes({
     root: config.library,
+    scanner,
     starter: config.starter,
     webDist: config.webDist,
     obsNames: config.obs,
