@@ -9,13 +9,13 @@
 // 3. remove a set: delete its folder, unless scenes made from it still use its theme and pictures:
 //    then only its views and pack.json go, so those scenes keep their look.
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
-import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
+import { resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
 import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
@@ -31,7 +31,8 @@ export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Bl
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
 const tokenOk = (t: unknown): t is string => typeof t === "string" && STAGING_TOKEN.test(t);
-const stageDir = (libraryRoot: string, orgId: string, token: string) => inside(libraryRoot, `${plainName(orgId)}/${STAGING}/${token}`);
+/** A staged pack's folder: in the org's staging folder, which is never a link (contain.ts stagingIn). */
+const stageDir = async (libraryRoot: string, orgId: string, token: string) => inside(await stagingIn(libraryRoot, plainName(orgId)), token);
 
 /** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
 function plainFsError(e: unknown, doing: string): Error {
@@ -66,9 +67,12 @@ export async function sweepStaging(libraryRoot: string) {
   const now = Date.now();
   for (const org of await readdir(libraryRoot).catch(() => [] as string[])) {
     if (org.startsWith(".")) continue;
-    const dir = join(libraryRoot, org, STAGING);
+    // An org (or its staging folder) that leads outside the library is left alone: nothing there is ours to delete.
+    const dir = await stagingIn(libraryRoot, org).catch(() => null);
+    if (!dir) continue;
     for (const name of await readdir(dir).catch(() => [] as string[])) {
-      const s = await stat(join(dir, name)).catch(() => null);
+      // lstat: a link in staging is judged (and removed) as the link, never followed.
+      const s = await lstat(join(dir, name)).catch(() => null);
       if (s && now - s.mtimeMs > STAGE_TTL_MS) await rm(join(dir, name), { recursive: true, force: true });
     }
   }
@@ -109,7 +113,9 @@ export async function stagePack(libraryRoot: string, orgId: string, source: Pack
 
   // 2. Unpack into staging (only the planned files, each checked to land inside it once more).
   const token = randomBytes(12).toString("hex");
-  const dir = stageDir(libraryRoot, orgId, token);
+  const dir = await stageDir(libraryRoot, orgId, token).catch((e) => {
+    throw plainFsError(e, "Unpacking it");
+  });
   const raw = join(dir, "raw");
   try {
     const texts: Record<string, string> = {};
@@ -160,7 +166,7 @@ const hash = (s: string) => createHash("sha256").update(s.replace(/\r\n/g, "\n")
 /** Install a staged pack into its org as templates/<set>/. Returns the set's folder name. */
 export async function installPack(libraryRoot: string, orgId: string, token: unknown): Promise<{ set: string }> {
   if (!tokenOk(token)) throw new PackError("That pack isn't ready to install any more. Drop it again.");
-  const dir = stageDir(libraryRoot, orgId, token);
+  const dir = await stageDir(libraryRoot, orgId, token);
   const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
   if (meta.org !== orgId) throw new PackError("That pack was checked for another show. Drop it again here.");
@@ -196,7 +202,7 @@ export async function installPack(libraryRoot: string, orgId: string, token: unk
 }
 
 export async function cancelPack(libraryRoot: string, orgId: string, token: unknown) {
-  if (tokenOk(token)) await rm(stageDir(libraryRoot, orgId, token), { recursive: true, force: true });
+  if (tokenOk(token)) await rm(await stageDir(libraryRoot, orgId, token), { recursive: true, force: true });
 }
 
 /** Library-relative paths of the org's project scenes that link the set's files. */

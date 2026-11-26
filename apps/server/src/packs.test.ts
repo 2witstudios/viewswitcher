@@ -1,13 +1,13 @@
 // Staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { addFromTemplate, createOrg, createProject } from "./library";
 import { LibraryScanner } from "./library/scanner";
-import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
+import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { SHOWS, SHOWS_DIR, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
@@ -311,5 +311,67 @@ describe("a templates/ folder linked outside the library", () => {
     } finally {
       await rm(away, { recursive: true, force: true });
     }
+  });
+});
+
+describe("an org's .viewswitcher/ or staging/ linked outside the library", () => {
+  const HOUR_AND_A_BIT = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+  /** A folder outside the library with an old file and an old folder in it, as a sweep would see them. */
+  async function awayWithOldFiles() {
+    const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
+    await mkdir(join(away, "staging/old-folder"), { recursive: true });
+    await writeFile(join(away, "staging/old-file"), "keep me");
+    await writeFile(join(away, "old-file"), "keep me");
+    for (const p of ["staging/old-folder", "staging/old-file", "old-file", "staging"]) await utimes(join(away, p), HOUR_AND_A_BIT, HOUR_AND_A_BIT);
+    return away;
+  }
+  const outsideListing = (away: string) => listing(away);
+
+  for (const [what, link] of [[".viewswitcher/", ".viewswitcher"], ["staging/", ".viewswitcher/staging"]] as const) {
+    test(`${what}: staging a pack is refused and writes nothing there; the sweep deletes nothing there`, async () => {
+      const away = await awayWithOldFiles();
+      try {
+        const before = await outsideListing(away);
+        await rm(join(root, org, ".viewswitcher"), { recursive: true, force: true });
+        await mkdir(join(root, org, ".viewswitcher"), { recursive: true });
+        await rm(join(root, org, link), { recursive: true, force: true });
+        await symlink(link === ".viewswitcher" ? away : join(away, "staging"), join(root, org, link));
+        await expect(stagePack(root, org, { zip: starterZip }, await starterJs())).rejects.toThrow("link");
+        await sweepStaging(root);
+        expect(await outsideListing(away)).toEqual(before);
+        expect(await readFile(join(away, "staging/old-file"), "utf8")).toBe("keep me");
+        // Install and cancel with a token that would name a folder there touch nothing either.
+        const token = "a".repeat(24);
+        await mkdir(join(away, "staging", token), { recursive: true });
+        await writeFile(join(away, "staging", token, "meta.json"), JSON.stringify({ org, set: "x", manifest: { id: "x" }, files: [], created: 0 }));
+        await expect(installPack(root, org, token)).rejects.toThrow("link");
+        await cancelPack(root, org, token).catch(() => {});
+        expect(await readFile(join(away, "staging", token, "meta.json"), "utf8")).toContain(org);
+      } finally {
+        await rm(away, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("an org folder that is a link outside the library: the sweep leaves it alone", async () => {
+    const away = await awayWithOldFiles();
+    try {
+      await mkdir(join(away, ".viewswitcher"), { recursive: true });
+      await rename(join(away, "staging"), join(away, ".viewswitcher/staging"));
+      await symlink(away, join(root, "elsewhere"));
+      const before = await outsideListing(away);
+      await sweepStaging(root);
+      expect(await outsideListing(away)).toEqual(before);
+    } finally {
+      await rm(away, { recursive: true, force: true });
+    }
+  });
+
+  test("a plain staging folder is still swept: a pack staged over an hour ago goes, a new one stays", async () => {
+    const old = await stagePack(root, org, { zip: starterZip }, await starterJs());
+    const fresh = await stagePack(root, org, { zip: starterZip }, await starterJs());
+    await utimes(join(root, org, ".viewswitcher/staging", old.token), HOUR_AND_A_BIT, HOUR_AND_A_BIT);
+    await sweepStaging(root);
+    expect(await readdir(join(root, org, ".viewswitcher/staging"))).toEqual([fresh.token]);
   });
 });

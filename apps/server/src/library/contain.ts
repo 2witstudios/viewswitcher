@@ -63,6 +63,24 @@ export async function resolveInLibrary(libraryRoot: string, clientPath: unknown,
 }
 
 /**
+ * An org's staging folder (<org>/.viewswitcher/staging), where template packs are unpacked before
+ * anyone says Install and which the hourly sweep clears, or a PathError. The org folder must really be
+ * in the library (it may be a link to another place in it), and neither .viewswitcher/ nor staging/ may
+ * be a link at all: a pack is written there and anything older than an hour deleted, so a link would
+ * aim both at wherever it points. Folders that aren't there yet are made by whoever writes.
+ */
+export async function stagingIn(libraryRoot: string, orgId: string): Promise<string> {
+  let at = await resolveInLibrary(libraryRoot, orgId, { forWrite: true });
+  for (const part of STAGING.split("/")) {
+    at = join(at, part);
+    const s = await lstat(at).catch(() => null);
+    // A link or a file where a folder should be: never followed, never replaced.
+    if (s && !s.isDirectory()) throw new PathError("The show's staging folder is a link or a file; packs are only unpacked into a plain folder in the library");
+  }
+  return at;
+}
+
+/**
  * Where a library path really is (through links), as a library path, or the path itself when that
  * can't be told. Synchronous, for checks that must happen at one instant (the agents' on-air guard).
  */
