@@ -279,7 +279,7 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
   const used = new Set<string>();
   for (const [path, text] of Object.entries(texts)) {
     if (!isTextFile(path) || path === "pack.json") continue;
-    for (const m of text.matchAll(PLACEHOLDER)) used.add(m[1]!);
+    for (const p of placeholdersIn(text)) used.add(p);
   }
   const unknown = [...used].filter((p) => !(PACK_PLACEHOLDERS as readonly string[]).includes(p));
   if (unknown.length) warnings.push(`${unknown.map((p) => `{{${p}}}`).join(", ")} ${unknown.length === 1 ? "isn't a placeholder" : "aren't placeholders"} ViewSwitcher fills, so ${unknown.length === 1 ? "it stays" : "they stay"} as typed`);
@@ -321,7 +321,10 @@ export function checkPack(files: PackFile[], texts: Record<string, string>): Pac
 export const installedPath = (packPath: string) => (packPath.startsWith("templates/") ? packPath.slice("templates/".length) : packPath);
 
 /** A placeholder as files write it: {{ORG_NAME}}. */
-export const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+const PLACEHOLDER = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
+
+/** The placeholder names `text` uses ("ORG_NAME" for {{ORG_NAME}}), each once, known or not. */
+export const placeholdersIn = (text: string): string[] => [...new Set(Array.from(text.matchAll(PLACEHOLDER), (m) => m[1]!))];
 
 /**
  * Fill the placeholders in the text file `path`; unknown ones stay as typed. Values are escaped for

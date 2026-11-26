@@ -1,6 +1,6 @@
 // EDIT-23: the template pack format's validator.
 import { describe, expect, test } from "bun:test";
-import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, planPack, readManifest } from "./template-pack";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, PACK_LIMITS, type PackEntry, placeholdersIn, planPack, readManifest } from "./template-pack";
 
 const file = (path: string, size = 100): PackEntry => ({ path, size, type: "file" });
 const manifest = (over: Record<string, unknown> = {}) => JSON.stringify({ format: 1, id: "neon", name: "Neon", version: "1.0.0", description: "Bright.", views: ["main", "brb"], placeholders: ["ORG_NAME", "PACK"], ...over });
@@ -185,4 +185,10 @@ test("fillPlaceholders escapes values for the file they land in", () => {
 test("isTextFile: the library's text files, by extension in any case", () => {
   for (const p of ["a.html", "t/A.HTML", "x.css", "x.js", "org.json", "BRAND.md", "n.txt", "m.svg"]) expect(isTextFile(p)).toBe(true);
   for (const p of ["a.png", "a.woff2", "html", "dir.html/file", ".html.png", "a"]) expect(isTextFile(p)).toBe(false);
+});
+
+test("placeholdersIn names each placeholder once, known or not, and only upper-case ones", () => {
+  const text = "{{ORG_NAME}} {{PACK}}/x {{ORG_NAME}} {{HOST}} {{lower}} {ORG_ID}";
+  expect(placeholdersIn(text)).toEqual(["ORG_NAME", "PACK", "HOST"]);
+  expect(placeholdersIn(text)).toEqual(["ORG_NAME", "PACK", "HOST"]); // the same again: no state between calls
 });

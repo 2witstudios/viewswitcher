@@ -7,7 +7,7 @@
 // as an org's own templates. In a pack they're the set's own: {{PACK}}/_shared/….
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { checkPack, isTextFile, PACK_PLACEHOLDERS, PLACEHOLDER, planPack } from "@viewswitcher/shared";
+import { checkPack, isTextFile, PACK_PLACEHOLDERS, placeholdersIn, planPack } from "@viewswitcher/shared";
 import { SHOWS, type Show } from "./shows";
 import { walkFiles } from "./walk";
 import { writeZip } from "./zip";
@@ -38,7 +38,7 @@ export function buildPack(m: Manifest, views: [string, string][], shared: [strin
   for (const [v, html] of views) add(`templates/${v}.html`, html);
   for (const [f, data] of shared) add(`_shared/${f}`, data);
   const used = new Set<string>();
-  for (const t of Object.values(texts)) for (const x of t.matchAll(PLACEHOLDER)) used.add(x[1]!);
+  for (const t of Object.values(texts)) for (const p of placeholdersIn(t)) used.add(p);
   const manifest = {
     format: 1, id: m.id, name: m.name, version: m.version ?? "1.0.0", description: m.description, author: m.author ?? "ViewSwitcher",
     views: views.map(([v]) => v),
