@@ -10,7 +10,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { LiveState } from "@viewswitcher/shared";
 import { type BuiltinPack, buildBuiltins } from "../builtin-packs";
 import { config } from "../config";
-import { onAirFor, renamedOnAir } from "../library-actions";
+import { onAirFor } from "../library-actions";
+import { LiveStore } from "../live/store";
 import { writeText } from "../library-files";
 import { ensureLibrary } from "../library-kit";
 import type { PreviewResult } from "../preview-types";
@@ -31,7 +32,9 @@ const fresh = (): LiveState => ({
   warnings: [],
   agent: { onAir: "not-live", lastSeen: null, client: null },
 });
-let state = fresh();
+/** The switcher's own live store, so go_on_air and renames go the way the switcher's do. */
+let store: LiveStore;
+let state: LiveState;
 /** Runs inside goOnAir after the scene is looked up and before it commits (a test makes OBS go live there). */
 let beforeCommit: (() => void) | null = null;
 /** Runs on every read of the switcher state by the tools (a test counts reads to pick an instant). */
@@ -52,22 +55,18 @@ beforeAll(async () => {
   await ensureLibrary(root, { kit: config.libraryKit, starter: config.starter, gitInit: async () => false });
   // The starter has no transition; most orgs make one.
   await writeFile(join(root, ORG, "templates/_shared/transition.html"), "<title>Wipe</title>");
+  const { onAir: _, warnings: __, ...initial } = fresh();
+  store = await LiveStore.open({ root, file: join(root, ".viewswitcher/state.json"), publish: () => {}, initial });
+  state = store.state;
   const server = createMcpServer({
     root,
     kit: config.libraryKit,
     port: PORT,
     state: () => (onStateRead?.(), state),
-    // As main.ts does it: look the scene up, run the agent's check, then commit.
-    goOnAir: async (b, check) => {
-      const next = await onAirFor(root, b);
-      beforeCommit?.();
-      check?.();
-      state.onAir = next;
-      return state;
-    },
-    renamed: async (from, name, r) => {
-      if (state.onAir?.path === from) state.onAir = renamedOnAir(state.onAir, from, name, r);
-    },
+    // The store runs the agent's check after looking the scene up and again as it commits; the hook
+    // runs right before each, where a test changes the state.
+    goOnAir: (b, check) => store.goOnAir(b, check && (() => (beforeCommit?.(), check()))),
+    renamed: (from, name, r) => store.renamed(from, name, r),
     previewer: { scene: async () => previews.scene, program: async () => previews.program },
     onCommit: () => atCommit?.(),
     outputsKnown: () => outputsKnown,
@@ -85,7 +84,8 @@ afterAll(() => {
   rmSync(outside, { recursive: true, force: true });
 });
 beforeEach(() => {
-  state = fresh();
+  state = store.state; // a test may have put a proxy in its place
+  Object.assign(state, fresh());
   beforeCommit = null;
   onStateRead = null;
   atCommit = null;
@@ -445,7 +445,7 @@ describe("go_on_air and the agent guard", () => {
   });
 });
 
-describe("structural tools stay inside the library (CodeRabbit)", () => {
+describe("structural tools stay inside the library", () => {
   test("duplicate_scene of a link to a file outside is refused; a link inside still copies", async () => {
     await writeFile(join(outside, "elsewhere.html"), "<title>Secret</title>");
     await symlink(join(outside, "elsewhere.html"), join(root, ORG, "templates", "linked-out.html"));
@@ -668,7 +668,7 @@ describe("the guard covers what the scene on air loads, and is checked again as 
   });
 });
 
-describe("CodeRabbit follow-ups", () => {
+describe("the guard at the commit instant", () => {
   test("write_file: a file the scene on air loads, with OBS going live between the in-turn check and the commit, is refused", async () => {
     await writeFile(join(root, ORG, "assets/race.css"), ".a{}");
     const scene = `${ORG}/templates/race-scene.html`;
@@ -721,7 +721,7 @@ describe("CodeRabbit follow-ups", () => {
   });
 });
 
-describe("dangling links where a new file would go (CodeRabbit)", () => {
+describe("dangling links where a new file would go", () => {
   test("Duplicate (MCP and the switcher's), New scene from a template and a stream copy never write through one", async () => {
     const { duplicateScene } = await import("../library-actions");
     const nowhere = (name: string) => join(outside, `dangling-${name}`);
@@ -746,7 +746,7 @@ describe("dangling links where a new file would go (CodeRabbit)", () => {
   });
 });
 
-describe("destination folders linked outside, with a name that links back in (CodeRabbit)", () => {
+describe("destination folders linked outside, with a name that links back in", () => {
   test("add_asset, scene_from_template and create_project refuse; nothing is written outside", async () => {
     const { mkdir } = await import("node:fs/promises");
     const away = join(outside, "away");
@@ -800,7 +800,7 @@ describe("destination folders linked outside, with a name that links back in (Co
   });
 });
 
-describe("CodeRabbit pass 3: the guard sees the file really made, a changed dependency, a cut-short scan, and unknown OBS status", () => {
+describe("the guard sees the file really made, a changed dependency, a cut-short scan, and unknown OBS status", () => {
   const onAirWith = async (name: string, html: string) => {
     await writeFile(join(root, ORG, `templates/${name}.html`), html);
     await data("go_on_air", { path: `${ORG}/templates/${name}.html` });

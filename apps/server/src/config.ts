@@ -26,7 +26,7 @@ export const config = {
   /** Built switcher/program SPA. */
   webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
   /**
-   * The built-in template packs (EDIT-29), prebuilt by packs:export (the Mac app's Resources/packs).
+   * The built-in template packs, prebuilt by packs:export (the Mac app's Resources/packs).
    * Unset in a source run: they're built from the repo (the starter and apps/site's shows) at start.
    */
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
@@ -38,7 +38,7 @@ export const config = {
   allowedOrigins: (env.VIEWSWITCHER_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   /** Where the server listens for this Mac (HOST: an old escape hatch; everything not from this Mac is still gated, gate.ts). */
   host: env.HOST ?? "127.0.0.1",
-  /** Phones and tablets on the Wi-Fi (MAC-23): listen on the network too, from the start. The Mac app passes its remembered setting. */
+  /** Phones and tablets on the Wi-Fi: listen on the network too, from the start. The Mac app passes its remembered setting. */
   lan: env.VIEWSWITCHER_LAN === "1",
   /** The address the Wi-Fi listener binds: every IPv4 interface, or one address (the integration test binds this Mac's LAN IP). */
   lanHost: env.VIEWSWITCHER_LAN_HOST || "0.0.0.0",
@@ -46,7 +46,11 @@ export const config = {
   adminToken: env.VIEWSWITCHER_ADMIN_TOKEN || "",
   obs: {
     url: env.OBS_URL ?? "ws://127.0.0.1:4455",
-    password: env.OBS_PASSWORD ?? localObsPassword(),
+    /**
+     * Read on every connect, not once at start: the password is often turned on or changed in OBS
+     * after the switcher is already running.
+     */
+    password: (): string | undefined => env.OBS_PASSWORD ?? localObsPassword(),
     /** The one OBS scene that holds the program browser source and the devices. */
     scene: env.OBS_SCENE ?? "ViewSwitcher",
     programSource: env.OBS_PROGRAM_SOURCE ?? "ViewSwitcher Program",

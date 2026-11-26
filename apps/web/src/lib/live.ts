@@ -40,6 +40,25 @@ let downTimer: ReturnType<typeof setTimeout> | undefined;
 /** The built entry script this page runs (undefined under the Vite dev server, which never reloads this way). */
 const ownBuild = typeof document !== "undefined" ? document.querySelector<HTMLScriptElement>('script[src*="/assets/index-"]')?.getAttribute("src") ?? undefined : undefined;
 
+/** The server run and its last library change this page heard; null until the first hello. */
+let heard: { server: string; seq: number } | null = null;
+
+/**
+ * Whether a page coming back to the live socket missed library changes: the server restarted (a new
+ * run) or sent changes while the page was away. A short drop with nothing changed reloads nothing.
+ */
+export function missedChanges(last: { server: string; seq: number } | null, hello: { server: string; seq: number }): boolean {
+  return last !== null && (last.server !== hello.server || last.seq !== hello.seq);
+}
+
+/**
+ * After changes were missed, any file may have changed: bump every version (the shared `*`, in every
+ * scene url) so each scene loads what's on disk now.
+ */
+export function caughtUp(versions: Record<string, number>): Record<string, number> {
+  return { ...versions, "*": (versions["*"] ?? 0) + 1 };
+}
+
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -55,6 +74,13 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data) as ServerMessage;
+    if (msg.t === "hello") {
+      if (missedChanges(heard, msg)) {
+        set({ versions: caughtUp(live.versions) });
+        queryClient.invalidateQueries({ queryKey: ["library"] });
+      }
+      heard = { server: msg.server, seq: msg.seq };
+    }
     if (msg.t === "state") set({ state: msg.state });
     if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.hash, msg.edit, { session: msg.session, seq: msg.seq }));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
@@ -67,6 +93,7 @@ function connect() {
       }
       set({ versions });
       queryClient.invalidateQueries({ queryKey: ["library"] });
+      if (heard) heard = { ...heard, seq: msg.seq };
     }
   };
 }
@@ -83,7 +110,7 @@ export function useLive(): Live {
  * URL for a library file that changes whenever the file (or the shared theme) changes.
  * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
  */
-/** `bridge`: with the bridge the program page talks to the sandboxed scene through (EDIT-26). */
+/** `bridge`: with the bridge the program page talks to the sandboxed scene through. */
 export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;

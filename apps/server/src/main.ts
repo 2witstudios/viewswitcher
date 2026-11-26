@@ -1,16 +1,18 @@
 // ViewSwitcher server: the switcher API, the library files, live state, OBS, and the MCP server for agents.
 import { existsSync, watch } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, sep } from "node:path";
-import { EditError, obsColor, orgOf } from "@viewswitcher/shared";
-import type { LiveState, OnAir, ServerMessage, Slot } from "@viewswitcher/shared";
+import { EditError } from "@viewswitcher/shared";
+import type { ServerMessage, Slot } from "@viewswitcher/shared";
 import type { Server, ServerWebSocket } from "bun";
 import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, stdioLaunch } from "./agent-connect";
 import { config } from "./config";
 import * as lib from "./library";
-import { customizeScene, duplicateScene, onAirFor, type OnAirRequest, orgDir, renamedOnAir, sceneFromTemplate } from "./library-actions";
+import { customizeScene, duplicateScene, orgDir, sceneFromTemplate } from "./library-actions";
 import { ensureLibrary } from "./library-kit";
+import { createPlacer } from "./live/placement";
+import { LiveStore } from "./live/store";
 import { handleMcp, noteSeen } from "./mcp/http";
 import { createPreviewer } from "./preview";
 import type { McpDeps } from "./mcp/server";
@@ -22,11 +24,10 @@ import { hostTrusted, originAllowed } from "./origin";
 import { PAIR_PAGE_CSP, pairPage } from "./pair-page";
 import { deviceName, guessName, Pairing, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 import { inside, PathError, plainName } from "./paths";
-import { placeDevices } from "./placement";
 import { createSlotOrder } from "./slot-order";
 import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { withBridge } from "./scene-bridge";
-import { editScene, parseEdit, readForEdit, renameScene, type RenameResult, scenePath } from "./scene-edit";
+import { editScene, parseEdit, readForEdit, renameScene, scenePath } from "./scene-edit";
 import { defuseMeta, libraryHeaders } from "./scene-sandbox";
 import { readSettings, SettingsError, writeSettings } from "./settings";
 import { asDropped, type BuiltinPack, buildBuiltins, readBuiltins } from "./builtin-packs";
@@ -47,7 +48,7 @@ const stateFile = join(config.library, ".viewswitcher", "state.json");
 await sweepStaging(config.library).catch(() => {});
 /** The starter kit's scene.js: a pack that ships the same one is marked "the standard scene script" on install. */
 const starterScript = await readFile(join(config.starter, "templates/_shared/scene.js"), "utf8").catch(() => null);
-/** The built-in template packs (EDIT-29): loaded once, on first use, and kept (a pack that won't build is logged and left out). */
+/** The built-in template packs: loaded once, on first use, and kept (a pack that won't build is logged and left out). */
 let builtinsLoad: Promise<BuiltinPack[]> | null = null;
 const builtins = () =>
   (builtinsLoad ??= (config.packs
@@ -67,7 +68,7 @@ if (!loopbackAddress(config.host) && config.host !== "localhost") {
   process.exit(1);
 }
 
-// Phones and tablets (MAC-23 … MAC-26); before anything else awaits, so publish() can always reach them.
+// Phones and tablets: before anything else awaits, so publish() can always reach them.
 /** Paired devices and the open pairing code (pairing.ts); devices.json sits with state.json, outside git (.viewswitcher/ is ignored). */
 const pairing = await new Pairing({ file: join(config.library, ".viewswitcher", "devices.json"), ttlMs: Number(process.env.VIEWSWITCHER_PAIR_TTL_MS) || undefined }).load();
 type Socket = ServerWebSocket<{ device: string | null; lan: boolean }>;
@@ -77,30 +78,35 @@ pairing.onRemoved = (id) => {
   for (const ws of sockets) if (ws.data.device === id) ws.close(4401, "This device was removed");
 };
 
+/** The main listener on 127.0.0.1, from the end of startup on. */
+let server: Server<Socket["data"]> | undefined;
 /** The Wi-Fi listener, while "Let phones and tablets on this Wi-Fi connect" is on. */
 let lanServer: Server<Socket["data"]> | null = null;
 
 // ---------------------------------------------------------------- live state
 
-const saved = await readFile(stateFile, "utf8").then((t) => JSON.parse(t) as { onAir: OnAir | null }, () => ({ onAir: null }));
-const state: LiveState = {
-  onAir: saved.onAir,
-  obs: { connected: false, recording: false, streaming: false },
-  obsSetup: null,
-  usb: { enabled: false, attached: false, connected: false },
-  warnings: [],
-  agent: { onAir: (await readSettings(config.library)).agentOnAir, lastSeen: null, client: null },
-};
-if (state.onAir) state.onAir.transition = await lib.resolveTransition(config.library, state.onAir.path).catch(() => null);
-let lastSlots: { path: string; slots: Slot[] } | null = null;
-const acceptSlots = createSlotOrder();
-
+/** Every client on 127.0.0.1 and, while it's on, the Wi-Fi listener. Safe before either exists. */
 function publish(msg: ServerMessage) {
   const text = JSON.stringify(msg);
-  server.publish("all", text);
+  server?.publish("all", text);
   lanServer?.publish("all", text);
 }
-const publishState = () => publish({ t: "state", state });
+const log = process.env.VIEWSWITCHER_LOG ? (line: string) => console.log(line) : undefined;
+
+const store = await LiveStore.open({
+  root: config.library,
+  file: stateFile,
+  publish,
+  log,
+  initial: {
+    obs: { connected: false, recording: false, streaming: false },
+    obsSetup: null,
+    usb: { enabled: false, attached: false, connected: false },
+    agent: { onAir: (await readSettings(config.library)).agentOnAir, lastSeen: null, client: null },
+  },
+});
+const state = store.state;
+const acceptSlots = createSlotOrder();
 
 // The web build being served. Pages (OBS's program source, the iPad, browsers) reload when it changes,
 // so a rebuild reaches OBS without anyone refreshing its browser source.
@@ -111,120 +117,57 @@ setInterval(async () => {
   const next = await readBuild();
   if (next === build) return;
   build = next;
-  if (process.env.VIEWSWITCHER_LOG) console.log("[build] switcher rebuilt, reloading pages");
+  log?.("[build] switcher rebuilt, reloading pages");
   publish({ t: "build", build });
 }, 2000);
-
-async function persist(onAir: OnAir | null = state.onAir) {
-  await mkdir(join(config.library, ".viewswitcher"), { recursive: true });
-  await writeFile(stateFile, JSON.stringify({ onAir }, null, 2));
-}
-
-/** Put a scene on air: for the switcher (POST /api/onair) and for agents (go_on_air). */
-async function goOnAir(b: OnAirRequest, check?: () => void): Promise<LiveState> {
-  if (process.env.VIEWSWITCHER_LOG) console.log(`[onair] ${String(b.path).split("/").slice(-2).join("/")}`);
-  const next = await onAirFor(config.library, b);
-  check?.(); // an agent's go_on_air: the on-air setting against the state now, after the await
-  // Saved first: if saving fails, the scene on air stays as it was (nothing else can pick up a new
-  // scene that wasn't saved). The agent's check runs again after the save; if it now refuses, the
-  // saved record goes back to the scene on air.
-  await persist(next);
-  try {
-    check?.();
-  } catch (e) {
-    await persist(state.onAir).catch((err) => console.error("[state] couldn't save:", (err as Error).message));
-    throw e;
-  }
-  state.onAir = next;
-  state.warnings = [];
-  publishState();
-  return state;
-}
-
-/** A scene was renamed (switcher or agent): if it's the one on air, the on-air record follows it. */
-async function renamed(from: string, name: string, r: Extract<RenameResult, { ok: true }>) {
-  const on = state.onAir;
-  if (!on || on.path !== from) return;
-  state.onAir = renamedOnAir(on, from, name, r);
-  // The file has moved: everyone hears about it even if saving the state fails (the next change saves it).
-  publishState();
-  await persist().catch((e) => console.error("[state] couldn't save:", (e as Error).message));
-}
 
 const obs = new OBSClient({
   url: config.obs.url,
   password: config.obs.password,
   log: true,
-  onStatus: (s) => {
-    state.obs = s;
-    if (!s.connected) state.obsSetup = null;
-    publishState();
-  },
+  onStatus: (s) => store.update(s.connected ? { obs: s } : { obs: s, obsSetup: null }),
   onIdentified: () => {
-    groundShown = null;
+    placer.reset();
     recheckSetup();
-    if (lastSlots) applyLatest();
+    void placer.replay();
   },
   onEvent: (type, data) => {
+    placer.onEvent(type);
     if (SETUP_EVENTS.has(type) || (type === "InputSettingsChanged" && data.inputName === config.obs.programSource)) recheckSetup();
   },
-}).start();
+});
 
-// Whether OBS has the scene and sources the switcher needs; the switcher shows a setup card until it does.
-// Rechecked when OBS connects, after "Set up OBS", and when scenes or sources come and go in OBS.
-const SETUP_EVENTS = new Set(["SceneCreated", "SceneRemoved", "SceneNameChanged", "SceneItemCreated", "SceneItemRemoved", "InputNameChanged", "InputRemoved"]);
+// OBS sources follow the slots of the scene the program page shows (live/placement.ts).
+const placer = createPlacer({
+  obs,
+  names: config.obs,
+  ground: (path) => store.groundFor(path),
+  onPlaced: (warnings) => store.setPlacementWarnings(warnings),
+  placed: store.placedSources,
+  log,
+});
+
+// Whether OBS has the scene and sources the switcher needs, in order; the switcher shows a setup card
+// until it does. Rechecked when OBS connects, after "Set up OBS", and when scenes or sources come, go
+// or move in OBS.
+const SETUP_EVENTS = new Set(["SceneCreated", "SceneRemoved", "SceneNameChanged", "SceneItemCreated", "SceneItemRemoved", "SceneItemListReindexed", "InputNameChanged", "InputRemoved"]);
 let setupTimer: ReturnType<typeof setTimeout> | undefined;
 function recheckSetup() {
   clearTimeout(setupTimer);
   setupTimer = setTimeout(async () => {
     const next = await checkObsSetup(obs, config.obs, config.port).catch(() => null);
     if (JSON.stringify(next) === JSON.stringify(state.obsSetup)) return;
-    state.obsSetup = next;
-    publishState();
+    store.update({ obsSetup: next });
   }, 300);
 }
-
-// OBS placements run one at a time, and only the latest request is applied: overlapping
-// placements would interleave OBS requests and could leave sources from an older scene.
-let placementQueue = Promise.resolve();
-let placementSeq = 0;
-
-function applyLatest(): Promise<void> {
-  const seq = ++placementSeq;
-  placementQueue = placementQueue.then(async () => {
-    if (seq !== placementSeq || !lastSlots) return; // superseded
-    if (process.env.VIEWSWITCHER_LOG) console.log(`[place] ${lastSlots.path.split("/").slice(-2).join("/")}`);
-    await applySlots(lastSlots.path, lastSlots.slots);
-  });
-  return placementQueue;
-}
-
-// The OBS ground color follows the org of the scene being shown.
-let groundShown: string | null = null;
-async function applyGround(path: string) {
-  const org = await lib.readOrg(config.library, orgOf(path)).catch(() => null);
-  if (!org || org.ground === groundShown) return;
-  await obs.request("SetInputSettings", { inputName: config.obs.groundSource, inputSettings: { color: obsColor(org.ground) } });
-  groundShown = org.ground;
-}
-
-async function applySlots(path: string, slots: Slot[]) {
-  if (!obs.status.connected) {
-    state.warnings = [];
-    return publishState();
-  }
-  try {
-    await applyGround(path).catch(() => {}); // a missing ground source isn't worth a warning
-    state.warnings = await placeDevices(obs, slots, config.obs);
-  } catch (e) {
-    state.warnings = [`Couldn't place sources in OBS: ${(e as Error).message}`];
-  }
-  publishState();
-}
+obs.start();
 
 // ---------------------------------------------------------------- library watcher
 
 let changed = new Set<string>();
+/** This run of the server, and its library changes so far: a reconnecting client asks whether it missed any. */
+const serverRun = crypto.randomUUID();
+let librarySeq = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 watch(config.library, { recursive: true }, (_event, filename) => {
   if (!filename) return;
@@ -235,17 +178,9 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   flushTimer = setTimeout(async () => {
     const paths = [...changed];
     changed = new Set();
-    publish({ t: "library:changed", paths });
-    // A transition file appeared or went away: re-pick the one for the scene on air.
-    const on = state.onAir;
-    if (on && paths.some((p) => p.endsWith("transition.html"))) {
-      const transition = await lib.resolveTransition(config.library, on.path);
-      // Only for the scene it was worked out for: another may have gone on air meanwhile.
-      if (state.onAir === on && transition !== on.transition) {
-        on.transition = transition;
-        publishState();
-      }
-    }
+    // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
+    await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
+    publish({ t: "library:changed", paths, seq: ++librarySeq });
   }, 120);
 });
 
@@ -254,7 +189,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 
-// ---------------------------------------------------------------- phones and tablets (MAC-23 … MAC-26)
+// ---------------------------------------------------------------- phones and tablets
 
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
 const lanNames = () => (lanServer ? thisMac() : null);
@@ -315,7 +250,7 @@ async function remoteApi(req: Request, path: string): Promise<Response> {
     const s = remoteStatus();
     const [host] = s.urls.filter((u) => !u.includes(".local:")).concat(s.urls);
     // The link opens on an address any phone can reach; `mac` also names this Mac's .local name, so the
-    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address (PHONE-4).
+    // iPhone and iPad app can pair on the name, which survives the router handing the Mac a new address.
     const mac = s.localName && host && !host.includes(".local:") ? `&mac=${encodeURIComponent(s.localName)}` : "";
     return json({ ...s, code: { code, expiresAt }, pairUrl: host ? `${host}pair?code=${code}${mac}` : null });
   }
@@ -350,7 +285,8 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
   // the iPad on the USB-C bridge.
   if (path === "/api/info" && req.method === "GET") {
     if (!macOnly) return json({ error: "Not found" }, 404);
-    return json({ library: root, port: server.port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(server.port ?? config.port)) });
+    const port = server?.port ?? config.port;
+    return json({ library: root, port, claudeCode: claudeCodeCommand(root, homedir()), stdio: commandLine(ownStdio(port)) });
   }
   if (path === "/api/remote" || path.startsWith("/api/remote/")) {
     return isAdmin(req, macOnly) ? remoteApi(req, path) : json({ error: "Not found" }, 404);
@@ -363,21 +299,20 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
   // Add to Claude Desktop: an extension made for this install, whose command is this server's own executable.
   if (path === "/api/agent/viewswitcher.mcpb" && req.method === "GET") {
     if (!macOnly) return json({ error: "Not found" }, 404);
-    const file = mcpbFile(mcpbManifest({ launch: ownStdio(server.port ?? config.port), version: extensionVersion }));
+    const file = mcpbFile(mcpbManifest({ launch: ownStdio(server?.port ?? config.port), version: extensionVersion }));
     return new Response(file, { headers: { "content-type": "application/octet-stream", "content-disposition": 'attachment; filename="ViewSwitcher.mcpb"', "cache-control": "no-store" } });
   }
 
   if (path === "/api/onair" && post) {
     const b = await body(req);
-    return json(await goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId }));
+    return json(await store.goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId }));
   }
 
   // What agents connected over MCP may put on air (agent-guard.ts); people in the switcher are never limited.
   if (path === "/api/agent/settings" && post) {
     const b = await body(req);
     const s = await writeSettings(root, { agentOnAir: b.onAir });
-    state.agent = { ...state.agent, onAir: s.agentOnAir };
-    publishState();
+    store.update({ agent: { ...state.agent, onAir: s.agentOnAir } });
     return json(state.agent);
   }
 
@@ -388,12 +323,11 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     // (Ignoring "stale" reports by scene caused drift.) Reports are numbered per page; one that
     // arrives after a newer one from the same page (a live drag's 33 ms reports can swap) is ignored.
     if (!acceptSlots(b.page, b.seq)) return json({ ok: true, stale: true, warnings: state.warnings });
-    if (process.env.VIEWSWITCHER_LOG) console.log(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
-    const slots: Slot[] = (b.slots ?? []).map((s: Slot) => ({
+    log?.(`[slots] ${String(b.path).split("/").slice(-2).join("/")}`);
+    const slots: Slot[] = (Array.isArray(b.slots) ? b.slots : []).map((s: Slot) => ({
       source: String(s.source), x: Number(s.x), y: Number(s.y), w: Number(s.w), h: Number(s.h),
     }));
-    lastSlots = { path: b.path, slots };
-    await applyLatest();
+    await placer.report(String(b.path), slots);
     return json({ ok: true, warnings: state.warnings });
   }
 
@@ -442,7 +376,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     }
     return json({ saved });
   }
-  // Template packs (EDIT-24 · EDIT-25): check a dropped .zip or folder and show it, install it as a
+  // Template packs: check a dropped .zip or folder and show it, install it as a
   // template set, or remove a set. See packs.ts.
   if (path === "/api/packs/stage" && post) {
     const form = await req.formData();
@@ -454,7 +388,7 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     if (!files.length || files.length !== paths.length || files.some((f) => !(f instanceof File))) return json({ error: "Drop a template pack: a .zip, or its folder" }, 400);
     return json(await stagePack(root, orgId, { files: files.map((f, i) => ({ path: paths[i]!, data: f as File })) }, starterScript));
   }
-  // The built-in template packs (EDIT-29 · EDIT-30): listed, then staged like a dropped one.
+  // The built-in template packs: listed, then staged like a dropped one.
   if (path === "/api/packs/builtin" && req.method === "GET") {
     return json((await builtins()).map(({ id, name, description, views }) => ({ id, name, description, views })));
   }
@@ -490,15 +424,15 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
     const b = await body(req);
     const r = await editScene(root, b.path, String(b.hash ?? ""), b.edits);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
-    if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
+    log?.(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
     return json(r);
   }
-  // Rename a scene (EDIT-19): its title, and a stream scene's file. The scene stays on air if it is.
+  // Rename a scene: its title, and a stream scene's file. The scene stays on air if it is.
   if (path === "/api/scene/rename" && post) {
     const b = await body(req);
     const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
     if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
-    await renamed(b.path, b.name, r);
+    await store.renamed(b.path, b.name, r);
     return json(r);
   }
   if (path === "/api/scene/preview" && post) {
@@ -510,13 +444,12 @@ async function api(req: Request, path: string, url: URL, macOnly: boolean): Prom
   }
   if (path === "/api/obs/setup" && post) {
     // JSON only: a cross-site page can't send that without a CORS preflight, which this server never grants,
-    // so no website can rearrange OBS mid-stream (the general fix for other endpoints is ISSUE-10).
+    // so no website can rearrange OBS mid-stream (the other endpoints rely on the Origin check in handle()).
     if (!req.headers.get("content-type")?.startsWith("application/json")) return json({ error: "Expected application/json" }, 415);
     if (!obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
     // While streaming or recording, setup never switches OBS's program scene (it would cut the stream).
     const report = await setupObs(obs, config.obs, config.port, { switchProgram: !obs.status.streaming && !obs.status.recording });
-    state.obsSetup = await checkObsSetup(obs, config.obs, config.port);
-    publishState();
+    store.update({ obsSetup: await checkObsSetup(obs, config.obs, config.port) });
     return json(report);
   }
   if (path === "/api/obs/record" && post) return json(await obs.request("ToggleRecord"));
@@ -543,8 +476,8 @@ const mcp: McpDeps = {
   kit: config.libraryKit,
   port: config.port,
   state: () => state,
-  goOnAir,
-  renamed,
+  goOnAir: (b, check) => store.goOnAir(b, check),
+  renamed: (from, name, r) => store.renamed(from, name, r),
   outputsKnown: () => obs.outputsKnown,
   previewer: createPreviewer(obs, { obs: config.obs, port: config.port, library: config.library }),
   templateSets: builtins,
@@ -553,7 +486,7 @@ const mcp: McpDeps = {
 function agentSeen(client: string | null) {
   const seen = noteSeen(state.agent, client, Date.now());
   state.agent = seen.agent;
-  if (seen.publish) publishState();
+  if (seen.publish) store.publish();
 }
 
 /** Every request, on 127.0.0.1 and (while it's on) the Wi-Fi listener. */
@@ -567,7 +500,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       // The API, the library and the live socket answer only to hosts this server is known by (origin.ts);
       // and anything not from this Mac, page loads included, only to those.
       if ((!local || path === "/ws" || path === "/mcp" || path.startsWith("/api/") || path.startsWith("/library/")) && !hostTrusted(host, config.allowedOrigins, lanNames())) {
-        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${path} for Host ${host}`);
+        log?.(`[http] refused ${path} for Host ${host}`);
         return json({ error: "Unknown host. If you reach ViewSwitcher by another name, add it to VIEWSWITCHER_ORIGINS." }, 421);
       }
       // Anything not from this Mac needs a paired device (gate.ts); unpaired, it can only pair.
@@ -584,7 +517,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
       if (path.startsWith("/api/") && req.method !== "GET" && req.method !== "HEAD") {
         const ok = originAllowed(req.headers.get("origin"), { host, forwardedHost: req.headers.get("x-forwarded-host"), extra: config.allowedOrigins, lan: lanNames() });
         if (!ok) {
-          if (process.env.VIEWSWITCHER_LOG) console.log(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
+          log?.(`[http] refused ${req.method} ${path} from ${req.headers.get("origin")}`);
           return json({ error: "Not allowed from this page" }, 403);
         }
       }
@@ -634,7 +567,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
 
     async function route(): Promise<Response> {
       if (path.startsWith("/api/")) {
-        if (process.env.VIEWSWITCHER_LOG) console.log(`[http] ${req.method} ${path}`);
+        log?.(`[http] ${req.method} ${path}`);
         if (path === "/api/log" && req.method === "POST") {
           console.log("[client]", JSON.stringify(await req.json().catch(() => ({}))));
           return json({ ok: true });
@@ -655,7 +588,7 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
           // live previews simply don't apply to it. ?bridge: with the bridge the program page talks to it through.
           const scene = url.searchParams.has("edit")
             ? await readForEdit(config.library, rel).catch((e) => {
-                if (process.env.VIEWSWITCHER_LOG) console.log(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
+                log?.(`[edit] serving ${rel} untagged: ${(e as Error).message}`);
                 return null;
               })
             : null;
@@ -690,11 +623,12 @@ async function handle(req: Request, srv: Server<Socket["data"]>): Promise<Respon
 
 const websocket = {
   open(ws: Socket) {
-    if (process.env.VIEWSWITCHER_LOG) console.log("[ws] client connected");
+    log?.("[ws] client connected");
     sockets.add(ws);
     ws.subscribe("all");
     ws.send(JSON.stringify({ t: "state", state } satisfies ServerMessage));
     ws.send(JSON.stringify({ t: "build", build } satisfies ServerMessage));
+    ws.send(JSON.stringify({ t: "hello", server: serverRun, seq: librarySeq } satisfies ServerMessage));
   },
   message() {},
   close(ws: Socket) {
@@ -702,7 +636,7 @@ const websocket = {
   },
 };
 
-const server: Server<Socket["data"]> = Bun.serve({ hostname: config.host, port: config.port, fetch: handle, websocket });
+server = Bun.serve({ hostname: config.host, port: config.port, fetch: handle, websocket });
 if (config.lan) setLan(true);
 
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
@@ -729,12 +663,11 @@ if (parent > 1) {
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).
 if (process.env.VIEWSWITCHER_USB !== "0" && usbAvailable()) {
-  state.usb.enabled = true;
+  store.update({ usb: { ...state.usb, enabled: true } });
   startUsbBridge({
     serverPort: config.port,
     onStatus: (s) => {
-      state.usb = { enabled: true, ...s };
-      publishState();
+      store.update({ usb: { enabled: true, ...s } });
     },
   });
 }

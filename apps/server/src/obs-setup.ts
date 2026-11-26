@@ -62,32 +62,30 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
     if (!(e instanceof OBSRequestError && e.code === 601)) throw e; // 601 = already exists
   }
 
+  /**
+   * The input's item in the scene: made if there's none, or (an input of that name left outside the
+   * scene) added to it. `update` is what setup sets on an input that was already there.
+   */
+  const ensure = async (input: { inputName: string; inputKind: string; inputSettings: object }, update: object, what: string) => {
+    let id = await itemIn(obs, scene, input.inputName);
+    if (id === null) {
+      const added = await addToScene(obs, scene, input);
+      log.push(added.created ? `Created ${what}.` : `Added ${what} to "${scene}".`);
+      if (added.created) return added.sceneItemId; // made with the settings it needs
+      id = added.sceneItemId;
+    }
+    await obs.request("SetInputSettings", { inputName: input.inputName, inputSettings: update });
+    return id;
+  };
+
   const settings = { url, width: 1920, height: 1080, fps_custom: false, reroute_audio: false, shutdown: false };
-  let itemId: number;
-  try {
-    ({ sceneItemId: itemId } = await obs.request("GetSceneItemId", { sceneName: scene, sourceName: programSource }));
-    await obs.request("SetInputSettings", { inputName: programSource, inputSettings: settings });
-  } catch {
-    ({ sceneItemId: itemId } = await obs.request("CreateInput", {
-      sceneName: scene, inputName: programSource, inputKind: "browser_source", inputSettings: settings, sceneItemEnabled: true,
-    }));
-    log.push(`Created browser source "${programSource}" → ${url}.`);
-  }
+  const itemId = await ensure({ inputName: programSource, inputKind: "browser_source", inputSettings: settings }, settings, `browser source "${programSource}" → ${url}`);
 
   // The ground color every scene sits on (scenes are transparent). The server recolors it to the
-  // on-air org's ground (org.json) whenever a scene from another org goes on air.
+  // on-air org's ground (org.json) whenever a scene from another org goes on air, so an existing
+  // ground keeps its color.
   const ground = { color: 0xff130f0e /* #0e0f13, the default ground */, width: 1920, height: 1080 };
-  let groundId: number;
-  try {
-    ({ sceneItemId: groundId } = await obs.request("GetSceneItemId", { sceneName: scene, sourceName: groundSource }));
-    // Keep its color: the server sets it to the on-air org's ground.
-    await obs.request("SetInputSettings", { inputName: groundSource, inputSettings: { width: ground.width, height: ground.height } });
-  } catch {
-    ({ sceneItemId: groundId } = await obs.request("CreateInput", {
-      sceneName: scene, inputName: groundSource, inputKind: "color_source_v3", inputSettings: ground, sceneItemEnabled: true,
-    }));
-    log.push(`Created color source "${groundSource}".`);
-  }
+  const groundId = await ensure({ inputName: groundSource, inputKind: "color_source_v3", inputSettings: ground }, { width: ground.width, height: ground.height }, `color source "${groundSource}"`);
 
   // Ground at the bottom, program browser source on top, devices in between.
   const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: scene });
@@ -129,30 +127,43 @@ const previewSettings = { width: 1920, height: 1080, fps_custom: false, reroute_
  */
 export async function ensurePreview(obs: ObsRequester, { previewScene, previewSource }: PreviewNames, url?: string): Promise<string[]> {
   const log: string[] = [];
-  const exists = async (create: () => Promise<unknown>) => {
-    try {
-      await create();
-      return false;
-    } catch (e) {
-      if (e instanceof OBSRequestError && e.code === 601) return true; // already exists
-      throw e;
-    }
-  };
-  try {
-    await obs.request("GetSceneItemId", { sceneName: previewScene, sourceName: previewSource });
-  } catch {
+  if ((await itemIn(obs, previewScene, previewSource)) === null) {
     if (!(await exists(() => obs.request("CreateScene", { sceneName: previewScene })))) log.push(`Created scene "${previewScene}" for previews.`);
-    const input = { sceneName: previewScene, inputName: previewSource, inputKind: "browser_source", inputSettings: { ...previewSettings, url: url ?? "about:blank" }, sceneItemEnabled: true };
-    if (await exists(() => obs.request("CreateInput", input))) {
-      // The source survived its scene (or was moved out of it): put it back in.
-      await obs.request("CreateSceneItem", { sceneName: previewScene, sourceName: previewSource, sceneItemEnabled: true });
-    } else {
-      log.push(`Created browser source "${previewSource}" for previews.`);
-    }
+    const input = { inputName: previewSource, inputKind: "browser_source", inputSettings: { ...previewSettings, url: url ?? "about:blank" } };
+    if ((await addToScene(obs, previewScene, input)).created) log.push(`Created browser source "${previewSource}" for previews.`);
   }
   await obs.request("SetInputSettings", { inputName: previewSource, inputSettings: url ? { ...previewSettings, url } : previewSettings });
   await obs.request("SetInputMute", { inputName: previewSource, inputMuted: true });
   return log;
+}
+
+/** Whether `create` failed only because what it makes already exists (OBS's 601). */
+async function exists(create: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await create();
+    return false;
+  } catch (e) {
+    if (e instanceof OBSRequestError && e.code === 601) return true;
+    throw e;
+  }
+}
+
+/** The id of `sourceName`'s item in `sceneName`, or null when the scene doesn't have one. */
+const itemIn = (obs: ObsRequester, sceneName: string, sourceName: string) =>
+  obs.request<{ sceneItemId: number }>("GetSceneItemId", { sceneName, sourceName }).then((r) => r.sceneItemId, () => null);
+
+/**
+ * Put an input in `sceneName`: a new one, or, when an input of that name already exists elsewhere (it
+ * survived its scene, or was moved out of it; input names are unique in OBS), that one. `created`
+ * says which.
+ */
+async function addToScene(obs: ObsRequester, sceneName: string, input: { inputName: string; inputKind: string; inputSettings: object }) {
+  let sceneItemId = 0;
+  const there = await exists(async () => {
+    ({ sceneItemId } = await obs.request<{ sceneItemId: number }>("CreateInput", { sceneName, ...input, sceneItemEnabled: true }));
+  });
+  if (there) ({ sceneItemId } = await obs.request<{ sceneItemId: number }>("CreateSceneItem", { sceneName, sourceName: input.inputName, sceneItemEnabled: true }));
+  return { sceneItemId, created: !there };
 }
 
 /**
@@ -161,15 +172,17 @@ export async function ensurePreview(obs: ObsRequester, { previewScene, previewSo
  */
 export async function checkObsSetup(obs: ObsRequester, names: SetupNames, port: number): Promise<ObsSetup> {
   const { scenes } = await obs.request<{ scenes: { sceneName: string }[] }>("GetSceneList");
-  if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, missingDevices: names.devices };
+  if (!scenes.some((s) => s.sceneName === names.scene)) return { scene: false, program: false, ground: false, ordered: false, missingDevices: names.devices };
+  // Bottom first, as OBS lists them.
   const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: names.scene });
   const present = new Set(sceneItems.map((i) => i.sourceName));
+  const ordered = sceneItems[0]?.sourceName === names.groundSource && sceneItems.at(-1)?.sourceName === names.programSource;
   let program = present.has(names.programSource);
   if (program) {
     const { inputSettings } = await obs.request<{ inputSettings: { url?: string } }>("GetInputSettings", { inputName: names.programSource });
     program = inputSettings.url === programUrl(port);
   }
-  return { scene: true, program, ground: present.has(names.groundSource), missingDevices: names.devices.filter((d) => !present.has(d)) };
+  return { scene: true, program, ground: present.has(names.groundSource), ordered, missingDevices: names.devices.filter((d) => !present.has(d)) };
 }
 
 if (import.meta.main) {
