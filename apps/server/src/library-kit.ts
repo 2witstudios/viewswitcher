@@ -77,7 +77,7 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
     written[to] = sha(text);
   }
   if (JSON.stringify(written) !== JSON.stringify(state.files ?? {})) {
-    await writeAtomic(statePath, JSON.stringify({ files: written }, null, 2) + "\n");
+    await writeAtomic(statePath, JSON.stringify({ files: written }, null, 2) + "\n", { plainParent: true });
   }
 
   if (fresh && !existsSync(join(root, ".git"))) result.git = await gitInit(root).catch(() => false);

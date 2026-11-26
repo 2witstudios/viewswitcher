@@ -211,7 +211,7 @@ export class LiveStore {
   /** state.json: the on-air record and the sources ever placed. */
   private persist(onAir: OnAir | null) {
     const { missing: _, ...saved } = onAir ?? ({} as OnAir);
-    return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null, placed: [...this.placed].sort() }, null, 2));
+    return writeAtomic(this.opts.file, JSON.stringify({ onAir: onAir ? saved : null, placed: [...this.placed].sort() }, null, 2), { plainParent: true });
   }
 
   /** For a save nothing waits on: a failure is logged, and the next change saves again. */

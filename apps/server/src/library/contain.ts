@@ -119,20 +119,31 @@ async function plainStaging(dir: string): Promise<string> {
 }
 
 /**
- * The library's own state folder (<library>/.viewswitcher: state.json, settings.json, devices.json,
- * kit.json) as a plain folder, made so at startup before anything reads or writes it. A cloned library
- * can carry a link (or a file) there; the switcher would write its state and pairings wherever it
- * points. So a link or a file is moved aside, kept and named in the log, and the folder starts empty:
- * never followed, never deleted. Returns where it was moved, or null when there was nothing to move.
+ * `dir` as a plain folder, or nothing there yet: a link or a file at `dir` is moved aside (kept, renamed
+ * `<dir>.moved-aside-<time>`) and never followed or deleted. Returns where it was moved, or null when
+ * there was nothing to move. A rename that fails says so plainly (a read-only library, say).
  */
-export async function plainStateFolder(libraryRoot: string, now = new Date()): Promise<string | null> {
-  const at = join(libraryRoot, ".viewswitcher");
-  const s = await lstat(at).catch(() => null);
+export async function plainFolder(dir: string, now = new Date()): Promise<string | null> {
+  const s = await lstat(dir).catch(() => null);
   if (!s || s.isDirectory()) return null;
-  const aside = `${at}.moved-aside-${now.toISOString().replace(/[:.]/g, "-")}`;
-  await rename(at, aside);
+  const aside = `${dir}.moved-aside-${now.toISOString().replace(/[:.]/g, "-")}`;
+  try {
+    await rename(dir, aside);
+  } catch (e) {
+    throw new Error(`${dir} is a link or a file, and it couldn't be moved aside (${(e as Error).message}). Move or remove it, then start ViewSwitcher again.`);
+  }
+  console.error(`[library] ${basename(dir)} was a link or a file, so it was moved aside to ${aside} and a plain folder takes its place`);
   return aside;
 }
+
+/**
+ * The library's own state folder (<library>/.viewswitcher: state.json, settings.json, devices.json,
+ * kit.json) as a plain folder. A cloned library can carry a link (or a file) there, and a `git pull`
+ * can put one there while the server runs (the local folder is gitignored, so git replaces it), and the
+ * switcher would write its state and pairings wherever it points. So it's checked at startup, and
+ * again by every state write (writeAtomic's `plainParent`) and settings read.
+ */
+export const plainStateFolder = (libraryRoot: string, now = new Date()) => plainFolder(join(libraryRoot, ".viewswitcher"), now);
 
 /**
  * Where a library path really is (through links), as a library path, or the path itself when that

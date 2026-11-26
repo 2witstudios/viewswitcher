@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentOnAir } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
+import { plainStateFolder } from "./library/contain";
 
 export type Settings = { agentOnAir: AgentOnAir };
 
@@ -21,6 +22,8 @@ const file = (root: string) => join(root, ".viewswitcher", "settings.json");
 async function readRaw(root: string): Promise<{ saved: Record<string, unknown> } | { error: string }> {
   let text: string;
   try {
+    // A .viewswitcher that became a link (a git pull) would hand the guard someone else's settings.
+    await plainStateFolder(root);
     text = await readFile(file(root), "utf8");
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { saved: {} };
@@ -63,7 +66,7 @@ export function writeSettings(root: string, patch: Partial<Settings>): Promise<S
     // An unreadable file is replaced: the person just chose what it should say.
     const raw = await readRaw(root);
     const next = { ...("saved" in raw ? raw.saved : {}), ...patch };
-    await writeAtomic(file(root), JSON.stringify(next, null, 2) + "\n");
+    await writeAtomic(file(root), JSON.stringify(next, null, 2) + "\n", { plainParent: true });
     return readSettings(root);
   });
   queue = run.catch(() => {});
