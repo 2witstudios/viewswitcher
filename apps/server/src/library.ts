@@ -15,9 +15,9 @@ const KINDS: Record<string, AssetKind> = {
 };
 
 // The library is read on every change by every client (and by agents), so a scan reads as little
-// as it can: scene titles are kept while their file's size and modification time stay the same (and
-// dropped for the paths the watcher reports), and folders are walked side by side. File reads and
-// stats go through one bounded queue, so a big library can't run out of open files.
+// as it can: scene titles are kept while the file's stat stamp (size, times, inode) stays the same,
+// and dropped for the paths the watcher reports (scene-titles.ts); folders are walked side by side.
+// File reads and stats go through one bounded queue, so a big library can't run out of open files.
 
 /** File reads and stats for scans: at most 32 at once, across every scan. */
 const io = limit(32);
