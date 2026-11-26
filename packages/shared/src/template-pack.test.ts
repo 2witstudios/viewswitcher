@@ -153,9 +153,9 @@ describe("checkPack", () => {
     // A backslash-newline continues a CSS string: what follows on the next line is still in it.
     const continued = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\n/* {{ORG_NAME}} */" }` }));
     expect(continued.ok && continued.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
-    // A view's <style> follows the same rule: a comment there is safe, its code isn't.
+    // A view's <style> comment isn't safe the way a .css one is: a page's fill doesn't break "*/" up, so it warns.
     const styled = checkPack(planned(basic), texts({ "templates/main.html": `<html><head><style>/* {{ORG_NAME}} */ .a { color: red }</style></head><body></body></html>` }));
-    expect(styled.ok && styled.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
+    expect(styled.ok && styled.warnings.find((x) => x.includes("in a script"))).toContain("templates/main.html <style>");
   });
 
   test("placeholders in text and attributes, and colors, ids and {{PACK}} in code, warn nothing", () => {

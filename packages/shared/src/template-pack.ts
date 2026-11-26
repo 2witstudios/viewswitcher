@@ -283,9 +283,10 @@ function remoteScripts(html: string): string[] {
 const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"];
 
 /**
- * CSS without its comments, where a value is safe (the starter names the show in one). Quoted strings
- * are kept and skipped while comments are taken out, so a "/*" inside one isn't a comment; a string
- * ends at its line's end at the latest, as CSS ends an unclosed one, unless a backslash continues it.
+ * A .css file without its comments, where a value is safe: the fill breaks up a comment's end there
+ * (TEXT_TYPES), and the starter names the show in one. Quoted strings are kept and skipped while
+ * comments are taken out, so a comment's start inside one isn't a comment; a string ends at its line's
+ * end at the latest, as CSS ends an unclosed one, unless a backslash continues it.
  */
 const cssCode = (css: string) => css.replace(/("(?:\\[\s\S]|[^"\\\n])*"?|'(?:\\[\s\S]|[^'\\\n])*'?)|\/\*[\s\S]*?\*\//g, (_m, quoted: string | undefined) => quoted ?? "");
 
@@ -307,10 +308,9 @@ function textInCode(texts: Record<string, string>): { placeholder: string; where
     if (e === ".css") note(cssCode(text), path);
     if (e !== ".html" && e !== ".svg") continue;
     for (const el of scanElements(text)) {
-      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) {
-        const inner = text.slice(el.innerStart, el.innerEnd);
-        note(el.tag === "style" ? cssCode(inner) : inner, `${path} <${el.tag}>`);
-      }
+      // A <style>'s comments count too: a page's values are HTML-escaped, which leaves a comment's end
+      // alone, so a name can close the comment it's in (only a .css file's fill breaks that up).
+      if ((el.tag === "script" || el.tag === "style") && el.innerEnd > el.innerStart) note(text.slice(el.innerStart, el.innerEnd), `${path} <${el.tag}>`);
       // An on… or style attribute is HTML-decoded, then read as JS or CSS: the same as code.
       for (const a of el.attrs) if ((/^on/i.test(a.name) || a.name.toLowerCase() === "style") && a.valueStart >= 0) note(text.slice(a.valueStart, a.valueEnd), `${path} ${a.name.toLowerCase()}`);
     }

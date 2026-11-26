@@ -41,15 +41,15 @@ export function fileRoutes(d: RouteDeps): Route[] {
           })
         : null;
       const html = scene?.html ?? (await readNoFollow(file).catch(() => null));
-      if (html !== null) {
-        // INERT_CSP (same-origin) only on a body that went through defuseMeta; anything else is sandboxed as usual.
-        return new Response(inert ? defuseMeta(html) : q.has("bridge") ? withBridge(html) : html, {
-          headers: {
-            ...(inert ? libraryHeaders(served, true) : headers), "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
-            ...(scene ? { "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" } : {}),
-          },
-        });
-      }
+      // Refused by the no-link read (a link or a pipe since it was checked): never fall back to serving the path.
+      if (html === null) return new Response("Not found", { status: 404, headers });
+      // INERT_CSP (same-origin) only on a body that went through defuseMeta; anything else is sandboxed as usual.
+      return new Response(inert ? defuseMeta(html) : q.has("bridge") ? withBridge(html) : html, {
+        headers: {
+          ...(inert ? libraryHeaders(served, true) : headers), "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+          ...(scene ? { "x-scene-hash": scene.hash, "access-control-expose-headers": "x-scene-hash" } : {}),
+        },
+      });
     }
     return (await fileResponse(file, "no-store", headers)) ?? new Response("Not found", { status: 404, headers });
   }
