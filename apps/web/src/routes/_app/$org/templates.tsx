@@ -7,8 +7,7 @@ import { SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { TemplatePicker } from "../../../components/TemplatePicker";
 import { attempt, type MenuItem, PlusIcon, toast } from "../../../components/ui";
 import { api, copy, packs, type StagedPack } from "../../../lib/api";
-import { refreshed, templateGroups, templateId, useLibrary } from "../../../lib/library";
-import { queryClient } from "../../../lib/live";
+import { templateGroups, templateId, useLibrary } from "../../../lib/library";
 import { describeScripts, type DroppedPack, fromPicker, readDrop } from "../../../lib/pack-drop";
 import { SCENE_SANDBOX } from "../../../lib/scene-frame";
 
@@ -62,12 +61,12 @@ export const Route = createFileRoute("/_app/$org/templates")({
       const menu: MenuItem[] = [
         ...lib.projects.flatMap((p): MenuItem[] => [{
           label: `Add to ${p.name}`,
-          run: () => attempt(() => refreshed(api.addFromTemplate(org, templateId(t), p.id)), `Added ${t.label} to ${p.name}`),
+          run: () => attempt(() => api.addFromTemplate(org, templateId(t), p.id), `Added ${t.label} to ${p.name}`),
         }]),
         ...(lib.projects.length ? ["divider" as const] : []),
         { label: "Open the file", run: () => attempt(() => api.open(t.path)) },
         { label: "Copy path", hint: t.path, run: () => void copy(t.path) },
-        { label: "Duplicate and edit", run: () => attempt(async () => openEditor((await refreshed(api.duplicate(t.path))).path, { rename: true })) },
+        { label: "Duplicate and edit", run: () => attempt(async () => openEditor((await api.duplicate(t.path)).path, { rename: true })) },
       ];
       return <SceneTile key={t.path} label={t.label} path={t.path} badge="TEMPLATE" onEdit={() => openEditor(t.path)} menu={menu} />;
     };
@@ -151,7 +150,6 @@ export const Route = createFileRoute("/_app/$org/templates")({
             skipLabel="Cancel"
             onClose={() => setAdding(false)}
             onAdded={async (names) => {
-              await queryClient.invalidateQueries({ queryKey: ["library", org] });
               if (names.length) toast(`Added ${names.join(", ")}`);
             }}
           />
@@ -166,7 +164,6 @@ export const Route = createFileRoute("/_app/$org/templates")({
             onInstall={async () => {
               await packs.install(org, staged.token);
               setStaged(null);
-              await queryClient.invalidateQueries({ queryKey: ["library", org] });
               toast(`Installed ${staged.manifest.name}`);
             }}
           />

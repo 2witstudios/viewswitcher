@@ -4,7 +4,6 @@ import { scanElements, setTitle, titleIn } from "@viewswitcher/shared";
 import type { SceneBase } from "@viewswitcher/shared";
 import { useRef, useState } from "react";
 import { api, SceneConflict } from "../../lib/api";
-import { refreshed } from "../../lib/library";
 import { attempt, toast } from "../ui";
 import type { ModeStore } from "./useMode";
 
@@ -45,8 +44,7 @@ export function useRename(opts: {
       if (mode.now().kind !== "saving-structure") return;
       try {
         if (!b) return;
-        // The library has the new name (and, for a stream's view, the new file) before the editor goes on.
-        const r = await refreshed(api.renameScene(path, b.hash, clean));
+        const r = await api.renameScene(path, b.hash, clean);
         setNamed(clean);
         if (r.path !== path) {
           toast(o.current.onAir() ? `Renamed: ${clean}. It's still on air.` : `Renamed: ${clean}`);

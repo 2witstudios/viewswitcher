@@ -11,7 +11,7 @@ import type { SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { api, copy } from "../lib/api";
-import { refreshed, useLibrary } from "../lib/library";
+import { useLibrary } from "../lib/library";
 import { libraryUrl, useLive } from "../lib/live";
 import { placeOf } from "../lib/place";
 import { EDITOR_SANDBOX } from "../lib/scene-frame";
@@ -357,7 +357,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
       text.finish(false);
       // Changes already made are saved before copying, so the copy has them (and a conflict stays here).
       if (!(await doc.settle())) return;
-      const { name } = await refreshed(api.duplicate(path));
+      const { name } = await api.duplicate(path);
       const copyPath = `${path.slice(0, path.lastIndexOf("/"))}/${name}.html`;
       toast("Editing a copy, not on air");
       navigate({ to: "/$org/edit", params: { org }, search: { path: copyPath }, replace: true });

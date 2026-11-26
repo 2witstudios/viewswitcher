@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { LiveState } from "@viewswitcher/shared";
 import { act, createElement } from "react";
-import { createStore, keepUnchanged, type Live, nextLive, sceneUrl, shallow, type Store, useStore } from "./live";
+import { createStore, keepUnchanged, type Live, nextLive, sceneUrl, type Store, useStore } from "./live";
 
 let createRoot: typeof import("react-dom/client").createRoot;
 beforeAll(async () => {
@@ -81,14 +81,17 @@ describe("re-rendering for the part of live state a component reads", () => {
     onAir.unmount();
   });
 
-  test("a selector that picks several parts, with shallow, re-renders only when one of them changes", () => {
+  test("a selector with its own equality re-renders only when that says the part changed", () => {
     const store = createStore<Live>({ connected: true, state: state(), versions: {} });
-    const head = counted(store, (l) => ({ connected: l.connected, obs: l.state?.obs }), shallow);
+    const sameLength = (a: string[] | undefined, b: string[] | undefined) => a?.length === b?.length;
+    const count = counted(store, (l) => l.state?.warnings, sameLength);
+    receive(store, { t: "state", state: state({ warnings: [] }) });
+    expect(count.renders).toBe(1);
     receive(store, { t: "state", state: state({ warnings: ["x"] }) });
-    expect(head.renders).toBe(1);
-    receive(store, { t: "state", state: state({ obs: { connected: true, recording: true, streaming: true } }) });
-    expect(head.renders).toBe(2);
-    head.unmount();
+    receive(store, { t: "state", state: state({ warnings: ["y"] }) });
+    expect(count.renders).toBe(2);
+    expect(count.last).toEqual(["x"]); // the selection it kept, as the equality said nothing changed
+    count.unmount();
   });
 });
 

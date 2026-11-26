@@ -1,5 +1,6 @@
 import type { AgentClients, AgentOnAir, Library, LiveState, Org, PackManifest, PackScripts, SceneEdit } from "@viewswitcher/shared";
-import { libraryUrl } from "./live";
+import type { QueryClient } from "@tanstack/react-query";
+import { libraryUrl, queryClient } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
 const previewSession = Math.random().toString(36).slice(2);
@@ -20,9 +21,40 @@ async function post<T = unknown>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
+/**
+ * A change to the library made here, then the library as it is after it: resolves once every library
+ * query on the page has been fetched again. Pages go on to what changed only then; the watcher's own
+ * refresh comes a moment later, and until it does a new stream or view would "not exist".
+ */
+export async function refreshed<T>(change: Promise<T>, client: QueryClient = queryClient): Promise<T> {
+  const result = await change;
+  await client.invalidateQueries({ queryKey: ["library"] });
+  return result;
+}
+
+/** post() for a request that changes the library (see refreshed). */
+const change = <T = unknown>(path: string, body?: unknown) => refreshed(post<T>(path, body));
+
+async function rename(path: string, hash: string, name: string): Promise<{ hash: string; path: string }> {
+  const res = await fetch("/api/scene/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, name }) });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  return data;
+}
+
+async function upload(org: string, files: FileList | File[]): Promise<{ saved: { path: string }[] }> {
+  const form = new FormData();
+  form.append("org", org);
+  for (const f of Array.from(files)) form.append("file", f);
+  const res = await fetch("/api/assets", { method: "POST", body: form });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Upload failed");
+  return res.json();
+}
+
 export const api = {
   orgs: async (): Promise<Org[]> => (await fetch("/api/orgs")).json(),
-  createOrg: (name: string, accent?: string) => post<{ orgId: string }>("/api/orgs", { name, accent }),
+  createOrg: (name: string, accent?: string) => change<{ orgId: string }>("/api/orgs", { name, accent }),
   library: async (org: string): Promise<Library> => {
     const res = await fetch(`/api/library?org=${encodeURIComponent(org)}`);
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
@@ -33,16 +65,16 @@ export const api = {
   putOnAir: (b: { path: string; label: string; projectId?: string; streamId?: string }) => post("/api/onair", b),
   reportSlots: (b: { path: string; slots: unknown[]; page?: string; seq?: number }) => post("/api/program/slots", b),
 
-  createProject: (org: string, name: string, templates: string[]) => post<{ projectId: string }>("/api/projects", { org, name, templates }),
+  createProject: (org: string, name: string, templates: string[]) => change<{ projectId: string }>("/api/projects", { org, name, templates }),
   createStream: (org: string, projectId: string, name: string, date: string) =>
-    post<{ projectId: string; streamId: string }>("/api/streams", { org, projectId, name, date }),
+    change<{ projectId: string; streamId: string }>("/api/streams", { org, projectId, name, date }),
   addFromTemplate: (org: string, template: string, projectId: string, streamId?: string) =>
-    post<{ name: string; path: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
-  customize: (org: string, projectId: string, streamId: string, name: string) => post<{ name: string; path: string }>("/api/scenes/customize", { org, projectId, streamId, name }),
-  revert: (org: string, projectId: string, streamId: string, name: string) => post("/api/scenes/revert", { org, projectId, streamId, name }),
-  customizeTransition: (org: string, projectId: string) => post("/api/transition/customize", { org, projectId }),
-  revertTransition: (org: string, projectId: string) => post("/api/transition/revert", { org, projectId }),
-  duplicate: (path: string) => post<{ name: string; path: string }>("/api/scenes/duplicate", { path }),
+    change<{ name: string; path: string }>("/api/scenes/from-template", { org, template, projectId, streamId }),
+  customize: (org: string, projectId: string, streamId: string, name: string) => change<{ name: string; path: string }>("/api/scenes/customize", { org, projectId, streamId, name }),
+  revert: (org: string, projectId: string, streamId: string, name: string) => change("/api/scenes/revert", { org, projectId, streamId, name }),
+  customizeTransition: (org: string, projectId: string) => change("/api/transition/customize", { org, projectId }),
+  revertTransition: (org: string, projectId: string) => change("/api/transition/revert", { org, projectId }),
+  duplicate: (path: string) => change<{ name: string; path: string }>("/api/scenes/duplicate", { path }),
 
   /** The scene tagged with data-vs ids, and the hash of the file it came from. */
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
@@ -61,13 +93,7 @@ export const api = {
     return data;
   },
   /** Rename a scene (its title, and a stream scene's file). Throws SceneConflict if the file changed since `hash`. */
-  renameScene: async (path: string, hash: string, name: string): Promise<{ hash: string; path: string }> => {
-    const res = await fetch("/api/scene/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, name }) });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
-    if (!res.ok) throw new Error(data.error ?? res.statusText);
-    return data;
-  },
+  renameScene: (path: string, hash: string, name: string) => refreshed(rename(path, hash, name)),
   /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
   previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, session: previewSession, seq: nextPreviewSeq() }),
   /** The same, from a page that's going away (survives pagehide). */
@@ -93,14 +119,7 @@ export const api = {
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
 
-  upload: async (org: string, files: FileList | File[]): Promise<{ saved: { path: string }[] }> => {
-    const form = new FormData();
-    form.append("org", org);
-    for (const f of Array.from(files)) form.append("file", f);
-    const res = await fetch("/api/assets", { method: "POST", body: form });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Upload failed");
-    return res.json();
-  },
+  upload: (org: string, files: FileList | File[]) => refreshed(upload(org, files)),
 };
 
 export type AgentInfo = { library: string; port: number; claudeCode: string; stdio: string };
@@ -139,9 +158,9 @@ export const packs = {
     }
     return form<StagedPack>("/api/packs/stage", body);
   },
-  install: (org: string, token: string) => post<{ set: string }>("/api/packs/install", { org, token }),
+  install: (org: string, token: string) => change<{ set: string }>("/api/packs/install", { org, token }),
   cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
-  removeSet: (org: string, set: string) => post<{ kept: number }>("/api/sets/remove", { org, set }),
+  removeSet: (org: string, set: string) => change<{ kept: number }>("/api/sets/remove", { org, set }),
   /** The built-in template packs (EDIT-29): the starter and the site's six shows. */
   builtin: async (): Promise<BuiltinPack[]> => {
     const r = await fetch("/api/packs/builtin");

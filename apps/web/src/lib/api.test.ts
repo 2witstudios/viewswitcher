@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { refreshed } from "./library";
+import { refreshed } from "./api";
 
 /** A page showing an org's library, served by a "server" whose streams the test changes. */
 function page() {

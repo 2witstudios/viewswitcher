@@ -84,7 +84,8 @@ export const Route = createFileRoute("/program")({
     const transitionLoaded = useRef<string | null>(null); // transition URL in the frame (without &load)
     // The transition of the scene going on air (read by the loop, so an edit applies from the next switch).
     const wantedTransition = useRef<string | null>(null);
-    wantedTransition.current = useLive((l) => (onAir?.transition ? sceneUrl(onAir.transition, l.versions, false, false, true) : null));
+    const transition = useLive((l) => (onAir?.transition ? sceneUrl(onAir.transition, l.versions, false, false, true) : null));
+    wantedTransition.current = transition;
     const [scale, setScale] = useState(1);
     const refs = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
 

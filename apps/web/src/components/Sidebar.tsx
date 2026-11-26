@@ -3,10 +3,10 @@ import type { Org } from "@viewswitcher/shared";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { refreshed, templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
+import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { DECK, UPRIGHT, useMedia } from "../lib/media";
-import { queryClient, useLive } from "../lib/live";
+import { useLive } from "../lib/live";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
 
@@ -135,7 +135,7 @@ export function Sidebar() {
         <NewStream
           onClose={() => setDialog(null)}
           onSubmit={async (name, date) => {
-            const r = await refreshed(api.createStream(org, dialog.projectId, name, date));
+            const r = await api.createStream(org, dialog.projectId, name, date);
             navigate({ to: "/$org/p/$projectId/$streamId", params: { org, ...r } });
           }}
         />
@@ -214,7 +214,6 @@ function OrgSwitcher({ current }: { current?: string }) {
         <NewOrg
           onClose={() => setCreating(false)}
           onCreated={async (id, name) => {
-            await queryClient.invalidateQueries({ queryKey: ["library", "orgs"] });
             navigate({ to: "/$org", params: { org: id } });
             setPicking({ id, name });
           }}
@@ -229,7 +228,6 @@ function OrgSwitcher({ current }: { current?: string }) {
           skipLabel="Skip"
           onClose={() => setPicking(null)}
           onAdded={async (names) => {
-            await queryClient.invalidateQueries({ queryKey: ["library", picking.id] });
             if (names.length) toast(`Added ${names.join(", ")} to Templates`);
           }}
         />
@@ -255,7 +253,7 @@ function NewProject({ org, groups, onClose }: { org: string; groups: ReturnType<
   // The org's own templates start ticked (not "chapter", a one-off); a template pack's, unticked.
   const [picked, setPicked] = useState<string[]>(groups[0]?.set === null ? groups[0].templates.map(templateId).filter((t) => t !== "chapter") : []);
   return (
-    <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => refreshed(api.createProject(org, name, picked)).then(() => {})}>
+    <Modal title="New project" submitLabel="Create project" onClose={onClose} onSubmit={() => api.createProject(org, name, picked).then(() => {})}>
       <label className="field">Name<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Spring series" /></label>
       <div className="field">
         Scenes

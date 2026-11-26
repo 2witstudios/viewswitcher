@@ -48,14 +48,6 @@ export function useStore<T, S>(store: Store<T>, selector: (value: T) => S, isEqu
   return useSyncExternalStore(store.subscribe, read, read);
 }
 
-/** Equal when both have the same keys with Object.is-equal values: for a selector that picks several parts. */
-export function shallow<S>(a: S, b: S): boolean {
-  if (Object.is(a, b)) return true;
-  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
-  const ka = Object.keys(a), kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && Object.is((a as any)[k], (b as any)[k]));
-}
-
 /**
  * `next`, keeping each part of `prev` that's equal to its counterpart in `next` (values as JSON
  * carries them). Every state message is a new object from the socket; this way a part that didn't
@@ -175,18 +167,13 @@ export function useLive<S>(selector: (live: Live) => S, isEqual?: (a: S, b: S) =
   return useStore(store, selector, isEqual);
 }
 
-/** The part of a scene url that changes with the file and the shared theme: a tile selects only this. */
-export function sceneVersion(path: string, versions: Record<string, number>) {
-  return `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
-}
-
 /**
  * URL for a library file that changes whenever the file (or the shared theme) changes.
  * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
  */
 /** `bridge`: with the bridge the program page talks to the sandboxed scene through. */
 export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
-  const v = sceneVersion(path, versions);
+  const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;
 }
 
