@@ -9,116 +9,173 @@
      guest and screen move into its boxes, and the red On air tally moves with it. Everything is bundled,
      so it works offline. It keeps looking for a Mac and leaves for the real switcher when one answers. -->
 <style>
+  /* The real switcher's look (apps/web/src/styles.css): its colours, type, sidebar, page head, pills and tiles,
+     with the program frame on top so a tap shows what goes out. The fonts are bundled (fonts/, SIL OFL). */
+  @font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 700; font-display: block; }
+  @font-face { font-family: "Space Grotesk"; src: url("fonts/space-grotesk-700.woff") format("woff"); font-weight: 700; font-display: block; }
   :root { --bg: #0b0c0f; --side: #101116; --raised: #16181e; --stage: #1c1f27; --line: #1f222a; --line-strong: #343846;
-    --sage: #a3a8b5; --quiet: #7d8290; --cream: #f4f5f7; --live: #ff4d4f;
+    --sage: #a3a8b5; --sage-deep: #7d8290; --quiet: #6e7380; --cream: #f4f5f7; --ink-muted: #c4c8d2; --live: #ff4d4f;
+    --display: "Space Grotesk", "Helvetica Neue", sans-serif; --text: "Instrument Sans", system-ui, sans-serif;
     --safe-top: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-right, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--cream); font-family: -apple-system, system-ui, sans-serif;
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--cream); font-family: var(--text); color-scheme: dark;
     -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-  body { display: flex; flex-direction: column; min-height: 100%; }
+  button { font: inherit; color: inherit; }
+  .app { min-height: 100vh; min-height: 100dvh; display: flex; }
 
-  /* The demo bar: always there, so nobody mistakes the demo for a live show. */
-  .demo-bar { display: flex; align-items: center; gap: 14px; padding: calc(10px + var(--safe-top)) calc(20px + var(--safe-right)) 10px calc(20px + var(--safe-left));
-    background: #f4f5f7; color: #0b0c0f; font-size: 16px; }
-  .demo-bar .msg { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .demo-bar .msg span { color: #4b505c; font-weight: 500; }
-  .demo-bar button { height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: #0b0c0f; color: #f4f5f7; font: 700 15px/1 inherit; font-family: inherit; }
+  /* Sidebar: the brand, the show, its stream. Nothing in it pretends to be tappable. */
+  .side { flex: none; width: 248px; position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto;
+    padding: calc(16px + var(--safe-top)) 10px calc(16px + var(--safe-bottom)) calc(10px + var(--safe-left));
+    background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 8px; min-height: 28px; }
+  .brand img { width: 24px; height: 24px; }
+  .brand span { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+  .org { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
+  .org .name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-dot { width: 20px; height: 20px; flex: none; border-radius: 6px; font-size: 11px; font-weight: 700; color: #2a1d05; display: inline-flex; align-items: center; justify-content: center; }
+  .side-group { display: flex; flex-direction: column; gap: 1px; }
+  .side-label { padding: 0 2px 4px 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.24em; color: var(--quiet); }
+  .side-item { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 4px 8px; border-radius: 6px; font-size: 13px; line-height: 1.3; }
+  .side-project { font-weight: 600; gap: 6px; }
+  .side-project svg { transform: rotate(90deg); color: var(--sage); }
+  .side-stream { background: var(--stage); }
+  .side-stream .date { width: 40px; flex: none; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .side-stream .onair { margin-left: auto; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--live); }
+  .side-note { margin: auto 8px 0; font-size: 12px; line-height: 1.45; color: var(--sage-deep); }
 
-  header { display: flex; align-items: center; gap: 12px; padding: 14px calc(20px + var(--safe-right)) 14px calc(20px + var(--safe-left)); border-bottom: 1px solid var(--line); background: var(--side); }
-  .mark { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: #2a1d05; flex: none; }
-  header b { font-size: 18px; font-weight: 700; white-space: nowrap; }
-  header .ep { color: var(--sage); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  header .obs { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--sage); font-size: 14px; white-space: nowrap; }
-  header .obs i { width: 8px; height: 8px; border-radius: 50%; background: var(--quiet); }
+  .main { flex: 1; min-width: 0; padding: calc(28px + var(--safe-top)) calc(32px + var(--safe-right)) calc(48px + var(--safe-bottom)) 32px; display: flex; flex-direction: column; gap: 28px; }
+  .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 16px; }
+  .titles { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .crumb { font-size: 14px; color: var(--sage); }
+  .title { margin: 0; font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.05; letter-spacing: -0.02em; }
+  .livebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--stage); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); flex: none; }
+  .pill.off { color: var(--sage); font-weight: 500; }
+  .pill.off .dot { background: var(--quiet); animation: look 1.6s ease-in-out infinite; }
+  @keyframes look { 50% { opacity: 0.3; } }
+  .connect { height: 36px; padding: 0 16px; border: 0; border-radius: 9px; background: var(--cream); color: var(--bg); font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }
+  .connect:active { opacity: 0.85; }
 
-  main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; background: var(--line); min-height: 0; }
-  @media (orientation: landscape) and (min-width: 900px) { main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
-  .stage, .deck { background: var(--raised); padding: 18px calc(20px + var(--safe-right)) calc(18px + var(--safe-bottom)) calc(20px + var(--safe-left)); min-width: 0; }
-  @media (orientation: landscape) and (min-width: 900px) {
-    .stage { padding-right: 18px; }
-    .deck { padding-left: 18px; overflow-y: auto; }
-  }
-  @media (orientation: portrait), (max-width: 899px) { .stage { padding-bottom: 18px; } }
-  .label { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; color: var(--sage); font-size: 15px; }
-  .tally { display: inline-flex; align-items: center; gap: 8px; color: var(--cream); font-weight: 700; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 4px #ff4d4f33; flex: none; }
-  .now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .section { display: flex; flex-direction: column; gap: 16px; }
+  .section h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.32em; color: var(--sage); text-transform: uppercase; }
 
   /* The program: the view's own background, the devices in its boxes, then the view on top. */
-  .frame { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; container-type: inline-size; box-shadow: 0 0 0 2px var(--live); }
+  .program { display: flex; flex-direction: column; gap: 10px; max-width: 640px; }
+  .frame { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; container-type: inline-size; outline: 4px solid var(--live); outline-offset: 3px; margin: 7px; }
   .frame .box, .thumb .box { position: absolute; overflow: hidden; }
   .frame img, .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .frame .shot { opacity: 0; transition: opacity 240ms ease; }
   .frame .shot.on { opacity: 1; }
   .mover { transition: left 620ms cubic-bezier(.2,.8,.2,1), top 620ms cubic-bezier(.2,.8,.2,1), width 620ms cubic-bezier(.2,.8,.2,1), height 620ms cubic-bezier(.2,.8,.2,1), border-radius 620ms ease, opacity 220ms ease; }
   .mover.gone { opacity: 0; }
-  .hint { margin: 14px 0 0; color: var(--quiet); font-size: 15px; }
+  .program-label { display: flex; align-items: center; gap: 10px; padding: 0 7px; font-family: var(--display); font-size: 17px; font-weight: 700; }
+  .program-label .tally { display: inline-flex; align-items: center; gap: 8px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--live); color: #fff;
+    font-family: var(--text); font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
+  .program-label .now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hint { margin: 0; padding: 0 7px; font-size: 14px; line-height: 1.5; color: var(--sage-deep); max-width: 60ch; }
 
-  .covers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 14px; }
-  @media (orientation: landscape) and (min-width: 900px) { .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .cover { display: grid; gap: 8px; padding: 0; margin: 0; border: 0; background: transparent; color: var(--sage); font: 600 15px/1.2 -apple-system, system-ui, sans-serif; text-align: left; transition: transform 120ms ease; }
-  .cover:active { transform: scale(0.96); }
-  .thumb { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; outline: 3px solid #ffffff14; outline-offset: 2px; container-type: inline-size; transition: outline-color 160ms ease; }
-  .badge { position: absolute; left: 6px; top: 6px; display: none; align-items: center; gap: 6px; background: #000000b3; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 999px; }
-  .badge .dot { width: 7px; height: 7px; box-shadow: none; }
-  .cover[aria-pressed="true"] { color: var(--cream); }
+  /* Views: the switcher's tiles. */
+  .covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px 20px; max-width: 1040px; }
+  .cover { display: flex; flex-direction: column; gap: 10px; padding: 0; margin: 0; border: 0; background: transparent; text-align: left; transition: transform 120ms ease; }
+  .cover:active { transform: scale(0.97); }
+  .thumb { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: var(--raised); outline: 4px solid transparent; outline-offset: 3px; container-type: inline-size; transition: outline-color 160ms ease; }
+  .badge { position: absolute; left: 10px; top: 10px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--live); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; display: none; align-items: center; text-transform: uppercase; }
   .cover[aria-pressed="true"] .thumb { outline-color: var(--live); }
   .cover[aria-pressed="true"] .badge { display: inline-flex; }
-  .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  @media (prefers-reduced-motion: reduce) { .mover, .frame .shot, .cover { transition: none; } }
+  .name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+  .phone-bar { display: none; }
+  @media (prefers-reduced-motion: reduce) { .mover, .frame .shot, .cover, .thumb { transition: none; } .pill.off .dot { animation: none; } }
 
-  /* iPhone (PHONE-7). Upright: the program, then the views two across. */
-  @media (max-width: 600px) {
-    .demo-bar { gap: 10px; padding: calc(8px + var(--safe-top)) calc(12px + var(--safe-right)) 8px calc(12px + var(--safe-left)); font-size: 14px; }
-    .demo-bar #look { display: none; }
-    .demo-bar button { height: 36px; padding: 0 12px; font-size: 14px; }
-    header { padding: 10px calc(12px + var(--safe-right)) 10px calc(12px + var(--safe-left)); }
-    header .obs { display: none; }
-    .stage, .deck { padding: 14px calc(12px + var(--safe-right)) 14px calc(12px + var(--safe-left)); }
-    .deck { padding-bottom: calc(14px + var(--safe-bottom)); }
+  /* iPhone upright (PHONE-7): the brand row, the program on top, the views two across, the Mac button at the bottom like the switcher's bar. */
+  @media (max-width: 780px) {
+    .side { display: none; }
+    .main { padding: calc(10px + var(--safe-top)) calc(16px + var(--safe-right)) calc(84px + var(--safe-bottom)) calc(16px + var(--safe-left)); gap: 22px; }
+    .phone-brand { display: flex !important; }
+    .page-head .livebar { display: none; }
+    .title { font-size: 28px; }
+    .frame { margin: 5px; outline-width: 3px; }
     .hint { display: none; }
-    .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+    .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
+    .name { font-size: 15px; }
+    .phone-bar { display: flex; position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; align-items: center; gap: 8px;
+      padding: 10px calc(16px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(16px + var(--safe-left));
+      background: #0b0c0fe6; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-top: 1px solid var(--line); }
+    .phone-bar .pill { flex: 1; min-width: 0; height: 44px; padding: 0 12px; gap: 8px; font-size: 13px; overflow: hidden; }
+    .phone-bar .connect { height: 44px; padding: 0 14px; font-size: 12px; }
   }
-  /* Sideways, as most people hold it: the program on the left, the views beside it, nothing below the fold. */
+  .phone-brand { display: none; align-items: center; gap: 8px; min-height: 44px; }
+  .phone-brand img { width: 24px; height: 24px; }
+  .phone-brand span { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+  .phone-brand .tag { margin-left: auto; font-family: var(--text); font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: var(--sage); text-transform: uppercase; }
+
+  /* Sideways, as most people hold a phone: the program on the left, the views beside it, the bar's button top right. */
   @media (max-height: 500px) and (orientation: landscape) {
-    body { height: 100%; }
-    .demo-bar { padding: calc(6px + var(--safe-top)) calc(16px + var(--safe-right)) 6px calc(16px + var(--safe-left)); font-size: 14px; }
-    .demo-bar #look { display: none; }
-    .demo-bar button { height: 34px; padding: 0 12px; font-size: 14px; }
-    header { display: none; }
-    main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .stage { padding: 10px 12px calc(10px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
-    .deck { padding: 10px calc(16px + var(--safe-right)) calc(10px + var(--safe-bottom)) 12px; overflow-y: auto; }
-    .label { margin-bottom: 8px; font-size: 14px; }
+    .side, .phone-brand, .page-head, .phone-bar { display: none !important; }
+    .main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; gap: 16px;
+      padding: calc(10px + var(--safe-top)) calc(16px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
+    .side-deck { display: flex !important; }
+    .program-section h2, .views-section h2 { display: none; }
+    .frame { margin: 4px; outline-width: 3px; }
+    .program-label { font-size: 15px; }
     .hint { display: none; }
-    .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-    .cover { font-size: 13px; gap: 4px; }
+    .covers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+    .name { font-size: 13px; }
+    .badge { left: 6px; top: 6px; height: 18px; font-size: 9px; padding: 0 6px; }
+    .views-section { gap: 10px; max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; }
   }
+  .side-deck { display: none; align-items: center; gap: 8px; }
+  .side-deck .pill { height: 32px; font-size: 12px; padding: 0 10px; flex: 1; min-width: 0; overflow: hidden; }
+  .side-deck .connect { height: 32px; font-size: 11px; padding: 0 12px; }
 </style>
 </head>
 <body>
-<div class="demo-bar" role="status">
-  <span class="msg">Demo · Connect your Mac to go live <span id="look">· looking for your Mac…</span></span>
-  <button type="button" id="connect">Connect your Mac</button>
+<div class="app">
+  <aside class="side" aria-label="Library">
+    <div class="brand"><img src="mark.svg" alt=""><span>ViewSwitcher</span></div>
+    <div class="org"><span class="org-dot" id="org-dot" aria-hidden="true"></span><span class="name" id="org"></span></div>
+    <div class="side-group">
+      <div class="side-label">PROJECTS</div>
+      <div class="side-item side-project"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>Sunday Bread</div>
+      <div class="side-item side-stream"><span class="date">Ep. 31</span><span id="side-ep"></span><span class="onair" aria-hidden="true"></span></div>
+    </div>
+    <p class="side-note">A sample show, so you can try switching. Nothing is streamed. Connect your Mac to go live with your own.</p>
+  </aside>
+  <main class="main">
+    <div class="phone-brand"><img src="mark.svg" alt=""><span>ViewSwitcher</span><span class="tag">Demo</span></div>
+    <div class="page-head">
+      <div class="titles">
+        <span class="crumb" id="crumb"></span>
+        <h1 class="title" id="title"></h1>
+      </div>
+      <div class="livebar">
+        <span class="pill off" role="status"><span class="dot"></span><span>Demo <span class="look">· looking for your Mac…</span></span></span>
+        <button type="button" class="connect" id="connect" aria-label="Connect your Mac">Connect your Mac</button>
+      </div>
+    </div>
+    <section class="section program-section" aria-label="Program">
+      <h2>On the stream</h2>
+      <div class="side-deck">
+        <span class="pill off"><span class="dot"></span><span>Demo · nothing is streamed</span></span>
+        <button type="button" class="connect" data-connect aria-label="Connect your Mac">Connect your Mac</button>
+      </div>
+      <div class="program">
+        <div class="frame" id="frame"></div>
+        <p class="program-label"><span class="tally">On air</span><span class="now" id="now" aria-live="polite"></span></p>
+        <p class="hint">Tap a view. The stream changes, and the camera, guest and screen move to where the view puts them. With your Mac, this goes out to OBS.</p>
+      </div>
+    </section>
+    <section class="section views-section" aria-label="Views">
+      <h2>Views</h2>
+      <div class="covers" id="covers" role="group" aria-label="Views"></div>
+    </section>
+  </main>
 </div>
-<header>
-  <span class="mark" id="mark" aria-hidden="true"></span>
-  <b id="show"></b>
-  <span class="ep" id="ep"></span>
-  <span class="obs"><i></i>Sample show · nothing is streamed</span>
-</header>
-<main>
-  <section class="stage" aria-label="Program">
-    <p class="label"><span class="tally"><span class="dot"></span>On air</span><span class="now" id="now" aria-live="polite"></span></p>
-    <div class="frame" id="frame"></div>
-    <p class="hint">Tap a view. The program changes, and the camera, guest and screen move to where the view puts them. With your Mac, this is what goes out to OBS.</p>
-  </section>
-  <section class="deck" aria-label="Views">
-    <p class="label">Views</p>
-    <div class="covers" id="covers" role="group" aria-label="Views"></div>
-  </section>
-</main>
+<div class="phone-bar">
+  <span class="pill off"><span class="dot"></span><span>Demo · nothing is streamed</span></span>
+  <button type="button" class="connect" data-connect aria-label="Connect your Mac">Connect your Mac</button>
+</div>
 <script src="../probe.js"></script>
 <script src="show.js"></script>
 <script>
@@ -130,10 +187,13 @@
   const place = (el, s) => Object.assign(el.style, { left: pct(s.x, 1920), top: pct(s.y, 1080), width: pct(s.w, 1920), height: pct(s.h, 1080), borderRadius: radius(s.radius) });
   const img = (src, cls, focus) => { const i = new Image(); i.src = src; i.alt = ""; i.decoding = "async"; if (cls) i.className = cls; if (focus) i.style.objectPosition = focus; return i; };
 
-  $("show").textContent = show.name;
-  $("ep").textContent = show.episode;
-  $("mark").textContent = show.name[0];
-  $("mark").style.background = show.accent;
+  const [ep, topic] = show.episode.split(" · ");
+  $("org").textContent = show.name;
+  $("org-dot").textContent = show.name[0];
+  $("org-dot").style.background = show.accent;
+  $("side-ep").textContent = topic || ep;
+  $("crumb").textContent = `${show.name} · Sample show`;
+  $("title").textContent = topic || show.episode;
 
   // The program frame: one mover per device (it glides between views), and every view's overlay.
   const frame = $("frame");
@@ -170,7 +230,7 @@
     thumb.append(img(`views/${v.file}.webp`));
     const badge = document.createElement("span");
     badge.className = "badge";
-    badge.innerHTML = `<span class="dot"></span>On air`;
+    badge.textContent = "On air";
     thumb.append(badge);
     const name = document.createElement("span");
     name.className = "name";
@@ -196,7 +256,7 @@
   take(Math.max(0, views.findIndex((v) => v.file === show.start)));
 
   // Back to the connector, and don't come straight back here until the app is launched again.
-  $("connect").addEventListener("click", () => { leaving = true; VS.leaveDemo(); location.href = "../"; });
+  for (const b of document.querySelectorAll("#connect, [data-connect]")) b.addEventListener("click", () => { leaving = true; VS.leaveDemo(); location.href = "../"; });
 
   // Connecting a Mac leaves the demo: keep looking, and open the real switcher when one answers.
   let busy = false, leaving = false;
@@ -205,7 +265,7 @@
     busy = true;
     try {
       const found = await VS.find();
-      if (found && !leaving) { leaving = true; $("look").textContent = `· connected over ${found.how}…`; VS.open(found.base); }
+      if (found && !leaving) { leaving = true; document.querySelector(".look").textContent = `· connected over ${found.how}…`; VS.open(found.base); }
     } finally { busy = false; }
   }
   look();
