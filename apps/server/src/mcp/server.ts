@@ -52,14 +52,14 @@ export type McpDeps = {
 };
 
 export const INSTRUCTIONS = [
-  "ViewSwitcher is a live-stream scene switcher for OBS. Scenes are HTML pages (1920×1080) in a library with one folder per org (brand or channel): templates, assets, projects and their streams. OBS shows the scene on air, with the camera, screen and iPad placed in its slots.",
-  "Call get_guide before creating or editing scenes: it has the scene rules (slots, theme, assets, overrides).",
-  "Every path starts with the org id, like \"my-channel/templates/brb.html\". list_orgs and scan_library show what's there.",
+  "ViewSwitcher is a live-stream switcher for OBS. Views are HTML pages (1920×1080) in a library with one folder per show: its templates, assets, projects and their streams. A show's id is its folder name; tools take it as org. OBS shows the view on air, with the camera, screen and iPad placed in its slots.",
+  "Call get_guide before creating or editing views: it has the rules for views (slots, theme, assets, a stream's own copies).",
+  "Every path starts with the show's id, like \"my-show/templates/brb.html\". list_orgs and scan_library show what's there.",
   "To change a file: read_file it, then write_file with the hash read_file gave you. A stale or missing hash is refused; read again and redo the change.",
   "preview_scene after every visual change, look at the picture, and fix what you see before you say it's done.",
-  "To start from a ready-made look, list_template_sets shows the built-in template sets and add_template_set adds one to an org (as the switcher's Add templates does); then scene_from_template makes scenes from its views (\"<set>/<view>\") in a project or stream.",
+  "To start from a ready-made template set, list_template_sets shows the built-in ones and add_template_set adds one to a show (as the switcher's Add templates does); then scene_from_template makes views from its templates (\"<set>/<name>\") in a project or stream.",
   "Use the structural tools (scene_from_template, customize_scene, duplicate_scene, rename_scene, customize_transition) instead of copying files by hand.",
-  "Only use go_on_air when the user asks. While OBS is streaming or recording, the scene on air and its shared files may be protected; the refusal says what to do instead.",
+  "Only use go_on_air when the user asks. While OBS is streaming or recording, the view on air and its shared files may be protected; the refusal says what to do instead.",
 ].join("\n");
 
 const GUIDE = "skills/viewswitcher-scenes/SKILL.md";
@@ -76,8 +76,8 @@ const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
 
-const orgArg = z.string().describe("The org id (a top-level library folder), from list_orgs.");
-const pathArg = (what: string) => z.string().describe(`${what}: a library path starting with the org id, like "my-channel/templates/brb.html".`);
+const orgArg = z.string().describe("The show's id (its folder name at the top of the library), from list_orgs.");
+const pathArg = (what: string) => z.string().describe(`${what}: a library path starting with the show's id, like "my-show/templates/brb.html".`);
 const fullArg = z.boolean().optional().describe("true for the full 1920×1080 picture; the default is 960×540.");
 
 const today = () => {
@@ -193,7 +193,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     return { file, name, path: `${plainName(org)}/${relative(dir, file).split("\\").join("/")}` };
   };
   const needScene = async (path: string) => {
-    if (!(await exists(scenePath(root, path)))) throw new Refusal(`There's no scene at ${path}. scan_library shows the scenes.`);
+    if (!(await exists(scenePath(root, path)))) throw new Refusal(`There's no view at ${path}. scan_library shows the views.`);
   };
 
   const stateView = (s: LiveState) => ({
@@ -214,19 +214,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("get_state", {
     title: "Switcher state",
-    description: "What's on air (path, label, org), whether OBS is connected, streaming or recording (\"live\"), any warnings, and the agent on-air setting (never / not-live / always) that decides whether you may use go_on_air.",
+    description: "What's on air (path, label, and org: the show's id), whether OBS is connected, streaming or recording (\"live\"), any warnings, and the agent on-air setting (never / not-live / always) that decides whether you may use go_on_air.",
     annotations: READ,
   }, run(async () => text(stateView(deps.state()))));
 
   server.registerTool("list_orgs", {
-    title: "List orgs",
-    description: "The orgs in the library (id, name, accent, ground). Every library path starts with an org id.",
+    title: "List shows",
+    description: "The shows in the library (id, name, accent, ground). A show's id is its folder name: every library path starts with it, and tools take it as org.",
     annotations: READ,
   }, run(async () => text(await lib.listOrgs(root))));
 
   server.registerTool("scan_library", {
-    title: "Scan an org",
-    description: "One org's templates, assets, projects, streams and scenes, with org-prefixed paths. A stream's scene with overrides: true is the stream's own copy of a project scene; sharedScenes are project scenes the stream uses as they are.",
+    title: "Scan a show",
+    description: "One show's templates, assets, projects, streams and views, with paths that start with the show's id. A stream's view with overrides: true is the stream's own copy of a project view; sharedScenes are project views the stream uses as they are.",
     inputSchema: { org: orgArg },
     annotations: READ,
   }, run(async ({ org }: { org: string }) => {
@@ -244,34 +244,34 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("list_files", {
     title: "List files",
-    description: "What's in an org's folder or a folder inside it: entries { name, path, type: \"file\" | \"dir\", size }. Pass an org id (\"my-channel\") or a folder path (\"my-channel/templates/_shared\"). Dot-files are left out.",
-    inputSchema: { path: z.string().describe("An org id, or a folder path starting with one.") },
+    description: "What's in a show's folder or a folder inside it: entries { name, path, type: \"file\" | \"dir\", size }. Pass a show's id (\"my-show\") or a folder path (\"my-show/templates/_shared\"). Dot-files are left out.",
+    inputSchema: { path: z.string().describe("A show's id (its folder name), or a folder path starting with one.") },
     annotations: READ,
   }, run(async ({ path }: { path: string }) => text(await listFiles(root, path))));
 
   server.registerTool("read_file", {
     title: "Read a file",
-    description: "A text file (html, css, js, json, md, svg, txt) and its hash. Pass that hash to write_file or rename_scene: they refuse a file that changed since you read it. Images and other media can't be read here; scenes use them as /library/<path>.",
+    description: "A text file (html, css, js, json, md, svg, txt) and its hash. Pass that hash to write_file or rename_scene: they refuse a file that changed since you read it. Images and other media can't be read here; views use them as /library/<path>.",
     inputSchema: { path: pathArg("The file") },
     annotations: READ,
   }, run(async ({ path }: { path: string }) => text(await readText(root, path, port))));
 
   server.registerTool("get_guide", {
-    title: "Scene guide",
-    description: "How ViewSwitcher scenes work (slots, theme, assets, templates, streams, overrides, previews). Read it before creating or editing scenes.",
+    title: "View guide",
+    description: "How ViewSwitcher views work (slots, theme, assets, templates, streams, a stream's own copies, previews). Read it before creating or editing views.",
     annotations: READ,
   }, run(async () => text(await readGuide(root, deps.kit))));
 
-  server.registerResource("guide", "viewswitcher://guide", { title: "ViewSwitcher scene guide", description: "How ViewSwitcher scenes work; the same text as get_guide.", mimeType: "text/markdown" }, async (uri) => ({
+  server.registerResource("guide", "viewswitcher://guide", { title: "ViewSwitcher view guide", description: "How ViewSwitcher views work; the same text as get_guide.", mimeType: "text/markdown" }, async (uri) => ({
     contents: [{ uri: uri.href, mimeType: "text/markdown", text: await readGuide(root, deps.kit) }],
   }));
 
   // ------------------------------------------------------------ look
 
   server.registerTool("preview_scene", {
-    title: "Preview a scene",
-    description: "A picture of a library scene as OBS renders it (960×540, or 1920×1080 with full), with the ground painted and device slots labelled. Use it after every visual change, look closely, and fix what's wrong. Without OBS it says so and gives the preview URL.",
-    inputSchema: { path: pathArg("The scene (.html)"), full: fullArg },
+    title: "Preview a view",
+    description: "A picture of a library view as OBS renders it (960×540, or 1920×1080 with full), with the ground painted and each slot labelled with its source. Use it after every visual change, look closely, and fix what's wrong. Without OBS it says so and gives the preview URL.",
+    inputSchema: { path: pathArg("The view (.html)"), full: fullArg },
     annotations: READ,
   }, run(async ({ path, full }: { path: string; full?: boolean }) => {
     await needScene(path);
@@ -280,7 +280,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("see_program", {
     title: "See the program output",
-    description: "A picture of what OBS is putting out right now: the scene on air INCLUDING the live camera, screen and iPad, so it shows the people on camera. 960×540, or 1920×1080 with full. Use it to check the real result on air.",
+    description: "A picture of what OBS is putting out right now: the view on air INCLUDING the live camera, screen and iPad, so it shows the people on camera. 960×540, or 1920×1080 with full. Use it to check the real result on air.",
     inputSchema: { full: fullArg },
     // Not marked read-only, so clients ask before it runs: it sends live camera frames to the AI provider.
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -290,7 +290,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("write_file", {
     title: "Write a file",
-    description: "Write a text file (html, css, js, json, md, svg, txt; up to 2 MB) inside an org. For a file that exists, pass the hash from read_file; it's refused if the file changed since (read again, redo the change). Leave hash out only to create a new file. Never in dot-folders. The switcher and OBS pick the change up by themselves.",
+    description: "Write a text file (html, css, js, json, md, svg, txt; up to 2 MB) inside a show. For a file that exists, pass the hash from read_file; it's refused if the file changed since (read again, redo the change). Leave hash out only to create a new file. Never in dot-folders. The switcher and OBS pick the change up by themselves.",
     inputSchema: { path: pathArg("The file"), text: z.string().describe("The whole new text of the file."), hash: z.string().optional().describe("The hash read_file gave you; required when the file exists.") },
     annotations: WRITE,
   }, run(async ({ path, text: body, hash }: { path: string; text: string; hash?: string }) => {
@@ -319,7 +319,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
           }
           // The list of what the scene loads was made for what was on air then, from the files as they were.
           if ((loads?.pages ?? "") !== pagesOnAir().join("\n") || (loads && !unchanged(loads))) {
-            throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the scene on air.");
+            throw new Refusal("What's on air changed while this was being written, and you're live. read_file it again and redo the change if it isn't part of the view on air.");
           }
         }
         guardNow({ kind: "write", paths: [target] }, loads);
@@ -332,7 +332,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const MAX_ASSET = 15 * 1024 * 1024;
   server.registerTool("add_asset", {
     title: "Add an asset",
-    description: "Save an image, video or audio file into an org's assets/ folder, from base64. Up to 15 MB. Returns its path (a free name is picked if the name is taken); scenes use it as /library/<path>.",
+    description: "Save an image, video or audio file into a show's assets/ folder, from base64. Up to 15 MB. Returns its path (a free name is picked if the name is taken); views use it as /library/<path>.",
     inputSchema: { org: orgArg, name: z.string().describe("File name with extension, like \"logo.png\"."), base64: z.string().describe("The file's bytes, base64-encoded.") },
     annotations: WRITE,
   }, run(async ({ org, name, base64 }: { org: string; name: string; base64: string }) => {
@@ -363,7 +363,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("list_template_sets", {
     title: "List built-in template sets",
-    description: "The template sets that come with ViewSwitcher (the switcher's Add templates): each a whole look with its views (starting soon, main, break, ending…), filled in with the org's name and colors when added. With org, also says which the org has already (an org's installed sets are in scan_library's sets).",
+    description: "The template sets that come with ViewSwitcher (the switcher's Add templates): each a whole set of templates, listed as its views (starting soon, main, break, ending…), filled in with the show's name and colors when added. With org (a show's id), also says which the show has already (a show's installed sets are in scan_library's sets).",
     inputSchema: { org: orgArg.optional() },
     annotations: READ,
   }, run(async ({ org }: { org?: string }) => {
@@ -377,7 +377,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("add_template_set", {
     title: "Add a built-in template set",
-    description: "Add one of the built-in template sets (list_template_sets: by id, like \"grace\", or name, like \"Grace Community\") to an org, exactly as the switcher's Add templates does: it lands as its own set in templates/<set>/, in the org's name and colors. Adding one the org has makes a second copy (\"<id>-2\"). Returns { set, templates }: pass a template to scene_from_template to make a scene from it.",
+    description: "Add one of the built-in template sets (list_template_sets: by id, like \"grace\", or name, like \"Grace Community\") to a show, exactly as the switcher's Add templates does: it lands as its own set in templates/<set>/, in the show's name and colors. Adding one the show has makes a second copy (\"<id>-2\"). Returns { set, templates }: pass a template to scene_from_template to make a view from it.",
     inputSchema: { org: orgArg, set: z.string().describe("The built-in set's id or name.") },
     annotations: WRITE,
   }, run(async ({ org, set }: { org: string; set: string }) => {
@@ -400,8 +400,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("create_project", {
     title: "Create a project",
-    description: "A new project in an org (a show or series), optionally starting with copies of some templates as its shared scenes. Returns { projectId }.",
-    inputSchema: { org: orgArg, name: z.string().describe("The project's name."), templates: z.array(z.string()).optional().describe("Template names to copy into the project: a file name without .html (\"brb\"), or \"<set>/<view>\" for a template set's (scan_library's sets).") },
+    description: "A new project in a show: a run of streams that share its views. It can start with copies of some templates as those shared views. Returns { projectId }.",
+    inputSchema: { org: orgArg, name: z.string().describe("The project's name."), templates: z.array(z.string()).optional().describe("Template names to copy into the project: a file name without .html (\"brb\"), or \"<set>/<name>\" for a template set's (scan_library's sets).") },
     annotations: WRITE,
   }, run(async ({ org, name, templates }: { org: string; name: string; templates?: string[] }) => {
     const dir = await existingOrg(root, org);
@@ -416,7 +416,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("create_stream", {
     title: "Create a stream",
-    description: "A new stream (one episode or broadcast) in a project. date is YYYY-MM-DD, today if left out. Returns { projectId, streamId }.",
+    description: "A new stream (one broadcast, a dated folder of its own views) in a project. date is YYYY-MM-DD, today if left out. Returns { projectId, streamId }.",
     inputSchema: { org: orgArg, projectId: z.string(), name: z.string().describe("The stream's name."), date: z.string().optional().describe("YYYY-MM-DD") },
     annotations: WRITE,
   }, run(async ({ org, projectId, name, date }: { org: string; projectId: string; name: string; date?: string }) => {
@@ -426,9 +426,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }));
 
   server.registerTool("scene_from_template", {
-    title: "New scene from a template",
-    description: "Copy one of the org's templates (its own, or a template set's, such as one add_template_set added) into a project's shared scenes, or into one stream with streamId. Returns { name, path } of the new scene (a free name is picked if needed); then edit it with read_file and write_file, and preview_scene it.",
-    inputSchema: { org: orgArg, template: z.string().describe("Template name: a file name without .html (\"brb\"), or \"<set>/<view>\" for a template set's (scan_library's sets)."), projectId: z.string(), streamId: z.string().optional() },
+    title: "New view from a template",
+    description: "Copy one of the show's templates (its own, or a template set's, such as one add_template_set added) into a project's shared views, or into one stream with streamId. Returns { name, path } of the new view (a free name is picked if needed); then edit it with read_file and write_file, and preview_scene it.",
+    inputSchema: { org: orgArg, template: z.string().describe("Template name: a file name without .html (\"brb\"), or \"<set>/<name>\" for a template set's (scan_library's sets)."), projectId: z.string(), streamId: z.string().optional() },
     annotations: WRITE,
   }, run(async ({ org, template, projectId, streamId }: { org: string; template: string; projectId: string; streamId?: string }) => {
     const dir = streamId ? await needStream(org, projectId, streamId) : await needProject(org, projectId);
@@ -443,12 +443,12 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("customize_scene", {
     title: "Make a stream copy",
-    description: "Give one stream its own copy of a project scene (an override), so it can change without changing the project's or other streams'. Returns { name, path } of the stream copy; edit that path. If the copy already exists, returns it.",
-    inputSchema: { org: orgArg, projectId: z.string(), streamId: z.string(), name: z.string().describe("The project scene's name (file name without .html).") },
+    description: "Give one stream its own copy of a project view (scan_library marks it overrides: true), so it can change without changing the project's or other streams'. Returns { name, path } of the stream copy; edit that path. If the copy already exists, returns it.",
+    inputSchema: { org: orgArg, projectId: z.string(), streamId: z.string(), name: z.string().describe("The project view's name (file name without .html).") },
     annotations: WRITE,
   }, run(async ({ org, projectId, streamId, name }: { org: string; projectId: string; streamId: string; name: string }) => {
     const dir = await needStream(org, projectId, streamId);
-    if (!(await exists(inside(dir, `projects/${projectId}/scenes/${plainName(name)}.html`)))) throw new Refusal(`Project ${projectId} has no scene "${name}". scan_library shows its scenes.`);
+    if (!(await exists(inside(dir, `projects/${projectId}/scenes/${plainName(name)}.html`)))) throw new Refusal(`Project ${projectId} has no view "${name}". scan_library shows its views.`);
     await contained(`${org}/projects/${projectId}/scenes/${name}.html`);
     await writes(`${org}/projects/${projectId}/streams/${streamId}/${name}.html`);
     return text(await customizeScene(root, { org, projectId, streamId, name }));
@@ -456,8 +456,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("revert_scene", {
     title: "Drop a stream copy",
-    description: "Delete a stream's own copy of a project scene, so the stream shows the project's version again. The stream copy's changes are lost.",
-    inputSchema: { org: orgArg, projectId: z.string(), streamId: z.string(), name: z.string().describe("The scene's name (file name without .html).") },
+    description: "Delete a stream's own copy of a project view, so the stream shows the project's version again. The stream copy's changes are lost.",
+    inputSchema: { org: orgArg, projectId: z.string(), streamId: z.string(), name: z.string().describe("The view's name (file name without .html).") },
     annotations: DESTRUCTIVE,
   }, run(async ({ org, projectId, streamId, name }: { org: string; projectId: string; streamId: string; name: string }) => {
     const dir = await needStream(org, projectId, streamId);
@@ -468,9 +468,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }));
 
   server.registerTool("duplicate_scene", {
-    title: "Duplicate a scene",
-    description: "Copy a scene beside itself as \"<name>-copy\" (its title gets \" copy\"). Returns { name, path } of the copy.",
-    inputSchema: { path: pathArg("The scene (.html)") },
+    title: "Duplicate a view",
+    description: "Copy a view beside itself as \"<name>-copy\" (its title gets \" copy\"). Returns { name, path } of the copy.",
+    inputSchema: { path: pathArg("The view (.html)") },
     annotations: WRITE,
   }, run(async ({ path }: { path: string }) => {
     await needScene(path);
@@ -482,9 +482,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }));
 
   server.registerTool("rename_scene", {
-    title: "Rename a scene",
-    description: "Give a scene a new name: its <title>, and for a stream's own scene its file name too. Pass the hash from read_file (refused if the scene changed since). Returns the scene's { path, hash } afterwards; the path changes when the file was renamed.",
-    inputSchema: { path: pathArg("The scene (.html)"), hash: z.string().describe("The hash read_file gave you."), name: z.string().describe("The new name, in words (\"Q&A\").") },
+    title: "Rename a view",
+    description: "Give a view a new name: its <title>, and for a stream's own view its file name too. Pass the hash from read_file (refused if the view changed since). Returns the view's { path, hash } afterwards; the path changes when the file was renamed.",
+    inputSchema: { path: pathArg("The view (.html)"), hash: z.string().describe("The hash read_file gave you."), name: z.string().describe("The new name, in words (\"Q&A\").") },
     annotations: WRITE,
   }, run(async ({ path, hash, name }: { path: string; hash: string; name: string }) => {
     await needScene(path);
@@ -497,7 +497,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   server.registerTool("customize_transition", {
     title: "Give a project its own transition",
-    description: "Copy the org's transition (templates/_shared/transition.html) into the project as projects/<id>/transition.html, which then plays for that project's scenes. Returns { path }; edit it with read_file and write_file.",
+    description: "Copy the show's transition (templates/_shared/transition.html) into the project as projects/<id>/transition.html, which then plays for that project's views. Returns { path }; edit it with read_file and write_file.",
     inputSchema: { org: orgArg, projectId: z.string() },
     annotations: WRITE,
   }, run(async ({ org, projectId }: { org: string; projectId: string }) => {
@@ -510,8 +510,8 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }));
 
   server.registerTool("revert_transition", {
-    title: "Back to the org's transition",
-    description: "Delete a project's own transition so its scenes use the org's again. The project transition's changes are lost.",
+    title: "Back to the show's transition",
+    description: "Delete a project's own transition so its views use the show's again. The project transition's changes are lost.",
     inputSchema: { org: orgArg, projectId: z.string() },
     annotations: DESTRUCTIVE,
   }, run(async ({ org, projectId }: { org: string; projectId: string }) => {
@@ -524,11 +524,11 @@ export function createMcpServer(deps: McpDeps): McpServer {
   // ------------------------------------------------------------ live
 
   server.registerTool("go_on_air", {
-    title: "Put a scene on air",
-    description: "Switch OBS to a scene (a template, project scene or stream scene, by its org-prefixed path). Only when the user asks. For a project scene that a stream uses as it is (scan_library's sharedScenes), pass that stream's streamId, as the stream page does. Whether it's allowed depends on the agent on-air setting (get_state): never, not-live (refused while OBS streams or records), or always. Returns the new state.",
+    title: "Put a view on air",
+    description: "Switch OBS to a view (a template, project view or stream view, by its path, which starts with the show's id). Only when the user asks. For a project view that a stream uses as it is (scan_library's sharedScenes), pass that stream's streamId, as the stream page does. Whether it's allowed depends on the agent on-air setting (get_state): never, not-live (refused while OBS streams or records), or always. Returns the new state.",
     inputSchema: {
-      path: pathArg("The scene (.html)"),
-      streamId: z.string().optional().describe("For a project scene: the stream it goes on air for (one that shares the scene). Leave it out otherwise."),
+      path: pathArg("The view (.html)"),
+      streamId: z.string().optional().describe("For a project view: the stream it goes on air for (one that shares the view). Leave it out otherwise."),
     },
     annotations: DESTRUCTIVE,
   }, run(async ({ path, streamId }: { path: string; streamId?: string }) => {
@@ -546,7 +546,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
         const st = p.streams.find((x) => x.id === streamId);
         if (!st) throw new Refusal(`Project ${p.id} has no stream "${streamId}". scan_library shows its streams.`);
         const own = resolveStream(p, st).own.find((x) => x.name === s.name);
-        if (own) throw new Refusal(`Stream ${st.id} has its own copy of that scene. Put ${own.path} on air instead.`);
+        if (own) throw new Refusal(`Stream ${st.id} has its own copy of that view. Put ${own.path} on air instead.`);
         found = { path, label: `${s.label} · ${st.name}`, projectId: p.id, streamId: st.id };
       } else if (s) found = { path, label: s.label, projectId: p.id };
       for (const st of p.streams) {
@@ -554,7 +554,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
         if (x) found = { path, label: `${x.label} · ${st.name}`, projectId: p.id, streamId: st.id };
       }
     }
-    if (!found) throw new Refusal("Only an org's templates, project scenes and stream scenes go on air. scan_library lists them.");
+    if (!found) throw new Refusal("Only a show's templates, project views and stream views go on air. scan_library lists them.");
     // Checked again as it commits: OBS may have gone live, or the setting changed, in the meantime.
     return text(stateView(await deps.goOnAir(found, () => guardNow({ kind: "go_on_air" }))));
   }));

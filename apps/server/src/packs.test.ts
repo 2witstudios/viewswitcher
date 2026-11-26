@@ -97,7 +97,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
   test("a pack staged for one org can't be installed into another", async () => {
     const other = (await createOrg(root, starter, "Personal")).orgId;
     const s = await stagePack(root, org, { zip: starterZip }, null);
-    await expect(installPack(root, other, s.token)).rejects.toThrow(/isn't ready|another org/);
+    await expect(installPack(root, other, s.token)).rejects.toThrow(/isn't ready|another show/);
     expect((await scanOrg(root, other)).sets).toEqual([]);
   });
 });

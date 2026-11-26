@@ -62,14 +62,14 @@ export function libraryRoutes(d: RouteDeps): Route[] {
     // live on the program page without writing anything.
     post("/api/scene/edit", async (b) => {
       const r = await editScene(root, b.path, String(b.hash ?? ""), b.edits);
-      if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
+      if (!r.ok) return json({ error: "This view changed since you opened it", hash: r.hash }, 409);
       d.log?.(`[edit] ${String(b.path).split("/").slice(-2).join("/")} ${r.changed ? "saved" : "unchanged"}`);
       return r;
     }),
     // Rename a scene: its title, and a stream scene's file. The scene stays on air if it is.
     post("/api/scene/rename", async (b) => {
       const r = await renameScene(root, b.path, String(b.hash ?? ""), b.name);
-      if (!r.ok) return json({ error: "This scene changed since you opened it", hash: r.hash }, 409);
+      if (!r.ok) return json({ error: "This view changed since you opened it", hash: r.hash }, 409);
       await store.renamed(b.path, b.name, r);
       return r;
     }),

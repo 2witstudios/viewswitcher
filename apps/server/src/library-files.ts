@@ -44,13 +44,13 @@ export function pageProblem(path: string, exists: boolean, isSet: (dir: string) 
   const where = parseLibraryPath(path);
   // A folder in templates/ is a template set only with its pack.json (library.ts listSets).
   if (where.set && !isSet(where.set)) {
-    return `templates/${where.set}/ isn't a template set (it has no pack.json), so the switcher doesn't list scenes in it. Put the scene in templates/, or add a set with add_template_set.`;
+    return `templates/${where.set}/ isn't a template set (it has no pack.json), so the switcher doesn't list views in it. Put the view in templates/, or add a set with add_template_set.`;
   }
   if (where.kind === "transition") return null;
   if (!isViewPath(where)) {
-    return `${path} isn't where scenes go. A new scene goes in templates/, a template set's folder, projects/<id>/scenes/ or projects/<id>/streams/<id>/ (assets/ and _shared/ hold no pages, except _shared/transition.html). Prefer scene_from_template, which picks the place and name.`;
+    return `${path} isn't where views go. A new view goes in templates/, a template set's folder, projects/<id>/scenes/ or projects/<id>/streams/<id>/ (assets/ and _shared/ hold no pages, except _shared/transition.html). Prefer scene_from_template, which picks the place and name.`;
   }
-  if (!SCENE_NAME.test(where.name)) return `Name new scenes with lower-case letters, numbers and dashes, like "${slugify(where.name) || "my-scene"}.html"; its <title> is the name people see.`;
+  if (!SCENE_NAME.test(where.name)) return `Name new views with lower-case letters, numbers and dashes, like "${slugify(where.name) || "my-view"}.html"; its <title> is the name people see.`;
   return null;
 }
 
@@ -80,7 +80,7 @@ export async function readText(root: string, path: unknown, port: number): Promi
   const s = await stat(abs).catch(() => null);
   if (!s) throw new PathError(`There's no file at ${p}`);
   if (s.isDirectory()) throw new PathError(`${p} is a folder. Use list_files for it.`);
-  if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Scenes use it as ${libraryUrl(p)}, and it's at http://127.0.0.1:${port}${libraryUrl(p)}.`);
+  if (!isTextFile(p)) throw new PathError(`${p} isn't a text file (${TEXT_EXTENSIONS.join(", ")}). Views use it as ${libraryUrl(p)}, and it's at http://127.0.0.1:${port}${libraryUrl(p)}.`);
   if (s.size > MAX_TEXT_BYTES) throw new PathError(`${p} is over 2 MB, too big to read here`);
   const text = await readFile(abs, "utf8");
   return { text, hash: sceneHash(text) };

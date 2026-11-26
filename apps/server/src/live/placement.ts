@@ -53,7 +53,7 @@ export function planPlacement(
   const sceneName = names.obsScene;
   const inSlots = slotted(items, slots);
   for (const source of new Set(slots.map((s) => s.source))) {
-    if (!items.some((i) => i.sourceName === source)) warnings.push(`This scene has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
+    if (!items.some((i) => i.sourceName === source)) warnings.push(`This view has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
   }
   for (const item of items) {
     if (item.sourceName === names.programSource || item.sourceName === names.groundSource) continue;

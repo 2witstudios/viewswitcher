@@ -206,7 +206,7 @@ export class Pairing {
       this.remotes.delete(hash);
       this.renewed.delete(id);
       this.onRemoved(id);
-      if (!(await this.flush())) throw new Error("The device is disconnected, but ViewSwitcher couldn't save the change; it may come back after a restart.");
+      if (!(await this.flush())) throw new Error("The phone or tablet is disconnected, but ViewSwitcher couldn't save the change; it may come back after a restart.");
       return true;
     }
     return false;

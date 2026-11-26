@@ -33,7 +33,7 @@ export async function listOrgs(libraryRoot: string): Promise<Org[]> {
 
 /** A new org from the starter kit: neutral templates that use the org's own name and colors. */
 export async function createOrg(libraryRoot: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
-  if (!name?.trim()) throw new PathError("An org needs a name");
+  if (!name?.trim()) throw new PathError("A show needs a name");
   const base = slugify(name);
   let id = base, n = 2;
   while (await exists(join(libraryRoot, id))) id = `${base}-${n++}`;
@@ -83,7 +83,7 @@ export async function customizeTransition(orgDir: string, projectId: string) {
   const dest = join(projectDir(orgDir, projectId), TRANSITION);
   if (await exists(dest)) return;
   const src = join(orgDir, ORG_TRANSITION);
-  if (!(await exists(src))) throw new PathError("This org has no transition to start from yet");
+  if (!(await exists(src))) throw new PathError("This show has no transition to start from yet");
   await contained(orgDir, src);
   await contained(orgDir, dest);
   await copyNew(src, dest);
@@ -225,14 +225,14 @@ export async function customize(orgDir: string, projectId: string, streamId: str
 /** Delete a stream's override so the project version shows again. */
 export async function revert(orgDir: string, projectId: string, streamId: string, name: string) {
   const projectScene = join(projectDir(orgDir, projectId), "scenes", `${plainName(name)}.html`);
-  if (!(await exists(projectScene))) throw new PathError("Only an override can go back to the project version");
+  if (!(await exists(projectScene))) throw new PathError("Only a stream's own copy can go back to the project version");
   const copy = join(streamDir(orgDir, projectId, streamId), `${name}.html`);
   await contained(orgDir, copy);
   await rm(copy);
 }
 
 export async function duplicate(libraryRoot: string, path: string, check?: BeforeCreate) {
-  if (!path.endsWith(".html")) throw new PathError("Only scenes can be duplicated");
+  if (!path.endsWith(".html")) throw new PathError("Only views can be duplicated");
   const src = inside(libraryRoot, path);
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);

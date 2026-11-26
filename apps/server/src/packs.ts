@@ -76,7 +76,7 @@ export async function sweepStaging(libraryRoot: string) {
 
 export async function stagePack(libraryRoot: string, orgId: string, source: PackSource, starterScript: string | null): Promise<StagedPack> {
   const orgDir = inside(libraryRoot, plainName(orgId));
-  if (!(await exists(join(orgDir, "org.json")))) throw new PathError("That org doesn't exist");
+  if (!(await exists(join(orgDir, "org.json")))) throw new PathError("That show doesn't exist");
   await sweepStaging(libraryRoot);
 
   // 1. What's in it, before anything is unpacked or written.
@@ -163,7 +163,7 @@ export async function installPack(libraryRoot: string, orgId: string, token: unk
   const dir = stageDir(libraryRoot, orgId, token);
   const meta = await readFile(join(dir, "meta.json"), "utf8").then((t) => JSON.parse(t) as StageMeta, () => null);
   if (!meta) throw new PackError("That pack isn't ready to install any more. Drop it again.");
-  if (meta.org !== orgId) throw new PackError("That pack was checked for another org. Drop it again here.");
+  if (meta.org !== orgId) throw new PackError("That pack was checked for another show. Drop it again here.");
   const orgDir = inside(libraryRoot, plainName(orgId));
   const final = join(dir, "final");
   try {

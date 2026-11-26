@@ -14,7 +14,7 @@ export const orgDir = (libraryRoot: string, id: unknown) => inside(libraryRoot, 
 /** An org that exists (a top-level folder with org.json), for callers that must never make a new one by accident. */
 export async function existingOrg(libraryRoot: string, id: unknown): Promise<string> {
   const dir = orgDir(libraryRoot, id);
-  if (!(await lib.isFile(join(dir, "org.json")))) throw new PathError(`There's no org "${String(id)}". list_orgs shows the orgs.`);
+  if (!(await lib.isFile(join(dir, "org.json")))) throw new PathError(`There's no show "${String(id)}". list_orgs shows the shows.`);
   return dir;
 }
 
@@ -36,7 +36,7 @@ export async function customizeScene(libraryRoot: string, b: { org: unknown; pro
 /** A copy of a scene beside it ("<name>-copy"): for the switcher's Duplicate and the agents' duplicate_scene. */
 export async function duplicateScene(libraryRoot: string, path: string, check?: lib.BeforeCreate): Promise<SceneRef> {
   // Library paths start with the org id: "/org/…" would come back as a path nothing else accepts.
-  if (String(path).startsWith("/")) throw new PathError(`Bad path: ${path}. Paths start with the org id, like "my-channel/templates/brb.html".`);
+  if (String(path).startsWith("/")) throw new PathError(`Bad path: ${path}. Paths start with the show's id, like "my-show/templates/brb.html".`);
   // The scene it reads, and the folder the copy goes in (a scene may link back inside from a folder that links out).
   await resolveInLibrary(libraryRoot, path);
   await resolveInLibrary(libraryRoot, dirname(path), { forWrite: true });
@@ -54,7 +54,7 @@ export async function onAirFor(libraryRoot: string, b: OnAirRequest): Promise<On
   // The program page loads it from /library/, which serves only what this rule allows.
   const file = await resolveInLibrary(libraryRoot, b.path);
   if (!String(b.path).endsWith(".html") || !(await lib.isFile(file))) {
-    throw new PathError(`There's no scene at ${b.path}. It may have been renamed or deleted.`);
+    throw new PathError(`There's no view at ${b.path}. It may have been renamed or deleted.`);
   }
   const o = await lib.readOrg(libraryRoot, orgOf(b.path));
   const transition = await lib.resolveTransition(libraryRoot, b.path);

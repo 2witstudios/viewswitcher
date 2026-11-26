@@ -94,8 +94,8 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
     async scene(path, { full } = {}) {
       const abs = inside(library, path);
       const rel = relative(library, abs).split(sep).join("/");
-      if (!rel.endsWith(".html")) throw new PathError(`Only scenes (.html files) can be previewed: ${path}`);
-      if (!existsSync(abs)) throw new PathError(`No scene at ${path}`);
+      if (!rel.endsWith(".html")) throw new PathError(`Only views (.html files) can be previewed: ${path}`);
+      if (!existsSync(abs)) throw new PathError(`No view at ${path}`);
       const url = `${base}${libraryUrl(rel)}?preview`;
       const dims = size(full);
       return oneAtATime(async (): Promise<PreviewResult> => {
@@ -104,10 +104,10 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
           // A new query string each time, so OBS reloads the page even when the URL is the same scene.
           await ensurePreview(obs, opts.obs, `${url}&load=${Date.now()}-${++loads}`);
           const png = await settle(opts.obs.previewSource, dims);
-          if (!png) return { ok: false, reason: `OBS didn't draw the scene within ${timeoutMs / 1000} s, so there's no picture. ${BROWSER}`, url };
+          if (!png) return { ok: false, reason: `OBS didn't draw the view within ${timeoutMs / 1000} s, so there's no picture. ${BROWSER}`, url };
           return { ok: true, png, ...dims };
         } catch (e) {
-          return { ok: false, reason: `OBS couldn't render the scene (${(e as Error).message}), so there's no picture. ${BROWSER}`, url };
+          return { ok: false, reason: `OBS couldn't render the view (${(e as Error).message}), so there's no picture. ${BROWSER}`, url };
         } finally {
           // Done with the page: a blank one, so the scene (a looping video, a countdown) doesn't keep
           // running in OBS for the rest of the show. The browser itself stays warm (shutdown: false).
@@ -120,7 +120,7 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
     // for two matching frames, because the live camera means the program never holds still.
     async program({ full } = {}) {
       const url = `${base}/program`;
-      const without = "The URL shows the scene on air, without the camera or screen.";
+      const without = "The URL shows the view on air, without the camera or screen.";
       if (!obs.status.connected) return { ok: false, reason: `OBS isn't connected, so there's no picture of the program. ${without}`, url };
       const dims = size(full);
       // Whatever OBS has on program (someone may have cut to another scene in OBS). If OBS won't say,
@@ -130,9 +130,9 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
         const r = await obs.request<{ currentProgramSceneName?: string; sceneName?: string }>("GetCurrentProgramScene");
         scene = r.currentProgramSceneName || r.sceneName || "";
       } catch (e) {
-        return { ok: false, reason: `OBS didn't say which scene is on program (${(e as Error).message}). ${without}`, url };
+        return { ok: false, reason: `OBS didn't say which OBS scene is on program (${(e as Error).message}). ${without}`, url };
       }
-      if (!scene) return { ok: false, reason: `OBS didn't say which scene is on program. ${without}`, url };
+      if (!scene) return { ok: false, reason: `OBS didn't say which OBS scene is on program. ${without}`, url };
       try {
         const { png } = await screenshot(scene, dims);
         if (isBlankPng(png)) return { ok: false, reason: `OBS returned an empty picture of "${scene}". ${without}`, url };

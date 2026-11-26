@@ -14,7 +14,7 @@ export const sceneHash = (text: string) => new Bun.CryptoHasher("sha256").update
 /** A scene file, by its library path (which starts with the org id). */
 export function scenePath(root: string, path: unknown): string {
   const p = String(path ?? "");
-  if (!p.endsWith(".html")) throw new PathError("Only scenes can be edited");
+  if (!p.endsWith(".html")) throw new PathError("Only views can be edited");
   plainName(orgOf(p));
   return inside(root, p);
 }
@@ -42,7 +42,7 @@ export function parseEdit(e: any): SceneEdit {
   const isId = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
   if (!isId(id)) throw new EditError("Each edit needs an element id");
   if (typeof e.text === "string") {
-    if (e.text.length > 2000) throw new EditError("That text is too long for a scene");
+    if (e.text.length > 2000) throw new EditError("That text is too long for a view");
     return { id, text: e.text };
   }
   if (typeof e.insert === "string") {
@@ -60,7 +60,7 @@ export function parseEdit(e: any): SceneEdit {
     try {
       rel = decodeURIComponent(src.slice("/library/".length));
     } catch {
-      throw new EditError("That isn't an image the scene can show");
+      throw new EditError("That isn't an image the view can show");
     }
     plainName(orgOf(rel));
     if (rel.split("/").some((part) => part === ".." || part.startsWith("."))) throw new EditError("Images come from the library");

@@ -168,7 +168,7 @@ describe("preview renderer", () => {
   test("if OBS never draws the page, it says so and gives the URL", async () => {
     const obs = connected(); // the fake's default frame is empty
     const r = await createPreviewer(obs, opts({ timeoutMs: 60, intervalMs: 10 })).scene(SCENE);
-    expect(r).toEqual({ ok: false, reason: expect.stringContaining("didn't draw the scene"), url: `http://127.0.0.1:${PORT}/library/${SCENE}?preview` });
+    expect(r).toEqual({ ok: false, reason: expect.stringContaining("didn't draw the view"), url: `http://127.0.0.1:${PORT}/library/${SCENE}?preview` });
   });
 
   test("previews run one at a time, so each gets its own scene's picture", async () => {
@@ -237,7 +237,7 @@ describe("program picture", () => {
 
   test("if OBS won't say which scene is on program, there's no picture (not some other scene's)", async () => {
     const none = connected(); // nothing on program yet: an empty name
-    expect(await createPreviewer(none, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining("didn't say which scene is on program"), url: `http://127.0.0.1:${PORT}/program` });
+    expect(await createPreviewer(none, opts()).program()).toEqual({ ok: false, reason: expect.stringContaining("didn't say which OBS scene is on program"), url: `http://127.0.0.1:${PORT}/program` });
     const failing = connected();
     const real = failing.request.bind(failing);
     failing.request = ((t: string, d?: object) => (t === "GetCurrentProgramScene" ? Promise.reject(new OBSRequestError(t, 500, "busy")) : real(t, d))) as never;

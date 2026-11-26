@@ -70,7 +70,7 @@ type Socket = ServerWebSocket<SocketData>;
 const sockets = new Set<Socket>();
 // A removed device's token stops at once: its next request is refused, and its live sockets close now.
 pairing.onRemoved = (id) => {
-  for (const ws of sockets) if (ws.data.remote === id) ws.close(4401, "This device was removed");
+  for (const ws of sockets) if (ws.data.remote === id) ws.close(4401, "This phone or tablet was removed");
 };
 
 /** The main listener on 127.0.0.1, from the end of startup on. */

@@ -24,7 +24,7 @@ export const STAGING_TOKEN = /^[a-f0-9]{24}$/;
 const STAGING_PREVIEW = /^[^/]+\/\.viewswitcher\/staging\/[a-f0-9]{24}\/preview\/[^.]/;
 
 const badPath = (p: string) =>
-  new PathError(`Bad path: ${p || "(empty)"}. Paths start with the org id, like "my-channel/templates/brb.html", and never go into dot-folders.`);
+  new PathError(`Bad path: ${p || "(empty)"}. Paths start with the show's id, like "my-show/templates/brb.html", and never go into dot-folders.`);
 const outside = () => new PathError("That path is a link to somewhere outside the library");
 
 /** Whether a library path (org first, "/"-separated) obeys the dot rule. */

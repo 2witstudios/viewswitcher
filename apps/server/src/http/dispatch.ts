@@ -124,7 +124,7 @@ function secured(res: Response, path: string): Response {
 }
 
 const REMOTE_OFF = "This Mac isn't letting phones and tablets connect right now. On the Mac, turn on Phones and Tablets in ViewSwitcher.";
-const PAIR_FIRST = "Pair this device first: open ViewSwitcher on the Mac, then Phones and Tablets.";
+const PAIR_FIRST = "Pair this phone or tablet first: open ViewSwitcher on the Mac, then Phones and Tablets.";
 const PLAIN_500 = "Something went wrong on the Mac. Its server log has the details.";
 
 export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<SocketData>) => Promise<Response | undefined> {
