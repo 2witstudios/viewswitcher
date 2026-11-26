@@ -2,9 +2,9 @@
 // library, change scenes under the switcher's own rules, look at its work, and go on air when that's
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
@@ -13,6 +13,7 @@ import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
 import { asDropped, type BuiltinPack } from "../builtin-packs";
 import * as lib from "../library";
+import { realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { cancelPack, installPack, PackError, stagePack } from "../packs";
@@ -20,6 +21,7 @@ import { inside, PathError, plainName } from "../paths";
 import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
 import { type Loaded, loadedFiles, textHash } from "../scene-refs";
+import { pathScrub } from "../scrub";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
@@ -85,14 +87,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
-  const realRoot = (() => {
-    try {
-      return realpathSync(root);
-    } catch {
-      return root;
-    }
-  })();
-  const scrub = (s: string) => [realRoot, root].reduce((t, r) => t.split(`${r}/`).join("").split(r).join("the library"), s);
+  const scrub = pathScrub(root);
 
   const text = (data: unknown): CallToolResult => ({ content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }] });
   const refusal = (message: string): CallToolResult => ({ content: [{ type: "text", text: scrub(message) }], isError: true });
@@ -107,20 +102,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   };
 
   /** Where a library path really is (through links), as a library path; the path itself when that can't be told. */
-  const realRel = (path: string) => {
-    try {
-      let probe = inside(root, path);
-      let rest = "";
-      while (!existsSync(probe)) {
-        rest = `/${basename(probe)}${rest}`;
-        probe = dirname(probe);
-      }
-      const back = relative(realRoot, realpathSync(probe)) + rest;
-      return back.startsWith("..") || isAbsolute(back) ? path : back;
-    } catch {
-      return path;
-    }
-  };
+  const realRel = (path: string) => realLibraryPath(root, path);
   /**
    * Live, for the agents' guard: OBS streaming or recording, or connected without having said yet
    * whether it is (just after connecting, before its first status answer). Unknown counts as live.
@@ -450,7 +432,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     if (!(await exists(tpl.file))) throw new Refusal(`${org} has no template "${template}". scan_library shows its templates and sets.`);
     await contained(tpl.path);
     // The copy may get a free name ("brb-2"): the folder is checked here, the name the copy gets as it's made.
-    await contained(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}/${tpl.name}.html`);
+    await contained(`${org}/projects/${projectId}/${streamId ? `streams/${streamId}` : "scenes"}`);
     const check = await guardFor();
     return text(await sceneFromTemplate(root, { org, template, projectId, streamId }, check));
   }));
@@ -488,9 +470,9 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: WRITE,
   }, run(async ({ path }: { path: string }) => {
     await needScene(path);
-    // The scene it copies must really be in the library: a link to a file outside would be copied in.
+    // The scene it copies, and the folder the copy goes in, must really be in the library: a link to a
+    // file outside would be copied in. The copy's own name is picked free of anything already there.
     await contained(path);
-    await contained(`${path.slice(0, -5)}-copy.html`);
     const check = await guardFor();
     return text(await duplicateScene(root, path, check));
   }));

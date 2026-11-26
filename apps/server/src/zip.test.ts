@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { crc32, storedZip } from "./zip";
+import { crc32, listZip, readZipEntry, readZipEntrySync, storedZip, writeZip, ZipError } from "./zip";
 
 describe("storedZip", () => {
   test("crc32 matches the standard check value", () => {
@@ -32,5 +32,34 @@ describe("storedZip", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("readZipEntry", () => {
+  // Text-like data that takes a while to inflate: 16 MB of random words.
+  const words = Array.from({ length: 2048 }, () => Math.random().toString(36).slice(2, 8));
+  let text = "";
+  while (text.length < 16 * 1024 * 1024) text += `${words[(Math.random() * words.length) | 0]} `;
+  const data = new TextEncoder().encode(text);
+  const zip = writeZip([{ name: "big.txt", data }, { name: "bomb.txt", data, declaredSize: 1024 }]);
+  const [big, bomb] = listZip(zip);
+
+  test("inflates off the event loop: timers keep firing while a big entry unpacks", async () => {
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 1);
+    const out = await readZipEntry(zip, big!);
+    clearInterval(timer);
+    expect(out).toEqual(data);
+    // Inflated in one go on the event loop, not one timer could fire before it's done.
+    expect(ticks).toBeGreaterThan(0);
+  });
+  test("keeps the declared size cap and the CRC check", async () => {
+    await expect(readZipEntry(zip, bomb!)).rejects.toThrow(ZipError);
+    const damaged = { ...big!, crc: (big!.crc + 1) >>> 0 };
+    await expect(readZipEntry(zip, damaged)).rejects.toThrow("is damaged");
+  });
+  test("the build scripts' sync copy reads the same and refuses the same", () => {
+    expect(readZipEntrySync(zip, big!)).toEqual(data);
+    expect(() => readZipEntrySync(zip, bomb!)).toThrow(ZipError);
   });
 });

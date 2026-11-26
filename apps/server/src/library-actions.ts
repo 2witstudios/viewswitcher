@@ -1,10 +1,10 @@
 // Library changes that both the switcher's /api routes and the MCP tools make, so the two follow one
 // set of rules and return the same shapes (paths start with the org id).
-import { realpath } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { orgOf } from "@viewswitcher/shared";
 import type { OnAir } from "@viewswitcher/shared";
 import * as lib from "./library";
+import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 import type { RenameResult } from "./scene-edit";
 
@@ -33,23 +33,13 @@ export async function customizeScene(root: string, b: { org: unknown; projectId:
   return { name, path: `${plainName(String(b.org))}/projects/${b.projectId}/streams/${b.streamId}/${name}.html` };
 }
 
-/**
- * Refuses a library path that is (or, through links, really is) outside the library. Scenes and packs
- * come from anyone, so a link inside the library must never pull a file from elsewhere into it.
- */
-export async function reallyInside(root: string, path: string): Promise<void> {
-  const real = await realpath(inside(root, path));
-  const back = relative(await realpath(root), real);
-  if (back.startsWith("..") || isAbsolute(back)) throw new PathError("That path is a link to somewhere outside the library");
-}
-
 /** A copy of a scene beside it ("<name>-copy"): for the switcher's Duplicate and the agents' duplicate_scene. */
 export async function duplicateScene(root: string, path: string, check?: lib.BeforeCreate): Promise<SceneRef> {
   // Library paths start with the org id: "/org/…" would come back as a path nothing else accepts.
   if (String(path).startsWith("/")) throw new PathError(`Bad path: ${path}. Paths start with the org id, like "my-channel/templates/brb.html".`);
   // The scene it reads, and the folder the copy goes in (a scene may link back inside from a folder that links out).
-  await reallyInside(root, path);
-  await reallyInside(root, dirname(path));
+  await resolveInLibrary(root, path);
+  await resolveInLibrary(root, dirname(path), { forWrite: true });
   const { name } = await lib.duplicate(root, path, check);
   return { name, path: `${path.slice(0, path.lastIndexOf("/"))}/${name}.html` };
 }
@@ -61,7 +51,8 @@ export type OnAirRequest = { path: string; label?: string; projectId?: string; s
  * a scene that isn't there: the program page would put the 404 on stream.
  */
 export async function onAirFor(root: string, b: OnAirRequest): Promise<OnAir> {
-  const file = inside(root, b.path);
+  // The program page loads it from /library/, which serves only what this rule allows.
+  const file = await resolveInLibrary(root, b.path);
   if (!String(b.path).endsWith(".html") || !(await lib.isFile(file))) {
     throw new PathError(`There's no scene at ${b.path}. It may have been renamed or deleted.`);
   }

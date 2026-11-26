@@ -6,7 +6,11 @@
 // (a zip bomb lies about its sizes; inflating is capped at the declared size, which the pack
 // validator has already held to its limits). Entry names are returned as written; the validator
 // (planPack) decides which names are safe.
-import { deflateRawSync, inflateRawSync } from "node:zlib";
+import { promisify } from "node:util";
+import { deflateRawSync, inflateRaw, inflateRawSync } from "node:zlib";
+
+/** On zlib's thread pool: a 25 MB entry never holds up the server (OBS traffic, the switcher) while it unpacks. */
+const inflate = promisify(inflateRaw);
 
 export class ZipError extends Error {}
 
@@ -82,29 +86,55 @@ export function listZip(zip: Uint8Array): ZipEntry[] {
   return out;
 }
 
-/** One entry's bytes: inflated, at most its declared size, and checked against its CRC. */
-export function readZipEntry(zip: Uint8Array, e: ZipEntry): Uint8Array {
+/** An entry's stored bytes, as they are in the zip (still compressed for deflate). */
+function rawEntry(zip: Uint8Array, e: ZipEntry): Uint8Array {
   const v = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
   if (e.offset + 30 > zip.length || v.getUint32(e.offset, true) !== LOCAL) throw new ZipError(`"${e.name}" is damaged`);
   const start = e.offset + 30 + v.getUint16(e.offset + 26, true) + v.getUint16(e.offset + 28, true);
   const end = start + e.compressedSize;
   if (end > zip.length) throw new ZipError(`"${e.name}" is damaged`);
-  const raw = zip.subarray(start, end);
-  let data: Uint8Array;
-  if (e.method === 0) {
-    if (e.compressedSize !== e.size) throw new ZipError(`"${e.name}" is damaged`);
-    data = raw;
-  } else if (e.method === 8) {
-    try {
-      // maxOutputLength: a bomb that inflates past what it declared throws here, before it's in memory.
-      data = e.size === 0 ? new Uint8Array(0) : new Uint8Array(inflateRawSync(raw, { maxOutputLength: e.size }));
-    } catch {
-      throw new ZipError(`"${e.name}" doesn't unpack to the size it says`);
-    }
-  } else throw new ZipError(`"${e.name}" uses a compression this can't read`);
+  if (e.method === 0 && e.compressedSize !== e.size) throw new ZipError(`"${e.name}" is damaged`);
+  if (e.method !== 0 && e.method !== 8) throw new ZipError(`"${e.name}" uses a compression this can't read`);
+  return zip.subarray(start, end);
+}
+
+/** The entry's bytes once they're out: exactly its declared size, and its CRC. */
+function checkedEntry(e: ZipEntry, data: Uint8Array): Uint8Array {
   if (data.length !== e.size) throw new ZipError(`"${e.name}" doesn't unpack to the size it says`);
   if (Bun.hash.crc32(data) >>> 0 !== e.crc >>> 0) throw new ZipError(`"${e.name}" is damaged`);
   return data;
+}
+
+const tooBig = (e: ZipEntry) => new ZipError(`"${e.name}" doesn't unpack to the size it says`);
+
+/**
+ * One entry's bytes: inflated, at most its declared size, and checked against its CRC. Inflates off
+ * the event loop, so the server keeps answering while a pack unpacks.
+ */
+export async function readZipEntry(zip: Uint8Array, e: ZipEntry): Promise<Uint8Array> {
+  const raw = rawEntry(zip, e);
+  if (e.method === 0 || e.size === 0) return checkedEntry(e, e.method === 0 ? raw : new Uint8Array(0));
+  let data: Uint8Array;
+  try {
+    // maxOutputLength: a bomb that inflates past what it declared fails here, before it's in memory.
+    data = new Uint8Array(await inflate(raw, { maxOutputLength: e.size }));
+  } catch {
+    throw tooBig(e);
+  }
+  return checkedEntry(e, data);
+}
+
+/** readZipEntry for build scripts (the site's pack and skill checks), which have nothing else to do meanwhile. Never in the server. */
+export function readZipEntrySync(zip: Uint8Array, e: ZipEntry): Uint8Array {
+  const raw = rawEntry(zip, e);
+  if (e.method === 0 || e.size === 0) return checkedEntry(e, e.method === 0 ? raw : new Uint8Array(0));
+  let data: Uint8Array;
+  try {
+    data = new Uint8Array(inflateRawSync(raw, { maxOutputLength: e.size }));
+  } catch {
+    throw tooBig(e);
+  }
+  return checkedEntry(e, data);
 }
 
 // ------------------------------------------------------------ writing (the pack exporter, and tests)

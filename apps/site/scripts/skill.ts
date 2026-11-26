@@ -9,7 +9,7 @@
 // public/skills/ is gitignored.
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { listZip, readZipEntry, storedZip } from "../../server/src/zip";
+import { listZip, readZipEntrySync, storedZip } from "../../server/src/zip";
 
 const site = resolve(import.meta.dir, "..");
 export const SKILL_DIR = resolve(site, "../server/library-kit/skills/viewswitcher-scenes");
@@ -55,7 +55,7 @@ export function verifySkillZip(zip: Uint8Array): { name: string; files: number }
   const [folder] = roots;
   const skill = entries.find((e) => e.name === `${folder}/SKILL.md`);
   if (!skill) throw new Error(`skill zip: no ${folder}/SKILL.md`);
-  const { name, description } = frontmatter(new TextDecoder().decode(readZipEntry(zip, skill)));
+  const { name, description } = frontmatter(new TextDecoder().decode(readZipEntrySync(zip, skill)));
   if (!name || name !== folder) throw new Error(`skill zip: the folder "${folder}" must match the skill's name "${name ?? ""}"`);
   if (name.length > 64 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) throw new Error(`skill zip: "${name}" isn't a valid skill name`);
   if (!description || description.length > 1024) throw new Error(`skill zip: the description must be 1 to 1024 characters (it's ${description?.length ?? 0})`);

@@ -4,8 +4,8 @@
 // and never from a web page at another site.
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { AgentStatus } from "@viewswitcher/shared";
-import { fromThisMacOnly, type Peer } from "../gate";
-import { originAllowed } from "../origin";
+import { isMac, type Peer } from "../gate";
+import { originAllowed, pageProto } from "../origin";
 import { createMcpServer, type McpDeps } from "./server";
 
 export type McpHttpOptions = {
@@ -43,9 +43,8 @@ export function noteSeen(prev: AgentStatus, client: string | null, now: number):
 }
 
 export async function handleMcp(req: Request, peer: Peer, opts: McpHttpOptions): Promise<Response> {
-  if (!fromThisMacOnly(peer, req.headers)) return refuse(404, "Not found");
-  const origin = req.headers.get("origin");
-  if (origin !== null && !originAllowed(origin, { host: req.headers.get("host"), forwardedHost: req.headers.get("x-forwarded-host"), extra: opts.allowedOrigins })) {
+  if (!isMac(peer, req.headers)) return refuse(404, "Not found");
+  if (!originAllowed(req.headers.get("origin"), { host: req.headers.get("host"), proto: pageProto(new URL(req.url), req.headers), extra: opts.allowedOrigins })) {
     return refuse(403, "Not allowed from this page");
   }
   // Stateless: no server-sent event stream to open and no session to end.

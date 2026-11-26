@@ -179,6 +179,42 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     expect((await lan("/api/state", { headers: { cookie: again } })).status).toBe(200); // still paired when it comes back
   });
 
+  test("through tailscale serve (developer-only), a paired token works only while remote access is on", async () => {
+    // tailscale serve: from 127.0.0.1, with the tailnet name as Host and forwarding headers.
+    const ts = { host: "mac.tail1234.ts.net", "x-forwarded-for": "100.64.0.9", "x-forwarded-proto": "https" };
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const paired = await mac("/api/pair", { method: "POST", headers: { ...ts, origin: "https://mac.tail1234.ts.net", "content-type": "application/json" }, body: JSON.stringify({ code: code.code, name: "Tailnet phone" }) });
+    expect(paired.status).toBe(200);
+    const proxied = { ...ts, cookie: cookieOf(paired) };
+    expect((await mac("/api/state", { headers: proxied })).status).toBe(200);
+    expect((await admin("/api/remote", { enabled: false })).enabled).toBe(false);
+    expect((await mac("/api/state", { headers: proxied })).status).toBe(403);
+    expect((await mac("/", { headers: proxied })).status).toBe(403);
+    expect((await mac("/api/state")).status).toBe(200); // this Mac carries on
+    expect((await admin("/api/remote", { enabled: true })).enabled).toBe(true);
+    expect((await mac("/api/state", { headers: proxied })).status).toBe(200);
+  });
+
+  test("a paired phone: routes that name no audience are this Mac's only, another page can't act, and a 500 says nothing of the Mac", async () => {
+    const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
+    const cookie = cookieOf(await pairWith(code.code));
+    const own = { cookie, "content-type": "application/json", origin: `http://${ip}:${port}` };
+    // Undeclared (Mac-only) routes and unknown paths look the same: not found.
+    for (const path of ["/api/info", "/api/nope", "/api/remote"]) expect({ path, status: (await lan(path, { headers: { cookie } })).status }).toEqual({ path, status: 404 });
+    expect((await lan("/api/remote/code", { method: "POST", headers: own, body: "{}" })).status).toBe(404);
+    // Another port on the Mac's address is another page.
+    expect((await lan("/api/onair", { method: "POST", headers: { ...own, origin: `http://${ip}:8000` }, body: "{}" })).status).toBe(403);
+    expect((await lan("/api/onair", { method: "POST", headers: { ...own, "content-type": "text/plain" }, body: "{}" })).status).toBe(415);
+    const broken = { path: "my-channel/templates/gone.html" };
+    const phone = await lan("/api/scenes/duplicate", { method: "POST", headers: own, body: JSON.stringify(broken) });
+    expect(phone.status).toBe(500);
+    expect(JSON.parse(phone.body).error).toBe("Something went wrong on the Mac. Its server log has the details.");
+    const here = await mac("/api/scenes/duplicate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(broken) });
+    expect(JSON.parse(here.body).error).toContain("ENOENT");
+    // The switcher's frame rule reaches phones too.
+    expect((await lan("/", { headers: { cookie } })).headers["content-security-policy"]).toBe("frame-ancestors 'self'");
+  });
+
   test("a removal survives quitting right after it (SIGTERM, as the Mac app quits)", async () => {
     const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
     const lost = cookieOf(await pairWith(code.code));

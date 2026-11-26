@@ -4,34 +4,26 @@
 // version that was read (the same hash the scene editor uses, so the two never overwrite each other).
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { slugify } from "@viewswitcher/shared";
 import { existingOrg } from "./library-actions";
+import { resolveInLibrary } from "./library/contain";
 import { inside, PathError } from "./paths";
 import { replaceChecked, sceneHash, serial } from "./scene-edit";
 
 export const TEXT_TYPES = [".html", ".css", ".js", ".json", ".md", ".svg", ".txt"];
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 
-/** A library path checked segment by segment: org first, no dot-files or dot-folders, nothing empty. */
 /**
  * A library path an agent gave: inside an existing org, never in a dot-folder, and (through any links)
- * really inside the library, or for a new file, its nearest existing folder is.
+ * really inside the library, or for a new file, its nearest existing folder is (library/contain.ts).
+ * Agents never read the staged pack preview either, so their reads follow the write rule.
  */
 export async function checked(root: string, path: unknown): Promise<{ path: string; abs: string }> {
   const p = String(path ?? "").replace(/\/+$/, "");
-  const parts = p.split("/");
-  if (!p || parts.some((s) => !s || s.startsWith(".") || s.includes("\\") || s.includes("\0") || s.length > 255)) {
-    throw new PathError(`Bad path: ${p || "(empty)"}. Paths start with the org id, like "my-channel/templates/brb.html", and never go into dot-folders.`);
-  }
-  await existingOrg(root, parts[0]);
-  const abs = inside(root, p);
-  // A link may point anywhere: what it really reaches (or, for a new file, its nearest folder) must be in the library.
-  let probe = abs;
-  while (!(await stat(probe).then(() => true, () => false))) probe = dirname(probe);
-  const back = relative(await realpath(root), await realpath(probe));
-  if (back.startsWith("..") || isAbsolute(back)) throw new PathError("That path is a link to somewhere outside the library");
-  return { path: p, abs };
+  await resolveInLibrary(root, p, { forWrite: true });
+  await existingOrg(root, p.split("/")[0]);
+  return { path: p, abs: inside(root, p) };
 }
 
 const isText = (path: string) => TEXT_TYPES.includes(extname(path).toLowerCase());

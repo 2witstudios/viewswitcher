@@ -1,9 +1,10 @@
 import { constants as fsConstants } from "node:fs";
-import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { copyFile, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, extname, join, relative } from "node:path";
 import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
+import { resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 
 const KINDS: Record<string, AssetKind> = {
@@ -185,8 +186,8 @@ export async function customizeTransition(root: string, projectId: string) {
   if (await exists(dest)) return;
   const src = join(root, ORG_TRANSITION);
   if (!(await exists(src))) throw new PathError("This org has no transition to start from yet");
-  await inLibrary(root, src);
-  await inLibrary(root, dest);
+  await contained(root, src);
+  await contained(root, dest);
   await copyNew(src, dest);
 }
 
@@ -207,24 +208,12 @@ export async function isFile(path: string) {
 }
 
 /**
- * Refuses (PathError) when `abs`, or any folder between the org folder `root` and it, is really
- * somewhere outside the library through a link (the library is the org folder's parent). Only what
- * exists is checked: a folder that isn't there yet is made inside. Links that stay in the library are
- * fine. Every change that makes a file or folder calls this for where it writes and what it reads, so
- * the switcher's routes and the agents' tools get the same rule.
+ * Refuses (PathError) when `abs`, a file or folder in the org folder `root`, is really somewhere
+ * outside the library through a link, or in a dot-folder (library/contain.ts, the rule every read and
+ * write follows; the library is the org folder's parent). Links that stay in the library are fine.
+ * Every change here that makes a file or folder calls this for where it writes and what it reads.
  */
-export async function inLibrary(root: string, abs: string): Promise<void> {
-  const library = await realpath(dirname(root)).catch(() => dirname(root));
-  for (let p = abs; ; p = dirname(p)) {
-    const here = await lstat(p).then(() => true, () => false);
-    if (here) {
-      const real = await realpath(p).catch(() => null); // null: a link that points nowhere
-      const back = real === null ? ".." : relative(library, real);
-      if (back.startsWith("..") || isAbsolute(back)) throw new PathError("That path is a link to somewhere outside the library");
-    }
-    if (p === root || p === dirname(p) || !p.startsWith(root)) break;
-  }
-}
+const contained = (root: string, abs: string) => resolveInLibrary(dirname(root), relative(dirname(root), abs), { forWrite: true });
 
 /** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
 async function copyNew(src: string, dest: string) {
@@ -279,13 +268,13 @@ export async function createProject(root: string, name: string, templates: strin
   if (!name?.trim()) throw new PathError("A project needs a name");
   const base = slugify(name);
   const parent = inside(root, "projects");
-  await inLibrary(root, parent);
+  await contained(root, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
   while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
   const dir = join(parent, id);
   const sources = templates.map((t) => templateFile(root, t));
-  for (const { file } of sources) if (await exists(file)) await inLibrary(root, file);
+  for (const { file } of sources) if (await exists(file)) await contained(root, file);
   await mkdir(join(dir, "scenes"), { recursive: true });
   await mkdir(join(dir, "streams"), { recursive: true });
   // Templates from sets ("neon/teaching") become scenes named by their view ("teaching", "teaching-2"…).
@@ -303,7 +292,7 @@ export async function createStream(root: string, projectId: string, name: string
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new PathError("Date must be YYYY-MM-DD");
   const base = `${date.slice(5, 7)}-${date.slice(8, 10)}-${slugify(name)}`;
   const parent = join(projectDir(root, projectId), "streams");
-  await inLibrary(root, parent);
+  await contained(root, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
   while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
@@ -316,8 +305,8 @@ export async function createStream(root: string, projectId: string, name: string
 export async function addFromTemplate(root: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
   const { file: src, name: view } = templateFile(root, template);
   const dir = streamId ? streamDir(root, projectId, streamId) : join(projectDir(root, projectId), "scenes");
-  await inLibrary(root, src);
-  await inLibrary(root, dir);
+  await contained(root, src);
+  await contained(root, dir);
   await mkdir(dir, { recursive: true });
   return { name: await writeFresh(dir, view, ".html", await readFile(src, "utf8"), check) };
 }
@@ -327,8 +316,8 @@ export async function customize(root: string, projectId: string, streamId: strin
   const src = join(projectDir(root, projectId), "scenes", `${plainName(name)}.html`);
   const dest = join(streamDir(root, projectId, streamId), `${name}.html`);
   if (await exists(dest)) return { name };
-  await inLibrary(root, src);
-  await inLibrary(root, dirname(dest));
+  await contained(root, src);
+  await contained(root, dirname(dest));
   await copyNew(src, dest);
   return { name };
 }
@@ -351,7 +340,7 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
 
 export async function saveAsset(root: string, file: File, check?: BeforeCreate) {
   const dir = inside(root, "assets");
-  await inLibrary(root, dir);
+  await contained(root, dir);
   await mkdir(dir, { recursive: true });
   const clean = file.name.replace(/[^A-Za-z0-9._ -]/g, "-").replace(/^[.\-]+/, "") || "upload";
   const ext = extname(clean);

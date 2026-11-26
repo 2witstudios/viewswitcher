@@ -109,7 +109,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
     const byName = new Map(list.map((e) => [e.name, e]));
     read = async (from) => {
       try {
-        return readZipEntry(source.zip, byName.get(from)!);
+        return await readZipEntry(source.zip, byName.get(from)!);
       } catch (e) {
         throw new PackError(e instanceof ZipError ? e.message : `Couldn't unpack "${from}"`);
       }
