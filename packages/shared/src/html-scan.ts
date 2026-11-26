@@ -235,18 +235,26 @@ export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").
 /**
  * The first <title> outside comments, raw-text content (the scanner's RAW elements: script, style,
  * noscript, textarea…) and <template> content: the one the browser shows, and the one setTitle
- * writes. One pass, no element scan, so listing many big scenes stays cheap. A comment ends at the
- * first "-->" after "<!--", as the scanner reads it; a tag name, opening or closing, ends at a space,
- * "/" or ">" (so <style-box> is an element of its own, and </script/> closes a script).
+ * writes. It reads a page as the scanner does: a comment ends at the first "-->" after "<!--"; a tag
+ * name, opening or closing, ends at a space, "/" or ">" (so <style-box> is an element of its own, and
+ * </script/> closes a script); and an element, a tag or a comment that never ends runs to the end of
+ * the file. Every part can end at the end of the file, so each match either succeeds or fails at once
+ * and the read stays linear, however a page (an untrusted pack's, say) is cut short.
  */
 const TITLE = new RegExp(
-  `<!--[\\s\\S]*?(?:-->|$)|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*>[\\s\\S]*?(?:<\\/\\1(?=[\\s/>])[^>]*>|$)|<title(?=[\\s/>])[^>]*>([\\s\\S]*?)<\\/title(?=[\\s/>])[^>]*>`,
+  "<!--[\\s\\S]*?(?:-->|$)" +
+    `|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*(?:>|$)[\\s\\S]*?(?:<\\/\\1(?=[\\s/>])[^>]*(?:>|$)|$)` +
+    "|<title(?=[\\s/>])[^>]*(?:>|$)([\\s\\S]*?)(?:(<\\/title)(?=[\\s/>])[^>]*(?:>|$)|$)",
   "gi",
 );
 
 /** A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it has none or it's empty. */
 export function readTitle(html: string): string | null {
-  for (const m of html.matchAll(TITLE)) if (m[2] !== undefined) return collapseHtmlSpace(decodeEntities(m[2])) || null;
+  for (const m of html.matchAll(TITLE)) {
+    if (m[2] === undefined) continue;
+    // A title that never closes runs to the end of the file, and the scanner (so setTitle) doesn't take it.
+    return m[3] === undefined ? null : collapseHtmlSpace(decodeEntities(m[2])) || null;
+  }
   return null;
 }
 

@@ -443,6 +443,7 @@ describe("readTitle", () => {
     "a close tag with a slash": "<head><script>x</script/><title>Real</title></head>",
     "a close tag with junk": "<head><script>x</script foo><title>Real</title></head>",
     "a title's own close tag with a slash": "<head><title>Real</title/></head>",
+    "a title closed at the end of the file": "<head><title>Real</title ",
   };
   test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
     expect(readTitle(html)).toBe("Real");
@@ -450,7 +451,25 @@ describe("readTitle", () => {
   test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
     expect(readTitle(setTitle(html, "New"))).toBe("New");
   });
-  test("an unclosed comment hides everything after it", () => {
+  test("an unclosed comment hides everything after it; a title that never closes isn't one", () => {
     expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
+    expect(readTitle("<head><script>x <title>Old</title>")).toBeNull();
+    expect(readTitle("<head><title>Never closed")).toBeNull();
+  });
+  test("stays linear on pages cut short at every turn (an untrusted pack's, say)", () => {
+    const mb = 1024 * 1024;
+    const pages = [
+      "<head><script>" + "</script ".repeat(mb / 9),
+      "<head><title>" + "</title ".repeat(mb / 8),
+      "<head>" + "<title ".repeat(mb / 7),
+      "<head>" + "<title>".repeat(mb / 7),
+      "<head>" + "<script ".repeat(mb / 8),
+      "<head>" + "<!--".repeat(mb / 4),
+    ];
+    for (const html of pages) {
+      const t = performance.now();
+      readTitle(html);
+      expect(performance.now() - t).toBeLessThan(250);
+    }
   });
 });
