@@ -8,7 +8,10 @@ import { join } from "node:path";
 import { titledCopy } from "./library";
 import { LibraryScanner } from "./library/scanner";
 
-/** One scanner per test, as the server has one: its title cache carries from scan to scan. */
+/**
+ * One scanner per test, as the server has one: its title cache carries from scan to scan. It keeps
+ * no finished scans (keepMs 0), so each scan reads the disk; "a finished scan, kept" tests those.
+ */
 let scanner: LibraryScanner;
 
 const roots: string[] = [];
@@ -32,7 +35,7 @@ const labels = async () => {
 beforeEach(async () => {
   root = mkdtempSync(join(tmpdir(), "vs-scan-"));
   roots.push(root);
-  scanner = new LibraryScanner(root, { concurrency: 4 });
+  scanner = new LibraryScanner(root, { concurrency: 4, keepMs: 0 });
   await put(`${ORG}/org.json`, JSON.stringify({ name: "Show" }));
   await put(`${ORG}/templates/title.html`, view("Title"));
   await put(`${ORG}/projects/p/project.json`, JSON.stringify({ name: "Weekly", order: ["intro", "brb"] }));
@@ -97,6 +100,74 @@ describe("LibraryScanner", () => {
       expect(l.projects[0]!.streams).toHaveLength(42);
       expect(l.projects[0]!.streams.find((s) => s.id === "s39")!.scenes.map((v) => v.label)).toEqual(["a 39", "b 39", "c 39", "d 39", "e 39"]);
     }
+  });
+});
+
+describe("a finished scan, kept", () => {
+  let clock = 0;
+  let kept: LibraryScanner;
+  beforeEach(() => {
+    clock = 1_000;
+    kept = new LibraryScanner(root, { keepMs: 2_000, now: () => clock });
+  });
+  const intro = async () => (await kept.scanOrg(ORG)).projects[0]!.scenes.find((s) => s.name === "intro")!.label;
+
+  test("requests together share one scan, and one soon after gets it too", async () => {
+    const [a, b] = await Promise.all([kept.scanOrg(ORG), kept.scanOrg(ORG)]);
+    expect(a).toBe(b);
+    clock += 1_999;
+    expect(await kept.scanOrg(ORG)).toBe(a);
+  });
+
+  test("a change the watcher reports is read on the next request, for that org only", async () => {
+    await put(`other/org.json`, JSON.stringify({ name: "Other" }));
+    const other = await kept.scanOrg("other");
+    expect(await intro()).toBe("Intro");
+    await put(`${ORG}/projects/p/scenes/intro.html`, view("Opening titles"));
+    expect(await intro()).toBe("Intro"); // nothing reported it yet
+    kept.forget([`${ORG}/projects/p/scenes/intro.html`]);
+    expect(await intro()).toBe("Opening titles");
+    expect(await kept.scanOrg("other")).toBe(other);
+  });
+
+  test("a change the watcher has only seen (touched, before its report) is read on the next request", async () => {
+    expect(await intro()).toBe("Intro");
+    await put(`${ORG}/projects/p/scenes/intro.tmp`, view("Opening titles"));
+    await rename(join(root, ORG, "projects/p/scenes/intro.tmp"), join(root, ORG, "projects/p/scenes/intro.html"));
+    kept.touched(`${ORG}/projects/p/scenes/intro.html`);
+    expect(await intro()).toBe("Opening titles");
+  });
+
+  test("a change by the switcher or an agent (changed) is read on the next request, before the watcher says anything", async () => {
+    expect(await intro()).toBe("Intro");
+    await put(`${ORG}/projects/p/scenes/intro.html`, view("Opening titles"));
+    kept.changed();
+    expect(await intro()).toBe("Opening titles");
+  });
+
+  test("a scan in flight when a change comes isn't kept for the requests after it", async () => {
+    const before = kept.scanOrg(ORG);
+    await put(`${ORG}/projects/p/scenes/intro.html`, view("Opening titles"));
+    kept.changed();
+    const after = kept.scanOrg(ORG);
+    expect(after).not.toBe(before);
+    await before;
+    expect((await after).projects[0]!.scenes.find((s) => s.name === "intro")!.label).toBe("Opening titles");
+    expect(await kept.scanOrg(ORG)).toBe(await after);
+  });
+
+  test("a change the watcher missed shows once the kept scan is older than keepMs", async () => {
+    expect(await intro()).toBe("Intro");
+    await put(`${ORG}/projects/p/scenes/intro.html`, view("Opening titles"));
+    clock += 2_000;
+    expect(await intro()).toBe("Opening titles");
+  });
+
+  test("what every request shares can't be changed by one of them", async () => {
+    const l = await kept.scanOrg(ORG);
+    expect(() => (l.projects as unknown[]).push(1)).toThrow();
+    expect(() => ((l.projects[0] as { name: string }).name = "x")).toThrow();
+    expect((await kept.scanOrg(ORG)).projects[0]!.name).toBe("Weekly");
   });
 });
 

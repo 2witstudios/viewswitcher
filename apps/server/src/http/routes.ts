@@ -65,5 +65,22 @@ export { pairPageResponse } from "./routes/pairing";
 
 /** The one table, in order: the public pairing routes, this Mac's, the switcher's, then files (the SPA catches the rest). */
 export function routes(d: RouteDeps): Route[] {
-  return [...pairingRoutes(d), ...agentRoutes(d), ...liveRoutes(d), ...libraryRoutes(d), ...packRoutes(d), ...fileRoutes(d)];
+  return [...pairingRoutes(d), ...agentRoutes(d), ...liveRoutes(d), ...libraryRoutes(d), ...packRoutes(d), ...fileRoutes(d)].map((r) => (r.method === "POST" ? changes(r, d.scanner) : r));
+}
+
+/**
+ * A POST may change the library: once it's done, the next listing is scanned afresh, so a page that
+ * lists the library after its own change (api.ts refreshed()) never gets a scan from before it.
+ */
+function changes(route: Route, scanner: LibraryScanner): Route {
+  return {
+    ...route,
+    handler: async (c) => {
+      try {
+        return await route.handler(c);
+      } finally {
+        scanner.changed();
+      }
+    },
+  };
 }

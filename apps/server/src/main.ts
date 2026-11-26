@@ -178,6 +178,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   if (rel === ".viewswitcher" || rel === ".viewswitcher/settings.json") settingsChanged();
   if (rel.startsWith(".git") || rel.startsWith(".viewswitcher") || rel.includes("/.") || rel.endsWith("~")) return;
   changed.add(rel);
+  scanner.touched(rel);
   clearTimeout(flushTimer);
   flushTimer = setTimeout(async () => {
     const paths = [...changed];

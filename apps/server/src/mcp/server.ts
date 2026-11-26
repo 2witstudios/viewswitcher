@@ -89,6 +89,19 @@ export function createMcpServer(deps: McpDeps): McpServer {
   const { root, port } = deps;
   const { scanner } = deps;
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
+  // A tool that isn't read-only may change the library: once it's done, the next listing (the
+  // agent's or a page's) is scanned afresh, never kept from before it (scanner.ts).
+  const register = server.registerTool.bind(server);
+  server.registerTool = ((name: string, config: { annotations?: { readOnlyHint?: boolean } }, cb: (...a: unknown[]) => unknown) =>
+    register(name, config as never, (config.annotations?.readOnlyHint
+      ? cb
+      : async (...a: unknown[]) => {
+          try {
+            return await cb(...a);
+          } finally {
+            scanner.changed();
+          }
+        }) as never)) as typeof server.registerTool;
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
   const scrub = pathScrub(root);
