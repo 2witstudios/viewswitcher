@@ -6,9 +6,9 @@ import { useLive } from "../../lib/live";
 export const Route = createFileRoute("/_app/")({
   component: function Home() {
     const { data: orgs } = useOrgs();
-    const { state } = useLive();
-    if (!orgs || !state) return null;
-    const onAir = state.onAir;
+    const known = useLive((l) => l.state !== null);
+    const onAir = useLive((l) => l.state?.onAir);
+    if (!orgs || !known) return null;
     if (onAir?.org && onAir.projectId && onAir.streamId && orgs.some((o) => o.id === onAir.org)) {
       return <Navigate to="/$org/p/$projectId/$streamId" params={{ org: onAir.org, projectId: onAir.projectId, streamId: onAir.streamId }} replace />;
     }

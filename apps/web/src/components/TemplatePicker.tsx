@@ -101,7 +101,7 @@ export function TemplatePicker({ org, have, title, intro, skipLabel, onClose, on
     try {
       if (names.length || !failed) await onAdded(names);
     } catch {
-      // The sets went in; only refreshing the page around the picker failed.
+      // The sets went in (and the library is refreshed): only the caller's follow-up, a toast, failed.
     }
     if (!mounted.current) return;
     if (!failed) return onClose();

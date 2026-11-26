@@ -12,6 +12,7 @@ import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
 import { appParent, watchParent } from "./parent-watch";
+import { forgetScanned } from "./library";
 import { ensureLibrary } from "./library-kit";
 import { createPlacer } from "./live/placement";
 import { LiveStore } from "./live/store";
@@ -172,6 +173,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
   flushTimer = setTimeout(async () => {
     const paths = [...changed];
     changed = new Set();
+    forgetScanned(config.library, paths);
     // The on-air record first (its file may be gone): a client that reloads on the change must not load a 404.
     await store.filesChanged(paths).catch((e) => console.error("[state]", (e as Error).message));
     publish({ t: "library:changed", paths, seq: ++librarySeq });

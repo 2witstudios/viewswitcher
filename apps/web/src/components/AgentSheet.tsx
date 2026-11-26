@@ -57,7 +57,7 @@ export function AgentSheet() {
 }
 
 function Sheet({ onClose }: { onClose: () => void }) {
-  const { state } = useLive();
+  const agent = useLive((l) => l.state?.agent);
   const parts = sheetParts(kind);
   const [now, setNow] = useState(Date.now);
   // undefined while asking; null when this isn't the Mac running ViewSwitcher (another machine).
@@ -93,7 +93,6 @@ function Sheet({ onClose }: { onClose: () => void }) {
     api.agentClients().then(setClients);
   }, [parts.waysIn]);
 
-  const agent = state?.agent;
   const connected = !!agent?.lastSeen && now - agent.lastSeen <= CONNECTED_FOR_MS;
   // What was clicked, until its request is answered (lib/agent.ts pendingChoice).
   const [pending, dispatch] = useReducer(pendingChoice, null);

@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { templateGroups, templateId, useLibrary, useOrgId, useOrgs } from "../lib/library";
 import { setLibraryOpen, useLibraryOpen } from "../lib/library-sheet";
 import { DECK, UPRIGHT, useMedia } from "../lib/media";
-import { queryClient, useLive } from "../lib/live";
+import { useLive } from "../lib/live";
 import { TemplatePicker } from "./TemplatePicker";
 import { Mark, Modal, PlusIcon, toast } from "./ui";
 
@@ -24,7 +24,7 @@ const readCollapsed = (): Record<string, boolean> => {
 export function Sidebar() {
   const org = useOrgId();
   const { data } = useLibrary(org);
-  const { state } = useLive();
+  const onAir = useLive((l) => l.state?.onAir);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(readCollapsed);
   const [dialog, setDialog] = useState<null | { kind: "project" } | { kind: "stream"; projectId: string }>(null);
@@ -114,7 +114,7 @@ export function Sidebar() {
                           className="side-item side-stream" activeProps={{ className: "side-item side-stream active" }}>
                           <span className="date">{s.date ? shortDate(s.date) : ""}</span>
                           <span>{s.name}</span>
-                          {state?.onAir?.org === org && state.onAir.projectId === p.id && state.onAir.streamId === s.id && <span className="onair" aria-label="on air" />}
+                          {onAir?.org === org && onAir.projectId === p.id && onAir.streamId === s.id && <span className="onair" aria-label="on air" />}
                         </Link>
                       ))}
                       <button type="button" className="side-item side-add" onClick={() => setDialog({ kind: "stream", projectId: p.id })}>+ New stream</button>
@@ -166,7 +166,7 @@ function CloseIcon() {
 /** The org menu under the ViewSwitcher name: every org, which one is on air, and "New org". */
 function OrgSwitcher({ current }: { current?: string }) {
   const { data: orgs } = useOrgs();
-  const { state } = useLive();
+  const onAirOrg = useLive((l) => l.state?.onAir?.org);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -200,7 +200,7 @@ function OrgSwitcher({ current }: { current?: string }) {
               <button key={o.id} type="button" role="menuitem" aria-current={o.id === current} onClick={() => go(o)}>
                 <span className="org-dot" aria-hidden="true">{o.name[0]?.toUpperCase()}</span>
                 {o.name}
-                {state?.onAir?.org === o.id && <span className="onair">ON AIR</span>}
+                {onAirOrg === o.id && <span className="onair">ON AIR</span>}
               </button>
             ))}
             <hr />
@@ -214,7 +214,6 @@ function OrgSwitcher({ current }: { current?: string }) {
         <NewOrg
           onClose={() => setCreating(false)}
           onCreated={async (id, name) => {
-            await queryClient.invalidateQueries({ queryKey: ["library", "orgs"] });
             navigate({ to: "/$org", params: { org: id } });
             setPicking({ id, name });
           }}
@@ -229,7 +228,6 @@ function OrgSwitcher({ current }: { current?: string }) {
           skipLabel="Skip"
           onClose={() => setPicking(null)}
           onAdded={async (names) => {
-            await queryClient.invalidateQueries({ queryKey: ["library", picking.id] });
             if (names.length) toast(`Added ${names.join(", ")} to Templates`);
           }}
         />

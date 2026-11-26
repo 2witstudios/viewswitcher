@@ -160,7 +160,7 @@ export function useSceneDocument(path: string, opts: {
   // way, nothing being typed, dragged, nudged or chosen) it reads the file again, and shows it if it
   // isn't the version it already has. Otherwise it waits: the person's change is never thrown away
   // for someone else's, and when it saves against the old version the conflict screen takes over.
-  const version = useLive().versions[path] ?? 0;
+  const version = useLive((l) => l.versions[path] ?? 0);
   const seen = useRef(version);
   const free = () => canReloadIn(mode.now()) && !saver.busy() && o.current.quiet();
   const refreshRef = useRef(async () => {});

@@ -1,6 +1,6 @@
 // The switcher's live state: what's on air, OBS, the USB link, the agent, and the warnings. It is
-// published to every client on each change, and the on-air record is saved in .viewswitcher/state.json
-// so a restart comes back to the same scene.
+// published to every client when it changes (and only then), and the on-air record is saved in
+// .viewswitcher/state.json so a restart comes back to the same scene.
 //
 // Changes to what's on air (a person's tap, an agent's go_on_air, a rename, the on-air file going
 // away) run one at a time, in the order they were asked: two requests close together always end on
@@ -19,7 +19,7 @@ export type LiveStoreOptions = {
   root: string;
   /** Where the on-air record is kept (state.json). */
   file: string;
-  /** Sends a message to every client (the live socket's hub); called on every change. */
+  /** Sends a message to every client (the live socket's hub); called when the state changes. */
   publish: (msg: ServerMessage) => void;
   /** What the rest of the state starts as. */
   initial: Omit<LiveState, "onAir" | "warnings">;
@@ -39,6 +39,8 @@ export const missingWarning = (on: OnAir) =>
 export class LiveStore {
   readonly state: LiveState;
   private placementWarnings: string[] = [];
+  /** The state as last published, serialized. */
+  private published = "";
   private onAirWarnings: string[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   /** Every OBS source a scene has placed in a slot, ever: placement hides these when a scene has no slot for them. */
@@ -67,8 +69,13 @@ export class LiveStore {
     return store;
   }
 
-  /** Publish the state as it is now. */
+  /** Publish the state as it is now, if it differs from what was last published. */
   publish() {
+    // Every client re-reads the state it's sent: a report that changed nothing (OBS repeating its
+    // status, a placement with the same warnings, an agent seen again) isn't worth sending.
+    const text = JSON.stringify(this.state);
+    if (text === this.published) return;
+    this.published = text;
     this.opts.publish({ t: "state", state: this.state });
   }
 
@@ -80,8 +87,7 @@ export class LiveStore {
 
   /** What the last placement in OBS reported (replacing the previous placement's warnings). */
   setPlacementWarnings(warnings: string[]) {
-    // Placement reports come every 33 ms while a box is dragged: only a change is worth telling everyone.
-    if (warnings.length === this.placementWarnings.length && warnings.every((w, i) => w === this.placementWarnings[i])) return;
+    // Placement reports come every 33 ms while a box is dragged; publish() sends only a change.
     this.placementWarnings = warnings;
     this.composeWarnings();
     this.publish();

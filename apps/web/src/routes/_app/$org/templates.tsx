@@ -8,7 +8,6 @@ import { TemplatePicker } from "../../../components/TemplatePicker";
 import { attempt, type MenuItem, PlusIcon, toast } from "../../../components/ui";
 import { api, copy, packs, type StagedPack } from "../../../lib/api";
 import { templateGroups, templateId, useLibrary } from "../../../lib/library";
-import { queryClient } from "../../../lib/live";
 import { describeScripts, type DroppedPack, fromPicker, readDrop } from "../../../lib/pack-drop";
 import { SCENE_SANDBOX } from "../../../lib/scene-frame";
 
@@ -151,7 +150,6 @@ export const Route = createFileRoute("/_app/$org/templates")({
             skipLabel="Cancel"
             onClose={() => setAdding(false)}
             onAdded={async (names) => {
-              await queryClient.invalidateQueries({ queryKey: ["library", org] });
               if (names.length) toast(`Added ${names.join(", ")}`);
             }}
           />
@@ -166,7 +164,6 @@ export const Route = createFileRoute("/_app/$org/templates")({
             onInstall={async () => {
               await packs.install(org, staged.token);
               setStaged(null);
-              await queryClient.invalidateQueries({ queryKey: ["library", org] });
               toast(`Installed ${staged.manifest.name}`);
             }}
           />

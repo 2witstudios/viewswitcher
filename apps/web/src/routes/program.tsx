@@ -69,12 +69,12 @@ function ask(frame: HTMLIFrameElement | null): Promise<FrameState | null> {
 
 export const Route = createFileRoute("/program")({
   component: function Program() {
-    const { state, versions } = useLive();
-    const onAir = state?.onAir ?? null;
+    // Only what's on air and its files' versions: not the warnings, OBS or the agent, and not other files.
+    const onAir = useLive((l) => l.state?.onAir ?? null);
     // Scenes load with data-vs element ids (?edit) so the editor's live previews can find their element.
     // A scene whose file was deleted on air isn't loaded again: the frame keeps the version it has,
     // where a reload would put the server's 404 on stream.
-    const target = onAir && !onAir.missing ? sceneUrl(onAir.path, versions, false, true, true) : null;
+    const target = useLive((l) => (onAir && !onAir.missing ? sceneUrl(onAir.path, l.versions, false, true, true) : null));
 
     const [frames, setFrames] = useState<[string | null, string | null]>([null, null]);
     const [front, setFront] = useState(0);
@@ -84,7 +84,8 @@ export const Route = createFileRoute("/program")({
     const transitionLoaded = useRef<string | null>(null); // transition URL in the frame (without &load)
     // The transition of the scene going on air (read by the loop, so an edit applies from the next switch).
     const wantedTransition = useRef<string | null>(null);
-    wantedTransition.current = onAir?.transition ? sceneUrl(onAir.transition, versions, false, false, true) : null;
+    const transition = useLive((l) => (onAir?.transition ? sceneUrl(onAir.transition, l.versions, false, false, true) : null));
+    wantedTransition.current = transition;
     const [scale, setScale] = useState(1);
     const refs = [useRef<HTMLIFrameElement>(null), useRef<HTMLIFrameElement>(null)];
 

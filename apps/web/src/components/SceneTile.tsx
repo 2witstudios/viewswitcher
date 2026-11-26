@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
+import { ownFile, useNearScreen, useTileSrc } from "../lib/tile";
 import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { PencilIcon } from "./icons";
@@ -13,31 +14,30 @@ export function useOpenEditor(): (path: string, opts?: { rename?: boolean; repla
     void navigate({ to: "/$org/edit", params: { org: path.split("/")[0]! }, search: rename ? { path, rename: true } : { path }, replace });
 }
 
-/** The 1920×1080 scene scaled to its box's width: 280 px on a desktop, half a phone's width (MAC-27).
- *  A callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */
-function useCoverScale<T extends HTMLElement>(): (el: T | null) => void {
-  const [el, setEl] = useState<T | null>(null);
+/** The 1920×1080 scene scaled to `el`'s width: 280 px on a desktop, half a phone's width (MAC-27).
+ *  Takes the element from a callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */
+function useCoverScale(el: HTMLElement | null) {
   useEffect(() => {
     if (!el || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => el.style.setProperty("--cover-scale", String(el.clientWidth / 1920)));
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
-  return setEl;
 }
 
 /** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Mounted only there, so the
  *  Mac, the iPad and the deck don't load and run a hidden copy of the on-air scene. */
 export function OnAirHero() {
-  const { state, versions, connected } = useLive();
-  const onAir = state?.onAir;
-  const box = useCoverScale<HTMLDivElement>();
+  const onAir = useLive((l) => (l.connected ? l.state?.onAir : null));
+  const src = useLive((l) => (onAir ? sceneUrl(onAir.path, l.versions, true) : null));
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  useCoverScale(box);
   const shown = isUprightPhone({ upright: useMedia(UPRIGHT), deck: useMedia(DECK) });
-  if (!shown || !onAir || !connected) return null;
+  if (!shown || !onAir || !src) return null;
   return (
     <section className="onair-hero" aria-label="On air">
-      <div className="cover live" ref={box}>
-        <iframe title={onAir.label} src={sceneUrl(onAir.path, versions, true)} sandbox={SCENE_SANDBOX} tabIndex={-1} />
+      <div className="cover live" ref={setBox}>
+        <iframe title={onAir.label} src={src} sandbox={SCENE_SANDBOX} tabIndex={-1} />
         <span className="badge">ON AIR</span>
       </div>
       <span className="label">{onAir.label}</span>
@@ -45,7 +45,7 @@ export function OnAirHero() {
   );
 }
 
-/** An album-style cover: a live, scaled render of the scene file. */
+/** An album-style cover: a live, scaled render of the scene file while it's on screen. */
 export function SceneTile({ label, path, live, badge, onActivate, onEdit, editChoices, menu }: {
   label: string;
   path: string;
@@ -59,8 +59,14 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   editChoices?: MenuItem[];
   menu: MenuItem[];
 }) {
-  const { versions } = useLive();
-  const cover = useCoverScale<HTMLButtonElement>();
+  const [box, setBox] = useState<HTMLButtonElement | null>(null);
+  useCoverScale(box);
+  // A scene runs only while its tile is on screen or near it (a stream page on an iPad can hold
+  // dozens); away from it the cover is an empty box of the same size.
+  const near = useNearScreen(box);
+  const wanted = useLive((l) => sceneUrl(path, l.versions, true));
+  const own = useLive((l) => ownFile(path, l.versions));
+  const src = useTileSrc(wanted, own, box, near);
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const openMenu = (e?: MouseEvent) => {
@@ -71,13 +77,13 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
     <div className="tile">
       <button
         type="button"
-        ref={cover}
+        ref={setBox}
         className={`cover${live ? " live" : ""}`}
         aria-label={onActivate ? `Put ${label} on air` : `Options for ${label}`}
         onClick={onActivate ?? (() => openMenu())}
         onContextMenu={openMenu}
       >
-        <iframe title={label} src={sceneUrl(path, versions, true)} sandbox={SCENE_SANDBOX} loading="lazy" tabIndex={-1} />
+        {near && <iframe title={label} src={src} sandbox={SCENE_SANDBOX} tabIndex={-1} />}
         {live ? <span className="badge">ON AIR</span> : badge ? <span className="badge quiet">{badge}</span> : null}
       </button>
       <div className="tile-meta">

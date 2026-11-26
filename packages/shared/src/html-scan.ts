@@ -618,32 +618,43 @@ function stampedElement(els: ScannedElement[]): number | null {
 export function tagForEdit(html: string, hash?: string): string {
   const els = scanElements(html);
   const stampAt = stampedElement(els);
-  let out = html;
-  for (let k = els.length - 1; k >= 0; k--) {
-    const el = els[k]!;
+  const stamp = hash ? ` data-vs-hash="${hash.replace(/[^\w-]/g, "")}"` : "";
+  // Built front to back and joined once: every on-air load goes through this, and splicing the whole
+  // string per element made a big scene (thousands of elements, a large inline font) take seconds.
+  const out: string[] = [];
+  let from = 0;
+  for (const el of els) {
     const at = el.start + 1 + el.tag.length;
-    const stamp = hash && el.id === stampAt ? ` data-vs-hash="${hash.replace(/[^\w-]/g, "")}"` : "";
-    out = `${out.slice(0, at)} data-vs="${el.id}"${stamp}${out.slice(at)}`;
+    out.push(html.slice(from, at), ` data-vs="${el.id}"`, el.id === stampAt ? stamp : "");
+    from = at;
   }
-  return out;
+  out.push(html.slice(from));
+  return out.join("");
 }
+
+const HASH_STAMP = / data-vs-hash="[\w-]*"/y;
 
 /** The file `tagForEdit` started from: removes exactly the ids it added, nothing else. */
 export function untagForEdit(tagged: string): string {
   const els = scanElements(tagged);
   const stampAt = stampedElement(els);
-  let out = tagged;
-  for (let k = els.length - 1; k >= 0; k--) {
-    const el = els[k]!;
+  const out: string[] = [];
+  let from = 0;
+  for (const el of els) {
     const at = el.start + 1 + el.tag.length;
     const attr = ` data-vs="${el.id}"`;
-    if (!out.startsWith(attr, at)) continue;
+    if (!tagged.startsWith(attr, at)) continue;
     let end = at + attr.length;
-    const stamp = el.id === stampAt ? /^ data-vs-hash="[\w-]*"/.exec(out.slice(end)) : null;
-    if (stamp) end += stamp[0].length;
-    out = out.slice(0, at) + out.slice(end);
+    if (el.id === stampAt) {
+      HASH_STAMP.lastIndex = end; // sticky: matches right there, without copying the rest of the file
+      const stamp = HASH_STAMP.exec(tagged);
+      if (stamp) end += stamp[0].length;
+    }
+    out.push(tagged.slice(from, at));
+    from = end;
   }
-  return out;
+  out.push(tagged.slice(from));
+  return out.join("");
 }
 
 // ---------------------------------------------------------------- conflicts

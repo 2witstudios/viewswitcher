@@ -250,6 +250,49 @@ describe("untagForEdit", () => {
   });
 });
 
+describe("tagging a very large scene", () => {
+  const font = "A".repeat(5 * 1024 * 1024);
+  const big = `<!doctype html><html><head><title>Big</title><style>@font-face{font-family:x;src:url(data:font/woff2;base64,${font})}</style></head><body><div class="scene">${Array.from({ length: 2000 }, (_, i) => `<div class="p" style="left:${i}px">item ${i}</div>`).join("")}</div></body></html>`;
+
+  test("2,000 elements and a 5 MB inline font are tagged and untagged well inside 100 ms each", () => {
+    let t = performance.now();
+    const tagged = tagForEdit(big, "abc");
+    const tagMs = performance.now() - t;
+    t = performance.now();
+    const back = untagForEdit(tagged);
+    const untagMs = performance.now() - t;
+    expect(back).toBe(big);
+    expect(tagged.match(/ data-vs="\d+"/g)).toHaveLength(scanElements(big).length);
+    expect(tagMs).toBeLessThan(100);
+    expect(untagMs).toBeLessThan(100);
+  });
+
+  test("tagging adds only the ids (and the stamp), and untagging gives back every byte, for many shapes of file", () => {
+    const shapes = [
+      ``,
+      `plain text, no tags`,
+      `<p>x</p>`,
+      `<!doctype html><html><head><meta charset=utf-8><title>T</title></head><body><img src=a.png><br/><p>a<b>b</b></p></body></html>`,
+      `<!-- <p data-vs="3"> --><div data-vs-hash="x" title=' data-vs="9"'>a</div><script>const s = '<p>';</script><style>p>a{}</style>`,
+      `<svg viewBox="0 0 10 10"><path d="M0 0"/><text>hi</text></svg><template><p>inside</p></template>`,
+      `<DIV CLASS=scene><Span>Mixed</Span><input value="a>b"><textarea><b>raw</b></textarea></DIV>`,
+      `<html lang=en>\r\n<body>\n\t<p>crlf</p></body></html>`,
+    ];
+    for (const html of shapes) {
+      // With a hash, as the server always tags (readForEdit), so a stamp the file itself has survives.
+      const tagged = tagForEdit(html, "f00d-1");
+      expect(untagForEdit(tagged)).toBe(html);
+      // One id per element and one stamp (when there's an element for it), and every other byte the file's.
+      const count = (text: string, re: RegExp) => text.match(re)?.length ?? 0;
+      const els = scanElements(html).length;
+      expect(count(tagged, / data-vs="\d+"/g)).toBe(count(html, / data-vs="\d+"/g) + els);
+      expect(count(tagged, / data-vs-hash="f00d-1"/g)).toBe(els ? 1 : 0);
+      expect(tagged.length).toBe(html.length + scanElements(html).reduce((n, e) => n + ` data-vs="${e.id}"`.length, 0) + (els ? ` data-vs-hash="f00d-1"`.length : 0));
+      expect(tagForEdit(html).length).toBe(tagged.length - (els ? ` data-vs-hash="f00d-1"`.length : 0));
+    }
+  });
+});
+
 describe("version stamp (PR #1 architecture #1, #2)", () => {
   test("tagForEdit stamps the hash on <html> only, and untagForEdit removes it", () => {
     const html = `<!doctype html><html lang="en"><body><p>x</p></body></html>`;
