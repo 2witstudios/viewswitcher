@@ -286,9 +286,30 @@ const TEXT_PLACEHOLDERS: readonly PackPlaceholder[] = ["ORG_NAME", "ORG_INITIAL"
  * A .css file without its comments, where a value is safe: the fill breaks up a comment's end there
  * (TEXT_TYPES), and the starter names the show in one. Quoted strings are kept and skipped while
  * comments are taken out, so a comment's start inside one isn't a comment; a string ends at its line's
- * end at the latest, as CSS ends an unclosed one, unless a backslash continues it.
+ * end at the latest, as CSS ends an unclosed one, unless a backslash continues it. Linear in the text,
+ * whatever it holds (an unclosed comment is looked for once).
  */
-const cssCode = (css: string) => css.replace(/("(?:\\[\s\S]|[^"\\\n])*"?|'(?:\\[\s\S]|[^'\\\n])*'?)|\/\*[\s\S]*?\*\//g, (_m, quoted: string | undefined) => quoted ?? "");
+function cssCode(css: string): string {
+  // One pass, as CSS tokenizes it: newlines normalized first (CRLF, CR and form feed are newlines there).
+  const text = css.replace(/\r\n?|\f/g, "\n");
+  const kept: string[] = [];
+  let from = 0;
+  for (let i = 0; i < text.length; ) {
+    const c = text[i]!;
+    if (c === '"' || c === "'") {
+      // A string runs to its closing quote, or to the end of its line; a backslash takes the next character with it.
+      let j = i + 1;
+      while (j < text.length && text[j] !== c && text[j] !== "\n") j += text[j] === "\\" ? 2 : 1;
+      i = Math.min(text[j] === c ? j + 1 : j, text.length);
+    } else if (c === "/" && text[i + 1] === "*") {
+      kept.push(text.slice(from, i));
+      const close = text.indexOf("*/", i + 2);
+      from = i = close < 0 ? text.length : close + 2; // an unclosed comment runs to the end
+    } else i++;
+  }
+  kept.push(text.slice(from));
+  return kept.join("");
+}
 
 /**
  * Text placeholders in code: an inline <script> or <style>, an on… or style attribute, a .js file, or a

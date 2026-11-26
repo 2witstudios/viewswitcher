@@ -153,6 +153,14 @@ describe("checkPack", () => {
     // A backslash-newline continues a CSS string: what follows on the next line is still in it.
     const continued = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\n/* {{ORG_NAME}} */" }` }));
     expect(continued.ok && continued.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // CSS reads CRLF (and CR, and form feed) as one newline, so a backslash-CRLF continues the string too.
+    const crlf = checkPack(planned(basic), texts({ "_shared/theme.css": `.a { content: "x\\\r\n/* {{ORG_NAME}} */" }` }));
+    expect(crlf.ok && crlf.warnings.find((x) => x.includes("in a script"))).toContain("_shared/theme.css");
+    // Many unclosed comment starts stay fast (one pass), and what follows the first is a comment.
+    const t0 = performance.now();
+    const many = checkPack(planned(basic), texts({ "_shared/theme.css": `.a {}\n${"/* ".repeat(30000)}{{ORG_NAME}}` }));
+    expect(performance.now() - t0).toBeLessThan(500);
+    expect(many.ok && many.warnings.filter((x) => x.includes("in a script"))).toEqual([]);
     // A view's <style> comment isn't safe the way a .css one is: a page's fill doesn't break "*/" up, so it warns.
     const styled = checkPack(planned(basic), texts({ "templates/main.html": `<html><head><style>/* {{ORG_NAME}} */ .a { color: red }</style></head><body></body></html>` }));
     expect(styled.ok && styled.warnings.find((x) => x.includes("in a script"))).toContain("templates/main.html <style>");
