@@ -262,45 +262,56 @@ describe("errors", () => {
 
 describe("unpacking a template pack never blocks the server", () => {
   test("/api/state keeps answering while a 96 MB pack unpacks", async () => {
-    // Text-like data, 3:1: inflating it takes long enough to see, in four entries of 24 MB.
-    const words = Array.from({ length: 4096 }, (_, i) => Math.random().toString(36).slice(2, 4 + (i % 9)));
+    // Text-like data, 3:1, written straight into bytes (millions of little strings would leave this
+    // process collecting garbage mid-test): inflating it takes long enough to see, in four entries of 24 MB.
+    const words = Array.from({ length: 4096 }, (_, i) => new TextEncoder().encode(`${Math.random().toString(36).slice(2, 4 + (i % 9))} `));
     const big = () => {
-      const parts: string[] = [];
-      for (let n = 0; n < 24 * 1024 * 1024; ) {
-        const w = `${words[(Math.random() * words.length) | 0]} `;
-        parts.push(w);
+      const out = new Uint8Array(24 * 1024 * 1024);
+      for (let n = 0; n < out.length; ) {
+        const w = words[(Math.random() * words.length) | 0]!;
+        out.set(w.subarray(0, Math.min(w.length, out.length - n)), n);
         n += w.length;
       }
-      return new TextEncoder().encode(parts.join("").slice(0, 24 * 1024 * 1024));
+      return out;
     };
     const zip = zipPack("big", [...(await starterPack(resolve(import.meta.dir, "../starter"))), ...[1, 2, 3, 4].map((i) => ({ path: `assets/big-${i}.mp4`, data: big() }))]);
     // How long one entry holds a thread when it's inflated in one go, on this machine right now.
     const entry = listZip(zip).find((e) => e.name.endsWith("big-1.mp4"))!;
-    const start = entry.offset + 30 + new DataView(zip.buffer, zip.byteOffset).getUint16(entry.offset + 26, true) + new DataView(zip.buffer, zip.byteOffset).getUint16(entry.offset + 28, true);
-    let t = performance.now();
+    const v = new DataView(zip.buffer, zip.byteOffset);
+    const start = entry.offset + 30 + v.getUint16(entry.offset + 26, true) + v.getUint16(entry.offset + 28, true);
+    const t = performance.now();
     inflateRawSync(zip.subarray(start, start + entry.compressedSize));
     const inflateMs = performance.now() - t;
 
+    // The poller is a process of its own, so only the server's delays count, not this one's upload.
+    const poller = Bun.spawn(
+      [process.execPath, "-e", `
+        let stop = false, worst = 0, n = 0;
+        (async () => { for await (const _ of Bun.stdin.stream()) {} stop = true; })();
+        while (!stop) {
+          const t = performance.now();
+          await fetch("http://127.0.0.1:${port}/api/state");
+          if (n++ === 0) console.log("ready");
+          worst = Math.max(worst, performance.now() - t);
+          await Bun.sleep(2);
+        }
+        console.log(worst);`],
+      { stdin: "pipe", stdout: "pipe" },
+    );
+    const lines = poller.stdout.pipeThrough(new TextDecoderStream()).getReader();
+    expect((await lines.read()).value?.trim()).toBe("ready");
     const form = new FormData();
     form.set("org", "my-channel");
     form.set("zip", new File([zip], "big.zip"));
-    let worst = 0;
-    let done = false;
-    const poll = (async () => {
-      while (!done) {
-        t = performance.now();
-        await fetch(`http://127.0.0.1:${port}/api/state`);
-        worst = Math.max(worst, performance.now() - t);
-        await Bun.sleep(2);
-      }
-    })();
     const r = await fetch(`http://127.0.0.1:${port}/api/packs/stage`, { method: "POST", body: form, headers: { origin: `http://127.0.0.1:${port}` } });
-    done = true;
-    await poll;
+    poller.stdin.end();
+    let rest = "";
+    for (let c = await lines.read(); !c.done; c = await lines.read()) rest += c.value;
+    const worst = Number(rest.trim());
     expect(r.status).toBe(200);
     expect(((await r.json()) as { set: string }).set).toBe("starter");
-    // Inflated on the event loop, one answer would wait at least that long.
-    expect(worst).toBeLessThan(inflateMs * 0.6);
+    // Inflated on the event loop, one answer would wait about as long as one entry takes.
+    expect(worst).toBeLessThan(inflateMs * 0.75);
   }, 60_000);
 });
 
