@@ -16,7 +16,7 @@ import { api } from "../lib/api";
 import { freshUrl, shouldBackstop } from "../lib/backstop";
 import { createProgramLoop, type FrameIndex } from "../lib/program-loop";
 import { cleanSlots, type FrameState, frameState, SCENE_SANDBOX } from "../lib/scene-frame";
-import { onScenePreview, sceneUrl, useLive } from "../lib/live";
+import { onLiveEdit, sceneUrl, useLive } from "../lib/live";
 
 // Report errors to the server log: the OBS browser has no devtools by default.
 const report = (data: object) => fetch("/api/log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ where: "program", ...data }) }).catch(() => {});
@@ -164,7 +164,7 @@ export const Route = createFileRoute("/program")({
       const latest = new Map<string, number>();
       let latestFor = "";
       let sent = 0;
-      const off = onScenePreview((path, hash, edit, order) => {
+      const off = onLiveEdit((path, hash, edit, order) => {
         const job = program.shown();
         if (!job || path !== job.path) return;
         const win = refs[program.front()]!.current?.contentWindow;
@@ -181,7 +181,7 @@ export const Route = createFileRoute("/program")({
         const key = `${order.session}:${edit.id}:${kind === "text" ? "t" : kind === "src" ? "s" : "p"}`;
         if (order.seq <= (latest.get(key) ?? -1)) return;
         latest.set(key, order.seq);
-        win.postMessage({ viewswitcher: "frame:preview", id: ++sent, hash, edit }, "*");
+        win.postMessage({ viewswitcher: "frame:liveEdit", id: ++sent, hash, edit }, "*");
         clearTimeout(backstop.current);
         backstop.current = setTimeout(() => {
           // Not if a saved version replaced it, or the operator asked for another scene meanwhile.

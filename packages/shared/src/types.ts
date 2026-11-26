@@ -189,6 +189,6 @@ export type ServerMessage =
    */
   | { t: "hello"; server: string; seq: number }
   /** The scene editor showing a change live (never written): the program page applies it to the on-air scene if `path` matches. */
-  | { t: "scene:preview"; path: string; hash: string; edit: SceneEdit; /** Which editor page sent it, and its order there: an older one from the same editor is ignored. */ session: string; seq: number }
+  | { t: "scene:liveEdit"; path: string; hash: string; edit: SceneEdit; /** Which editor page sent it, and its order there: an older one from the same editor is ignored. */ session: string; seq: number }
   /** The entry script of the switcher build being served; a page running a different one reloads. "" when nothing is built. */
   | { t: "build"; build: string };

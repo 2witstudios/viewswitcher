@@ -12,7 +12,7 @@ export function useConflictActions(opts: {
   current: () => SceneBase | null;
   /** Change an element now: on screen, live, saved, undoable against `before`. */
   change: (edit: SceneEdit, before: SceneEdit | null) => void;
-  preview: (edit: SceneEdit, gen?: number) => void;
+  liveEdit: (edit: SceneEdit, gen?: number) => void;
   structural: (edit: InsertEdit | RemoveEdit) => Promise<unknown>;
 }) {
   const o = useRef(opts);
@@ -56,11 +56,11 @@ export function useConflictActions(opts: {
     const k = o.current;
     const c = k.mode.now();
     if (c.kind !== "conflict") return;
-    // The stream may still show the preview of the change that didn't save: put the latest back.
+    // The stream may still show the live edit of the change that didn't save: put the latest back.
     for (const e of c.edits) {
       const m = retarget(c.prev.source, c.latest.source, e);
       const v = m && valueIn(c.latest, m);
-      if (v) k.preview(v);
+      if (v) k.liveEdit(v);
     }
     k.mode.dispatch({ t: "end", kind: "conflict" });
   };

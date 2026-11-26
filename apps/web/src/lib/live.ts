@@ -75,12 +75,12 @@ export function keepUnchanged<T>(prev: T, next: T): T {
 
 const store = createStore<Live>({ connected: false, state: null, versions: {} });
 
-type PreviewListener = (path: string, hash: string, edit: SceneEdit, order: { session: string; seq: number }) => void;
-const previewListeners = new Set<PreviewListener>();
+type LiveEditListener = (path: string, hash: string, edit: SceneEdit, order: { session: string; seq: number }) => void;
+const liveEditListeners = new Set<LiveEditListener>();
 /** Live changes from the scene editor (never saved): the program page applies them to the on-air scene. */
-export function onScenePreview(listener: PreviewListener) {
-  previewListeners.add(listener);
-  return () => void previewListeners.delete(listener);
+export function onLiveEdit(listener: LiveEditListener) {
+  liveEditListeners.add(listener);
+  return () => void liveEditListeners.delete(listener);
 }
 const set = (patch: Partial<Live>) => store.set({ ...store.get(), ...patch });
 
@@ -150,7 +150,7 @@ function connect() {
       heard = { server: msg.server, seq: msg.seq };
     }
     if (msg.t === "state" || msg.t === "library:changed") store.set(nextLive(store.get(), msg));
-    if (msg.t === "scene:preview") previewListeners.forEach((l) => l(msg.path, msg.hash, msg.edit, { session: msg.session, seq: msg.seq }));
+    if (msg.t === "scene:liveEdit") liveEditListeners.forEach((l) => l(msg.path, msg.hash, msg.edit, { session: msg.session, seq: msg.seq }));
     if (msg.t === "build" && msg.build && ownBuild && msg.build !== ownBuild) location.reload();
     if (msg.t === "library:changed") {
       queryClient.invalidateQueries({ queryKey: ["library"] });
@@ -169,12 +169,13 @@ export function useLive<S>(selector: (live: Live) => S, isEqual?: (a: S, b: S) =
 }
 
 /**
- * URL for a library file that changes whenever the file (or the shared theme) changes.
- * `preview` paints the ground and labels slots; `edit` serves it with data-vs element ids.
+ * URL for a library file that changes whenever the file (or the shared theme) changes. `cover` paints
+ * the ground and labels the camera boxes, for tiles and covers: on the wire that's ?preview, the name
+ * every scene.js (each library's, each pack's) reads, so it stays. `edit` serves it with data-vs
+ * element ids; `bridge` adds the bridge the program page talks to the sandboxed view through.
  */
-/** `bridge`: with the bridge the program page talks to the sandboxed scene through. */
-export function sceneUrl(path: string, versions: Record<string, number>, preview = false, edit = false, bridge = false) {
+export function sceneUrl(path: string, versions: Record<string, number>, cover = false, edit = false, bridge = false) {
   const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
-  return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${preview ? "preview&" : ""}v=${v}`;
+  return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${cover ? "preview&" : ""}v=${v}`;
 }
 

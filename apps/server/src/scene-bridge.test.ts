@@ -46,7 +46,7 @@ function frame(hash: string | null, els: Record<number, El>, opts: { stampOnFrag
     },
   };
 }
-const preview = (edit: unknown, hash = "v1") => ({ viewswitcher: "frame:preview", id: 7, hash, edit });
+const preview = (edit: unknown, hash = "v1") => ({ viewswitcher: "frame:liveEdit", id: 7, hash, edit });
 
 describe("frame:hello", () => {
   test("answers with the slots, the version and the transition's hold", () => {

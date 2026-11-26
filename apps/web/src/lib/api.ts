@@ -4,9 +4,9 @@ import type { QueryClient } from "@tanstack/react-query";
 import { queryClient } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
-const previewSession = Math.random().toString(36).slice(2);
-let previewSeq = 0;
-const nextPreviewSeq = () => ++previewSeq;
+const liveEditSession = Math.random().toString(36).slice(2);
+let liveEditSeq = 0;
+const nextLiveEditSeq = () => ++liveEditSeq;
 
 /** The scene editor saving against a version of the file that isn't the latest any more. */
 export class SceneConflict extends Error {}
@@ -96,10 +96,10 @@ export const api = {
   /** Rename a scene (its title, and a stream scene's file). Throws SceneConflict if the file changed since `hash`. */
   renameScene: (path: string, hash: string, name: string) => refreshed(rename(path, hash, name)),
   /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
-  previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, session: previewSession, seq: nextPreviewSeq() }),
+  liveEdit: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/live-edit", { path, hash, edit, session: liveEditSession, seq: nextLiveEditSeq() }),
   /** The same, from a page that's going away (survives pagehide). */
-  previewSceneBeacon: (path: string, hash: string, edit: SceneEdit) =>
-    navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, session: previewSession, seq: nextPreviewSeq() })], { type: "application/json" })),
+  liveEditBeacon: (path: string, hash: string, edit: SceneEdit) =>
+    navigator.sendBeacon?.("/api/scene/live-edit", new Blob([JSON.stringify({ path, hash, edit, session: liveEditSession, seq: nextLiveEditSeq() })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
   /** What agents connected over MCP may put on air (Edit with AI). */

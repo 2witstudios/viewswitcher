@@ -28,7 +28,7 @@ import { useAddDelete } from "./editor/useAddDelete";
 import { useConflictActions } from "./editor/useConflictActions";
 import { isField, useEditorKeys } from "./editor/useEditorKeys";
 import { useGestures } from "./editor/useGestures";
-import { useLivePreview } from "./editor/useLivePreview";
+import { useLiveEdit } from "./editor/useLiveEdit";
 import { useMode } from "./editor/useMode";
 import { useNudge } from "./editor/useNudge";
 import { usePictureDrop } from "./editor/usePictureDrop";
@@ -155,7 +155,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
 
   // ------------------------------------------------------------ showing, saving and undoing changes
 
-  const live = useLivePreview({
+  const live = useLiveEdit({
     path,
     onAir: () => onAirRef.current,
     base: () => baseRef.current,
@@ -170,7 +170,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     },
     beforeLeave: () => nudges.flush(),
   });
-  const preview = live.preview;
+  const liveEdit = live.liveEdit;
 
   const save = (edits: SceneEdit[], undoEntries: UndoEntry[] = [], madeIn = generation.current) => {
     live.saved();
@@ -185,7 +185,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const change = (edit: SceneEdit, before: SceneEdit | null) => {
     nudges.flush(); // a pending nudge saves first, so it can't land after (and over) this change
     applyDom(edit);
-    preview(edit);
+    liveEdit(edit);
     save([edit], before ? [{ before, after: edit }] : []);
   };
 
@@ -204,14 +204,14 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     change(next, { id, ...now });
   };
 
-  const nudges = useNudge({ generation: () => generation.current, posNow, applyDom, preview, save });
+  const nudges = useNudge({ generation: () => generation.current, posNow, applyDom, liveEdit, save });
 
   const text = useTextEditing({
     mode: modes,
     frame: fd,
     generation: () => generation.current,
     open: () => baseRef.current !== null,
-    preview,
+    liveEdit,
     save,
     redraw,
     onStart: clearPointers,
@@ -269,7 +269,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     posNow,
     sizeNow,
     applyDom,
-    preview,
+    liveEdit,
     save,
     flushNudge: () => nudges.flush(),
     startEdit: text.start,
@@ -317,7 +317,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
     closeDropChoice: () => pictures.choose(null),
   });
 
-  const conflicts = useConflictActions({ mode: modes, current: () => baseRef.current, change, preview, structural: edits.structural });
+  const conflicts = useConflictActions({ mode: modes, current: () => baseRef.current, change, liveEdit, structural: edits.structural });
 
   // ------------------------------------------------------------ leaving, rename, Edit a copy
 

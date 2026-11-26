@@ -15,7 +15,7 @@ export function useTextEditing(opts: {
   generation: () => number;
   /** Whether a version is open (typing needs one to save against). */
   open: () => boolean;
-  preview: (edit: SceneEdit, gen?: number) => void;
+  liveEdit: (edit: SceneEdit, gen?: number) => void;
   save: (edits: SceneEdit[], undo: UndoEntry[], madeIn: number) => void;
   redraw: () => void;
   /** Typing starts: menus, selection and hover go. */
@@ -37,7 +37,7 @@ export function useTextEditing(opts: {
 
   /** Save what was typed (`commit`), or put the text back. Nothing when nobody is typing. */
   const finish = (commit: boolean) => {
-    const { mode, frame, preview, save, redraw } = o.current;
+    const { mode, frame, liveEdit, save, redraw } = o.current;
     const m = mode.now();
     if (m.kind !== "typing") return;
     // Finished: leaving now mustn't put the old text back on air.
@@ -56,7 +56,7 @@ export function useTextEditing(opts: {
     if (!commit || !text.trim()) {
       if (commit && !text.trim()) toast("Text can't be empty: put back what was there");
       setShownText(d, m.id, m.original);
-      preview({ id: m.id, text: m.original }, m.gen);
+      liveEdit({ id: m.id, text: m.original }, m.gen);
     } else if (text === original) {
       setShownText(d, m.id, m.original);
     } else {
@@ -71,7 +71,7 @@ export function useTextEditing(opts: {
     const { id, gen } = typing;
     return listenWhileTyping(o.current.frame(), id, {
       input: (text) => {
-        o.current.preview({ id, text }, gen);
+        o.current.liveEdit({ id, text }, gen);
         o.current.redraw();
       },
       // `finish` reads everything through `o`, so this render's copy is as good as the next one's.

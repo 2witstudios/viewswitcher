@@ -372,12 +372,16 @@ export function routes(d: RouteDeps): Route[] {
       await store.renamed(b.path, b.name, r);
       return r;
     }),
-    post("/api/scene/preview", (b) => {
-      scenePath(root, b.path);
-      // The hash names the file version the edit's ids belong to; pages showing another version ignore it.
-      d.publish({ t: "scene:preview", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), session: String(b.session ?? "").slice(0, 40), seq: Number(b.seq) || 0 });
-      return { ok: true };
-    }),
+    // A live edit: an unsaved change shown on the program as it's made. /api/scene/preview is its old
+    // name, still answered for a page loaded before an update.
+    ...["/api/scene/live-edit", "/api/scene/preview"].map((path) =>
+      post(path, (b) => {
+        scenePath(root, b.path);
+        // The hash names the file version the edit's ids belong to; pages showing another version ignore it.
+        d.publish({ t: "scene:liveEdit", path: b.path, hash: String(b.hash ?? ""), edit: parseEdit(b.edit), session: String(b.session ?? "").slice(0, 40), seq: Number(b.seq) || 0 });
+        return { ok: true };
+      }),
+    ),
     post("/api/obs/setup", async () => {
       if (!d.obs.status.connected) return json({ error: "OBS isn't connected. Open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server." }, 503);
       // While streaming or recording, setup never switches OBS's program scene (it would cut the stream).

@@ -38,7 +38,7 @@ export function useGestures(opts: {
   posNow: (id: number) => Pos | null;
   sizeNow: (id: number) => Size | null;
   applyDom: (edit: SceneEdit) => void;
-  preview: (edit: SceneEdit, gen?: number) => void;
+  liveEdit: (edit: SceneEdit, gen?: number) => void;
   save: (edits: SceneEdit[], undo: UndoEntry[], madeIn: number) => void;
   flushNudge: () => void;
   startEdit: (id: number) => void;
@@ -98,7 +98,7 @@ export function useGestures(opts: {
       r.last = next;
       const edit = resizeEdit(r.id, r.corner, next);
       o.current.applyDom(edit);
-      o.current.preview(edit, r.gen);
+      o.current.liveEdit(edit, r.gen);
       mode.dispatch({ t: "resize", id: r.id, width: next.width, height: next.height });
       return;
     }
@@ -140,7 +140,7 @@ export function useGestures(opts: {
     if (samePos(next, d.last)) return;
     d.last = { left: next.left, top: next.top };
     o.current.applyDom({ id: d.id, ...d.last });
-    o.current.preview({ id: d.id, ...d.last }, d.gen);
+    o.current.liveEdit({ id: d.id, ...d.last }, d.gen);
     mode.dispatch({ t: "drag", id: d.id, ...next });
   };
 
@@ -177,7 +177,7 @@ export function useGestures(opts: {
 
   /** The press was taken away (a system gesture, the pointer lost): put the box back where it was. */
   const onPointerCancel = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const { mode, applyDom, preview } = o.current;
+    const { mode, applyDom, liveEdit } = o.current;
     const g = gesture.current;
     if (!g || g.pointerId !== e.pointerId) return;
     gesture.current = null;
@@ -185,13 +185,13 @@ export function useGestures(opts: {
     if (g.resize) {
       const { id, start, gen } = g.resize;
       applyDom({ id, ...start });
-      preview({ id, ...start }, gen);
+      liveEdit({ id, ...start }, gen);
       mode.dispatch({ t: "end", kind: "resizing" });
       return;
     }
     if (g.drag) {
       applyDom({ id: g.drag.id, ...g.drag.start });
-      preview({ id: g.drag.id, ...g.drag.start }, g.drag.gen);
+      liveEdit({ id: g.drag.id, ...g.drag.start }, g.drag.gen);
       mode.dispatch({ t: "end", kind: "dragging" });
     }
   };
