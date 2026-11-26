@@ -143,14 +143,13 @@ describe("built-in template packs", () => {
   });
 
   test("a source run builds the shows from the folder VIEWSWITCHER_SHOWS names (config.shows), when it's set", async () => {
-    const shows = join(root, "..", `${org}-shows-${Date.now()}`);
+    const shows = join(root, "shows"); // under root, which afterEach removes whatever happens
     await cp(SHOWS_DIR, shows, { recursive: true });
     await rm(join(shows, "kitchen"), { recursive: true });
     const left: string[] = [];
     const b = await buildBuiltins(starter, (id) => left.push(id), shows);
     expect(left).toEqual(["kitchen"]);
     expect(b.map((p) => p.id)).toEqual(["starter", ...SHOWS.map((s) => s.id).filter((id) => id !== "kitchen")]);
-    await rm(shows, { recursive: true, force: true });
   });
 
   test("each installs through the drop path as its own set, generic: the org's name and colors, not the show's", async () => {
