@@ -22,8 +22,8 @@ final class DemoTests: XCTestCase {
         let web = app.webViews.firstMatch
         // (Guest cook's cover: on an iPhone held sideways the show's header is hidden, PHONE-7.)
         XCTAssertTrue(web.switches["Guest cook"].waitForExistence(timeout: 20), "the demo opened by itself")
-        XCTAssertTrue(web.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Connect your Mac to go live'")).firstMatch.exists, "the demo bar says it's a demo")
-        XCTAssertTrue(web.staticTexts["On air"].firstMatch.exists, "the tally")
+        XCTAssertTrue(web.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Demo'")).firstMatch.exists, "the demo bar says it's a demo")
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label ==[c] 'On air'")).firstMatch.exists, "the tally (styled in capitals)")
 
         // Tap a view: the program now shows it (its name beside the tally; the covers are labelled buttons).
         // Tap a view: it goes on air (the cover is a toggle, aria-pressed) and the program shows its name.
