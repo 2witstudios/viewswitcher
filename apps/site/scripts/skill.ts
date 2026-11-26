@@ -7,9 +7,9 @@
 // Upload a skill): the skill's folder at the root of the zip, named as SKILL.md's `name`, with SKILL.md
 // in it. The zip is read back and checked, so one that wouldn't upload fails the build. Build output:
 // public/skills/ is gitignored.
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, join, relative, resolve, sep } from "node:path";
-import { listZip, readZipEntrySync, storedZip } from "../../server/src/zip";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, join, resolve } from "node:path";
+import { listZip, readZipEntrySync, storedZip, walkFiles } from "@viewswitcher/packs";
 
 const site = resolve(import.meta.dir, "..");
 export const SKILL_DIR = resolve(site, "../server/library-kit/skills/viewswitcher-scenes");
@@ -20,16 +20,7 @@ type File = { name: string; data: Uint8Array };
 /** Every file in the skill folder, named `<folder>/<path>`; dotfiles (.DS_Store) are left out. */
 export async function skillFiles(dir: string): Promise<File[]> {
   const folder = basename(dir);
-  const paths = await readdir(dir, { recursive: true });
-  const files: File[] = [];
-  for (const path of paths) {
-    const abs = join(dir, path);
-    if (!(await stat(abs)).isFile()) continue;
-    const rel = relative(dir, abs).split(sep);
-    if (rel.some((part) => part.startsWith("."))) continue;
-    files.push({ name: [folder, ...rel].join("/"), data: new Uint8Array(await readFile(abs)) });
-  }
-  return files.sort((a, b) => a.name.localeCompare(b.name));
+  return Promise.all((await walkFiles(dir)).map(async (rel) => ({ name: `${folder}/${rel}`, data: new Uint8Array(await readFile(join(dir, rel))) })));
 }
 
 export const skillZip = (files: File[]) => storedZip(files);

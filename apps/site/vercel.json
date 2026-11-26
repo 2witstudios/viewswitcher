@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "astro",
-  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site --filter @viewswitcher/server",
+  "installCommand": "bun install --frozen-lockfile --filter viewswitcher-site --filter @viewswitcher/packs --filter @viewswitcher/shared",
   "buildCommand": "bun run build",
   "outputDirectory": "dist",
   "cleanUrls": true,

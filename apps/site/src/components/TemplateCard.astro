@@ -2,7 +2,7 @@
 // One template set in a gallery: its cover, name, kind, number of views, and Download.
 import ViewFrame from "./ViewFrame.astro";
 import Icon from "./Icon.astro";
-import type { Show } from "../data/shows";
+import type { Show } from "@viewswitcher/packs/shows";
 import { packOf, setPath } from "../lib/templates";
 interface Props { show: Show; sizes?: string; heading?: "h2" | "h3" }
 const { show, sizes = "(min-width: 64rem) 24rem, (min-width: 40rem) 45vw, calc(100vw - 2.5rem)", heading = "h2" } = Astro.props;

@@ -3,6 +3,7 @@
 //
 // Each message is a 16-byte little-endian header {length, version=1, type=8 (plist), tag}
 // followed by an XML property list.
+import { escapeHtml } from "@viewswitcher/shared";
 
 export const USBMUXD_SOCKET = "/var/run/usbmuxd";
 
@@ -25,7 +26,7 @@ export function concat(...parts: Buffer[]): Buffer {
 const VERSION_PLIST = 1;
 const TYPE_PLIST = 8;
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s: string) => escapeHtml(s, { quotes: false });
 const unesc = (s: string) =>
   s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 

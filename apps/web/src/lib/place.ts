@@ -2,7 +2,7 @@
 import { shortDate } from "@viewswitcher/shared";
 import type { Library } from "@viewswitcher/shared";
 
-const fileName = (path: string) => path.split("/").pop()?.replace(/\.html$/, "") ?? "";
+const fileName = (path: string) => path.slice(path.lastIndexOf("/") + 1).replace(/\.html$/, "");
 
 /** "Bible Study · Day 1 · Nov 24" and the scene's label; its file name until the library is known. */
 export function placeOf(lib: Library | undefined, path: string): { crumb: string; title: string } {

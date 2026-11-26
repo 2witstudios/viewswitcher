@@ -6,13 +6,13 @@
 // This is the composition root: it wires the parts in ./editor together and lays them out. What the
 // editor is doing is one mode (mode.ts); the file and its saves are useSceneDocument; the frame's DOM
 // is frame-dom.ts; each kind of change has its own hook.
-import { canRemove, isSlot, isStructural, markFor, movableAround, movableIn, nameOf, posIn, replaceableImage, sizeIn, textOf } from "@viewswitcher/shared";
+import { canRemove, isSlot, isStructural, libraryUrl, markFor, movableAround, movableIn, nameOf, parseLibraryPath, posIn, replaceableImage, sizeIn, textOf } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { api, copy } from "../lib/api";
 import { useLibrary } from "../lib/library";
-import { libraryUrl, useLive } from "../lib/live";
+import { useLive } from "../lib/live";
 import { placeOf } from "../lib/place";
 import { EDITOR_SANDBOX } from "../lib/scene-frame";
 import { AssetPicker } from "./editor/AssetPicker";
@@ -47,7 +47,7 @@ export function SceneEditor({ org, path, rename = false }: { org: string; path: 
   const onAirRef = useRef(onAir);
   onAirRef.current = onAir;
   const place = placeOf(library, path);
-  const isTemplate = path.startsWith(`${org}/templates/`);
+  const isTemplate = parseLibraryPath(path).kind === "template";
 
   const modes = useMode();
   const { mode, dispatch } = modes;

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { freePort, SERVER_START_MS, startServer } from "../test-server";
 import type { AgentStatus } from "@viewswitcher/shared";
 import type { Previewer } from "../preview-types";
+import { LibraryScanner } from "../library/scanner";
 import { clientName, handleMcp, noteSeen } from "./http";
 
 /** A previewer for a server these tests never ask for pictures. */
@@ -128,7 +129,7 @@ describe("POST /mcp refuses, without any MCP processing", () => {
 describe("handleMcp from another machine", () => {
   test("a peer that isn't loopback is refused with 404, even with a loopback Host", async () => {
     let seen = 0;
-    const deps = { root: library, kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
+    const deps = { root: library, scanner: new LibraryScanner(library), kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
     const req = () => new Request(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { host: `127.0.0.1:${port}`, ...MCP_HEADERS }, body: JSON.stringify(initialize()) });
     for (const peer of [{ address: "192.168.1.20" }, { address: "100.64.0.3" }, { address: "" }, null]) {
       const r = await handleMcp(req(), peer, { deps, allowedOrigins: [], onSeen: () => seen++ });
@@ -142,7 +143,7 @@ describe("handleMcp from the iPad on the USB-C bridge", () => {
   test("a bridged socket (loopback peer and Host, its port marked by usb-bridge.ts) is refused with 404", async () => {
     const { bridgePorts } = await import("../gate");
     let seen = 0;
-    const deps = { root: library, kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
+    const deps = { root: library, scanner: new LibraryScanner(library), kit: library, port, state: () => { throw new Error("not reached"); }, goOnAir: async () => { throw new Error("not reached"); }, renamed: async () => {}, previewer: noPreview(port) };
     const req = () => new Request(`http://127.0.0.1:${port}/mcp`, { method: "POST", headers: { host: `127.0.0.1:${port}`, ...MCP_HEADERS }, body: JSON.stringify(initialize()) });
     bridgePorts.add(52001);
     try {

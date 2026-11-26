@@ -1,4 +1,4 @@
-// Installing template packs (EDIT-24 · EDIT-25). A pack arrives as a .zip or a dropped folder's files.
+// Installing template packs. A pack arrives as a .zip or a dropped folder's files.
 //
 // 1. stage: list it, check every path and size before anything is written (planPack), unpack it into
 //    <org>/.viewswitcher/staging/<token>/raw (inside the org, so preview paths start with its id), check what it is (checkPack), and write a preview
@@ -11,12 +11,14 @@
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, PACK_TEXT, planPack } from "@viewswitcher/shared";
-import type { PackEntry, PackFile, PackManifest, PackPlaceholder, PackScripts } from "@viewswitcher/shared";
+import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
+import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
+import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
 import { resolveInLibrary, STAGING, STAGING_TOKEN } from "./library/contain";
+import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
-import { listZip, readZipEntry, ZipError } from "./zip";
+import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
 
 /** A pack that can't be installed: the message says why, in plain words. */
 export class PackError extends Error {}
@@ -25,20 +27,6 @@ export class PackError extends Error {}
 const STAGE_TTL_MS = 60 * 60 * 1000;
 
 export type PackSource = { zip: Uint8Array } | { files: { path: string; data: Blob }[] };
-
-export type StagedPack = {
-  token: string;
-  /** The folder it installs as: the pack's id, or "<id>-2"… when the org has that already. */
-  set: string;
-  manifest: PackManifest;
-  /** Covers: library paths of the filled-in preview copy. */
-  views: { name: string; label: string; path: string }[];
-  transition: string | null;
-  scripts: PackScripts & { standard: boolean };
-  warnings: string[];
-  files: number;
-  bytes: number;
-};
 
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
@@ -53,10 +41,7 @@ function plainFsError(e: unknown, doing: string): Error {
 }
 
 /** The placeholders for `org`, with {{PACK}} pointing at `packUrl`. */
-async function varsFor(root: string, orgId: string, packUrl: string): Promise<Record<PackPlaceholder, string>> {
-  const o = await readOrg(root, orgId);
-  return { ORG_ID: o.id, ORG_NAME: o.name, ORG_INITIAL: (o.name.trim()[0] ?? "?").toUpperCase(), ACCENT: o.accent, GROUND: o.ground, PACK: packUrl };
-}
+const varsFor = async (root: string, orgId: string, packUrl: string) => placeholderVars(await readOrg(root, orgId), packUrl);
 
 /** A set folder name the org doesn't have yet (a set someone removed but scenes still use counts as taken). */
 async function freeSet(orgDir: string, id: string) {
@@ -66,12 +51,12 @@ async function freeSet(orgDir: string, id: string) {
 }
 
 /** Copy `raw` to `dest` with every text file filled in. */
-async function fillCopy(raw: string, dest: string, files: string[], vars: Record<string, string>) {
+async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
   for (const f of files) {
     const from = inside(raw, f);
     const to = inside(dest, installedPath(f));
     await mkdir(dirname(to), { recursive: true });
-    if (PACK_TEXT.test(f)) await writeFile(to, fillPlaceholders(await readFile(from, "utf8"), vars), { flag: "wx" });
+    if (isTextFile(f)) await writeFile(to, fillPlaceholders(f, await readFile(from, "utf8"), vars), { flag: "wx" });
     else await writeFile(to, new Uint8Array(await readFile(from)), { flag: "wx" });
   }
 }
@@ -136,7 +121,7 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
       const to = inside(raw, f.path);
       await mkdir(dirname(to), { recursive: true });
       await writeFile(to, data, { flag: "wx" });
-      if (PACK_TEXT.test(f.path)) texts[f.path] = new TextDecoder().decode(data);
+      if (isTextFile(f.path)) texts[f.path] = new TextDecoder().decode(data);
     }
 
     // 3. Is it a pack?
@@ -147,13 +132,15 @@ export async function stagePack(root: string, orgId: string, source: PackSource,
 
     // 4. A preview copy for the covers, filled in for this org.
     const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
-    await fillCopy(raw, join(dir, "preview"), files, await varsFor(root, orgId, `/library/${previewRel}`));
-    const label = (html: string, name: string) => /<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() || name.replace(/-/g, " ");
-    const views = report.views.map((v) => ({ name: v.name, label: label(texts[v.file] ?? "", v.name), path: `${previewRel}/${installedPath(v.file)}` }));
+    const previewVars = await varsFor(root, orgId, libraryUrl(previewRel));
+    await fillCopy(raw, join(dir, "preview"), files, previewVars);
+    // A cover's caption is the filled view's title, as the cover above it shows it ("Daisy Debate · Live").
+    const label = (v: { file: string; name: string }) => readTitle(fillPlaceholders(v.file, texts[v.file] ?? "", previewVars)) ?? v.name.replace(/-/g, " ");
+    const views = report.views.map((v) => ({ name: v.name, label: label(v), path: `${previewRel}/${installedPath(v.file)}` }));
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
     const meta: StageMeta = { org: orgId, set, manifest: report.manifest, files, created: Date.now() };
-    await writeFile(join(dir, "meta.json"), JSON.stringify(meta));
+    await writeAtomic(join(dir, "meta.json"), JSON.stringify(meta));
     return {
       token, set, manifest: report.manifest, views,
       transition: report.transition ? `${previewRel}/${report.transition}` : null,
@@ -184,7 +171,7 @@ export async function installPack(root: string, orgId: string, token: unknown): 
     // Where the set goes must really be in the library: templates/ may be a link to somewhere else.
     await resolveInLibrary(root, `${plainName(orgId)}/templates/${set}`, { forWrite: true });
     await rm(final, { recursive: true, force: true });
-    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, `/library/${orgId}/templates/${set}`));
+    await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(root, orgId, libraryUrl(`${orgId}/templates/${set}`)));
     await mkdir(join(orgDir, "templates"), { recursive: true });
     // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
     // installs at once, an agent), where rename alone would quietly replace an empty one.
@@ -214,22 +201,15 @@ export async function cancelPack(root: string, orgId: string, token: unknown) {
 
 /** Library-relative paths of the org's project scenes that link the set's files. */
 async function scenesUsing(orgDir: string, orgId: string, set: string): Promise<number> {
+  // As written by hand or by the switcher: plain, or with each segment encoded (libraryUrl).
   const needle = `/library/${orgId}/templates/${set}/`;
-  const encoded = `/library/${encodeURIComponent(orgId)}/templates/${encodeURIComponent(set)}/`;
-  let n = 0;
-  const walk = async (dir: string) => {
-    for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      if (e.name.startsWith(".")) continue;
-      const p = join(dir, e.name);
-      if (e.isDirectory()) await walk(p);
-      else if (e.name.endsWith(".html")) {
-        const text = await readFile(p, "utf8").catch(() => "");
-        if (text.includes(needle) || text.includes(encoded)) n++;
-      }
-    }
-  };
-  await walk(join(orgDir, "projects"));
-  return n;
+  const encoded = `${libraryUrl(`${orgId}/templates/${set}`)}/`;
+  const projects = join(orgDir, "projects");
+  const read = limit(16); // scenes can be megabytes: read side by side, but not all at once
+  // Linked scenes too: a scene that is a link still uses the set through it.
+  const scenes = (await walkFiles(projects, { links: true }).catch(() => [] as string[])).filter((rel) => rel.endsWith(".html"));
+  const uses = await Promise.all(scenes.map((rel) => read(() => readFile(join(projects, rel), "utf8").catch(() => "")).then((t) => t.includes(needle) || t.includes(encoded))));
+  return uses.filter(Boolean).length;
 }
 
 /**

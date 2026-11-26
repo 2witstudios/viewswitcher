@@ -5,12 +5,12 @@
 // 1. scripts/library.ts writes the shows' scratch library (the starter kit restyled per show)
 //    OUTSIDE the repo ($TMPDIR/viewswitcher-site-library, or SHOTS_LIBRARY).
 // 2. The switcher server starts on SHOTS_PORT (default 7434) with OBS offline and no USB bridge.
-// 3. Each view in src/data/shows.ts is opened at 1920×1080 the way OBS shows it: transparent,
+// 3. Each view in @viewswitcher/packs' shows.ts is opened at 1920×1080 the way OBS shows it: transparent,
 //    with holes where the devices go. It's saved with its alpha as src/assets/views/<id>.webp,
 //    and its device boxes and ground color go to src/data/views.json. The site stacks
 //    ground → photos/screens in the boxes → the view, which is how OBS composites it.
 // 4. scripts/screens/*.html (made-up screen shares, if any) render to src/assets/media/<name>.webp.
-// The views' HTML stays in scripts/shows/ and the scratch library; only rendered images enter src/.
+// The views' HTML stays in packages/packs/shows/ and the scratch library; only rendered images enter src/.
 // SHOTS_ONLY=fullcount,nova renders just those shows and keeps the rest of views.json.
 import { chromium } from "playwright-core";
 import sharp from "sharp";
@@ -18,7 +18,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { SHOWS, viewId } from "../src/data/shows";
+import { SHOWS, viewId } from "@viewswitcher/packs/shows";
 import { buildLibrary } from "./library";
 
 const site = resolve(import.meta.dir, "..");

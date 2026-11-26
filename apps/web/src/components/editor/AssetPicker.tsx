@@ -1,7 +1,8 @@
+import { libraryUrl } from "@viewswitcher/shared";
 import type { Library } from "@viewswitcher/shared";
 import { useRef, useState } from "react";
 import { api } from "../../lib/api";
-import { inApp, libraryUrl } from "../../lib/live";
+import { inApp } from "../../lib/live";
 import { attempt } from "../ui";
 
 /** The org's images to choose from, and Upload. */

@@ -1,7 +1,10 @@
-// The six made-up shows on the site, each with its own look, and the views the site shows.
-// Their view HTML lives in scripts/shows/<id>/ (one template set per show); scripts/library.ts copies it into a
-// scratch library outside the repo and scripts/shots.ts renders every view to src/assets/views/<id>-<view>.webp.
-// `media` says what fills each device box: a photo in src/assets/media (credited in CREDITS.md).
+// The six made-up shows on the site, each with its own look, and the views the site shows. Each is
+// also a built-in template set in the app (./build.ts showPacks).
+// Their view HTML lives in ../shows/<id>/ (one template set per show), with ../shows/_shared/ common
+// to all; the site's scripts/library.ts copies it into a scratch library outside the repo and
+// scripts/shots.ts renders every view to apps/site/src/assets/views/<id>-<view>.webp.
+// `media` says what fills each device box: a photo in apps/site/src/assets/media (credited in its CREDITS.md).
+// Plain data, so the site's pages can import it (@viewswitcher/packs/shows) without the pack builder.
 
 export type ViewSpec = {
   file: string; name: string; media?: Record<string, string>;
@@ -9,7 +12,7 @@ export type ViewSpec = {
   use: string;
 };
 export type Show = {
-  id: string; name: string; initial: string; kind: string; episode: string;
+  id: string; name: string; kind: string; episode: string;
   /** OBS paints this behind every view; it also fills the site's frames under the photos. */
   ground: string; accent: string;
   blurb: string; views: ViewSpec[];
@@ -21,7 +24,7 @@ export type Show = {
 
 export const SHOWS: Show[] = [
   {
-    id: "fullcount", name: "Full Count", initial: "F", kind: "Sports podcast", episode: "Ep. 112 · Trade deadline",
+    id: "fullcount", name: "Full Count", kind: "Sports podcast", episode: "Ep. 112 · Trade deadline",
     ground: "#0b1426", accent: "#e63946",
     blurb: "Two hosts under a scoreboard title bar that counts the segments, with highlights in the break.",
     slug: "full-count", goodFor: "Sports talk shows and podcasts with two hosts, from fantasy leagues to local teams.",
@@ -34,7 +37,7 @@ export const SHOWS: Show[] = [
     ],
   },
   {
-    id: "nova", name: "NOVA_PLAYS", initial: "N", kind: "Gaming stream", episode: "Ranked grind · day 12",
+    id: "nova", name: "NOVA_PLAYS", kind: "Gaming stream", episode: "Ranked grind · day 12",
     ground: "#0d0f1a", accent: "#7cf3ff",
     blurb: "The game full screen with an angled face cam, sub alerts and a clipped name plate.",
     slug: "nova-plays", goodFor: "Gaming streams on Twitch or YouTube: a face cam over the game, alerts and a raid screen.",
@@ -47,7 +50,7 @@ export const SHOWS: Show[] = [
     ],
   },
   {
-    id: "grace", name: "Grace Community", initial: "G", kind: "Church service", episode: "Sunday Live · 10:30",
+    id: "grace", name: "Grace Community", kind: "Church service", episode: "Sunday Live · 10:30",
     ground: "#08080a", accent: "#c9a45c",
     blurb: "Letterboxed and calm: the scripture beside the pastor, gold rules and spaced capitals.",
     slug: "grace-community", goodFor: "Church services and other weekly gatherings that want a calm, reverent look.",
@@ -60,7 +63,7 @@ export const SHOWS: Show[] = [
     ],
   },
   {
-    id: "remi", name: "Roam with Remi", initial: "R", kind: "Travel vlog", episode: "Day 4 · Over the ridge",
+    id: "remi", name: "Roam with Remi", kind: "Travel vlog", episode: "Day 4 · Over the ridge",
     ground: "#e6dcc8", accent: "#d9472b",
     blurb: "A travel journal: paper tags, a polaroid of the view and a location stamp.",
     slug: "roam-with-remi", goodFor: "Travel vlogs and outdoor streams: walks, hikes and city tours, with chat along for the ride.",
@@ -73,7 +76,7 @@ export const SHOWS: Show[] = [
     ],
   },
   {
-    id: "riverside", name: "Riverside Live", initial: "R", kind: "Live event coverage", episode: "Music Festival · Day 2",
+    id: "riverside", name: "Riverside Live", kind: "Live event coverage", episode: "Music Festival · Day 2",
     ground: "#101114", accent: "#d62828",
     blurb: "Coverage like the evening news: a red live block, a location bar, the reporter's name strip and a clock.",
     slug: "riverside-live", goodFor: "Live event coverage, local news and festivals, with a reporter on location.",
@@ -86,7 +89,7 @@ export const SHOWS: Show[] = [
     ],
   },
   {
-    id: "kitchen", name: "Saltwater Kitchen", initial: "S", kind: "Cooking show", episode: "Ep. 31 · Sunday bread",
+    id: "kitchen", name: "Saltwater Kitchen", kind: "Cooking show", episode: "Ep. 31 · Sunday bread",
     ground: "#eadfca", accent: "#d9472b",
     blurb: "A handwritten recipe card, the dough up close and questions from chat on sticky notes.",
     slug: "saltwater-kitchen", goodFor: "Cooking, baking and craft shows with a second camera on the work.",

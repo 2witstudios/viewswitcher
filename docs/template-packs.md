@@ -15,7 +15,7 @@ neon-night/                         the pack (a folder, or a .zip of it)
 ├─ _shared/                         the pack's own shared files
 │  ├─ theme.css                     tokens and classes (see the starter kit's)
 │  ├─ scene.js                      the starter kit's, or the pack's own
-│  ├─ transition.html               optional: its transition page
+│  ├─ transition.html               optional: its transition, played when one of its views goes on air
 │  └─ brand/…, fonts/…              pictures and fonts the theme uses
 ├─ assets/                          optional: pictures, video, audio, fonts the views use
 ├─ README.md, LICENSE               optional, installed alongside
@@ -64,6 +64,8 @@ Every `.html`, `.css`, `.js`, `.json`, `.svg`, `.md` and `.txt` file is filled i
 
 Anything else in `{{LIKE_THIS}}` stays as typed (with a warning).
 
+Values are escaped for the file they land in: in `.html` and `.svg` they're HTML-escaped (an org named `R&B <Live>` reads as text and can't add markup), in `.json` they're escaped for a JSON string, in `.css` only `*/` is broken up (so a value can't close a comment), and elsewhere (`.js`, `.md`, `.txt`) they're as typed. So in a view, put `{{ORG_NAME}}` in text or an attribute, not inside an inline `<script>`; a script that needs the name can read it from the page.
+
 **Link the pack's own files through `{{PACK}}`:** `{{PACK}}/_shared/theme.css`, `{{PACK}}/assets/bg.jpg`, `{{PACK}}/_shared/brand/mark.svg`. Views are installed at the set's top level, beside `_shared/`, so another view is `{{PACK}}/<view>.html`. Absolute URLs keep working when a view is copied into a project or stream, which relative ones wouldn't. A link to a pack file that isn't in the pack is a warning. A view may also link the org's own files (`/library/{{ORG_ID}}/assets/…`).
 
 ## Views
@@ -89,9 +91,11 @@ Scripts may only be in `_shared/`, so what a pack runs is in one place.
 ## What installing does, and refuses
 
 1. **Before anything is written**, every entry is checked: a path that leaves the pack (`..`, an absolute path, a drive letter, a backslash), a symlink or device, a file type where it doesn't belong, two names that differ only in case, too many or too big. Any of these refuses the whole pack, with the reason in plain words.
-2. The zip is read by `apps/server/src/zip.ts`: entries are inflated one at a time and never past the size they declare (a zip bomb that lies about its sizes stops there), checked against their CRC, and encrypted entries, ZIP64 and other compression methods are refused.
+2. The zip is read by `packages/packs/src/zip.ts`: entries are inflated one at a time and never past the size they declare (a zip bomb that lies about its sizes stops there), checked against their CRC, and encrypted entries, ZIP64 and other compression methods are refused.
 3. Accepted files are unpacked into `<org>/.viewswitcher/staging/<token>/`. pack.json and the views are checked (`checkPack`). A copy filled in for the org is the preview the switcher shows: covers of every view and the transition, what the pack runs, and any warnings.
 4. **Install** fills the files in again with the set's real URL in a staging folder, then renames that folder to `<org>/templates/<set>/`. That rename is the only step that touches the org, so a failed install leaves nothing behind. **Cancel** (or an hour without either) deletes the staging folder.
+
+**Its transition.** When one of the set's views goes on air, the switcher plays the set's own `_shared/transition.html` if it has one, else the org's (`templates/_shared/transition.html`), else a blank fade. A scene made from the set's view in a project plays its project's transition, else the org's: it's the project's now.
 
 **Removing a set** (Templates → Remove set) deletes its folder. If scenes made from it still link its files, only its views and pack.json go: its `_shared/` and `assets/` stay so those scenes keep their look, and the switcher says how many use them. Scenes are never touched.
 
@@ -108,15 +112,15 @@ On install the switcher says what the pack runs: ViewSwitcher's standard `scene.
 
 ## Making packs
 
-- `bun run packs:export [out-dir]` writes the starter kit and the site's six example shows (apps/site/scripts/shows: fullcount, nova, grace, remi, riverside, kitchen) as `<id>/` and `<id>.zip` (default `dist/packs/`), each checked with the same validator, so an export that wouldn't install, or that warns, fails there.
+- `bun run packs:export [out-dir]` writes the starter kit and the site's six example shows (packages/packs/shows: fullcount, nova, grace, remi, riverside, kitchen) as `<id>/` and `<id>.zip` (default `dist/packs/`), each checked with the same validator, so an export that wouldn't install, or that warns, fails there.
 - An agent can write a pack folder from the library skill's "Template sets and template packs" section and this page.
 
 ## Built-in template packs (EDIT-29 · EDIT-30)
 
-The app comes with seven: **Starter** (the neutral views every new org also gets as its own templates) and the six example shows from viewswitcher.com (Full Count, NOVA_PLAYS, Grace Community, Roam with Remi, Riverside Live, Saltwater Kitchen). One source feeds them, the site's renders and the site's downloads: `apps/site/scripts/shows/<id>/`, written with the show's own name and colors.
+The app comes with seven: **Starter** (the neutral views every new org also gets as its own templates) and the six example shows from viewswitcher.com (Full Count, NOVA_PLAYS, Grace Community, Roam with Remi, Riverside Live, Saltwater Kitchen). One source feeds them, the site's renders and the site's downloads: `packages/packs` (the shows in `src/shows.ts`, their views and themes in `shows/<id>/`), written with the show's own name and colors. The server, the Mac build and the site all build from it; neither app imports the other.
 
-- `packs:export` makes them generic (`apps/server/src/export-packs.ts`): in each view the show's name becomes `{{ORG_NAME}}` (however its words are spaced or broken; capitals keep their look with `text-transform` on the element itself, so it stays plain text to retype), and `<title>` loses it ("Pregame", not "Full Count · Pregame"); in `theme.css` `--ground` and every variable set to the show's accent become `{{GROUND}}` and `{{ACCENT}}`. The rest of the palette stays, even a panel colour that happens to equal the show's ground (Full Count's navy plates): it's the look, and an org's ground could put white text on a light plate. A paper ground (Remi, Kitchen) keeps its own color in `--paper-ground`: the paper is the look. Sample copy (episode titles, hosts) stays as text to retype. The export fails if a show's name is left in a view.
+- `packs:export` makes them generic (`packages/packs/src/build.ts`): in each view the show's name becomes `{{ORG_NAME}}` (however its words are spaced or broken; capitals keep their look with `text-transform` on the element itself, so it stays plain text to retype), and `<title>` loses it ("Pregame", not "Full Count · Pregame"); in `theme.css` `--ground` and every variable set to the show's accent become `{{GROUND}}` and `{{ACCENT}}`. The rest of the palette stays, even a panel colour that happens to equal the show's ground (Full Count's navy plates): it's the look, and an org's ground could put white text on a light plate. A paper ground (Remi, Kitchen) keeps its own color in `--paper-ground`: the paper is the look. Sample copy (episode titles, hosts) stays as text to retype. The export fails if a show's name is left in a view.
 - The site's renders fill the same views with each show's values (`apps/site/scripts/library.ts`).
-- The Mac app ships them prebuilt in `Contents/Resources/packs` (`apps/apple/scripts/build.sh`; the server reads `VIEWSWITCHER_PACKS`). A source run builds them from the repo when the server starts (`apps/server/src/builtin-packs.ts`). The iPhone and iPad app gets them from the server.
+- The Mac app ships them prebuilt in `Contents/Resources/packs` (`apps/apple/scripts/build.sh`; the server reads `VIEWSWITCHER_PACKS`). A source run builds them from the repo when they're first asked for (`apps/server/src/builtin-packs.ts`), from `packages/packs/shows/` or the folder `VIEWSWITCHER_SHOWS` names. The iPhone and iPad app gets them from the server.
 - `GET /api/packs/builtin` lists them; `POST /api/packs/builtin/stage {org, id}` stages one for an org, and from there it's the same as a dropped pack: covers, install, cancel.
 - In the switcher: a new org offers them after it's created (**Pick your templates**; "Just the starter" skips), and the Templates page has **Add templates**. Each goes in as its own set, filled with the org's name and colors; adding one the org has already makes a second copy (`fullcount-2`).

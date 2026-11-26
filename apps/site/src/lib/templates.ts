@@ -1,19 +1,20 @@
 // What the template pages (/templates, /templates/<set>) say about each set, from the same sources the
-// packs are built from: src/data/shows.ts, scripts/shows/<id>/theme.css (its fonts) and CREDITS.md (photos).
+// packs are built from: packages/packs (src/shows.ts and shows/<id>/theme.css, its fonts) and CREDITS.md (photos).
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseCredits, fontsFromCss, type Credit } from "./credits";
 import credits from "../../CREDITS.md?raw";
-import { SHOWS, type Show } from "../data/shows";
+import { SHOWS, type Show } from "@viewswitcher/packs/shows";
 
-const themes = import.meta.glob<string>("../../scripts/shows/*/theme.css", { query: "?raw", import: "default", eager: true });
+// Vite needs the glob written out: packages/packs/shows/<id>/theme.css.
+const themes = import.meta.glob<string>("../../../../packages/packs/shows/*/theme.css", { query: "?raw", import: "default", eager: true });
 
 const CREDITS = parseCredits(credits);
 
 /** The fonts a set loads from Google Fonts, from its theme.css. */
 export function fontsOf(id: string): string[] {
-  const css = themes[`../../scripts/shows/${id}/theme.css`];
-  if (css === undefined) throw new Error(`scripts/shows/${id}/theme.css is missing`);
+  const css = Object.entries(themes).find(([path]) => path.endsWith(`/shows/${id}/theme.css`))?.[1];
+  if (css === undefined) throw new Error(`packages/packs/shows/${id}/theme.css is missing`);
   return fontsFromCss(css);
 }
 

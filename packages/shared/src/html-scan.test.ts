@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  applyEdits, changedElements, decodeEntities, positionOf, retarget, scanElements, setPosition, setText, snapMove, tagForEdit, textOf, untagForEdit,
+  applyEdits, changedElements, decodeEntities, positionOf, readTitle, retarget, scanElements, setPosition, setText, setTitle, snapMove, tagForEdit, textOf, untagForEdit,
 } from "./index";
 
 const starter = join(import.meta.dir, "../../../apps/server/starter/templates");
@@ -421,5 +421,65 @@ describe("round 5 on PR #1", () => {
     expect(decodeEntities("&toString; &constructor; &amp;")).toBe("&toString; &constructor; &");
     const html = `<p>&toString;</p>`;
     expect(textOf(html, scanElements(html)[0]!)).toBe("&toString;");
+  });
+});
+
+describe("readTitle", () => {
+  test("the page's title, decoded and collapsed", () => {
+    expect(readTitle("<head><title>  R&amp;B\n night </title></head>")).toBe("R&B night");
+    expect(readTitle("<head><title></title></head>")).toBeNull();
+    expect(readTitle("<main></main>")).toBeNull();
+  });
+  // Each page has its real title, "Real", after something that holds a title the browser doesn't show.
+  const pages: Record<string, string> = {
+    comment: "<head><!-- <title>Old</title> --><title>Real</title></head>",
+    script: "<head><script>const t = '<title>Code</title>';</script><title>Real</title></head>",
+    style: "<head><style>/* <title>x</title> */</style><title>Real</title></head>",
+    noscript: "<head><noscript><title>NS</title></noscript><title>Real</title></head>",
+    textarea: "<head></head><body><textarea><title>T</title></textarea></body><title>Real</title>",
+    template: "<head><template><title>Inner</title></template><title>Real</title></head>",
+    "a custom element named like one": "<head><style-box></style-box><title>Real</title></head>",
+    "a tagged title": '<head><title data-vs="1">Real</title></head>',
+    "a close tag with a slash": "<head><script>x</script/><title>Real</title></head>",
+    "a close tag with junk": "<head><script>x</script foo><title>Real</title></head>",
+    "a title's own close tag with a slash": "<head><title>Real</title/></head>",
+    "a title closed at the end of the file": "<head><title>Real</title ",
+    "a title inside an end tag": "<head></x <title>><title>Real</title></head>",
+    "a title in a quoted attribute": '<head><meta content="<title>Fake</title>"><title>Real</title></head>',
+    "a > in the title's own attribute": '<head><title data-x="a>b">Real</title></head>',
+    "nested templates": "<head><template><template></template><title>Inner</title></template><title>Real</title></head>",
+    "a bogus comment": "<head><!x <title>><title>Real</title></head>",
+    "a processing instruction": "<head><?x <title>?><title>Real</title></head>",
+  };
+  test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
+    expect(readTitle(html)).toBe("Real");
+  });
+  test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
+    expect(readTitle(setTitle(html, "New"))).toBe("New");
+  });
+  test("an unclosed comment hides everything after it; a title that never closes isn't one", () => {
+    expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
+    expect(readTitle("<head><script>x <title>Old</title>")).toBeNull();
+    expect(readTitle("<head><title>Never closed")).toBeNull();
+  });
+  test("stays linear on pages cut short at every turn (an untrusted pack's, say)", () => {
+    const mb = 1024 * 1024;
+    const pages = [
+      "<head><script>" + "</script ".repeat(mb / 9),
+      "<head><title>" + "</title ".repeat(mb / 8),
+      "<head>" + "<title ".repeat(mb / 7),
+      "<head>" + "<title>".repeat(mb / 7),
+      "<head>" + "<script ".repeat(mb / 8),
+      "<head>" + "<!--".repeat(mb / 4),
+      "<head>" + "</a>".repeat(mb / 4),
+      "<head>" + "</a ".repeat(mb / 4),
+      // Deep nesting under a <template>, with many titles in it: none is the page's.
+      "<head><template>" + "<div>".repeat(100_000) + "<title></title>".repeat(30_000),
+    ];
+    for (const html of pages) {
+      const t = performance.now();
+      readTitle(html);
+      expect(performance.now() - t).toBeLessThan(250);
+    }
   });
 });

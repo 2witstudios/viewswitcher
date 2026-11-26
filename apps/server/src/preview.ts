@@ -3,6 +3,7 @@
 // source. A preview points that source at the scene with ?preview and screenshots it until the
 // picture settles. program() screenshots the ViewSwitcher scene as it is, camera included.
 // Neither ever switches OBS's program or touches the ViewSwitcher scene, so both are safe while live.
+import { libraryUrl } from "@viewswitcher/shared";
 import { existsSync } from "node:fs";
 import { relative, sep } from "node:path";
 import { config } from "./config";
@@ -95,7 +96,7 @@ export function createPreviewer(live: Pick<OBSClient, "request" | "status">, opt
       const rel = relative(library, abs).split(sep).join("/");
       if (!rel.endsWith(".html")) throw new PathError(`Only scenes (.html files) can be previewed: ${path}`);
       if (!existsSync(abs)) throw new PathError(`No scene at ${path}`);
-      const url = `${base}/library/${rel.split("/").map(encodeURIComponent).join("/")}?preview`;
+      const url = `${base}${libraryUrl(rel)}?preview`;
       const dims = size(full);
       return oneAtATime(async (): Promise<PreviewResult> => {
         if (!obs.status.connected) return { ok: false, reason: `OBS isn't connected, so there's no picture. ${BROWSER}`, url };

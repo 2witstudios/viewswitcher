@@ -1,70 +1,16 @@
 import { constants as fsConstants } from "node:fs";
-import { copyFile, cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
-import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
+import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
+import type { Org } from "@viewswitcher/shared";
+import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
 import { resolveInLibrary } from "./library/contain";
-import { limit } from "./limit";
+import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
-import { createSceneTitles } from "./scene-titles";
 
-const KINDS: Record<string, AssetKind> = {
-  ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image", ".svg": "image", ".avif": "image",
-  ".mp4": "video", ".mov": "video", ".webm": "video", ".m4v": "video",
-  ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
-};
-
-// The library is read on every change by every client (and by agents), so a scan reads as little
-// as it can: scene titles are kept while the file's stat stamp (size, times, inode) stays the same,
-// and dropped for the paths the watcher reports (scene-titles.ts); folders are walked side by side.
-// File reads and stats go through one bounded queue, so a big library can't run out of open files.
-
-/** File reads and stats for scans: at most 32 at once, across every scan. */
-const io = limit(32);
-
-async function dirs(path: string): Promise<string[]> {
-  try {
-    const entries = await io(() => readdir(path, { withFileTypes: true }));
-    return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("_")).map((e) => e.name).sort();
-  } catch {
-    return [];
-  }
-}
-
-async function readJson<T>(path: string, fallback: T): Promise<T> {
-  try {
-    return { ...fallback, ...JSON.parse(await io(() => readFile(path, "utf8"))) };
-  } catch {
-    return fallback;
-  }
-}
-
-/** `url` when the file `abs` is there, else null (a transition, for the library listing). */
-const urlIfThere = (abs: string, url: string) => io(() => exists(abs)).then((t) => (t ? url : null));
-
-const titles = createSceneTitles({ stat: (abs) => io(() => stat(abs)), read: (abs) => io(() => readFile(abs, "utf8")) });
-
-/** Library paths the watcher reported (library-relative): their titles are read again on the next scan. */
-export const forgetScanned = (libraryRoot: string, paths: string[]) => titles.forget(libraryRoot, paths);
-
-async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
-  let files: string[] = [];
-  try {
-    files = (await io(() => readdir(join(root, rel)))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
-  } catch {
-    return [];
-  }
-  const scenes = await Promise.all(
-    files.map(async (f) => {
-      const name = f.slice(0, -5);
-      const title = await titles.titleOf(join(root, rel, f));
-      return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
-    }),
-  );
-  const rank = (n: string) => (order.includes(n) ? order.indexOf(n) : order.length);
-  return scenes.sort((a, b) => rank(a.name) - rank(b.name) || a.label.localeCompare(b.label));
-}
+// Reading an org's content for the switcher is library/scanner.ts (LibraryScanner); this file has
+// the orgs themselves and every change to the library.
 
 // ---------------------------------------------------------------- orgs
 // The library root holds one folder per org (a brand or channel). Each org has its own
@@ -93,107 +39,31 @@ export async function createOrg(root: string, starter: string, name: string, acc
   while (await exists(join(root, id))) id = `${base}-${n++}`;
   const dir = join(root, id);
   await cp(starter, dir, { recursive: true });
-  const vars: Record<string, string> = { ORG_ID: id, ORG_NAME: name.trim(), ORG_INITIAL: name.trim()[0]!.toUpperCase(), ACCENT: accent, GROUND: ground };
-  const fill = async (path: string) => {
-    for (const e of await readdir(path, { withFileTypes: true })) {
-      const p = join(path, e.name);
-      if (e.isDirectory()) await fill(p);
-      else if (/\.(html|css|json|md|js|svg)$/.test(e.name)) {
-        const text = await readFile(p, "utf8");
-        await writeFile(p, text.replace(/\{\{(\w+)\}\}/g, (m, k) => vars[k] ?? m));
-      }
-    }
-  };
-  await fill(dir);
+  const vars = placeholderVars({ id, name, accent, ground });
+  await Promise.all(
+    (await walkFiles(dir)).filter(isTextFile).map(async (rel) => {
+      const p = join(dir, rel);
+      const text = await readFile(p, "utf8");
+      const filled = fillPlaceholders(rel, text, vars);
+      if (filled !== text) await writeAtomic(p, filled);
+    }),
+  );
   await mkdir(join(dir, "assets"), { recursive: true });
   await mkdir(join(dir, "projects"), { recursive: true });
   return { orgId: id };
 }
 
-/** One org's content. `root` is the library root; every returned path starts with the org id. */
-export async function scanLibrary(libraryRoot: string, orgId: string): Promise<Library> {
-  const org = await readOrg(libraryRoot, orgId);
-  const root = inside(libraryRoot, plainName(orgId));
-  const prefix = `${org.id}/`;
-  const [templates, sets, assets, projects, transition] = await Promise.all([
-    readJson(join(root, "templates/_shared/order.json"), { order: [] as string[] }).then((meta) => scenesIn(root, "templates", "template", meta.order, prefix)),
-    listSets(root, prefix),
-    listAssets(root, prefix),
-    dirs(join(root, "projects")).then((ids) => Promise.all(ids.map((id) => scanProject(root, prefix, id)))),
-    urlIfThere(join(root, ORG_TRANSITION), `${prefix}${ORG_TRANSITION}`),
-  ]);
-  return { org, templates, sets, assets, projects, transition };
-}
-
-async function listAssets(root: string, prefix: string): Promise<Asset[]> {
-  try {
-    const names = (await io(() => readdir(join(root, "assets")))).filter((n) => !n.startsWith("."));
-    const assets = await Promise.all(
-      names.map(async (name) => {
-        // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.
-        const s = await io(() => stat(join(root, "assets", name))).catch(() => null);
-        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s?.size ?? 0 } satisfies Asset;
-      }),
-    );
-    return assets.filter((a) => a.size > 0).sort((a, b) => a.name.localeCompare(b.name));
-  } catch {
-    return [];
-  }
-}
-
-async function scanProject(root: string, prefix: string, id: string): Promise<Project> {
-  const dir = join(root, "projects", id);
-  const p = await readJson(join(dir, "project.json"), { name: id, order: [] as string[] });
-  const [scenes, streams, transition] = await Promise.all([
-    scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix),
-    dirs(join(dir, "streams")).then((ids) =>
-      Promise.all(
-        ids.map(async (sid): Promise<Stream> => {
-          const rel = `projects/${id}/streams/${sid}`;
-          const [s, scenes] = await Promise.all([readJson(join(root, rel, "stream.json"), { name: sid, date: "" }), scenesIn(root, rel, "stream", p.order, prefix)]);
-          return { id: sid, name: s.name, date: s.date, scenes };
-        }),
-      ),
-    ),
-    urlIfThere(join(dir, TRANSITION), `${prefix}projects/${id}/${TRANSITION}`),
-  ]);
-  streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
-  return { id, name: p.name, scenes, streams, transition };
-}
-
-// ---------------------------------------------------------------- template sets
-// An installed template pack is a folder templates/<set>/ with its pack.json, its views, _shared/ and
-// assets/ (see packs.ts and docs/template-packs.md). The org's own templates stay in templates/*.html.
-
-/** The org's template sets: folders in templates/ that have a pack.json. */
-async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {
-  const found = await Promise.all(
-    (await dirs(join(root, "templates"))).map(async (id): Promise<TemplateSet | null> => {
-      const text = await io(() => readFile(join(root, "templates", id, "pack.json"), "utf8")).catch(() => null);
-      if (text === null) return null;
-      const read = readManifest(text);
-      // A pack.json someone edited by hand into something odd: still list the set, by its folder.
-      const m = read.ok ? read.manifest : { name: id, version: "", description: "", views: [] as string[] };
-      const rel = `templates/${id}`;
-      const [templates, transition] = await Promise.all([
-        scenesIn(root, rel, "template", m.views, prefix, id),
-        urlIfThere(join(root, rel, "_shared", TRANSITION), `${prefix}${rel}/_shared/${TRANSITION}`),
-      ]);
-      return { id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}), templates, transition };
-    }),
-  );
-  return found.filter((s): s is TemplateSet => s !== null).sort((a, b) => a.name.localeCompare(b.name));
-}
+// ---------------------------------------------------------------- templates
 
 /**
  * The file of a template, by its name: "teaching" is the org's own (templates/teaching.html),
  * "neon/teaching" is in the set "neon" (templates/neon/teaching.html).
  */
 export function templateFile(root: string, template: string): { file: string; name: string } {
-  const parts = String(template ?? "").split("/");
-  if (parts.length > 2) throw new PathError(`Bad template: ${template}`);
-  const name = plainName(parts.at(-1)!);
-  const set = parts.length === 2 ? plainName(parts[0]!) : null;
+  const t = parseTemplateId(template);
+  if (!t) throw new PathError(`Bad template: ${template}`);
+  const name = plainName(t.name);
+  const set = t.set === null ? null : plainName(t.set);
   return { file: inside(root, set ? `templates/${set}/${name}.html` : `templates/${name}.html`), name };
 }
 
@@ -201,8 +71,6 @@ export function templateFile(root: string, template: string): { file: string; na
 // A transition is an HTML page shown full screen while scenes switch. The org's default lives in
 // templates/_shared/transition.html; a project can have its own projects/<id>/transition.html.
 
-const TRANSITION = "transition.html";
-const ORG_TRANSITION = `templates/_shared/${TRANSITION}`;
 
 /** The transition to play when `scenePath` goes on air, or null for a plain ground-color wipe. */
 export async function resolveTransition(libraryRoot: string, scenePath: string): Promise<string | null> {
@@ -369,7 +237,20 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
   const html = await readFile(src, "utf8");
-  return { name: await writeFresh(dir, `${base}-copy`, ".html", html.replace(/<title>([^<]*)<\/title>/i, (_m, t) => `<title>${t} copy</title>`), check) };
+  return { name: await writeFresh(dir, `${base}-copy`, ".html", titledCopy(html), check) };
+}
+
+/** A copy's page: its <title> with " copy" after it, kept within a title's 120 characters; as it was when it has none. */
+export function titledCopy(html: string): string {
+  const title = readTitle(html);
+  if (!title) return html;
+  // Whole characters only (an emoji or a flag at the cut isn't split), within setTitle's 120 UTF-16 units.
+  let kept = "";
+  for (const ch of graphemes(title)) {
+    if (kept.length + ch.length > 120 - " copy".length) break;
+    kept += ch;
+  }
+  return setTitle(html, `${kept.trimEnd()} copy`);
 }
 
 export async function saveAsset(root: string, file: File, check?: BeforeCreate) {

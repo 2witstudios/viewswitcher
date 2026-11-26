@@ -107,6 +107,7 @@ The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRAR
 | `VIEWSWITCHER_LOG` | `1` prints requests, placements and OBS-browser errors |
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
+| `VIEWSWITCHER_PACKS` / `VIEWSWITCHER_SHOWS` | the built-in template packs, prebuilt (the Mac app's Resources/packs; unset: built from the repo when first asked for) / the example shows they're built from in that case (`packages/packs/shows`) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
 | `VIEWSWITCHER_VERSION` | set by the Mac app to its version, which the Claude Desktop extension carries (default `1.0.0`) |
 | `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |
@@ -147,7 +148,7 @@ A view (a scene) is a 1920 × 1080 HTML page with a transparent background. Boxe
 
 OBS shows one browser source, `/program`, which displays the view on air. When you switch, the server moves and crops the OBS sources named in the view's slots (`Camera`, `Screen`, `Guest`, `iPad`…) into their boxes over obs-websocket, and paints the org's ground color behind everything. Text lives in its own small elements, so people can retype it in the switcher's editor; the format, the transition contract and the rules for agents are in the [viewswitcher-scenes skill](apps/server/library-kit/skills/viewswitcher-scenes/SKILL.md).
 
-**Transitions** are pages too. Switching briefly covers the screen with the scene's transition page: its project's own `transition.html` if it has one, else the org's `templates/_shared/transition.html`, else (the default) a blank fade through the ground color.
+**Transitions** are pages too. Switching briefly covers the screen with the scene's transition page: for a template set's view, the set's own `_shared/transition.html`; for a project's scene, the project's `transition.html` if it has one; else the org's `templates/_shared/transition.html`; else (the default) a blank fade through the ground color.
 
 Scenes run sandboxed: every library page is served with a CSP sandbox and shown in sandboxed frames, so a scene's scripts (an agent's, or a stranger's template pack) can't reach the switcher's API. The program page reads slot positions through a small bridge over `postMessage` ([docs/template-packs.md](docs/template-packs.md#scripts-and-the-sandbox)).
 

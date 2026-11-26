@@ -1,5 +1,6 @@
 // What the scene editor's Add menu puts in a scene: one element, in the middle, using the classes
 // every org's theme defines (abs, panel, display, muted, slot), so it picks up the org's look.
+import { escapeHtml } from "./html-scan";
 import { SCENE } from "./snap";
 
 export type AddKind = "text" | "title" | "image" | "camera" | "screen" | "guest";
@@ -7,7 +8,6 @@ export type AddKind = "text" | "title" | "image" | "camera" | "screen" | "guest"
 /** Device boxes and the OBS source each one asks for. */
 export const DEVICE_SLOTS: Partial<Record<AddKind, string>> = { camera: "Camera", screen: "Screen", guest: "Guest" };
 
-const attr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 /** A box of `w`×`h` in the middle of the scene, or centred on `at` and kept inside the scene. */
 const middle = (w: number, h: number, at?: { x: number; y: number }) => {
@@ -49,14 +49,14 @@ export function markupFor(kind: AddKind, opts: { slots?: string[]; image?: { src
       // Fit inside 600×600, keeping its shape (a dropped picture is never made bigger than it is).
       const k = Math.min(600 / nw, 600 / nh, opts.at && nw > 1 && nh > 1 ? 1 : Infinity);
       const w = Math.max(16, Math.round(nw * k)), h = Math.max(16, Math.round(nh * k));
-      return `<img class="abs" src="${attr(src)}" alt="" style="${box(middle(w, h, opts.at))}; object-fit: contain">`;
+      return `<img class="abs" src="${escapeHtml(src)}" alt="" style="${box(middle(w, h, opts.at))}; object-fit: contain">`;
     }
     case "camera":
     case "guest":
     case "screen": {
       const name = freeSlotName(DEVICE_SLOTS[kind]!, opts.slots ?? []);
       const b = kind === "screen" ? middle(1280, 720) : middle(640, 360);
-      return `<div class="slot" data-slot="${attr(name)}" style="${box(b)}"></div>`;
+      return `<div class="slot" data-slot="${escapeHtml(name)}" style="${box(b)}"></div>`;
     }
   }
 }

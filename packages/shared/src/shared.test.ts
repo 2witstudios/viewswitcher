@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { coverTransform, obsColor, obsReady, orgOf, resolveStream, shortDate, slugify, transitionCandidates } from "./index";
+import { coverTransform, obsColor, obsReady, resolveStream, shortDate, slugify } from "./index";
 import type { Project, Scene, Stream } from "./types";
 
 const scene = (name: string, origin: Scene["origin"], dir: string): Scene => ({
@@ -68,21 +68,11 @@ describe("helpers", () => {
   });
 });
 
-describe("orgs", () => {
+describe("obsColor", () => {
   test("OBS colors are opaque ABGR", () => {
     expect(obsColor("#0d1812")).toBe(0xff12180d);
     expect(obsColor("ffffff")).toBe(0xffffffff);
     expect(() => obsColor("red")).toThrow();
-  });
-  test("a path's org is its first folder", () => {
-    expect(orgOf("daisy/projects/ld/scenes/teaching.html")).toBe("daisy");
-  });
-  test("a scene's transition: its project's first, then the org's", () => {
-    expect(transitionCandidates("daisy/projects/ld/streams/09-14-x/teaching.html")).toEqual([
-      "daisy/projects/ld/transition.html",
-      "daisy/templates/_shared/transition.html",
-    ]);
-    expect(transitionCandidates("daisy/templates/brb.html")).toEqual(["daisy/templates/_shared/transition.html"]);
   });
 });
 

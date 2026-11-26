@@ -1,7 +1,7 @@
 // What an AI agent connected over MCP may do to the show, by the agent on-air setting
 // (.viewswitcher/settings.json). "Live" means OBS is streaming or recording. Only MCP tools ask;
 // people in the switcher are never blocked.
-import { orgOf, transitionCandidates } from "@viewswitcher/shared";
+import { parseLibraryPath, transitionCandidates } from "@viewswitcher/shared";
 import type { AgentOnAir } from "@viewswitcher/shared";
 
 export type GuardAction = { kind: "go_on_air" } | { kind: "write"; paths: string[] };
@@ -30,7 +30,9 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
   if (p === scene) return "scene";
   // The resolved transition, and the project's own one that would take over from the org's if it were created.
   if (p === onAir.transition?.toLowerCase() || transitionCandidates(scene).includes(p)) return "transition";
-  if (p.startsWith(`${orgOf(scene)}/templates/_shared/`)) return "shared";
+  // The org's _shared/ styles every scene; a set's styles its own views.
+  const file = parseLibraryPath(p), view = parseLibraryPath(scene);
+  if (file.org === view.org && file.kind === "shared" && (!file.set || file.set === view.set)) return "shared";
   if (onAir.loads?.some((l) => l.toLowerCase() === p)) return "loaded";
   // The scan of what the scene loads stopped at its limit: anything might be on stream.
   if (onAir.loadsComplete === false) return "tooMany";
@@ -40,7 +42,7 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
 const REASONS = {
   scene: "That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.",
   transition: "That is the transition for the scene on air, and you're live. Wait until the stream ends to change it.",
-  shared: "Files in templates/_shared/ style the scene on air, and you're live. Wait until the stream ends, or put the change in a stream copy of the scene (customize_scene).",
+  shared: "Files in templates/_shared/ (and a template set's own _shared/) style the scene on air, and you're live. Wait until the stream ends, or put the change in a stream copy of the scene (customize_scene).",
   tooMany: "The scene on air loads more files than ViewSwitcher checks, so while you're live agents can't change library files. Wait until the stream ends.",
   loaded: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends.",
 };

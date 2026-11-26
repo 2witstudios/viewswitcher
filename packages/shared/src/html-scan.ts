@@ -216,10 +216,47 @@ export function decodeEntities(text: string): string {
   });
 }
 
-const escapeText = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;");
+/**
+ * `text` safe as an element's text and inside a quoted attribute, single or double: &, <, >, " and '
+ * escaped. `quotes: false` leaves both quotes as typed, for text alone (an edit then changes only
+ * what it must).
+ */
+export function escapeHtml(text: string, { quotes = true }: { quotes?: boolean } = {}): string {
+  const out = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return quotes ? out.replace(/"/g, "&quot;").replace(/'/g, "&#39;") : out;
+}
+
+/** Text as typed into a scene: escaped, and a non-breaking space kept as one (&nbsp;, which the browser won't collapse). */
+const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace(/\u00a0/g, "&nbsp;");
 
 /** Collapse and trim HTML whitespace only. (JS trim() would also eat U+00A0, a non-breaking space, which is text.) */
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
+
+/**
+ * The page's <title> element: the first closed one that isn't inside a <template> (the browser
+ * never shows that one). The one readTitle reads and setTitle writes, so the two can't disagree.
+ */
+function titleElement(els: ScannedElement[]): ScannedElement | undefined {
+  // One forward pass: a parent always comes before its children in `els`, so each element's answer is
+  // its parent's, known already (no walk up the tree per title, which nesting made quadratic).
+  const inTemplate = new Uint8Array(els.length);
+  for (const e of els) {
+    const p = e.parent === null ? null : els[e.parent]!;
+    inTemplate[e.id] = p !== null && (p.tag === "template" || inTemplate[p.id] === 1) ? 1 : 0;
+    if (e.tag === "title" && e.closed && !inTemplate[e.id]) return e;
+  }
+  return undefined;
+}
+
+/**
+ * A page's <title> as the browser shows it (entities decoded, whitespace collapsed), or null when it
+ * has none or it's empty. Read with the scanner, which knows comments, raw text, quoted attributes
+ * and templates, and stays linear on untrusted pages; `els` is its scan when the caller has one.
+ */
+export function readTitle(html: string, els: ScannedElement[] = scanElements(html)): string | null {
+  const t = titleElement(els);
+  return t ? textOf(html, t) || null : null;
+}
 
 /** The text of a leaf element as the browser shows it (whitespace collapsed, trimmed). */
 export function textOf(html: string, el: ScannedElement): string {
@@ -594,7 +631,7 @@ export function setTitle(html: string, name: string): string {
   if (!clean.trim()) throw new EditError("A scene needs a name");
   if (clean.length > 120) throw new EditError("That name is too long");
   const els = scanElements(html);
-  const title = els.find((e) => e.tag === "title" && e.closed);
+  const title = titleElement(els);
   const text = escapeText(clean);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);

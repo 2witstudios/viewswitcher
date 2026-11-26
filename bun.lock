@@ -13,6 +13,7 @@
       "name": "@viewswitcher/server",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
+        "@viewswitcher/packs": "workspace:*",
         "@viewswitcher/shared": "workspace:*",
         "zod": "^4.6.7",
       },
@@ -23,6 +24,8 @@
         "@astrojs/sitemap": "^3.7.6",
         "@fontsource-variable/instrument-sans": "^5.3.0",
         "@fontsource-variable/space-grotesk": "^5.3.0",
+        "@viewswitcher/packs": "workspace:*",
+        "@viewswitcher/shared": "workspace:*",
         "astro": "^7.4.13",
       },
       "devDependencies": {
@@ -51,6 +54,12 @@
         "@vitejs/plugin-react": "^6.3.0",
         "typescript": "^7.0.2",
         "vite": "^8.3.8",
+      },
+    },
+    "packages/packs": {
+      "name": "@viewswitcher/packs",
+      "dependencies": {
+        "@viewswitcher/shared": "workspace:*",
       },
     },
     "packages/shared": {
@@ -405,6 +414,8 @@
     "@typescript/typescript-win32-x64": ["@typescript/typescript-win32-x64@7.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g=="],
 
     "@ungap/structured-clone": ["@ungap/structured-clone@1.4.0", "", {}, "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ=="],
+
+    "@viewswitcher/packs": ["@viewswitcher/packs@workspace:packages/packs"],
 
     "@viewswitcher/server": ["@viewswitcher/server@workspace:apps/server"],
 

@@ -5,7 +5,7 @@
 // Changes to what's on air (a person's tap, an agent's go_on_air, a rename, the on-air file going
 // away) run one at a time, in the order they were asked: two requests close together always end on
 // the one asked last, and state.json is only ever written by one of them at a time (and atomically).
-import { orgOf } from "@viewswitcher/shared";
+import { orgOf, projectViewOf } from "@viewswitcher/shared";
 import type { LiveState, OnAir, ServerMessage } from "@viewswitcher/shared";
 import { writeAtomic } from "../atomic";
 import * as lib from "../library";
@@ -25,13 +25,6 @@ export type LiveStoreOptions = {
   initial: Omit<LiveState, "onAir" | "warnings">;
   log?: (line: string) => void;
 };
-
-/** A stream's own copy of a project scene: the project scene it overrides. */
-const STREAM_SCENE = /^([^/]+)\/projects\/([^/]+)\/streams\/([^/]+)\/([^/]+\.html)$/;
-export function overriddenScene(path: string): string | null {
-  const m = STREAM_SCENE.exec(path);
-  return m ? `${m[1]}/projects/${m[2]}/scenes/${m[4]}` : null;
-}
 
 export const missingWarning = (on: OnAir) =>
   `"${on.label}" was deleted while on air. Put another view on air: until then the program keeps showing it (only the ground if the program page reloads).`;
@@ -190,7 +183,7 @@ export class LiveStore {
 
   /** The on-air file is gone: the project's scene it overrode, else keep showing it with a warning. */
   private async removed(on: OnAir) {
-    const fallback = overriddenScene(on.path);
+    const fallback = projectViewOf(on.path);
     if (fallback && (await isFile(this.abs(fallback)))) {
       try {
         // The same view, back to the project's version: swapped in place, like a rename, not a transition.

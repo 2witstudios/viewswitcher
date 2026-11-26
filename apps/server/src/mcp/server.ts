@@ -7,11 +7,11 @@ import { readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { EditError, orgOf, resolveStream, slugify } from "@viewswitcher/shared";
+import { EditError, orgOf, resolveStream, slugify, templateId } from "@viewswitcher/shared";
 import type { LiveState } from "@viewswitcher/shared";
 import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
-import { asDropped, type BuiltinPack } from "../builtin-packs";
+import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import * as lib from "../library";
 import { realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
@@ -22,10 +22,13 @@ import type { Previewer, PreviewResult } from "../preview-types";
 import { renameScene, scenePath, type RenameResult } from "../scene-edit";
 import { type Loaded, loadedFiles, textHash } from "../scene-refs";
 import { pathScrub } from "../scrub";
+import type { LibraryScanner } from "../library/scanner";
 
 export type McpDeps = {
   /** The library folder. Never shown to the agent: every path it sees starts with an org id. */
   root: string;
+  /** Reads an org's content: the switcher's own scanner, so both share its cache and the watcher's reports. */
+  scanner: LibraryScanner;
   /** The library kit (config.libraryKit), for the guide when the library has no copy of the skill. */
   kit: string;
   port: number;
@@ -39,7 +42,7 @@ export type McpDeps = {
   renamed: (from: string, name: string, r: Extract<RenameResult, { ok: true }>) => Promise<void>;
   previewer: Previewer;
   /** The built-in template sets (builtin-packs.ts), as the switcher's Add templates lists them. */
-  templateSets?: () => Promise<BuiltinPack[]>;
+  templateSets?: () => Promise<BuiltinPackFiles[]>;
   /** The starter kit's scene.js, which a pack's own copy is compared with on install (packs.ts). */
   starterScript?: string | null;
   /** Whether OBS has said, since it connected, whether it's streaming or recording (OBSClient.outputsKnown). */
@@ -84,6 +87,7 @@ const today = () => {
 
 export function createMcpServer(deps: McpDeps): McpServer {
   const { root, port } = deps;
+  const { scanner } = deps;
   const server = new McpServer({ name: "viewswitcher", version: "1.0.0" }, { instructions: INSTRUCTIONS, capabilities: { tools: {}, resources: {} } });
 
   // No absolute path ever reaches the agent, not even inside an error from the file system.
@@ -227,7 +231,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     annotations: READ,
   }, run(async ({ org }: { org: string }) => {
     await existingOrg(root, org);
-    const l = await lib.scanLibrary(root, plainName(org));
+    const l = await scanner.scan(plainName(org));
     const projects = l.projects.map((p) => ({
       ...p,
       streams: p.streams.map((s) => {
@@ -347,7 +351,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
 
   // ------------------------------------------------------------ template sets
 
-  const setView = (b: BuiltinPack) => ({ id: b.id, name: b.name, description: b.description, views: b.views });
+  const setView = (b: BuiltinPackFiles) => ({ id: b.id, name: b.name, description: b.description, views: b.views });
   /** A built-in set by its id ("grace") or its name ("Grace Community"), in any case. */
   const findSet = async (set: string) => {
     const all = (await deps.templateSets?.()) ?? [];
@@ -366,7 +370,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     const sets = ((await deps.templateSets?.()) ?? []).map(setView);
     if (!org) return text(sets);
     await existingOrg(root, org);
-    const have = (await lib.scanLibrary(root, plainName(org))).sets.map((s) => s.id);
+    const have = (await scanner.scan(plainName(org))).sets.map((s) => s.id);
     // An added set's folder is its id, or "<id>-2"… when the org had one already.
     return text(sets.map((s) => ({ ...s, added: have.filter((h) => h === s.id || new RegExp(`^${s.id}-\\d+$`).test(h)) })));
   }));
@@ -391,7 +395,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
       await cancelPack(root, plainName(org), staged.token).catch(() => {});
       throw e;
     }
-    return text({ set: installed.set, name: b.name, templates: staged.views.map((v) => `${installed.set}/${v.name}`), ...(staged.warnings.length ? { warnings: staged.warnings } : {}) });
+    return text({ set: installed.set, name: b.name, templates: staged.views.map((v) => templateId({ set: installed.set, name: v.name })), ...(staged.warnings.length ? { warnings: staged.warnings } : {}) });
   }));
 
   server.registerTool("create_project", {
@@ -530,7 +534,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
   }, run(async ({ path, streamId }: { path: string; streamId?: string }) => {
     guardNow({ kind: "go_on_air" });
     await needScene(path);
-    const l = await lib.scanLibrary(root, plainName(orgOf(path)));
+    const l = await scanner.scan(plainName(orgOf(path)));
     let found: OnAirRequest | null = null;
     // The org's own templates and those of its installed template sets.
     const t = [...l.templates, ...l.sets.flatMap((set) => set.templates)].find((s) => s.path === path);

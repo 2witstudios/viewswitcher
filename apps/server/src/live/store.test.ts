@@ -6,7 +6,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { LiveState, ServerMessage } from "@viewswitcher/shared";
-import { LiveStore, missingWarning, overriddenScene } from "./store";
+import { LiveStore, missingWarning } from "./store";
 
 const roots: string[] = [];
 afterAll(() => roots.forEach((r) => rmSync(r, { recursive: true, force: true })));
@@ -204,6 +204,20 @@ describe("the on-air file going away", () => {
     await store.filesChanged([`${ORG}/templates/_shared/transition.html`]);
     expect(store.state.onAir?.transition).toBe(`${ORG}/templates/_shared/transition.html`);
   });
+
+  test("a template set's view plays the set's own transition, else the org's", async () => {
+    await put(`${ORG}/templates/_shared/transition.html`, scene("Wipe"));
+    await put(`${ORG}/templates/neon/pack.json`, "{}");
+    await put(`${ORG}/templates/neon/brb.html`, scene("Neon BRB"));
+    const store = await open();
+    await store.goOnAir({ path: `${ORG}/templates/neon/brb.html`, label: "Neon BRB" });
+    expect(store.state.onAir?.transition).toBe(`${ORG}/templates/_shared/transition.html`);
+    await put(`${ORG}/templates/neon/_shared/transition.html`, scene("Neon wipe"));
+    await store.goOnAir({ path: `${ORG}/templates/a.html`, label: "A" });
+    expect(store.state.onAir?.transition).toBe(`${ORG}/templates/_shared/transition.html`);
+    await store.goOnAir({ path: `${ORG}/templates/neon/brb.html`, label: "Neon BRB" });
+    expect(store.state.onAir?.transition).toBe(`${ORG}/templates/neon/_shared/transition.html`);
+  });
 });
 
 describe("sources placed before", () => {
@@ -264,10 +278,4 @@ describe("the ground color", () => {
     await store.filesChanged([`${ORG}/org.json`]);
     expect(await store.groundFor(`${ORG}/templates/a.html`)).toBe("#202020");
   });
-});
-
-test("overriddenScene: a stream's copy names its project scene; nothing else has one", () => {
-  expect(overriddenScene("o/projects/p/streams/s/brb.html")).toBe("o/projects/p/scenes/brb.html");
-  expect(overriddenScene("o/projects/p/scenes/brb.html")).toBeNull();
-  expect(overriddenScene("o/templates/brb.html")).toBeNull();
 });

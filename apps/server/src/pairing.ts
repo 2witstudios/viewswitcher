@@ -11,8 +11,8 @@
 // Secrets are compared by hashing both sides with SHA3-256 and comparing the digests (the
 // aidd-timing-safe-compare rule). Don't "fix" this to a raw === or crypto.timingSafeEqual: a digest
 // has no prefix structure to guess one character at a time, and the raw secret never reaches a log.
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { writeAtomic } from "./atomic";
 
 export const CODE_LENGTH = 8;
 export const CODE_TTL_MS = 5 * 60_000;
@@ -228,11 +228,7 @@ export class Pairing {
     let ok = true;
     this.saving = this.saving.then(async () => {
       try {
-        await mkdir(dirname(file), { recursive: true });
-        const tmp = `${file}.tmp`;
-        await writeFile(tmp, body, { mode: 0o600 });
-        await chmod(tmp, 0o600);
-        await rename(tmp, file);
+        await writeAtomic(file, body, { mode: 0o600 });
       } catch (e) {
         ok = false;
         console.error("[pairing] couldn't save devices:", (e as Error).message);

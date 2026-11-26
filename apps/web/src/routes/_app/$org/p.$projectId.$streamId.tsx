@@ -1,4 +1,4 @@
-import { resolveStream, shortDate } from "@viewswitcher/shared";
+import { resolveStream, shortDate, templateId } from "@viewswitcher/shared";
 import type { Scene } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
@@ -7,7 +7,7 @@ import { PageHead } from "../../../components/PageHead";
 import { OnAirHero, SceneTile, useOpenEditor } from "../../../components/SceneTile";
 import { attempt, Menu, type MenuItem, PlusIcon } from "../../../components/ui";
 import { api, copy } from "../../../lib/api";
-import { templateGroups, templateId, useLibrary } from "../../../lib/library";
+import { templateGroups, useLibrary } from "../../../lib/library";
 import { useLive } from "../../../lib/live";
 
 export const Route = createFileRoute("/_app/$org/p/$projectId/$streamId")({

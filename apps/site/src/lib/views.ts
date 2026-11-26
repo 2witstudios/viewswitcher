@@ -1,6 +1,6 @@
 import type { ImageMetadata } from "astro";
 import data from "../data/views.json";
-import { SHOWS, viewId, type Show, type ViewSpec } from "../data/shows";
+import { SHOWS, viewId, type Show, type ViewSpec } from "@viewswitcher/packs/shows";
 
 export type Slot = { name: string; x: number; y: number; w: number; h: number; radius: string };
 export type Media = { image: ImageMetadata; focus: string; alt: string };

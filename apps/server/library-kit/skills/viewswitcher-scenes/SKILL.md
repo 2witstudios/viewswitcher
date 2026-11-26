@@ -56,7 +56,7 @@ Fix what's wrong and preview again until it's right; usually 1–3 rounds. If `p
 ### On air
 
 - Call `go_on_air { path }` only when the user asks to put something on air.
-- When `get_state` says the show is live, tell the user before you change anything that's on air: the on-air scene, its project's transition, or the org's `templates/_shared/` files (the theme every scene uses).
+- When `get_state` says the show is live, tell the user before you change anything that's on air: the on-air scene, its transition (its set's, its project's or the org's), or the org's `templates/_shared/` files (the theme every scene uses) and, for a set's view, the set's `_shared/`.
 - The server refuses some changes while live, depending on the user's setting in Edit with AI (by default, going on air and writing to what's on air). When it refuses, tell the user why in plain words, and offer the way around it: make a stream copy with `customize_scene` (or `duplicate_scene`) and change that, or wait until the show is off air. Don't retry the same change.
 
 ## Where things live
@@ -185,7 +185,7 @@ my-pack/
 
 ## Transitions
 
-A transition is a page that covers the screen while one scene switches to the next. The switcher fades it in over about 170 ms, holds it, then fades out onto the new scene. Switching to a scene in project P plays `<org>/projects/P/transition.html` if it exists, else `<org>/templates/_shared/transition.html`, else a blank fade through the ground color. Templates use the org's.
+A transition is a page that covers the screen while one scene switches to the next. The switcher fades it in over about 170 ms, holds it, then fades out onto the new scene. Switching to a scene plays the most specific transition there is: for a template set's view, the set's own `<org>/templates/<set>/_shared/transition.html`; for a scene in project P, `<org>/projects/P/transition.html`; else the org's `<org>/templates/_shared/transition.html`; else a blank fade through the ground color. The org's own templates use the org's.
 
 A blank fade is the default and often the best choice: anything with words flashes by too fast to read and distracts. Only make a transition page when the user asks for one, and prefer something simple (a mark, a color sweep) over text.
 

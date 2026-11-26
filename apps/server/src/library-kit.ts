@@ -3,8 +3,9 @@
 // a library that already has everything is left exactly as it is. See library-kit/README.md.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { lstat, mkdir, readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { writeAtomic } from "./atomic";
 import { createOrg, listOrgs } from "./library";
 
 /** Kit file (in the repo's library-kit/) → where it goes in the library. */
@@ -54,13 +55,14 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
   for (const { from, to } of KIT_FILES) {
     const text = await readFile(join(kit, from), "utf8");
     const dest = join(root, to);
+    // A kit file someone made a link (AGENTS.md → CLAUDE.md) is their arrangement: never replaced.
+    if (await lstat(dest).then((s) => s.isSymbolicLink(), () => false)) continue;
     const current = await readFile(dest, "utf8").catch(() => null);
     if (current === null) {
-      await mkdir(dirname(dest), { recursive: true });
-      await writeFile(dest, text);
+      await writeAtomic(dest, text);
       result.copied.push(to);
     } else if (current !== text && written[to] === sha(current)) {
-      await writeFile(dest, text);
+      await writeAtomic(dest, text);
       result.updated.push(to);
     } else if (current !== text) {
       continue; // someone's own file, or one they've edited: never touched
@@ -68,8 +70,7 @@ export async function ensureLibrary(root: string, { kit, starter, firstOrg = FIR
     written[to] = sha(text);
   }
   if (JSON.stringify(written) !== JSON.stringify(state.files ?? {})) {
-    await mkdir(dirname(statePath), { recursive: true });
-    await writeFile(statePath, JSON.stringify({ files: written }, null, 2) + "\n");
+    await writeAtomic(statePath, JSON.stringify({ files: written }, null, 2) + "\n");
   }
 
   if (fresh && !existsSync(join(root, ".git"))) result.git = await gitInit(root).catch(() => false);

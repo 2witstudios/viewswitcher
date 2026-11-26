@@ -12,11 +12,12 @@ import { join, relative, sep } from "node:path";
 import { existsSync } from "node:fs";
 import type { ServerMessage, Slot } from "@viewswitcher/shared";
 import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, type stdioLaunch } from "../agent-connect";
-import { asDropped, type BuiltinPack } from "../builtin-packs";
+import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import { Audience, rateKey } from "../gate";
 import * as lib from "../library";
 import { customizeScene, duplicateScene, orgDir, sceneFromTemplate } from "../library-actions";
 import { resolveInLibrary } from "../library/contain";
+import type { LibraryScanner } from "../library/scanner";
 import type { Placer } from "../live/placement";
 import type { LiveStore } from "../live/store";
 import { handleMcp } from "../mcp/http";
@@ -38,6 +39,8 @@ import type { Ctx, Route } from "./dispatch";
 export type RouteDeps = {
   /** The library folder. */
   root: string;
+  /** Reads an org's content (its cache is the server's, shared with the MCP server). */
+  scanner: LibraryScanner;
   /** The starter kit new orgs are made from. */
   starter: string;
   /** The built switcher. */
@@ -51,7 +54,7 @@ export type RouteDeps = {
   /** Whether a program page's slot report is the newest from that page (slot-order.ts). */
   acceptSlots: (page: unknown, seq: unknown) => boolean;
   publish: (msg: ServerMessage) => void;
-  builtins: () => Promise<BuiltinPack[]>;
+  builtins: () => Promise<BuiltinPackFiles[]>;
   starterScript: string | null;
   pairing: Pairing;
   /** Phones and tablets: what the Mac app's window shows, and the Wi-Fi setting (null, or why it couldn't listen). */
@@ -262,7 +265,7 @@ export function routes(d: RouteDeps): Route[] {
     }),
     get("/api/orgs", () => lib.listOrgs(root)),
     post("/api/orgs", (b) => lib.createOrg(root, d.starter, b.name, b.accent, b.ground)),
-    get("/api/library", (c) => lib.scanLibrary(root, plainName(c.url.searchParams.get("org") ?? ""))),
+    get("/api/library", (c) => d.scanner.scan(plainName(c.url.searchParams.get("org") ?? ""))),
     get("/api/state", () => store.state),
     post("/api/onair", (b) => store.goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId })),
     // What agents connected over MCP may put on air (agent-guard.ts); people in the switcher are never limited.

@@ -1,6 +1,7 @@
-import type { AgentClients, AgentOnAir, Library, LiveState, Org, PackManifest, PackScripts, SceneEdit } from "@viewswitcher/shared";
+import { libraryUrl } from "@viewswitcher/shared";
+import type { AgentClients, AgentOnAir, BuiltinPack, Library, LiveState, Org, SceneEdit, StagedPack } from "@viewswitcher/shared";
 import type { QueryClient } from "@tanstack/react-query";
-import { libraryUrl, queryClient } from "./live";
+import { queryClient } from "./live";
 
 /** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
 const previewSession = Math.random().toString(36).slice(2);
@@ -127,19 +128,6 @@ export type AgentInfo = { library: string; port: number; claudeCode: string; std
 /** The Claude Desktop extension made for this install (this Mac only); the Mac app saves and opens it. */
 export const MCPB_URL = "/api/agent/viewswitcher.mcpb";
 
-/** A template pack the server has checked and staged, ready to install (apps/server/src/packs.ts). */
-export type StagedPack = {
-  token: string;
-  set: string;
-  manifest: PackManifest;
-  views: { name: string; label: string; path: string }[];
-  transition: string | null;
-  scripts: PackScripts & { standard: boolean };
-  warnings: string[];
-  files: number;
-  bytes: number;
-};
-
 async function form<T>(path: string, body: FormData): Promise<T> {
   const res = await fetch(path, { method: "POST", body });
   const data = await res.json().catch(() => ({}));
@@ -169,9 +157,6 @@ export const packs = {
   },
   stageBuiltin: (org: string, id: string) => post<StagedPack>("/api/packs/builtin/stage", { org, id }),
 };
-
-/** A built-in template pack, as /api/packs/builtin lists it. */
-export type BuiltinPack = { id: string; name: string; description: string; views: string[] };
 
 /** Copy text; falls back to a prompt where the clipboard API is unavailable (plain http on the iPad). */
 export async function copy(text: string, ask = "Copy this path:") {
