@@ -1,11 +1,12 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
-import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
+import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
+import { createSceneTitles } from "./scene-titles";
 
 const KINDS: Record<string, AssetKind> = {
   ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image", ".svg": "image", ".avif": "image",
@@ -41,52 +42,10 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 /** `url` when the file `abs` is there, else null (a transition, for the library listing). */
 const urlIfThere = (abs: string, url: string) => io(() => exists(abs)).then((t) => (t ? url : null));
 
-/**
- * Each scene file's title as last read, with what identified that version of the file: its size,
- * modification and change times, and inode. Times alone can be coarse (2 s on exFAT, 1 s on
- * HFS+ and some shares); a save that replaces the file (most editors, atomic writes) gets a new inode.
- */
-const titles = new Map<string, { stamp: string; title: string }>();
-const stampOf = (s: { size: number; mtimeMs: number; ctimeMs: number; ino: number | bigint }) => `${s.size}:${s.mtimeMs}:${s.ctimeMs}:${s.ino}`;
+const titles = createSceneTitles({ stat: (abs) => io(() => stat(abs)), read: (abs) => io(() => readFile(abs, "utf8")) });
 
-/** A scene file's <title>, read again only when the file has changed since. */
-async function titleOf(abs: string): Promise<string> {
-  const s = await io(() => stat(abs)).catch(() => null);
-  if (!s) return "";
-  const stamp = stampOf(s);
-  const known = titles.get(abs);
-  if (known?.stamp === stamp) return known.title;
-  // Read after the stat: what's read is at least as new as the version it's kept under.
-  const html = await io(() => readFile(abs, "utf8")).catch(() => null);
-  if (html === null) return "";
-  const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
-  titles.set(abs, { stamp, title });
-  return title;
-}
-
-/**
- * Library paths that changed (the watcher's, library-relative): their titles are read again on the
- * next scan, even if a change kept the size and time the same. A folder drops everything inside it.
- * Linear in the paths and the titles kept, so a change to thousands of files at once (a git pull, a
- * sync) doesn't hold up the server.
- */
-export function forgetScanned(libraryRoot: string, paths: string[]) {
-  const folders = new Set<string>();
-  // A path that was a title kept is done; any other may be a folder.
-  for (const p of paths) {
-    const abs = resolve(libraryRoot, p);
-    if (!titles.delete(abs)) folders.add(abs);
-  }
-  if (!folders.size) return;
-  for (const key of titles.keys()) {
-    for (let dir = dirname(key); dir !== dirname(dir); dir = dirname(dir)) {
-      if (folders.has(dir)) {
-        titles.delete(key);
-        break;
-      }
-    }
-  }
-}
+/** Library paths the watcher reported (library-relative): their titles are read again on the next scan. */
+export const forgetScanned = (libraryRoot: string, paths: string[]) => titles.forget(libraryRoot, paths);
 
 async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
   let files: string[] = [];
@@ -98,7 +57,7 @@ async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: s
   const scenes = await Promise.all(
     files.map(async (f) => {
       const name = f.slice(0, -5);
-      const title = await titleOf(join(root, rel, f));
+      const title = await titles.titleOf(join(root, rel, f));
       return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
     }),
   );

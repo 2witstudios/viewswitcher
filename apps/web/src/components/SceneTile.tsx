@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent, useEffect, useState } from "react";
 import { sceneUrl, useLive } from "../lib/live";
-import { useNearScreen, useTileSrc } from "../lib/tile";
+import { ownFile, useNearScreen, useTileSrc } from "../lib/tile";
 import { DECK, isUprightPhone, UPRIGHT, useMedia } from "../lib/media";
 import { SCENE_SANDBOX } from "../lib/scene-frame";
 import { PencilIcon } from "./icons";
@@ -65,7 +65,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   // dozens); away from it the cover is an empty box of the same size.
   const near = useNearScreen(box);
   const wanted = useLive((l) => sceneUrl(path, l.versions, true));
-  const own = useLive((l) => `${path}@${l.versions[path] ?? 0}`);
+  const own = useLive((l) => ownFile(path, l.versions));
   const src = useTileSrc(wanted, own, box, near);
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);

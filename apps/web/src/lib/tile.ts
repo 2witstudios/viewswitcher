@@ -24,8 +24,14 @@ const onScreen = (el: Element | null) => {
 };
 
 /**
+ * Which file a tile shows and which version of it: a Customize or Revert swaps the tile's path in
+ * place, which must count as its own file changing even when both versions are 0.
+ */
+export const ownFile = (path: string, versions: Record<string, number>) => `${path}@${versions[path] ?? 0}`;
+
+/**
  * The url a tile's frame shows, given the url it should show (`wanted`) and which file and version
- * of it is its own (`own`, e.g. "org/x.html@3"). Its own file changing, or another file taking the
+ * of it is its own (`own`, from ownFile). Its own file changing, or another file taking the
  * tile's place (a Customize or Revert swaps the path in place), loads straight away; a change to the
  * shared theme only (every tile's url at once) waits its turn in `reloads`. A tile that isn't near
  * the screen has no frame, so it just takes the new url.

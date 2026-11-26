@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement } from "react";
 import type { Stagger } from "./stagger";
-import { useNearScreen, useTileSrc } from "./tile";
+import { ownFile, useNearScreen, useTileSrc } from "./tile";
 
 let createRoot: typeof import("react-dom/client").createRoot;
 /** The observers the page made; `show` says whether their element is near the screen now. */
@@ -131,6 +131,14 @@ describe("a tile's frame url", () => {
     t.unmount();
     expect(q.waiting).toHaveLength(0);
   });
+});
+
+test("ownFile: another file at the same version, and the same file at a new version, are both a change of its own", () => {
+  const versions = { "o/p/scenes/brb.html": 0, "o/p/streams/s/brb.html": 0, "*": 4 };
+  const before = ownFile("o/p/streams/s/brb.html", versions);
+  expect(ownFile("o/p/scenes/brb.html", versions)).not.toBe(before); // Revert: the project's file takes its place
+  expect(ownFile("o/p/streams/s/brb.html", { ...versions, "o/p/streams/s/brb.html": 1 })).not.toBe(before);
+  expect(ownFile("o/p/streams/s/brb.html", { ...versions, "*": 5 })).toBe(before); // the shared theme isn't its own
 });
 
 describe("near the screen", () => {
