@@ -42,7 +42,7 @@ const LEGACY = { scene: "Daisy Live", program: "Daisy Program", ground: "Daisy G
 export const programUrl = (port: number) => `http://127.0.0.1:${port}/program`;
 
 export async function setupObs(obs: ObsRequester, names: SetupNames, port: number, { switchProgram = true }: SetupOptions = {}): Promise<SetupReport> {
-  const { obsScene: scene, programSource, groundSource, sources } = names;
+  const { obsScene, programSource, groundSource, sources } = names;
   const url = programUrl(port);
   const log: string[] = [];
 
@@ -52,13 +52,13 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
       log.push(`Renamed "${from}" → "${to}".`);
     } catch {} // not there, or the new name is already taken
   };
-  await rename("SetSceneName", LEGACY.scene, scene, "sceneName", "newSceneName");
+  await rename("SetSceneName", LEGACY.scene, obsScene, "sceneName", "newSceneName");
   await rename("SetInputName", LEGACY.program, programSource, "inputName", "newInputName");
   await rename("SetInputName", LEGACY.ground, groundSource, "inputName", "newInputName");
 
   try {
-    await obs.request("CreateScene", { sceneName: scene });
-    log.push(`Created scene "${scene}".`);
+    await obs.request("CreateScene", { sceneName: obsScene });
+    log.push(`Created scene "${obsScene}".`);
   } catch (e) {
     if (!(e instanceof OBSRequestError && e.code === 601)) throw e; // 601 = already exists
   }
@@ -68,10 +68,10 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
    * scene) added to it. `update` is what setup sets on an input that was already there.
    */
   const ensure = async (input: { inputName: string; inputKind: string; inputSettings: object }, update: object, what: string) => {
-    let id = await itemIn(obs, scene, input.inputName);
+    let id = await itemIn(obs, obsScene, input.inputName);
     if (id === null) {
-      const added = await addToScene(obs, scene, input);
-      log.push(added.created ? `Created ${what}.` : `Added ${what} to "${scene}".`);
+      const added = await addToScene(obs, obsScene, input);
+      log.push(added.created ? `Created ${what}.` : `Added ${what} to "${obsScene}".`);
       if (added.created) return added.sceneItemId; // made with the settings it needs
       id = added.sceneItemId;
     }
@@ -89,14 +89,14 @@ export async function setupObs(obs: ObsRequester, names: SetupNames, port: numbe
   const groundId = await ensure({ inputName: groundSource, inputKind: "color_source_v3", inputSettings: ground }, { width: ground.width, height: ground.height }, `color source "${groundSource}"`);
 
   // Ground at the bottom, program browser source on top, the placed sources in between.
-  const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: scene });
-  await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: groundId, sceneItemIndex: 0 });
-  await obs.request("SetSceneItemIndex", { sceneName: scene, sceneItemId: itemId, sceneItemIndex: sceneItems.length - 1 });
+  const { sceneItems } = await obs.request<{ sceneItems: { sourceName: string }[] }>("GetSceneItemList", { sceneName: obsScene });
+  await obs.request("SetSceneItemIndex", { sceneName: obsScene, sceneItemId: groundId, sceneItemIndex: 0 });
+  await obs.request("SetSceneItemIndex", { sceneName: obsScene, sceneItemId: itemId, sceneItemIndex: sceneItems.length - 1 });
   if (switchProgram) {
-    await obs.request("SetCurrentProgramScene", { sceneName: scene });
-    log.push(`OBS is on "${scene}" with "${programSource}" on top.`);
+    await obs.request("SetCurrentProgramScene", { sceneName: obsScene });
+    log.push(`OBS is on "${obsScene}" with "${programSource}" on top.`);
   } else {
-    log.push(`"${scene}" is ready with "${programSource}" on top. OBS is live, so it stays on its current scene: switch to "${scene}" in OBS when you're ready.`);
+    log.push(`"${obsScene}" is ready with "${programSource}" on top. OBS is live, so it stays on its current scene: switch to "${obsScene}" in OBS when you're ready.`);
   }
 
   // The switcher is set up by now. The preview scene is for agents' previews only, and they make it

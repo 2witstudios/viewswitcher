@@ -1,6 +1,6 @@
 # Template packs
 
-A template pack is one whole template set for a show: a set of templates (starting soon, the main layouts, be right back, ending…) with their own theme, scripts, transition and pictures, in one folder or `.zip`. People install one by dropping it on the switcher's Templates page (or **Import a template pack**), or pick a built-in one (**Add templates**, and when making a new show). It goes into the show (`<org>/`) as its own **template set**, filled in with the show's name and colors, beside the show's own templates.
+A template pack is one whole template set for a show: a set of templates (starting soon, the main layouts, be right back, ending…) with their own theme, scripts, transition and pictures, in one folder or `.zip`. People install one by dropping it on the switcher's Templates page (or **Import pack…**), or pick a built-in one (**Add templates**, and when making a new show). It goes into the show (`<org>/`) as its own **template set**, filled in with the show's name and colors, beside the show's own templates.
 
 Packs come from agents, from the app itself (the starter kit and the site's six example shows, built in: see below), as downloads on viewswitcher.com, and later from the overlay studio there. They all make this one format. It's plain HTML, CSS and a little JS, so a pack stays the source of truth after it's installed: people and agents keep editing the same files.
 
@@ -123,4 +123,4 @@ The app comes with seven: **Starter** (the neutral templates every new show also
 - The site's renders fill the same views with each show's values (`apps/site/scripts/library.ts`).
 - The Mac app ships them prebuilt in `Contents/Resources/packs` (`apps/apple/scripts/build.sh`; the server reads `VIEWSWITCHER_PACKS`). A source run builds them from the repo when they're first asked for (`apps/server/src/builtin-packs.ts`), from `packages/packs/shows/` or the folder `VIEWSWITCHER_SHOWS` names. The iPhone and iPad app gets them from the server.
 - `GET /api/packs/builtin` lists them; `POST /api/packs/builtin/stage {org, id}` stages one for a show, and from there it's the same as a dropped pack: covers, install, cancel.
-- In the switcher: a new show offers them after it's created (**Pick your templates**; "Just the starter" skips), and the Templates page has **Add templates**. Each goes in as its own set, filled with the show's name and colors; adding one the show has already makes a second copy (`fullcount-2`).
+- In the switcher: a new show offers them after it's created (**Pick your templates**; **Skip** leaves just the starter), and the Templates page has **Add templates**. Each goes in as its own set, filled with the show's name and colors; adding one the show has already makes a second copy (`fullcount-2`).

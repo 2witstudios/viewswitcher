@@ -633,8 +633,16 @@ export function setTitle(html: string, name: string): string {
   const els = scanElements(html);
   const title = titleElement(els);
   const text = escapeText(clean);
-  // A self-closed <title/> has no content to fill: it's replaced whole, so the name lands inside one.
-  if (title && html.slice(title.openEnd - 2, title.openEnd) === "/>") return html.slice(0, title.start) + `<title>${text}</title>` + html.slice(title.end);
+  // A <title/> the scanner reads as self-closed (end === openEnd) has no content to fill. A browser
+  // ignores that "/" and takes everything up to the next </title> as the title, so that whole stretch
+  // is replaced (or just the tag, when no </title> follows): the name lands inside a title, and no
+  // old text is left behind it to show on air.
+  if (title && title.end === title.openEnd) {
+    const close = /<\/title[\s/>]/i.exec(html.slice(title.openEnd));
+    const closeEnd = close ? html.indexOf(">", title.openEnd + close.index) : -1;
+    const to = closeEnd === -1 ? title.end : closeEnd + 1;
+    return html.slice(0, title.start) + `<title>${text}</title>` + html.slice(to);
+  }
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);
   if (!head) throw new EditError("This view has no <head> for a title: ask your agent to rename it");
