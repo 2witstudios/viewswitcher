@@ -6,10 +6,10 @@
 //   Claude Desktop extension), the Mac app's pairing admin, the agents' /mcp.
 // - paired: the switcher itself, for this Mac, the USB-C device and paired phones and tablets.
 // - public: the pairing page and its POST.
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, sep } from "node:path";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import type { ServerMessage, Slot } from "@viewswitcher/shared";
 import { claudeCodeCommand, commandLine, detectClients, mcpbFile, mcpbManifest, type stdioLaunch } from "../agent-connect";
 import { asDropped, type BuiltinPack } from "../builtin-packs";
@@ -82,13 +82,6 @@ export function routes(d: RouteDeps): Route[] {
   const { root, store } = d;
   /** One org's folder; every mutation below works inside it. */
   const org = (id: unknown) => orgDir(root, id);
-  const realRoot = (() => {
-    try {
-      return realpathSync(root);
-    } catch {
-      return root;
-    }
-  })();
 
   /** A JSON POST for the switcher. */
   const post = (path: string, handler: (b: Record<string, any>, c: Ctx) => Promise<unknown> | unknown): Route => ({
@@ -128,8 +121,8 @@ export function routes(d: RouteDeps): Route[] {
       throw e;
     }
     // Headers for where the file really is: a link in templates/ to the org's own media isn't a template's.
-    const served = relative(realRoot, file).split(sep).join("/");
-    const headers = libraryHeaders(served.startsWith("..") ? rel : served);
+    const served = relative(await realpath(root), file).split(sep).join("/");
+    const headers = libraryHeaders(served);
     const q = c.url.searchParams;
     const inert = q.has("inert");
     if (rel.endsWith(".html") && (q.has("edit") || q.has("bridge"))) {

@@ -187,7 +187,18 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     expect(paired.status).toBe(200);
     const proxied = { ...ts, cookie: cookieOf(paired) };
     expect((await mac("/api/state", { headers: proxied })).status).toBe(200);
+    // Its live socket, as tailscale serve would forward it to 127.0.0.1; and this Mac's own.
+    const tailnet = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { ...proxied, origin: "https://mac.tail1234.ts.net" } } as any);
+    const own = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const opened = (w: WebSocket) => new Promise<boolean>((r) => ((w.onopen = () => r(true)), (w.onerror = () => r(false))));
+    expect([await opened(tailnet), await opened(own)]).toEqual([true, true]);
+    const tailnetClosed = new Promise<number>((r) => tailnet.addEventListener("close", (e) => r(e.code)));
+    let ownClosed = false;
+    own.addEventListener("close", () => (ownClosed = true));
     expect((await admin("/api/remote", { enabled: false })).enabled).toBe(false);
+    expect(await Promise.race([tailnetClosed, Bun.sleep(2000).then(() => -1)])).toBe(1001);
+    expect(ownClosed).toBe(false);
+    own.close();
     expect((await mac("/api/state", { headers: proxied })).status).toBe(403);
     expect((await mac("/", { headers: proxied })).status).toBe(403);
     expect((await mac("/api/state")).status).toBe(200); // this Mac carries on

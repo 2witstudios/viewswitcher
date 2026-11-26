@@ -213,8 +213,9 @@ function setLan(on: boolean): string | null {
   if (!on && lanServer) {
     const s = lanServer;
     lanServer = null;
-    // Off means off: the port closes and every device on the Wi-Fi is cut off now (they stay paired).
-    for (const ws of sockets) if (ws.data.lan) ws.close(1001, "Wi-Fi connections were turned off");
+    // Off means off: the port closes and every paired device is cut off now, on the Wi-Fi or through
+    // tailscale serve (they stay paired). Only this Mac's and the USB-C device's sockets have no device.
+    for (const ws of sockets) if (ws.data.lan || ws.data.device) ws.close(1001, "Wi-Fi connections were turned off");
     s.stop(true);
     console.log("[wifi] network listener closed; 127.0.0.1 only");
   }
