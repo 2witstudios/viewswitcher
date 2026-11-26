@@ -1,5 +1,5 @@
 // One WebSocket to the server: live state (on air, OBS, warnings) and file-change versions.
-import { libraryUrl } from "@viewswitcher/shared";
+import { libraryUrl, parseLibraryPath } from "@viewswitcher/shared";
 import type { LiveState, SceneEdit, ServerMessage } from "@viewswitcher/shared";
 import { QueryClient } from "@tanstack/react-query";
 import { useRef, useSyncExternalStore } from "react";
@@ -10,7 +10,10 @@ export const queryClient = new QueryClient({ defaultOptions: { queries: { staleT
 export type Live = {
   connected: boolean;
   state: LiveState | null;
-  /** Bumped per library path when its file changes; `*` bumps when any org's shared theme changes. */
+  /**
+   * Bumped per library path when its file changes; per shared folder (sharedRootOf) and per org
+   * (`<org>/*`) when a file in one of its _shared/ folders changes; `*` when every file may have.
+   */
   versions: Record<string, number>;
 };
 
@@ -115,14 +118,46 @@ export function caughtUp(versions: Record<string, number>): Record<string, numbe
   return { ...versions, "*": (versions["*"] ?? 0) + 1 };
 }
 
+/**
+ * The shared folder a library path is in or names, as its version key: `<org>/templates/_shared`
+ * (the org's theme, scripts and transition) or `<org>/templates/<set>/_shared` (a template set's);
+ * null for anything else.
+ */
+export function sharedRootOf(path: string): string | null {
+  const m = /^([^/]+)\/templates\/(?:([^/]+)\/)?_shared(?:\/|$)/.exec(path);
+  if (!m) return null;
+  return m[2] ? `${m[1]}/templates/${m[2]}/_shared` : `${m[1]}/templates/_shared`;
+}
+
+/** Bumped by a change in any of an org's shared folders. */
+const anyShared = (org: string) => `${org}/*`;
+
+/**
+ * The shared versions a view's page depends on. The org's own templates use the org's _shared/; a
+ * set's views (and its transition) their set's, and they may link the org's too. A project's or a
+ * stream's view may have come from any template, set or not, so any shared change in its org counts.
+ * Cheap enough for every tile on every change: a path is read, not the page.
+ */
+export function sharedFor(path: string): string[] {
+  const p = parseLibraryPath(path);
+  const org = `${p.org}/templates/_shared`;
+  if ((p.kind === "template" || p.kind === "transition" || p.kind === "shared") && p.rest.startsWith("templates/")) return p.set ? [`${p.org}/templates/${p.set}/_shared`, org] : [org];
+  return [anyShared(p.org)];
+}
+
 /** Live state after a state message or a library change from the socket. */
 export function nextLive(live: Live, msg: Extract<ServerMessage, { t: "state" | "library:changed" }>): Live {
   if (msg.t === "state") return { ...live, state: keepUnchanged(live.state, msg.state) };
   const versions = { ...live.versions };
+  const bump = (k: string) => (versions[k] = (versions[k] ?? 0) + 1);
   for (const p of msg.paths) {
-    versions[p] = (versions[p] ?? 0) + 1;
-    // An org's or a template set's shared theme: every cover may use it.
-    if (p.includes("/_shared/")) versions["*"] = (versions["*"] ?? 0) + 1;
+    bump(p);
+    // A shared folder: the views that use it reload (sharedFor), not every view in every org.
+    const root = sharedRootOf(p);
+    if (root) {
+      bump(root);
+      bump(anyShared(parseLibraryPath(p).org));
+    }
   }
   return { ...live, versions };
 }
@@ -169,13 +204,15 @@ export function useLive<S>(selector: (live: Live) => S, isEqual?: (a: S, b: S) =
 }
 
 /**
- * URL for a library file that changes whenever the file (or the shared theme) changes. `cover` paints
+ * URL for a library file that changes whenever the file (or a shared folder it may use, sharedFor) changes. `cover` paints
  * the ground and labels the camera boxes, for tiles and covers: on the wire that's ?preview, the name
  * every scene.js (each library's, each pack's) reads, so it stays. `edit` serves it with data-vs
  * element ids; `bridge` adds the bridge the program page talks to the sandboxed view through.
  */
 export function sceneUrl(path: string, versions: Record<string, number>, cover = false, edit = false, bridge = false) {
-  const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}`;
+  // Counters only go up, so their sum changes whenever one of them does.
+  const shared = sharedFor(path).reduce((n, k) => n + (versions[k] ?? 0), 0);
+  const v = `${versions[path] ?? 0}.${versions["*"] ?? 0}.${shared}`;
   return `${libraryUrl(path)}?${edit ? "edit&" : ""}${bridge ? "bridge&" : ""}${cover ? "preview&" : ""}v=${v}`;
 }
 

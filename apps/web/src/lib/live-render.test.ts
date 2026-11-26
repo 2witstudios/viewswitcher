@@ -68,7 +68,7 @@ describe("re-rendering for the part of live state a component reads", () => {
     expect(tile.renders).toBe(2);
     receive(store, { t: "library:changed", paths: ["show/templates/_shared/theme.css"], seq: 3 });
     expect(tile.renders).toBe(3);
-    expect(tile.last).toBe("/library/show/templates/title.html?preview&v=1.1");
+    expect(tile.last).toBe("/library/show/templates/title.html?preview&v=1.0.1");
     tile.unmount();
   });
 
