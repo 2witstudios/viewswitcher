@@ -20,7 +20,7 @@
 // switcher's routes and the MCP server, so both share them and their lifetime is the server's; a
 // test makes its own and shares nothing with another.
 import type { Dirent } from "node:fs";
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
@@ -38,9 +38,16 @@ const KINDS: Record<string, AssetKind> = {
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
 
-/** A file's text, refusing a link at its last segment (O_NOFOLLOW): ELOOP instead of reading through it. */
-async function readNoFollow(abs: string): Promise<string> {
-  const f = await open(abs, constants.O_RDONLY | constants.O_NOFOLLOW);
+/**
+ * No link anywhere in the path: macOS's O_NOFOLLOW_ANY (0x20000000, not in Node's constants), so a
+ * folder swapped for a link after the scan checked it gives ELOOP too. Elsewhere, the last segment only.
+ * (Together with O_NOFOLLOW, macOS refuses the open with EINVAL.)
+ */
+export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
+
+/** A file's text, read only when no part of `abs` is a link (NO_LINKS): `abs` must be a real path. */
+export async function readNoFollow(abs: string): Promise<string> {
+  const f = await open(abs, constants.O_RDONLY | NO_LINKS);
   try {
     return await f.readFile("utf8");
   } finally {
@@ -75,8 +82,9 @@ export class LibraryScanner {
     this.io = io;
     this.keepMs = keepMs;
     this.now = now;
-    // Titles are read from the file the scan checked (scenesIn: a plain file, or a link's real target),
-    // never through a link: one swapped in after the check reads as no title.
+    // Titles are read from the real path the scan checked (scenesIn: a plain file in its folder's real
+    // path, or a link's real target), never through a link: a file or a folder swapped for one after the
+    // check reads as no title (readNoFollow).
     this.titles = createSceneTitles({ stat: (abs) => io(() => lstat(abs)), read: (abs) => io(() => readNoFollow(abs)) });
   }
 
@@ -86,6 +94,15 @@ export class LibraryScanner {
    */
   forget(paths: string[]) {
     this.titles.forget(this.libraryRoot, paths);
+    // Titles are kept by real path (readNoFollow), so under the library's real root too when it differs.
+    const real = (() => {
+      try {
+        return realpathSync(this.libraryRoot);
+      } catch {
+        return this.libraryRoot;
+      }
+    })();
+    if (real !== this.libraryRoot) this.titles.forget(real, paths);
     for (const p of paths) this.kept.delete(p.split("/")[0]!);
   }
 
@@ -133,29 +150,35 @@ export class LibraryScanner {
   }
 
   /** Whether `rel` in the org folder `orgDir` is really in the library, through any links (contain.ts). */
-  private inLibrary = (orgDir: string, rel: string) =>
-    this.io(() => resolveInLibrary(this.libraryRoot, `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}`)).then(() => true, () => false);
+  private inLibrary = (orgDir: string, rel: string) => this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).then(() => true, () => false);
   /** The folders the library lists in `rel`, when `rel` itself is in the library (a listed folder is never a link: isDirectory). */
   private dirs = async (orgDir: string, rel: string) => ((await this.inLibrary(orgDir, rel)) ? listDirs(join(orgDir, rel), this.io) : []);
-  /** The entries of the folder `rel`, when it's in the library; none when it isn't or can't be read. */
-  private entries = async (orgDir: string, rel: string): Promise<Dirent[]> =>
-    (await this.inLibrary(orgDir, rel)) ? this.io(() => readdir(join(orgDir, rel), { withFileTypes: true })).catch(() => []) : [];
+  /** The library path of `rel` in the org folder `orgDir`. */
+  private libraryPath = (orgDir: string, rel: string) => `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}`;
   /**
-   * The file an entry of a folder that's inside the library really is: a plain file is itself, a
-   * link its real target when that's in the library too, else null.
+   * The folder `rel` as its real path (no links in it), when it's in the library, and its entries;
+   * none when it isn't or can't be read.
    */
-  private realFile = (orgDir: string, rel: string, e: Dirent): Promise<string | null> =>
-    e.isSymbolicLink()
-      ? this.io(() => resolveInLibrary(this.libraryRoot, `${relative(this.libraryRoot, orgDir).split(sep).join("/")}/${rel}/${e.name}`)).catch(() => null)
-      : Promise.resolve(join(orgDir, rel, e.name));
+  private entries = async (orgDir: string, rel: string): Promise<{ dir: string; list: Dirent[] }> => {
+    const dir = await this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, rel))).catch(() => null);
+    if (dir === null) return { dir: "", list: [] };
+    return { dir, list: await this.io(() => readdir(dir, { withFileTypes: true })).catch(() => []) };
+  };
+  /**
+   * The real path of an entry of a folder that's inside the library (`dir`, that folder's real path):
+   * a plain file is itself in `dir`, a link its real target when that's in the library too, else null.
+   */
+  private realFile = (orgDir: string, rel: string, dir: string, e: Dirent): Promise<string | null> =>
+    e.isSymbolicLink() ? this.io(() => resolveInLibrary(this.libraryRoot, this.libraryPath(orgDir, `${rel}/${e.name}`))).catch(() => null) : Promise.resolve(join(dir, e.name));
   private readJson = async <T>(orgDir: string, rel: string, fallback: T) => ((await this.inLibrary(orgDir, rel)) ? readJsonFile(join(orgDir, rel), fallback, this.io) : fallback);
   /** `url` when the file `rel` is there, in the library, else null (a transition, for the library listing). */
   private urlIfThere = async (orgDir: string, rel: string, url: string) =>
     (await this.io(() => exists(join(orgDir, rel)))) && (await this.inLibrary(orgDir, rel)) ? url : null;
 
   private async scenesIn(orgDir: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
-    const listed = (await this.entries(orgDir, rel)).filter((e) => isViewFile(e.name) && !e.isDirectory());
-    const files = (await Promise.all(listed.map(async (e) => ({ f: e.name, real: await this.realFile(orgDir, rel, e) })))).filter((x): x is { f: string; real: string } => x.real !== null);
+    const { dir, list } = await this.entries(orgDir, rel);
+    const listed = list.filter((e) => isViewFile(e.name) && !e.isDirectory());
+    const files = (await Promise.all(listed.map(async (e) => ({ f: e.name, real: await this.realFile(orgDir, rel, dir, e) })))).filter((x): x is { f: string; real: string } => x.real !== null);
     const scenes = await Promise.all(
       files.map(async ({ f, real }) => {
         const name = f.slice(0, -5);
@@ -170,8 +193,9 @@ export class LibraryScanner {
 
   private async listAssets(orgDir: string, prefix: string): Promise<Asset[]> {
     try {
-      const listed = (await this.entries(orgDir, "assets")).filter((e) => !e.name.startsWith("."));
-      const names = (await Promise.all(listed.map(async (e) => ((await this.realFile(orgDir, "assets", e)) ? e.name : null)))).filter((n): n is string => n !== null);
+      const { dir, list } = await this.entries(orgDir, "assets");
+      const listed = list.filter((e) => !e.name.startsWith("."));
+      const names = (await Promise.all(listed.map(async (e) => ((await this.realFile(orgDir, "assets", dir, e)) ? e.name : null)))).filter((n): n is string => n !== null);
       const assets = await Promise.all(
         names.map(async (name) => {
           // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.

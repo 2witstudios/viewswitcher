@@ -2,11 +2,11 @@
 // next scan by the same scanner (titles are kept between scans while a file stays the same).
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { mkdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titledCopy } from "./library";
-import { LibraryScanner } from "./library/scanner";
+import { LibraryScanner, readNoFollow } from "./library/scanner";
 
 /**
  * One scanner per test, as the server has one: its title cache carries from scan to scan. It keeps
@@ -217,6 +217,18 @@ describe("links out of the library are never read", () => {
     expect(l.sets).toEqual([]);
     expect(l.org.name).toBe(ORG);
     expect(await everything()).not.toContain("Outside");
+  });
+
+  test("a title is read only through a path with no link in it: a folder swapped for a link after the check reads as no title", async () => {
+    await mkdir(join(away, "real"), { recursive: true });
+    await writeFile(join(away, "real/x.html"), view("Outside"));
+    await symlink(join(away, "real"), join(away, "swapped"));
+    const real = await realpath(join(away, "real/x.html"));
+    expect(await readNoFollow(real)).toContain("Outside");
+    // A link in a folder of the path is refused on macOS (O_NOFOLLOW_ANY), the product's platform and CI's.
+    if (process.platform === "darwin") await expect(readNoFollow(join(await realpath(away), "swapped/x.html"))).rejects.toThrow();
+    await symlink(real, join(away, "file-link.html"));
+    await expect(readNoFollow(join(await realpath(away), "file-link.html"))).rejects.toThrow();
   });
 
   test("an org folder that is a link outside the library lists nothing from there", async () => {
