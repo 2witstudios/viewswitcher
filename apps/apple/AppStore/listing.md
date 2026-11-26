@@ -70,12 +70,13 @@ landscape capture). Upload the framed ones, in these orders.
 
 ### iPhone: 6.9-inch (1320 × 2868, `iphone/`) and 6.3-inch "medium display" (1206 × 2622, `iphone-6.3/`)
 
-The same four, from the iPhone 17 Pro Max simulator. Sideways first: most people hold the phone like a deck.
+Four marketing shots (`scripts/frame-phone.ts`): real captures from the iPhone 17 Pro Max simulator
+(`raw/`) in realistic iPhones, beside the show itself (rebuilt from the site's template frames and photos).
 
-1. `1-deck-landscape.png`: "Tap a view. / OBS switches." Full Count's deck, Both hosts on air
-2. `2-sermon-portrait.png`: "Always know / what's on air." Grace Community upright, the sermon on top
-3. `3-pair-portrait.png`: "Scan the code. / You're connected." The app's own connector: Scan the code, Enter code, or USB-C
-4. `4-pastor-landscape.png`: "Your whole show, / in your pocket." Grace Community's deck, Pastor on air
+1. `1-stream.png`: "Run your stream / from your phone." Grace Community's sermon big, the phone in front with Sermon on air
+2. `2-switch.png`: "Quickly switch / between views." Full Count's stream above the sideways deck, the tap on Both hosts
+3. `3-mac.png`: "Plug into your Mac. / OBS does the rest." A MacBook showing Pastor, the phone on a cable with Pastor on air
+4. `4-looks.png`: "A look for every / kind of show." Six template sets: church, sports podcast, cooking, gaming, travel, live events
 
 ## First version (1.2.1): text
 

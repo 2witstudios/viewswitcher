@@ -33,6 +33,8 @@ final class AppStoreScreenshots: XCTestCase {
         XCUIDevice.shared.orientation = orientation
         app = XCUIApplication()
         app.launchEnvironment["VIEWSWITCHER_SERVER"] = server + path
+        // The simulator doesn't always turn for XCUIDevice: the app turns its own scene too (SceneDelegate, debug builds).
+        app.launchEnvironment["VIEWSWITCHER_ORIENTATION"] = orientation.isLandscape ? "landscape" : "portrait"
         // If the server drops, the connector probes this one, never the Mac's own 127.0.0.1:7420.
         app.launchEnvironment["VIEWSWITCHER_PROBE"] = server
         app.launch()
@@ -124,23 +126,12 @@ final class AppStoreScreenshots: XCTestCase {
         try shot("2-sermon-portrait", "portrait")
         app.terminate()
 
-        // 3. Pairing in the app: Scan the Mac's code, or Enter code. The connector a person sees with no
-        // Mac yet, reached through the demo's Connect your Mac (the demo itself isn't captured).
-        XCUIDevice.shared.orientation = .portrait
-        app = XCUIApplication()
-        app.launchEnvironment["VIEWSWITCHER_START"] = "demo"
-        app.launchEnvironment["VIEWSWITCHER_PROBE"] = "http://127.0.0.1:9"
-        app.launch()
-        web = app.webViews.firstMatch
-        XCTAssertTrue(web.buttons["Connect your Mac"].waitForExistence(timeout: 20), "the demo loaded")
-        web.buttons["Connect your Mac"].tap()
-        XCTAssertTrue(web.buttons["Enter code"].waitForExistence(timeout: 10), "the connector offers Scan and Enter code")
-        try shot("3-pair-portrait", "portrait")
-        app.terminate()
-
-        // 4. Sideways, the church's deck: Pastor on air.
-        web = try launch(.landscapeLeft, path: grace)
+        // 3. Upright, the church again: Pastor (the camera full screen) on air, for the Mac shot.
+        web = try launch(.portrait, path: grace)
         takeView(web, "Pastor")
-        try shot("4-pastor-landscape", "landscape")
+        app.terminate()
+        web = try launch(.portrait, path: grace)
+        XCTAssertTrue(web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'On air: Pastor'")).firstMatch.waitForExistence(timeout: 20))
+        try shot("3-pastor-portrait", "portrait")
     }
 }
