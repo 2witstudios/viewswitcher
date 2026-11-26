@@ -448,6 +448,7 @@ describe("readTitle", () => {
     "a title in a quoted attribute": '<head><meta content="<title>Fake</title>"><title>Real</title></head>',
     "a > in the title's own attribute": '<head><title data-x="a>b">Real</title></head>',
     "nested templates": "<head><template><template></template><title>Inner</title></template><title>Real</title></head>",
+    "an SVG's title before the page's": "<head></head><body><svg><title>Logo</title></svg></body><title>Real</title>",
     "a bogus comment": "<head><!x <title>><title>Real</title></head>",
     "a processing instruction": "<head><?x <title>?><title>Real</title></head>",
   };
@@ -456,6 +457,13 @@ describe("readTitle", () => {
   });
   test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
     expect(readTitle(setTitle(html, "New"))).toBe("New");
+  });
+  test("setTitle never writes into an SVG's or MathML's title, and never removes what's after one", () => {
+    const html = '<head></head><body><svg><title/><rect/></svg><p>Keep me</p><svg><title>Logo</title></svg></body>';
+    const out = setTitle(html, "New");
+    expect(out).toBe('<head><title>New</title></head><body><svg><title/><rect/></svg><p>Keep me</p><svg><title>Logo</title></svg></body>');
+    expect(readTitle(html)).toBeNull();
+    expect(readTitle('<head></head><body><math><title>x</title></math></body>')).toBeNull();
   });
   test("setTitle fills a self-closed <title/> by replacing it, so the name lands inside a title", () => {
     expect(setTitle('<head><title data-x="1"/><meta charset="utf-8"></head>', "New")).toBe('<head><title>New</title><meta charset="utf-8"></head>');

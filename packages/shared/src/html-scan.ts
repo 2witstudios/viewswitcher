@@ -233,17 +233,19 @@ const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
 /**
- * The page's <title> element: the first closed one that isn't inside a <template> (the browser
- * never shows that one). The one readTitle reads and setTitle writes, so the two can't disagree.
+ * The page's <title> element: the first closed one that isn't inside a <template>, an <svg> or
+ * <math> (the browser never shows those as the page's title). The one readTitle reads and setTitle writes, so the two can't disagree.
  */
 function titleElement(els: ScannedElement[]): ScannedElement | undefined {
   // One forward pass: a parent always comes before its children in `els`, so each element's answer is
-  // its parent's, known already (no walk up the tree per title, which nesting made quadratic).
-  const inTemplate = new Uint8Array(els.length);
+  // its parent's, known already (no walk up the tree per title, which nesting made quadratic). A
+  // title inside a <template>, an <svg> or <math> isn't the page's: document.title ignores those, and
+  // an SVG <title/> really is self-closed, so writing the page's name there would be wrong.
+  const outside = new Uint8Array(els.length);
   for (const e of els) {
     const p = e.parent === null ? null : els[e.parent]!;
-    inTemplate[e.id] = p !== null && (p.tag === "template" || inTemplate[p.id] === 1) ? 1 : 0;
-    if (e.tag === "title" && e.closed && !inTemplate[e.id]) return e;
+    outside[e.id] = p !== null && (p.tag === "template" || p.tag === "svg" || p.tag === "math" || outside[p.id] === 1) ? 1 : 0;
+    if (e.tag === "title" && e.closed && !outside[e.id]) return e;
   }
   return undefined;
 }
