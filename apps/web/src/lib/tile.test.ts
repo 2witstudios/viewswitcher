@@ -43,7 +43,7 @@ function queue() {
 }
 
 /** A tile reduced to its frame's url, with `wanted`, `own` and `near` set by the test. */
-function tile(reloads: Stagger, first: { wanted: string; own: number; near: boolean }) {
+function tile(reloads: Stagger, first: { wanted: string; own: string; near: boolean }) {
   let props = first;
   const shown: string[] = [];
   function Probe() {
@@ -67,16 +67,25 @@ function tile(reloads: Stagger, first: { wanted: string; own: number; near: bool
 describe("a tile's frame url", () => {
   test("its own file changing loads at once, without waiting in the queue", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: true });
-    t.set({ wanted: "a?v=1.0", own: 1 });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
+    t.set({ wanted: "a?v=1.0", own: "a@1" });
     expect(t.src).toBe("a?v=1.0");
+    expect(q.waiting).toHaveLength(0);
+    t.unmount();
+  });
+
+  test("another file taking the tile's place (a Customize or Revert) loads at once", () => {
+    const q = queue();
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
+    t.set({ wanted: "b?v=0.0", own: "b@0" });
+    expect(t.src).toBe("b?v=0.0");
     expect(q.waiting).toHaveLength(0);
     t.unmount();
   });
 
   test("a shared theme change waits its turn", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: true });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
     t.set({ wanted: "a?v=0.1" });
     expect(t.src).toBe("a?v=0.0");
     expect(q.waiting).toHaveLength(1);
@@ -87,7 +96,7 @@ describe("a tile's frame url", () => {
 
   test("a tile away from the screen just takes the new url (it has no frame to reload)", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: false });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: false });
     t.set({ wanted: "a?v=0.1" });
     expect(t.src).toBe("a?v=0.1");
     expect(q.waiting).toHaveLength(0);
@@ -96,7 +105,7 @@ describe("a tile's frame url", () => {
 
   test("a newer url while one is waiting replaces it: one reload, to the newest", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: true });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
     t.set({ wanted: "a?v=0.1" });
     t.set({ wanted: "a?v=0.2" });
     expect(q.waiting).toHaveLength(1);
@@ -107,7 +116,7 @@ describe("a tile's frame url", () => {
 
   test("leaving the screen while waiting gives up its turn and takes the url", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: true });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
     t.set({ wanted: "a?v=0.1" });
     t.set({ near: false });
     expect(q.waiting).toHaveLength(0);
@@ -117,7 +126,7 @@ describe("a tile's frame url", () => {
 
   test("a tile that goes away while waiting gives up its turn", () => {
     const q = queue();
-    const t = tile(q.stagger, { wanted: "a?v=0.0", own: 0, near: true });
+    const t = tile(q.stagger, { wanted: "a?v=0.0", own: "a@0", near: true });
     t.set({ wanted: "a?v=0.1" });
     t.unmount();
     expect(q.waiting).toHaveLength(0);

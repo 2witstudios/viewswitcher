@@ -41,20 +41,26 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
 /** `url` when the file `abs` is there, else null (a transition, for the library listing). */
 const urlIfThere = (abs: string, url: string) => io(() => exists(abs)).then((t) => (t ? url : null));
 
-/** Each scene file's title as last read, with the size and modification time it was read at. */
-const titles = new Map<string, { mtimeMs: number; size: number; title: string }>();
+/**
+ * Each scene file's title as last read, with what identified that version of the file: its size,
+ * modification and change times, and inode. Times alone can be coarse (2 s on exFAT, 1 s on
+ * HFS+ and some shares); a save that replaces the file (most editors, atomic writes) gets a new inode.
+ */
+const titles = new Map<string, { stamp: string; title: string }>();
+const stampOf = (s: { size: number; mtimeMs: number; ctimeMs: number; ino: number | bigint }) => `${s.size}:${s.mtimeMs}:${s.ctimeMs}:${s.ino}`;
 
 /** A scene file's <title>, read again only when the file has changed since. */
 async function titleOf(abs: string): Promise<string> {
   const s = await io(() => stat(abs)).catch(() => null);
   if (!s) return "";
+  const stamp = stampOf(s);
   const known = titles.get(abs);
-  if (known && known.mtimeMs === s.mtimeMs && known.size === s.size) return known.title;
-  // Read after the stat: what's read is at least as new as the size and time it's kept under.
+  if (known?.stamp === stamp) return known.title;
+  // Read after the stat: what's read is at least as new as the version it's kept under.
   const html = await io(() => readFile(abs, "utf8")).catch(() => null);
   if (html === null) return "";
   const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
-  titles.set(abs, { mtimeMs: s.mtimeMs, size: s.size, title });
+  titles.set(abs, { stamp, title });
   return title;
 }
 
@@ -164,8 +170,9 @@ async function listAssets(root: string, prefix: string): Promise<Asset[]> {
     const names = (await io(() => readdir(join(root, "assets")))).filter((n) => !n.startsWith("."));
     const assets = await Promise.all(
       names.map(async (name) => {
-        const s = await io(() => stat(join(root, "assets", name)));
-        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s.size } satisfies Asset;
+        // One that's gone since the listing (a replace, a delete, a broken link) is left out, not the rest with it.
+        const s = await io(() => stat(join(root, "assets", name))).catch(() => null);
+        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s?.size ?? 0 } satisfies Asset;
       }),
     );
     return assets.filter((a) => a.size > 0).sort((a, b) => a.name.localeCompare(b.name));

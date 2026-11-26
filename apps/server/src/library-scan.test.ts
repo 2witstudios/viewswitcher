@@ -2,7 +2,7 @@
 // next scan (titles are kept between scans while a file stays the same).
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { forgetScanned, scanLibrary } from "./library";
@@ -73,6 +73,22 @@ describe("scanLibrary", () => {
     await putKeepingTime(`${ORG}/projects/p/streams/a/brb.html`, view("BRB, week 1ne"));
     forgetScanned(root, [`${ORG}/projects/p/streams`]);
     expect(await labels()).toContain("p/streams/a/brb.html=BRB, week 1ne");
+  });
+
+  test("a same-size save in the same instant that replaced the file is read again, even if the watcher missed it", async () => {
+    await keepTime(`${ORG}/projects/p/scenes/intro.html`);
+    await scanLibrary(root, ORG);
+    // An editor's atomic save: a new file renamed over the old one (a new inode), same size and time.
+    await writeFile(join(root, ORG, "projects/p/scenes/intro.tmp"), view("Outro"));
+    await keepTime(`${ORG}/projects/p/scenes/intro.tmp`);
+    await rename(join(root, ORG, "projects/p/scenes/intro.tmp"), join(root, ORG, "projects/p/scenes/intro.html"));
+    expect(await labels()).toContain("p/scenes/intro.html=Outro");
+  });
+
+  test("an asset that can't be read (gone since the listing, a broken link) leaves the rest listed", async () => {
+    await put(`${ORG}/assets/logo.png`, "png");
+    await symlink(join(root, "nowhere.png"), join(root, ORG, "assets/broken.png"));
+    expect((await scanLibrary(root, ORG)).assets.map((a) => a.name)).toEqual(["logo.png"]);
   });
 
   test("files added and deleted between scans come and go", async () => {

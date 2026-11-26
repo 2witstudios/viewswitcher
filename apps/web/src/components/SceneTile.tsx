@@ -65,7 +65,7 @@ export function SceneTile({ label, path, live, badge, onActivate, onEdit, editCh
   // dozens); away from it the cover is an empty box of the same size.
   const near = useNearScreen(box);
   const wanted = useLive((l) => sceneUrl(path, l.versions, true));
-  const own = useLive((l) => l.versions[path] ?? 0);
+  const own = useLive((l) => `${path}@${l.versions[path] ?? 0}`);
   const src = useTileSrc(wanted, own, box, near);
   const [open, setOpen] = useState(false);
   const [choosing, setChoosing] = useState(false);

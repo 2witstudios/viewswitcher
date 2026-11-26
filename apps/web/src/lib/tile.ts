@@ -24,12 +24,13 @@ const onScreen = (el: Element | null) => {
 };
 
 /**
- * The url a tile's frame shows, given the url it should show (`wanted`) and its own file's version
- * (`own`). A change to its own file loads straight away; a change to the shared theme only (every
- * tile's url at once) waits its turn in `reloads`. A tile that isn't near the screen has no frame,
- * so it just takes the new url.
+ * The url a tile's frame shows, given the url it should show (`wanted`) and which file and version
+ * of it is its own (`own`, e.g. "org/x.html@3"). Its own file changing, or another file taking the
+ * tile's place (a Customize or Revert swaps the path in place), loads straight away; a change to the
+ * shared theme only (every tile's url at once) waits its turn in `reloads`. A tile that isn't near
+ * the screen has no frame, so it just takes the new url.
  */
-export function useTileSrc(wanted: string, own: number, el: Element | null, near: boolean, reloads: Stagger = tileReloads): string {
+export function useTileSrc(wanted: string, own: string, el: Element | null, near: boolean, reloads: Stagger = tileReloads): string {
   const [src, setSrc] = useState(wanted);
   const shownOwn = useRef(own);
   useEffect(() => {
