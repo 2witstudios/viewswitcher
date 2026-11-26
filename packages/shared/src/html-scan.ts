@@ -633,6 +633,8 @@ export function setTitle(html: string, name: string): string {
   const els = scanElements(html);
   const title = titleElement(els);
   const text = escapeText(clean);
+  // A self-closed <title/> has no content to fill: it's replaced whole, so the name lands inside one.
+  if (title && html.slice(title.openEnd - 2, title.openEnd) === "/>") return html.slice(0, title.start) + `<title>${text}</title>` + html.slice(title.end);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);
   if (!head) throw new EditError("This scene has no <head> for a title: ask your agent to rename it");

@@ -457,6 +457,10 @@ describe("readTitle", () => {
   test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
     expect(readTitle(setTitle(html, "New"))).toBe("New");
   });
+  test("setTitle fills a self-closed <title/> by replacing it, so the name lands inside a title", () => {
+    expect(setTitle('<head><title data-x="1"/><meta charset="utf-8"></head>', "New")).toBe('<head><title>New</title><meta charset="utf-8"></head>');
+    expect(readTitle(setTitle("<head><title/></head>", "New"))).toBe("New");
+  });
   test("an unclosed comment hides everything after it; a title that never closes isn't one", () => {
     expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();
     expect(readTitle("<head><script>x <title>Old</title>")).toBeNull();
