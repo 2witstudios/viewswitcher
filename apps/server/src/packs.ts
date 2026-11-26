@@ -14,13 +14,13 @@ import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, PACK_LIMITS, PACK_TEXT, planPack } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, PackPlaceholder, PackScripts } from "@viewswitcher/shared";
 import { exists, readOrg } from "./library";
+import { STAGING, STAGING_TOKEN } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, ZipError } from "./zip";
 
 /** A pack that can't be installed: the message says why, in plain words. */
 export class PackError extends Error {}
 
-const STAGING = ".viewswitcher/staging";
 /** Staged packs nobody installed or cancelled are cleared after this. */
 const STAGE_TTL_MS = 60 * 60 * 1000;
 
@@ -42,7 +42,7 @@ export type StagedPack = {
 
 type StageMeta = { org: string; set: string; manifest: PackManifest; files: string[]; created: number };
 
-const tokenOk = (t: unknown): t is string => typeof t === "string" && /^[a-f0-9]{24}$/.test(t);
+const tokenOk = (t: unknown): t is string => typeof t === "string" && STAGING_TOKEN.test(t);
 const stageDir = (root: string, orgId: string, token: string) => inside(root, `${plainName(orgId)}/${STAGING}/${token}`);
 
 /** A filesystem error, without the absolute path Node puts in its message (AGENTS.md: none in responses). */
