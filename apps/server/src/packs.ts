@@ -66,8 +66,9 @@ async function freeSet(orgDir: string, id: string) {
  */
 async function fillCopy(raw: string, dest: string, files: string[], vars: ReturnType<typeof placeholderVars>) {
   const changed = (f: string) => new PackError(`"${f}" changed in staging. Drop the pack again.`);
-  // `raw` is already a real path (the staging folder is, and the token folder isn't a link), so the no-link
-  // open refuses a link at raw or anywhere below it, at the moment each file is opened.
+  // `raw` is already a real path (the staging folder is, and the token folder isn't a link), so on macOS
+  // the no-link open refuses a link at raw or anywhere below it, at the moment each file is opened
+  // (O_NOFOLLOW_ANY); elsewhere only a link at the file itself (contain.ts NO_LINKS).
   if (!(await lstat(raw)).isDirectory()) throw changed("raw");
   for (const f of files) {
     const bytes = await readNoFollowBytes(inside(raw, f), { single: true }).catch(() => {

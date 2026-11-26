@@ -7,7 +7,6 @@
 // isn't seen, so this narrows what an agent can change on air; it isn't a sandbox (agent-guard.ts).
 import { libraryUrl } from "@viewswitcher/shared";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
-import { inside } from "./paths";
 
 const BASE_HOST = "scene.invalid";
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);

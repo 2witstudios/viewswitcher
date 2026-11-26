@@ -3,7 +3,7 @@
 // safe. It runs inside the switcher's server and calls the same library functions as /api; it is given
 // what it needs (deps) rather than reaching into index.ts.
 import { realpathSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -13,7 +13,7 @@ import { z } from "zod";
 import { agentGuard, type GuardAction } from "../agent-guard";
 import { asDropped, type BuiltinPackFiles } from "../builtin-packs";
 import * as lib from "../library";
-import { readNoFollowSync, realLibraryPath } from "../library/contain";
+import { readNoFollowSync, readPlainText, realLibraryPath } from "../library/contain";
 import { customizeScene, duplicateScene, existingOrg, type OnAirRequest, sceneFromTemplate } from "../library-actions";
 import { checked, listFiles, readText, writeText } from "../library-files";
 import { cancelPack, installPack, PackError, stagePack } from "../packs";
@@ -66,7 +66,7 @@ const GUIDE = "skills/viewswitcher-scenes/SKILL.md";
 
 /** The scene rules: the library's own copy of the skill (people's edits win), else the kit's. */
 export async function readGuide(root: string, kit: string): Promise<string> {
-  return readFile(join(root, ".claude", GUIDE), "utf8").catch(() => readFile(join(kit, GUIDE), "utf8"));
+  return readPlainText(join(root, ".claude", GUIDE)).catch(() => readPlainText(join(kit, GUIDE)));
 }
 
 /** A refusal the agent can act on (shown as the tool's error text). */

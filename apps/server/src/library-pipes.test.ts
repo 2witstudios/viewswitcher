@@ -2,15 +2,19 @@
 // text file: every read the switcher and agents make refuses it at once instead of waiting forever, and
 // a view that is a link outside the library is never copied in.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { duplicate } from "./library";
+import { addFromTemplate, customize, duplicate } from "./library";
+import { readNoFollowSync } from "./library/contain";
+import { readGuide } from "./mcp/server";
+import { PathError } from "./paths";
 import { readText, writeText } from "./library-files";
 import { loadedFiles } from "./scene-refs";
 
 const root = mkdtempSync(join(tmpdir(), "vs-pipes-"));
+const realRoot = realpathSync(root);
 const away = mkdtempSync(join(tmpdir(), "vs-pipes-away-"));
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
@@ -37,9 +41,35 @@ describe("a named pipe in the library", () => {
     expect(r).toHaveProperty("e");
   });
 
-  test("write_file over it refuses", async () => {
+  test("write_file over it refuses, saying what it is", async () => {
     const r = await settled(writeText(root, "daisy/templates/pipe.html", "<title>x</title>", "somehash"));
-    expect(r).not.toBe("hung");
+    expect(r).toEqual({ e: "daisy/templates/pipe.html isn't a plain file (a named pipe or a device?)" });
+  });
+
+  test("the on-air guard's check at a commit (readNoFollowSync) refuses it at once", async () => {
+    const t0 = performance.now();
+    expect(() => readNoFollowSync(join(realRoot, "daisy/templates/pipe.html"))).toThrow("isn't a plain file");
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+
+  test("a new scene from a template that is a pipe, and a stream's copy of one, refuse it as a bad path", async () => {
+    await mkdir(join(root, "daisy/projects/p/scenes"), { recursive: true });
+    await mkdir(join(root, "daisy/projects/p/streams/s"), { recursive: true });
+    await writeFile(join(root, "daisy/projects/p/project.json"), JSON.stringify({ name: "P", order: [] }));
+    const fromTemplate = await settled(addFromTemplate(join(root, "daisy"), "pipe", "p"));
+    expect(fromTemplate).toHaveProperty("e");
+    fifo("daisy/projects/p/scenes/piped.html");
+    await expect(customize(join(root, "daisy"), "p", "s", "piped")).rejects.toBeInstanceOf(PathError);
+  });
+
+  test("the guide (get_guide) skips a library copy that is a pipe and reads the kit's", async () => {
+    await mkdir(join(root, ".claude/skills/viewswitcher-scenes"), { recursive: true });
+    fifo(".claude/skills/viewswitcher-scenes/SKILL.md");
+    const kit = mkdtempSync(join(tmpdir(), "vs-pipes-kit-"));
+    await mkdir(join(kit, "skills/viewswitcher-scenes"), { recursive: true });
+    await writeFile(join(kit, "skills/viewswitcher-scenes/SKILL.md"), "the kit's guide");
+    expect(await settled(readGuide(root, kit))).toEqual({ v: "the kit's guide" });
+    rmSync(kit, { recursive: true, force: true });
   });
 
   test("the on-air guard's loadedFiles skips a linked stylesheet that is a pipe", async () => {

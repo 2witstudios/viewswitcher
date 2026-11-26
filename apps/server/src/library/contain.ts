@@ -134,6 +134,21 @@ export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promis
   }
 }
 
+/**
+ * A file's text through a non-blocking open of a plain file, following links: for files that are the
+ * person's own arrangement, where a link is fine (the library's .claude/ and its kit files), but a named
+ * pipe must still never hang a read.
+ */
+export async function readPlainText(abs: string): Promise<string> {
+  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK);
+  try {
+    if (!(await f.stat()).isFile()) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");
+    return await f.readFile("utf8");
+  } finally {
+    await f.close();
+  }
+}
+
 /** readNoFollow at one instant (the agents' on-air guard checks at a commit): the same open, synchronously. */
 export function readNoFollowSync(abs: string): string {
   const fd = openSync(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);

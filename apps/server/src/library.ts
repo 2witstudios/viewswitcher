@@ -160,6 +160,7 @@ const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgD
 
 /** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
 async function copyNew(src: string, dest: string) {
+  if (!(await stat(src).then((s) => s.isFile(), () => true))) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");
   try {
     await copyFile(src, dest, fsConstants.COPYFILE_EXCL);
   } catch (e) {
