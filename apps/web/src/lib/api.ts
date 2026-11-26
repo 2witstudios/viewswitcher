@@ -146,7 +146,7 @@ export const packs = {
     }
     return form<StagedPack>("/api/packs/stage", body);
   },
-  install: (org: string, token: string) => change<{ set: string }>("/api/packs/install", { org, token }),
+  install: (org: string, token: string) => change<{ set: string }>("/api/sets/install", { org, token }),
   cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
   removeSet: (org: string, set: string) => change<{ kept: number }>("/api/sets/remove", { org, set }),
   /** The built-in template packs (EDIT-29): the starter and the site's six shows. */

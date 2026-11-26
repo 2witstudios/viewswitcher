@@ -113,7 +113,7 @@ describe("cross-site POST: Origin from another site", () => {
   test("a sandboxed scene (Origin: null) can't change anything", async () => {
     expect((await onAir({ origin: "null" })).status).toBe(403);
     expect((await request("/api/scene/edit", { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
-    expect((await request("/api/packs/install", { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
+    for (const path of ["/api/sets/install", "/api/packs/install"]) expect((await request(path, { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).onAir).toBeNull();
   });
   test("a scene can't turn the agent on-air setting off either (the MCP preview path)", async () => {
