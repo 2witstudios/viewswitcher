@@ -1,6 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, isAbsolute, join, relative } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { decodeEntities, readManifest, slugify, transitionCandidates } from "@viewswitcher/shared";
 import type { Asset, AssetKind, Library, Org, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
@@ -12,9 +12,31 @@ const KINDS: Record<string, AssetKind> = {
   ".mp3": "audio", ".wav": "audio", ".m4a": "audio", ".aac": "audio", ".ogg": "audio",
 };
 
+// The library is read on every change by every client (and by agents), so a scan reads as little
+// as it can: scene titles are kept while their file's size and modification time stay the same (and
+// dropped for the paths the watcher reports), and folders are walked side by side. File reads and
+// stats go through one bounded queue, so a big library can't run out of open files.
+
+/** At most this many file reads or stats at once, across every scan. */
+const IO_AT_ONCE = 32;
+let ioActive = 0;
+const ioWaiting: (() => void)[] = [];
+async function io<T>(fn: () => Promise<T>): Promise<T> {
+  if (ioActive < IO_AT_ONCE) ioActive++;
+  else await new Promise<void>((go) => ioWaiting.push(go));
+  try {
+    return await fn();
+  } finally {
+    // The slot passes straight to the next waiter, so nothing slips in between and goes over the bound.
+    const next = ioWaiting.shift();
+    if (next) next();
+    else ioActive--;
+  }
+}
+
 async function dirs(path: string): Promise<string[]> {
   try {
-    const entries = await readdir(path, { withFileTypes: true });
+    const entries = await io(() => readdir(path, { withFileTypes: true }));
     return entries.filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("_")).map((e) => e.name).sort();
   } catch {
     return [];
@@ -23,24 +45,53 @@ async function dirs(path: string): Promise<string[]> {
 
 async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
-    return { ...fallback, ...JSON.parse(await readFile(path, "utf8")) };
+    return { ...fallback, ...JSON.parse(await io(() => readFile(path, "utf8"))) };
   } catch {
     return fallback;
+  }
+}
+
+const there = (path: string) => io(() => exists(path));
+
+/** Each scene file's title as last read, with the size and modification time it was read at. */
+const titles = new Map<string, { mtimeMs: number; size: number; title: string }>();
+
+/** A scene file's <title>, read again only when the file has changed since. */
+async function titleOf(abs: string): Promise<string> {
+  const s = await io(() => stat(abs)).catch(() => null);
+  if (!s) return "";
+  const known = titles.get(abs);
+  if (known && known.mtimeMs === s.mtimeMs && known.size === s.size) return known.title;
+  // Read after the stat: what's read is at least as new as the size and time it's kept under.
+  const html = await io(() => readFile(abs, "utf8")).catch(() => null);
+  if (html === null) return "";
+  const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
+  titles.set(abs, { mtimeMs: s.mtimeMs, size: s.size, title });
+  return title;
+}
+
+/**
+ * Library paths that changed (the watcher's, library-relative): their titles are read again on the
+ * next scan, even if a change kept the size and time the same. A folder drops everything inside it.
+ */
+export function forgetScanned(libraryRoot: string, paths: string[]) {
+  for (const p of paths) {
+    const abs = resolve(libraryRoot, p);
+    for (const key of titles.keys()) if (key === abs || key.startsWith(abs + sep)) titles.delete(key);
   }
 }
 
 async function scenesIn(root: string, rel: string, origin: SceneOrigin, order: string[], prefix: string, set?: string): Promise<Scene[]> {
   let files: string[] = [];
   try {
-    files = (await readdir(join(root, rel))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
+    files = (await io(() => readdir(join(root, rel)))).filter((f) => f.endsWith(".html") && !f.startsWith("."));
   } catch {
     return [];
   }
   const scenes = await Promise.all(
     files.map(async (f) => {
       const name = f.slice(0, -5);
-      const html = await readFile(join(root, rel, f), "utf8").catch(() => "");
-      const title = decodeEntities(/<title\b[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? "").replace(/\s+/g, " ").trim();
+      const title = await titleOf(join(root, rel, f));
       return { name, label: title || name.replace(/-/g, " "), path: `${prefix}${rel}/${f}`, origin, ...(set ? { set } : {}) } satisfies Scene;
     }),
   );
@@ -97,37 +148,49 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
   const org = await readOrg(libraryRoot, orgId);
   const root = inside(libraryRoot, plainName(orgId));
   const prefix = `${org.id}/`;
-  const meta = await readJson(join(root, "templates/_shared/order.json"), { order: [] as string[] });
-  const templates = await scenesIn(root, "templates", "template", meta.order, prefix);
-  const sets = await listSets(root, prefix);
+  const [templates, sets, assets, projects, transition] = await Promise.all([
+    readJson(join(root, "templates/_shared/order.json"), { order: [] as string[] }).then((meta) => scenesIn(root, "templates", "template", meta.order, prefix)),
+    listSets(root, prefix),
+    listAssets(root, prefix),
+    dirs(join(root, "projects")).then((ids) => Promise.all(ids.map((id) => scanProject(root, prefix, id)))),
+    there(join(root, ORG_TRANSITION)).then((t) => (t ? `${prefix}${ORG_TRANSITION}` : null)),
+  ]);
+  return { org, templates, sets, assets, projects, transition };
+}
 
-  let assets: Asset[] = [];
+async function listAssets(root: string, prefix: string): Promise<Asset[]> {
   try {
-    const names = (await readdir(join(root, "assets"))).filter((n) => !n.startsWith("."));
-    assets = await Promise.all(
+    const names = (await io(() => readdir(join(root, "assets")))).filter((n) => !n.startsWith("."));
+    const assets = await Promise.all(
       names.map(async (name) => {
-        const s = await stat(join(root, "assets", name));
-        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s.size };
+        const s = await io(() => stat(join(root, "assets", name)));
+        return { name, path: `${prefix}assets/${name}`, kind: KINDS[extname(name).toLowerCase()] ?? "other", size: s.size } satisfies Asset;
       }),
     );
-    assets = assets.filter((a) => a.size > 0).sort((a, b) => a.name.localeCompare(b.name));
-  } catch {}
-
-  const projects: Project[] = [];
-  for (const id of await dirs(join(root, "projects"))) {
-    const p = await readJson(join(root, "projects", id, "project.json"), { name: id, order: [] as string[] });
-    const streams: Stream[] = [];
-    for (const sid of await dirs(join(root, "projects", id, "streams"))) {
-      const rel = `projects/${id}/streams/${sid}`;
-      const s = await readJson(join(root, rel, "stream.json"), { name: sid, date: "" });
-      streams.push({ id: sid, name: s.name, date: s.date, scenes: await scenesIn(root, rel, "stream", p.order, prefix) });
-    }
-    streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
-    const transition = (await exists(join(root, "projects", id, TRANSITION))) ? `${prefix}projects/${id}/${TRANSITION}` : null;
-    projects.push({ id, name: p.name, scenes: await scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix), streams, transition });
+    return assets.filter((a) => a.size > 0).sort((a, b) => a.name.localeCompare(b.name));
+  } catch {
+    return [];
   }
-  const transition = (await exists(join(root, ORG_TRANSITION))) ? `${prefix}${ORG_TRANSITION}` : null;
-  return { org, templates, sets, assets, projects, transition };
+}
+
+async function scanProject(root: string, prefix: string, id: string): Promise<Project> {
+  const dir = join(root, "projects", id);
+  const p = await readJson(join(dir, "project.json"), { name: id, order: [] as string[] });
+  const [scenes, streams, transition] = await Promise.all([
+    scenesIn(root, `projects/${id}/scenes`, "project", p.order, prefix),
+    dirs(join(dir, "streams")).then((ids) =>
+      Promise.all(
+        ids.map(async (sid): Promise<Stream> => {
+          const rel = `projects/${id}/streams/${sid}`;
+          const [s, scenes] = await Promise.all([readJson(join(root, rel, "stream.json"), { name: sid, date: "" }), scenesIn(root, rel, "stream", p.order, prefix)]);
+          return { id: sid, name: s.name, date: s.date, scenes };
+        }),
+      ),
+    ),
+    there(join(dir, TRANSITION)).then((t) => (t ? `${prefix}projects/${id}/${TRANSITION}` : null)),
+  ]);
+  streams.sort((a, b) => (a.date || a.id).localeCompare(b.date || b.id));
+  return { id, name: p.name, scenes, streams, transition };
 }
 
 // ---------------------------------------------------------------- template sets
@@ -136,22 +199,22 @@ export async function scanLibrary(libraryRoot: string, orgId: string): Promise<L
 
 /** The org's template sets: folders in templates/ that have a pack.json. */
 async function listSets(root: string, prefix: string): Promise<TemplateSet[]> {
-  const sets: TemplateSet[] = [];
-  for (const id of await dirs(join(root, "templates"))) {
-    const text = await readFile(join(root, "templates", id, "pack.json"), "utf8").catch(() => null);
-    if (text === null) continue;
-    const read = readManifest(text);
-    // A pack.json someone edited by hand into something odd: still list the set, by its folder.
-    const m = read.ok ? read.manifest : { name: id, version: "", description: "", views: [] as string[] };
-    const rel = `templates/${id}`;
-    const transition = (await exists(join(root, rel, "_shared", TRANSITION))) ? `${prefix}${rel}/_shared/${TRANSITION}` : null;
-    sets.push({
-      id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}),
-      templates: await scenesIn(root, rel, "template", m.views, prefix, id),
-      transition,
-    });
-  }
-  return sets.sort((a, b) => a.name.localeCompare(b.name));
+  const found = await Promise.all(
+    (await dirs(join(root, "templates"))).map(async (id): Promise<TemplateSet | null> => {
+      const text = await io(() => readFile(join(root, "templates", id, "pack.json"), "utf8")).catch(() => null);
+      if (text === null) return null;
+      const read = readManifest(text);
+      // A pack.json someone edited by hand into something odd: still list the set, by its folder.
+      const m = read.ok ? read.manifest : { name: id, version: "", description: "", views: [] as string[] };
+      const rel = `templates/${id}`;
+      const [templates, transition] = await Promise.all([
+        scenesIn(root, rel, "template", m.views, prefix, id),
+        there(join(root, rel, "_shared", TRANSITION)).then((t) => (t ? `${prefix}${rel}/_shared/${TRANSITION}` : null)),
+      ]);
+      return { id, name: m.name, version: m.version, description: m.description, ...("author" in m && m.author ? { author: m.author } : {}), templates, transition };
+    }),
+  );
+  return found.filter((s): s is TemplateSet => s !== null).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
