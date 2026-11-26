@@ -1,0 +1,17 @@
+{
+  // packages/shared's source, which the browser (apps/web) and Bun (apps/server) both run: no Bun,
+  // Node or DOM types, so code that only one of them has doesn't typecheck here. Its tests: tsconfig.test.json.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

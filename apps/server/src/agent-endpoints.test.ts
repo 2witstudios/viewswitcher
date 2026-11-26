@@ -1,14 +1,15 @@
 // Edit with AI's endpoints on the real server (from source, OBS offline, no USB, a temp library):
 // /api/info's commands, /api/agent/clients and the Claude Desktop extension answer only this Mac.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { Subprocess } from "bun";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { freePort, SERVER_START_MS, startServer } from "./test-server";
 
 let port = 0;
-let proc: ReturnType<typeof Bun.spawn>;
+let proc: Subprocess;
 const library = mkdtempSync(join(tmpdir(), "vs-agent-endpoints-"));
 const scratch = mkdtempSync(join(tmpdir(), "vs-agent-mcpb-"));
 
@@ -26,23 +27,9 @@ function request(path: string, headers: Record<string, string> = {}) {
 }
 
 beforeAll(async () => {
-  port = await new Promise<number>((r) => {
-    const s = createServer().listen(0, "127.0.0.1", () => {
-      const p = (s.address() as { port: number }).port;
-      s.close(() => r(p));
-    });
-  });
-  proc = Bun.spawn([process.execPath, join(import.meta.dir, "index.ts")], {
-    env: { ...process.env, PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" },
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  for (let i = 0; i < 100; i++) {
-    if (await request("/api/state").then((r) => r.status === 200, () => false)) return;
-    await Bun.sleep(50);
-  }
-  throw new Error("server didn't start");
-});
+  port = await freePort();
+  proc = await startServer({ PORT: String(port), OBS_URL: "ws://127.0.0.1:1", VIEWSWITCHER_USB: "0", VIEWSWITCHER_LIBRARY: library, VIEWSWITCHER_ORIGINS: "" }, () => request("/api/state").then((r) => r.status === 200));
+}, SERVER_START_MS);
 afterAll(() => {
   proc?.kill();
   rmSync(library, { recursive: true, force: true });
