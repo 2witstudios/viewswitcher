@@ -3,8 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { api } from "./api";
 
+/**
+ * The cache keys for what the server's library holds. Each kind has its own place in the key, so no
+ * org id can name another kind ("orgs" is a fine name for a show). Everything is under "library",
+ * which a change to the library refreshes as one.
+ */
+export const libraryKeys = {
+  orgs: ["library", "orgs"] as const,
+  org: (id: string | undefined) => ["library", "org", id] as const,
+};
+
 export function useOrgs() {
-  return useQuery({ queryKey: ["library", "orgs"], queryFn: api.orgs });
+  return useQuery({ queryKey: libraryKeys.orgs, queryFn: api.orgs });
 }
 
 /** The org in the URL (/$org/...), if any. */
@@ -13,7 +23,7 @@ export function useOrgId(): string | undefined {
 }
 
 export function useLibrary(org: string | undefined) {
-  return useQuery({ queryKey: ["library", org], queryFn: () => api.library(org!), enabled: !!org });
+  return useQuery({ queryKey: libraryKeys.org(org), queryFn: () => api.library(org!), enabled: !!org });
 }
 
 const LAST_ORG = "viewswitcher.org";

@@ -227,11 +227,17 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
   });
 
   test("a removal survives quitting right after it (SIGTERM, as the Mac app quits)", async () => {
+    // The device this pairing added, as the one id that wasn't there before: earlier tests paired
+    // phones with the same name, and their times can tie with this one's to the millisecond.
+    const ids = async () => ((await admin("/api/remote")).devices as { id: string }[]).map((d) => d.id);
+    const before = new Set(await ids());
     const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
     const lost = cookieOf(await pairWith(code.code));
-    const { devices } = await admin("/api/remote");
-    const id = devices.find((d: { name: string; lastSeen: number }) => d.name === "Test phone" && d.lastSeen === Math.max(...devices.map((x: { lastSeen: number }) => x.lastSeen))).id;
-    await admin("/api/remote/remove", { id });
+    const added = (await ids()).filter((id) => !before.has(id));
+    expect(added).toHaveLength(1);
+    expect((await lan("/api/state", { headers: { cookie: lost } })).status).toBe(200);
+    await admin("/api/remote/remove", { id: added[0] });
+    expect((await lan("/api/state", { headers: { cookie: lost } })).status).toBe(401);
     proc.kill("SIGTERM");
     await proc.exited;
     await start();
