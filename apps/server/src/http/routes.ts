@@ -24,6 +24,7 @@ import { libraryRoutes } from "./routes/library";
 import { liveRoutes } from "./routes/live";
 import { packRoutes } from "./routes/packs";
 import { pairingRoutes } from "./routes/pairing";
+import type { Log } from "../log";
 
 export type RouteDeps = {
   /** The library folder. */
@@ -56,7 +57,7 @@ export type RouteDeps = {
   ownStdio: (port: number) => ReturnType<typeof stdioLaunch>;
   extensionVersion: string;
   mcp: { deps: McpDeps; allowedOrigins: string[]; onSeen: (client: string | null) => void };
-  log?: (line: string) => void;
+  log?: Log;
 };
 
 export { secure } from "./routes/kit";

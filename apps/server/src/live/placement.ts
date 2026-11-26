@@ -14,6 +14,7 @@
 import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
+import type { Log } from "../log";
 
 export type PlacementNames = { obsScene: string; programSource: string; groundSource: string; /** Sources views may place (OBS_SOURCES). */ sources: string[] };
 
@@ -98,7 +99,7 @@ export type PlacerOptions = {
    */
   placed: { has(source: string): boolean; remember(sources: string[]): void };
   timeoutMs?: number;
-  log?: (line: string) => void;
+  log?: Log;
 };
 
 export type Placer = ReturnType<typeof createPlacer>;

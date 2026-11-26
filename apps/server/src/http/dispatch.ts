@@ -26,6 +26,7 @@ import { hostTrusted, type Lan, originAllowed, pageProto } from "../origin";
 import { PackError } from "../packs";
 import { PathError } from "../paths";
 import { SettingsError } from "../settings";
+import type { Log } from "../log";
 
 /** A refusal with its status, from a handler or the checks. */
 export class HttpError extends Error {
@@ -82,7 +83,7 @@ export type DispatchOptions = {
   pairPage: (req: Request) => Response;
   /** Takes absolute paths out of error messages (scrub.ts). */
   scrub: (message: string) => string;
-  log?: (line: string) => void;
+  log?: Log;
   /** The USB-C bridge's connections (gate.ts bridgePorts); tests pass their own. */
   bridged?: ReadonlySet<number>;
 };

@@ -29,6 +29,8 @@ export const config = {
    * The built-in template packs, prebuilt by packs:export (the Mac app's Resources/packs).
    * Unset in a source run: they're built from the repo (the starter and @viewswitcher/packs' shows).
    */
+  /** VIEWSWITCHER_LOG=1: print requests, placements and OBS-browser errors (log.ts). */
+  verbose: !!env.VIEWSWITCHER_LOG,
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
   /** The example shows' views and themes a source run builds them from; unset: @viewswitcher/packs' own shows/ folder. */
   shows: env.VIEWSWITCHER_SHOWS ? resolve(env.VIEWSWITCHER_SHOWS) : undefined,

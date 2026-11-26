@@ -7,6 +7,7 @@ import type { Server, ServerWebSocket } from "bun";
 import { stdioLaunch } from "./agent-connect";
 import { type BuiltinPackFiles, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { config } from "./config";
+import { createLog } from "./log";
 import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
@@ -86,7 +87,7 @@ function publish(msg: ServerMessage) {
   server?.publish("all", text);
   lanServer?.publish("all", text);
 }
-const log = process.env.VIEWSWITCHER_LOG ? (line: string) => console.log(line) : undefined;
+const log = createLog(config.verbose);
 
 /** Reads an org's content for the switcher and agents; its scene-title cache lives as long as the server. */
 const scanner = new LibraryScanner(config.library);

@@ -13,6 +13,7 @@ import { isFile } from "../library";
 import { onAirFor, type OnAirRequest, renamedOnAir } from "../library-actions";
 import { inside } from "../paths";
 import type { RenameResult } from "../scene-edit";
+import type { Log } from "../log";
 
 export type LiveStoreOptions = {
   /** The library root. */
@@ -23,7 +24,7 @@ export type LiveStoreOptions = {
   publish: (msg: ServerMessage) => void;
   /** What the rest of the state starts as. */
   initial: Omit<LiveState, "onAir" | "warnings">;
-  log?: (line: string) => void;
+  log?: Log;
 };
 
 export const missingWarning = (on: OnAir) =>
