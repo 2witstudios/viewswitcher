@@ -444,6 +444,7 @@ describe("readTitle", () => {
     "a close tag with junk": "<head><script>x</script foo><title>Real</title></head>",
     "a title's own close tag with a slash": "<head><title>Real</title/></head>",
     "a title closed at the end of the file": "<head><title>Real</title ",
+    "a title inside an end tag": "<head></x <title>><title>Real</title></head>",
   };
   test.each(Object.entries(pages))("skips what the browser doesn't show: %s", (_name, html) => {
     expect(readTitle(html)).toBe("Real");
@@ -465,6 +466,8 @@ describe("readTitle", () => {
       "<head>" + "<title>".repeat(mb / 7),
       "<head>" + "<script ".repeat(mb / 8),
       "<head>" + "<!--".repeat(mb / 4),
+      "<head>" + "</a>".repeat(mb / 4),
+      "<head>" + "</a ".repeat(mb / 4),
     ];
     for (const html of pages) {
       const t = performance.now();

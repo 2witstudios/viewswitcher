@@ -235,14 +235,15 @@ export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").
 /**
  * The first <title> outside comments, raw-text content (the scanner's RAW elements: script, style,
  * noscript, textarea…) and <template> content: the one the browser shows, and the one setTitle
- * writes. It reads a page as the scanner does: a comment ends at the first "-->" after "<!--"; a tag
+ * writes. It reads a page as the scanner does: a comment ends at the first "-->" after "<!--"; an end
+ * tag is skipped whole (so a "<title>" inside "</x <title>>" is part of that tag); a tag
  * name, opening or closing, ends at a space, "/" or ">" (so <style-box> is an element of its own, and
  * </script/> closes a script); and an element, a tag or a comment that never ends runs to the end of
  * the file. Every part can end at the end of the file, so each match either succeeds or fails at once
  * and the read stays linear, however a page (an untrusted pack's, say) is cut short.
  */
 const TITLE = new RegExp(
-  "<!--[\\s\\S]*?(?:-->|$)" +
+  "<!--[\\s\\S]*?(?:-->|$)|<\\/[a-z][^>]*(?:>|$)" +
     `|<(${[...RAW].filter((t) => t !== "title").concat("template").join("|")})(?=[\\s/>])[^>]*(?:>|$)[\\s\\S]*?(?:<\\/\\1(?=[\\s/>])[^>]*(?:>|$)|$)` +
     "|<title(?=[\\s/>])[^>]*(?:>|$)([\\s\\S]*?)(?:(<\\/title)(?=[\\s/>])[^>]*(?:>|$)|$)",
   "gi",

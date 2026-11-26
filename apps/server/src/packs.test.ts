@@ -8,7 +8,7 @@ import { asDropped, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { addFromTemplate, createOrg, createProject } from "./library";
 import { LibraryScanner } from "./library/scanner";
 import { cancelPack, installPack, PackError, removeSet, stagePack } from "./packs";
-import { SHOWS, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
+import { SHOWS, SHOWS_DIR, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
 const scanLibrary = (root: string, org: string) => new LibraryScanner(root).scan(org);
@@ -140,6 +140,17 @@ describe("built-in template packs", () => {
     const left: string[] = [];
     expect((await buildBuiltins(join(root, "no-starter"), (id) => left.push(id))).map((p) => p.id)).toEqual(SHOWS.map((s) => s.id)); // one that won't build is left out
     expect(left).toEqual(["starter"]);
+  });
+
+  test("a source run builds the shows from the folder VIEWSWITCHER_SHOWS names (config.shows), when it's set", async () => {
+    const shows = join(root, "..", `${org}-shows-${Date.now()}`);
+    await cp(SHOWS_DIR, shows, { recursive: true });
+    await rm(join(shows, "kitchen"), { recursive: true });
+    const left: string[] = [];
+    const b = await buildBuiltins(starter, (id) => left.push(id), shows);
+    expect(left).toEqual(["kitchen"]);
+    expect(b.map((p) => p.id)).toEqual(["starter", ...SHOWS.map((s) => s.id).filter((id) => id !== "kitchen")]);
+    await rm(shows, { recursive: true, force: true });
   });
 
   test("each installs through the drop path as its own set, generic: the org's name and colors, not the show's", async () => {

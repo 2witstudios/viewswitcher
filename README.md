@@ -107,6 +107,7 @@ The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRAR
 | `VIEWSWITCHER_LOG` | `1` prints requests, placements and OBS-browser errors |
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |
+| `VIEWSWITCHER_PACKS` / `VIEWSWITCHER_SHOWS` | the built-in template packs, prebuilt (the Mac app's Resources/packs; unset: built from the repo when first asked for) / the example shows they're built from in that case (`packages/packs/shows`) |
 | `VIEWSWITCHER_UPDATES` | Mac app: `0` turns off checking for updates |
 | `VIEWSWITCHER_VERSION` | set by the Mac app to its version, which the Claude Desktop extension carries (default `1.0.0`) |
 | `VIEWSWITCHER_REPO` | Mac app, Debug builds without a bundled server: run `bun <repo>/apps/server/src/index.ts` (set by `mac:dev`) |

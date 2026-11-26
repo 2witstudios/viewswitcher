@@ -139,8 +139,7 @@ export function genericTheme(css: string, show: Show): string {
  * placeholders with the show's (apps/site/scripts/library.ts). Its views in the show's order, its
  * theme.css, and the shared base.css and view.js.
  */
-export async function showPacks({ onError, dir }: { onError?: (id: string, e: Error) => void; dir?: string } = {}): Promise<{ id: string; files: PackFileOut[] }[]> {
-  dir ??= SHOWS_DIR;
+export async function showPacks({ onError, dir = SHOWS_DIR }: { onError?: (id: string, e: Error) => void; dir?: string } = {}): Promise<{ id: string; files: PackFileOut[] }[]> {
   const common = await sharedOf(join(dir, "_shared"));
   const built = await Promise.all(
     SHOWS.map(async (s) => {
