@@ -228,13 +228,13 @@ describe("library paths obey the real-path rule, for reads as for writes", () =>
       expect({ p, status: r.status }).toEqual({ p, status: 404 });
     }
   });
-  test("a staged pack's preview still loads, and nothing else in staging does", async () => {
+  test("a staged pack's covers still load, and nothing else in staging does", async () => {
     const token = "0a1b2c3d4e5f60718293a4b5";
-    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/view.html`), "<title>Cover</title>");
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/covers/view.html`), "<title>Cover</title>");
     await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/meta.json`), "{}");
-    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/.hidden`), "x");
-    expect((await request(`/library/my-channel/.viewswitcher/staging/${token}/preview/view.html`)).status).toBe(200);
-    for (const p of [`${token}/meta.json`, `${token}/preview/.hidden`, `${token}/raw/view.html`, "not-a-token/preview/view.html"]) {
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/covers/.hidden`), "x");
+    expect((await request(`/library/my-channel/.viewswitcher/staging/${token}/covers/view.html`)).status).toBe(200);
+    for (const p of [`${token}/meta.json`, `${token}/covers/.hidden`, `${token}/raw/view.html`, "not-a-token/covers/view.html"]) {
       expect({ p, status: (await request(`/library/my-channel/.viewswitcher/staging/${p}`)).status }).toEqual({ p, status: 404 });
     }
   });
@@ -357,8 +357,8 @@ describe("scenes are served sandboxed", () => {
     expect((await request("/library/my-channel/assets/photo.jpg")).status).toBe(200);
     expect((await request("/library/my-channel/assets/photo.jpg")).headers["access-control-allow-origin"]).toBeUndefined();
     // A staged pack's preview copy is a template pack's design files too (covers before installing).
-    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg"), "<svg/>");
-    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
+    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/covers/_shared/brand/m.svg"), "<svg/>");
+    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/covers/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
     const sneaky = await request("/library/my-channel/templates/%2e%2e/assets/photo.jpg");
     expect(sneaky.headers["access-control-allow-origin"]).toBeUndefined();
   });

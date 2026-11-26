@@ -3,7 +3,7 @@ import type { AgentClients, AgentOnAir, BuiltinPack, OrgContent, LiveState, Org,
 import type { QueryClient } from "@tanstack/react-query";
 import { queryClient } from "./live";
 
-/** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
+/** Live edit order, per editor page: `session` tells editors apart (clocks on two phones or tablets needn't agree). */
 const liveEditSession = Math.random().toString(36).slice(2);
 let liveEditSeq = 0;
 const nextLiveEditSeq = () => ++liveEditSeq;

@@ -2,8 +2,8 @@
 // makes, and every file an agent reads or writes. Scenes and template packs come from anyone, so:
 //
 // - the path never goes into a dot-folder or dot-file (.git, .viewswitcher,
-//   .env), except the preview copy of a staged template pack, which the switcher shows as covers
-//   before anyone says Install (<org>/.viewswitcher/staging/<token>/preview/…), and only to read;
+//   .env), except the covers copy of a staged template pack, which the switcher shows as covers
+//   before anyone says Install (<org>/.viewswitcher/staging/<token>/covers/…), and only to read;
 // - and what it really reaches, through any links, is inside the library and obeys the same rule.
 //   A link inside the library may point at another place in it, never outside it, and never at a
 //   dot-folder in it. For a path that doesn't exist yet, its nearest existing folder is checked: a
@@ -20,8 +20,8 @@ export const STAGING = ".viewswitcher/staging";
 /** A staged pack's token: 24 hex characters (packs.ts). */
 export const STAGING_TOKEN = /^[a-f0-9]{24}$/;
 
-/** "<org>/.viewswitcher/staging/<token>/preview/…": the one dot-path anyone may read. */
-const STAGING_PREVIEW = /^[^/]+\/\.viewswitcher\/staging\/[a-f0-9]{24}\/preview\/[^.]/;
+/** "<org>/.viewswitcher/staging/<token>/covers/…": the one dot-path anyone may read. */
+const STAGING_COVERS = /^[^/]+\/\.viewswitcher\/staging\/[a-f0-9]{24}\/covers\/[^.]/;
 
 const badPath = (p: string) =>
   new PathError(`Bad path: ${p || "(empty)"}. Paths start with the show's id, like "my-show/templates/brb.html", and never go into dot-folders.`);
@@ -31,14 +31,14 @@ const outside = () => new PathError("That path is a link to somewhere outside th
 function plainPath(p: string, forWrite: boolean): boolean {
   const parts = p.split("/");
   if (parts.some((s) => !s || s.includes("\\") || s.includes("\0") || s.length > 255)) return false;
-  // The staging preview's own segments are fixed; the org before them and what follows them obey the rule like anything else.
-  const skip = !forWrite && STAGING_PREVIEW.test(p) ? 4 : 0;
+  // The staging covers' own segments are fixed; the org before them and what follows them obey the rule like anything else.
+  const skip = !forWrite && STAGING_COVERS.test(p) ? 4 : 0;
   return !parts[0]!.startsWith(".") && parts.slice(1 + skip).every((s) => !s.startsWith("."));
 }
 
 /**
  * The absolute file a client's library path (`daisy/projects/…`) leads to, through any links, or a
- * PathError. `forWrite`: the path will be written, so the staged pack preview is refused too. A path
+ * PathError. `forWrite`: the path will be written, so a staged pack's covers are refused too. A path
  * that exists comes back as its real file; one that doesn't, inside its nearest real folder.
  */
 export async function resolveInLibrary(libraryRoot: string, clientPath: unknown, { forWrite = false }: { forWrite?: boolean } = {}): Promise<string> {

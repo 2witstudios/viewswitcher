@@ -219,8 +219,8 @@ function setLan(on: boolean): string | null {
   if (!on && lanServer) {
     const s = lanServer;
     lanServer = null;
-    // Off means off: the port closes and every paired device is cut off now, on the Wi-Fi or through
-    // tailscale serve (they stay paired). Only this Mac's and the USB-C device's sockets have no device.
+    // Off means off: the port closes and every paired phone or tablet is cut off now, on the Wi-Fi or through
+    // tailscale serve (they stay paired). Only this Mac's and the USB-C device's sockets have no remote.
     for (const ws of sockets) if (ws.data.lan || ws.data.remote) ws.close(1001, "Wi-Fi connections were turned off");
     s.stop(true);
     console.log("[wifi] network listener closed; 127.0.0.1 only");
@@ -291,9 +291,9 @@ const handle = dispatcher({
   remoteAccess: () => !!lanServer,
   onLan: (srv) => srv === lanServer,
   remote: (req) => pairing.check(tokenFromCookie(req.headers.get("cookie")))?.id ?? null,
-  renew: (device, c) => {
+  renew: (remote, c) => {
     const token = tokenFromCookie(c.req.headers.get("cookie"));
-    return token && pairing.renew(device) ? tokenCookie(token, secure(c)) : null;
+    return token && pairing.renew(remote) ? tokenCookie(token, secure(c)) : null;
   },
   pairPage: pairPageResponse,
   scrub: pathScrub(config.library),
@@ -321,7 +321,7 @@ if (config.lan) setLan(true);
 console.log(`[viewswitcher] http://localhost:${server.port}  library: ${config.library}`);
 console.log(`[viewswitcher] OBS program browser source → http://127.0.0.1:${server.port}/program`);
 
-// Quit (the Mac app sends SIGTERM) or Ctrl-C: write paired devices first, so nothing changed in the last moment is lost.
+// Quit (the Mac app sends SIGTERM) or Ctrl-C: write paired phones and tablets first, so nothing changed in the last moment is lost.
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
 }

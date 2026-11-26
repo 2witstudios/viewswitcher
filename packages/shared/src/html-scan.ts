@@ -445,7 +445,7 @@ const subtreeSize = (els: ScannedElement[], el: ScannedElement) => {
  */
 function insertPatch(html: string, els: ScannedElement[], edit: InsertEdit, check = true): Patch {
   const into = els[edit.id];
-  if (!into || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!into || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this view`);
   if (!into.closed || VOID.has(into.tag) || RAW.has(into.tag) || into.tag === "html") throw new EditError(`Nothing can go inside <${into.tag}>`);
   const why = check ? checkInsert(edit.insert) : null;
   if (why) throw new EditError(why);
@@ -474,7 +474,7 @@ function insertPatch(html: string, els: ScannedElement[], edit: InsertEdit, chec
 
 function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch[] {
   const el = els[edit.id];
-  if (!el || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!el || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this view`);
   switch (editKind(edit)) {
     case "text": {
       const { text: raw } = edit as TextEdit;
@@ -528,7 +528,7 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
       if (el.tag !== "img") throw new EditError(`<${el.tag}> isn't an image`);
       // With srcset the browser picks from that list, so a new src alone wouldn't show.
       if (el.attrs.some((x) => x.name === "srcset")) throw new EditError("This image has several sizes (srcset): ask your agent to change it");
-      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
+      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the view can show");
       const a = el.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
       if (!a) throw new EditError("This image has no src to replace");
       return html.slice(a.valueStart, a.valueEnd) === src ? [] : [{ from: a.valueStart, to: a.valueEnd, text: src }];
@@ -551,7 +551,7 @@ export function applyEdits(html: string, edits: SceneEdit[]): string {
   const els = scanElements(html);
   const patches = edits.flatMap((e) => patchesFor(html, els, e)).sort((a, b) => b.from - a.from);
   for (let k = 1; k < patches.length; k++) {
-    if (patches[k]!.to > patches[k - 1]!.from) throw new EditError("Two edits change the same part of the scene");
+    if (patches[k]!.to > patches[k - 1]!.from) throw new EditError("Two edits change the same part of the view");
   }
   let out = html;
   for (const p of patches) out = out.slice(0, p.from) + p.text + out.slice(p.to);
@@ -581,7 +581,7 @@ export function idsAfter(html: string, edit: InsertEdit | RemoveEdit): { map: (i
     return { map: (id) => (id < n ? id : id + count), added: n };
   }
   const el = els[edit.id];
-  if (!el) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!el) throw new EditError(`No element ${edit.id} in this view`);
   const count = subtreeSize(els, el);
   return { map: (id) => (id < el.id ? id : id < el.id + count ? null : id - count), added: null };
 }
@@ -628,7 +628,7 @@ export function sceneRoot(html: string): number | null {
 /** The scene's <title> set to `name` (added at the top of <head> when there's none). */
 export function setTitle(html: string, name: string): string {
   const clean = collapseHtmlSpace(String(name ?? "").replace(/[\r\n]+/g, " "));
-  if (!clean.trim()) throw new EditError("A scene needs a name");
+  if (!clean.trim()) throw new EditError("A view needs a name");
   if (clean.length > 120) throw new EditError("That name is too long");
   const els = scanElements(html);
   const title = titleElement(els);
@@ -637,7 +637,7 @@ export function setTitle(html: string, name: string): string {
   if (title && html.slice(title.openEnd - 2, title.openEnd) === "/>") return html.slice(0, title.start) + `<title>${text}</title>` + html.slice(title.end);
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);
-  if (!head) throw new EditError("This scene has no <head> for a title: ask your agent to rename it");
+  if (!head) throw new EditError("This view has no <head> for a title: ask your agent to rename it");
   const first = els.find((e) => e.parent === head.id);
   const p = insertPatch(html, els, first ? { id: head.id, insert: `<title>${text}</title>`, before: first.id } : { id: head.id, insert: `<title>${text}</title>` }, false);
   return html.slice(0, p.from) + p.text + html.slice(p.to);

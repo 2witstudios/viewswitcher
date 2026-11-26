@@ -50,7 +50,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         # Phones and tablets on the Wi-Fi: announce the switcher over Bonjour while that's on.
-        NSLocalNetworkUsageDescription: ViewSwitcher lets the phones and tablets you pair switch scenes over this Wi-Fi, when you turn that on.
+        NSLocalNetworkUsageDescription: ViewSwitcher lets the phones and tablets you pair switch views over this Wi-Fi, when you turn that on.
         NSBonjourServices:
           - _http._tcp
         # Sparkle: the appcast on the latest published GitHub release (ViewSwitcherKit.UpdateFeed).

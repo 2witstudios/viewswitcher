@@ -2,18 +2,18 @@
 //
 // - mac: this Mac itself. The Mac app, a browser on the Mac, OBS's program page.
 // - macOrUsb: that, or the iPad or iPhone on the USB-C bridge (its tunnel ends on 127.0.0.1 too).
-// - paired: those, or a paired device on the Wi-Fi (or, for developers, through tailscale serve).
+// - paired: those, or a paired phone or tablet on the Wi-Fi (or, for developers, through tailscale serve).
 // - public: anyone who passes the host guard: the pairing page and its POST.
 //
 // Anything not from this Mac or the USB-C bridge is remote, and is served only while remote access
-// (the Mac app's Wi-Fi setting) is on; without a paired device token it gets the pairing page, and
+// (the Mac app's Wi-Fi setting) is on; without a paired phone's token it gets the pairing page, and
 // nothing else.
 //
 // "This Mac" is the socket's own remote address being loopback, addressed to a loopback name, with no
 // proxy headers. Proxy headers are never believed (anyone can send X-Forwarded-For), so they only ever
 // make a request *less* trusted: a loopback connection carrying them was forwarded from somewhere else.
 // The loopback Host keeps DNS rebinding out: a page at some other name that now resolves to 127.0.0.1
-// is treated like any other device (and the host guard refuses it first).
+// is treated like any other caller on the network (and the host guard refuses it first).
 import { loopbackHost } from "./origin";
 
 /** Headers a proxy or forwarder adds to say who the real client is. Any x-forwarded-* counts too. */
@@ -61,12 +61,12 @@ export function isMac(peer: Peer, headers: Headers, bridged: ReadonlySet<number>
 export const Audience = { Mac: "mac", MacOrUsb: "macOrUsb", Paired: "paired", Public: "public" } as const;
 export type Audience = (typeof Audience)[keyof typeof Audience];
 
-/** Who is asking. `device`: the paired device's id. */
+/** Who is asking. `remote`: the paired phone's or tablet's id. */
 export type Caller = { kind: "mac" } | { kind: "usb" } | { kind: "remote"; remote: string } | { kind: "stranger" };
 
 /**
  * Who sent a request. `onLan`: it came in on the Wi-Fi listener, which is never this Mac whatever the
- * peer says. `device` looks up a paired device by the request's cookie, and is only asked for remote ones.
+ * peer says. `remote` looks up a paired phone or tablet by the request's cookie, and is only asked for callers that aren't this Mac.
  */
 export function callerOf(
   { onLan, peer, headers, remote, bridged = bridgePorts }: { onLan: boolean; peer: Peer; headers: Headers; remote: () => string | null; bridged?: ReadonlySet<number> },

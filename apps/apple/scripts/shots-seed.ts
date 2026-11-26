@@ -32,7 +32,7 @@ const today = new Date().toISOString().slice(0, 10);
 async function show(name: string, accent: string, ground: string, pack: string, project: string, stream: string) {
   const { orgId } = await call("/api/orgs", { name, accent, ground });
   const { token } = await call("/api/packs/builtin/stage", { org: orgId, id: pack });
-  await call("/api/packs/install", { org: orgId, token });
+  await call("/api/sets/install", { org: orgId, token });
   await fillDevices(orgId, pack);
   // Not the starter views every new org gets: their boxes would be empty.
   const templates = join(library, orgId, "templates");

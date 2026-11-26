@@ -25,12 +25,12 @@ export const config = {
   starter: resolve(env.VIEWSWITCHER_STARTER ?? join(import.meta.dir, "../starter")),
   /** Built switcher/program SPA. */
   webDist: resolve(env.VIEWSWITCHER_WEB_DIST ?? join(import.meta.dir, "../../web/dist")),
+  /** VIEWSWITCHER_LOG=1: print requests, placements and OBS-browser errors (log.ts). */
+  verbose: !!env.VIEWSWITCHER_LOG,
   /**
    * The built-in template packs, prebuilt by packs:export (the Mac app's Resources/packs).
    * Unset in a source run: they're built from the repo (the starter and @viewswitcher/packs' shows).
    */
-  /** VIEWSWITCHER_LOG=1: print requests, placements and OBS-browser errors (log.ts). */
-  verbose: !!env.VIEWSWITCHER_LOG,
   packs: env.VIEWSWITCHER_PACKS ? resolve(env.VIEWSWITCHER_PACKS) : null,
   /** The example shows' views and themes a source run builds them from; unset: @viewswitcher/packs' own shows/ folder. */
   shows: env.VIEWSWITCHER_SHOWS ? resolve(env.VIEWSWITCHER_SHOWS) : undefined,

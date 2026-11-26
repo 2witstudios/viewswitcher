@@ -4,7 +4,7 @@ One word for each thing. **People read** is the word in the app, the site, the R
 
 | People read | Code | What it is | Where it lives |
 |---|---|---|---|
-| **library** | `library`, `libraryRoot` | Everything ViewSwitcher keeps: every show, plus its own state | `~/ViewSwitcher Library` (`VIEWSWITCHER_LIBRARY`) |
+| **library** | `library`, `libraryRoot` (a bare `root` is always the library's; one show's folder is `orgDir`) | Everything ViewSwitcher keeps: every show, plus its own state | `~/ViewSwitcher Library` (`VIEWSWITCHER_LIBRARY`) |
 | **show** | `org`, `Org`, `orgDir`, `orgId` | One brand or channel: a name, an accent and a ground color, its templates, projects and assets | `<library>/<org>/org.json` |
 | **project** | `project`, `Project` | A series within a show. Its views are shared by every stream in it | `<org>/projects/<id>/project.json`, `scenes/` |
 | **stream** | `stream`, `Stream` | One episode: a dated folder holding the views made for it and its own copies of project views | `<project>/streams/MM-DD-slug/stream.json` |
@@ -22,10 +22,10 @@ One word for each thing. **People read** is the word in the app, the site, the R
 | **the ViewSwitcher scene** | `obsScene` | The one OBS scene ViewSwitcher drives. Always say "OBS scene" in code | `OBS_SCENE` |
 | **live** / **recording** | `ObsStatus.streaming`, `ObsStatus.recording` | OBS is broadcasting or recording. Never "stream" for this | |
 | **phone or tablet** (paired) | `remote`, `Remote` | A phone or tablet paired over Wi-Fi | `<library>/.viewswitcher/devices.json` |
-| **iPhone or iPad on USB-C** | `usbDevice` | The app connected over the cable | |
+| **iPhone or iPad on USB-C** | `usb` (the caller `{ kind: "usb" }`, `Audience.MacOrUsb`, `LiveState.usb`) | The app connected over the cable | |
 | **the app** (iPhone, iPad) | `iPad` (folder, target "ViewSwitcher iPad", user agent `ViewSwitcher-iPad`): a historical name kept on purpose, for App Store continuity | The one universal iPhone and iPad app | `apps/apple/iPad` |
 | **AI app**, **agent** | `agent` | An AI app connected over MCP | `/mcp` |
-| **preview** | `preview`, `Previewer` | A picture of a view rendered in OBS, for agents. Nothing else is called a preview | `preview.ts` |
+| **preview** | `preview`, `Previewer` | A picture of a view rendered in OBS, for agents. Nothing else is called a preview, except one wire name kept on purpose: the `?preview` query and `preview` class that paint a view as a cover (every library's and pack's `scene.js` reads them; `cover` in code) | `preview.ts` |
 | **live edit** | `liveEdit` | Unsaved editor changes shown on the program as you make them | |
 
 ## Words we don't use

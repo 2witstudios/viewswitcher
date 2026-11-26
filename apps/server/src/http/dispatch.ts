@@ -35,7 +35,7 @@ export class HttpError extends Error {
   }
 }
 
-/** A live socket's data: the paired device it belongs to, and whether it came over the Wi-Fi. */
+/** A live socket's data: the paired phone or tablet it belongs to, and whether it came over the Wi-Fi. */
 export type SocketData = { remote: string | null; lan: boolean };
 
 /** What a handler gets. */
@@ -75,9 +75,9 @@ export type DispatchOptions = {
   remoteAccess: () => boolean;
   /** Whether a request came in on the Wi-Fi listener. */
   onLan: (srv: Server<SocketData>) => boolean;
-  /** The paired device a request's token belongs to, or null. */
+  /** The paired phone or tablet a request's token belongs to, or null. */
   remote: (req: Request) => string | null;
-  /** After a paired device's request: a Set-Cookie that renews its pairing, or null. */
+  /** After a paired phone's or tablet's request: a Set-Cookie that renews its pairing, or null. */
   renew: (remote: string, c: Ctx) => string | null;
   /** The pairing page, for a stranger's page load. */
   pairPage: (req: Request) => Response;

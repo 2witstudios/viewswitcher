@@ -6,7 +6,7 @@ import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { useEffect, useRef } from "react";
 import { api } from "../../lib/api";
 
-const PREVIEW_MS = 33;
+const LIVE_EDIT_MS = 33;
 const HEARTBEAT_MS = 2000;
 
 type Change = { edit: SceneEdit; gen: number };
@@ -50,7 +50,7 @@ export function useLiveEdit(opts: {
       }
       const hash = o.current.base()?.hash ?? "";
       for (const p of items) api.liveEdit(o.current.path, hash, p.edit).catch(() => {});
-      timer.current = setTimeout(flush, PREVIEW_MS);
+      timer.current = setTimeout(flush, LIVE_EDIT_MS);
     };
     flush();
   };

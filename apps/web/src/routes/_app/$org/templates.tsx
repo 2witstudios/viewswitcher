@@ -156,7 +156,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
           />
         )}
         {staged && data && (
-          <PackPreview
+          <PackCovers
             pack={staged}
             onCancel={() => {
               void packs.cancel(org, staged.token).catch(() => {});
@@ -174,7 +174,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
   },
 });
 
-function PackPreview({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel: () => void; onInstall: () => Promise<void> }) {
+function PackCovers({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel: () => void; onInstall: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const m = pack.manifest;

@@ -25,7 +25,7 @@ export function liveRoutes(d: RouteDeps): Route[] {
     get("/api/state", () => store.state),
     post("/api/onair", (b) => store.goOnAir({ path: b.path, label: b.label, projectId: b.projectId, streamId: b.streamId })),
     post("/api/program/slots", async (b) => {
-      // Devices follow what the program page is *showing*, never what was just requested: the page
+      // Sources follow what the program page is *showing*, never what was just requested: the page
       // always converges on the latest on-air scene, so its last report matches the final picture.
       // (Ignoring "stale" reports by scene caused drift.) Reports are numbered per page; one that
       // arrives after a newer one from the same page (a live drag's 33 ms reports can swap) is ignored.

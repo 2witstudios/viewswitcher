@@ -1,4 +1,4 @@
-// Pairing phones and tablets: one-time codes the Mac app shows, and the device tokens
+// Pairing phones and tablets: one-time codes the Mac app shows, and the remotes' tokens
 // they are exchanged for.
 //
 // - A code is 8 characters from an alphabet without look-alikes (I, L, O, 0, 1), lives 5 minutes, and
@@ -6,7 +6,7 @@
 //   up after MAX_CODE_FAILURES wrong guesses against it, and each address may guess only
 //   MAX_PEER_FAILURES times per window, so a guesser gets a few dozen tries at ~8.5e11 codes.
 // - A device token is 32 random bytes. The store keeps only its SHA3-256 hash, so devices.json can't
-//   be turned back into a working token. Removing a device drops its hash: its token stops at once.
+//   be turned back into a working token. Removing a remote drops its hash: its token stops at once.
 //
 // Secrets are compared by hashing both sides with SHA3-256 and comparing the digests (the
 // aidd-timing-safe-compare rule). Don't "fix" this to a raw === or crypto.timingSafeEqual: a digest
@@ -20,10 +20,10 @@ export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const MAX_CODE_FAILURES = 10;
 export const MAX_PEER_FAILURES = 5;
 export const PEER_WINDOW_MS = 5 * 60_000;
-/** Cookie that carries the device token. */
+/** Cookie that carries a remote's token. */
 export const COOKIE = "vs_device";
-/** Browsers keep a cookie at most 400 days. The cookie is sent again at most once a day while a device is
- *  in use (`renew`), so a device used within that time stays paired. */
+/** Browsers keep a cookie at most 400 days. The cookie is sent again at most once a day while a remote is
+ *  in use (`renew`), so a remote used within that time stays paired. */
 export const COOKIE_MAX_AGE_S = 400 * 24 * 3600;
 const RENEW_MS = 24 * 3600_000;
 
@@ -85,12 +85,12 @@ export class Pairing {
   /** The last code was cancelled by wrong guesses (someone on the network is guessing); the Mac says so. */
   codeGuessed = false;
   private peers = new Map<string, number[]>(); // wrong-guess times per address (only addresses that guessed wrong)
-  private renewed = new Map<string, number>(); // when each device's cookie was last sent
+  private renewed = new Map<string, number>(); // when each remote's cookie was last sent
   private lastSaved = 0; // when a lastSeen change was last scheduled for writing
   private readonly now: () => number;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   private saving: Promise<void> = Promise.resolve();
-  /** Called after a device is removed (to close its sockets). */
+  /** Called after a remote is removed (to close its sockets). */
   onRemoved: (id: string) => void = () => {};
 
   constructor(private readonly opts: Options) {
@@ -130,7 +130,7 @@ export class Pairing {
     return this.code && this.code.expiresAt > this.now() ? this.code.expiresAt : null;
   }
 
-  /** Exchange a code for a device token. `peer` keys the rate limit: the socket's address, or the
+  /** Exchange a code for a remote's token. `peer` keys the rate limit: the socket's address, or the
    *  forwarded client's for a proxied request (a bucket key only, never trusted for anything else). */
   pair(candidate: unknown, name: string, peer: string): PairResult {
     const t = this.now();
@@ -166,7 +166,7 @@ export class Pairing {
 
   // ------------------------------------------------------------ devices
 
-  /** The device a token belongs to (and it was just seen), or null. */
+  /** The remote a token belongs to (and it was just seen), or null. */
   check(token: string | null | undefined): RemoteInfo | null {
     if (!token) return null;
     const d = this.remotes.get(sha3(token)); // a lookup by digest: hash first, never the raw token
@@ -181,7 +181,7 @@ export class Pairing {
     return info(d);
   }
 
-  /** Whether to send this device's cookie again (at most once a day), so it lasts 400 days from last use, not from pairing. */
+  /** Whether to send this remote's cookie again (at most once a day), so it lasts 400 days from last use, not from pairing. */
   renew(id: string): boolean {
     const t = this.now();
     if (t - (this.renewed.get(id) ?? 0) < RENEW_MS) return false;
@@ -198,8 +198,8 @@ export class Pairing {
     return [...this.remotes.values()].map(info).sort((a, b) => b.lastSeen - a.lastSeen);
   }
 
-  /** Remove a device: its token stops now, and devices.json is written before this returns, so a quit or a
-   *  crash right after can't bring it back. Resolves false if there's no such device; throws if the write failed. */
+  /** Remove a remote: its token stops now, and devices.json is written before this returns, so a quit or a
+   *  crash right after can't bring it back. Resolves false if there's no such remote; throws if the write failed. */
   async remove(id: string): Promise<boolean> {
     for (const [hash, d] of this.remotes) {
       if (d.id !== id) continue;
@@ -250,7 +250,7 @@ export class Pairing {
 
 const info = ({ tokenHash: _, ...d }: Remote): RemoteInfo => ({ ...d });
 
-/** The device token from a Cookie header. */
+/** A remote's token from a Cookie header. */
 export function tokenFromCookie(header: string | null): string | null {
   if (!header) return null;
   for (const part of header.split(";")) {
@@ -260,6 +260,6 @@ export function tokenFromCookie(header: string | null): string | null {
   return null;
 }
 
-/** Set-Cookie for a new device token: HttpOnly (no script reads it), SameSite=Strict (no other site sends it). */
+/** Set-Cookie for a new remote's token: HttpOnly (no script reads it), SameSite=Strict (no other site sends it). */
 export const tokenCookie = (token: string, secure: boolean) =>
   `${COOKIE}=${token}; Path=/; Max-Age=${COOKIE_MAX_AGE_S}; HttpOnly; SameSite=Strict${secure ? "; Secure" : ""}`;

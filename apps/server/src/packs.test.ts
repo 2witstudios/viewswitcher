@@ -45,7 +45,7 @@ describe("the starter kit as a pack", () => {
     expect(s.warnings).toEqual([]);
     const cover = await readFile(join(root, s.views[1]!.path), "utf8");
     expect(s.views[1]!.path.startsWith(`${org}/.viewswitcher/staging/`)).toBe(true); // library paths start with the org id
-    expect(cover).toContain(`href="/library/${org}/.viewswitcher/staging/${s.token}/preview/_shared/theme.css"`);
+    expect(cover).toContain(`href="/library/${org}/.viewswitcher/staging/${s.token}/covers/_shared/theme.css"`);
     expect(cover).toContain("Daisy Debate");
     // Staged, not installed: the org has no set yet.
     expect((await scanOrg(root, org)).sets).toEqual([]);

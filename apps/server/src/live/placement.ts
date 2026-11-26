@@ -41,7 +41,7 @@ const PLACEMENT_TIMEOUT_MS = 2000;
 
 /**
  * The OBS changes for one placement, given the scene's items and the slotted sources' sizes (by item
- * id; 0×0 for a source with no picture yet). Every managed item (a device, or a source some scene
+ * id; 0×0 for a source with no picture yet). Every managed item (a configured source, or one some view
  * placed before: `placed`) that isn't in one of this scene's slots is hidden, so a guest camera from
  * the last scene doesn't stay on top of a BRB. The program, the ground and anything else are left alone.
  */

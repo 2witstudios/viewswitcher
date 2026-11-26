@@ -1,7 +1,7 @@
 // Installing template packs. A pack arrives as a .zip or a dropped folder's files.
 //
 // 1. stage: list it, check every path and size before anything is written (planPack), unpack it into
-//    <org>/.viewswitcher/staging/<token>/raw (inside the org, so preview paths start with its id), check what it is (checkPack), and write a preview
+//    <org>/.viewswitcher/staging/<token>/raw (inside the org, so cover paths start with its id), check what it is (checkPack), and write a covers
 //    copy, filled in for the org, that the switcher shows as covers before anyone says Install.
 // 2. install: fill the raw copy in for the org into staging/<token>/final, then rename that folder to
 //    <org>/templates/<set>. Nothing reaches the org until that one rename, so a failed install (or a
@@ -130,20 +130,20 @@ export async function stagePack(libraryRoot: string, orgId: string, source: Pack
     const set = await freeSet(orgDir, report.manifest.id);
     const files = plan.files.map((f: PackFile) => f.path);
 
-    // 4. A preview copy for the covers, filled in for this org.
-    const previewRel = `${plainName(orgId)}/${STAGING}/${token}/preview`;
-    const previewVars = await varsFor(libraryRoot, orgId, libraryUrl(previewRel));
-    await fillCopy(raw, join(dir, "preview"), files, previewVars);
+    // 4. A copy filled in for this org, which the switcher shows as covers.
+    const coversRel = `${plainName(orgId)}/${STAGING}/${token}/covers`;
+    const coverVars = await varsFor(libraryRoot, orgId, libraryUrl(coversRel));
+    await fillCopy(raw, join(dir, "covers"), files, coverVars);
     // A cover's caption is the filled view's title, as the cover above it shows it ("Daisy Debate · Live").
-    const label = (v: { file: string; name: string }) => readTitle(fillPlaceholders(v.file, texts[v.file] ?? "", previewVars)) ?? v.name.replace(/-/g, " ");
-    const views = report.views.map((v) => ({ name: v.name, label: label(v), path: `${previewRel}/${installedPath(v.file)}` }));
+    const label = (v: { file: string; name: string }) => readTitle(fillPlaceholders(v.file, texts[v.file] ?? "", coverVars)) ?? v.name.replace(/-/g, " ");
+    const views = report.views.map((v) => ({ name: v.name, label: label(v), path: `${coversRel}/${installedPath(v.file)}` }));
     const sceneJs = texts["_shared/scene.js"];
     const standard = sceneJs !== undefined && starterScript !== null && hash(sceneJs) === hash(starterScript);
     const meta: StageMeta = { org: orgId, set, manifest: report.manifest, files, created: Date.now() };
     await writeAtomic(join(dir, "meta.json"), JSON.stringify(meta));
     return {
       token, set, manifest: report.manifest, views,
-      transition: report.transition ? `${previewRel}/${report.transition}` : null,
+      transition: report.transition ? `${coversRel}/${report.transition}` : null,
       scripts: { ...report.scripts, standard },
       warnings: plan.skipped ? [...report.warnings, `Left out ${plan.skipped} hidden or system file${plan.skipped === 1 ? "" : "s"} (like .DS_Store)`] : report.warnings,
       files: files.length,

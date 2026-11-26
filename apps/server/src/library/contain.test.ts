@@ -21,7 +21,7 @@ put("daisy/templates/brb.html");
 put("daisy/.git/config");
 put("daisy/.env");
 put(".viewswitcher/settings.json", "{}");
-put(`daisy/.viewswitcher/staging/${TOKEN}/preview/brb.html`);
+put(`daisy/.viewswitcher/staging/${TOKEN}/covers/brb.html`);
 put(`daisy/.viewswitcher/staging/${TOKEN}/meta.json`, "{}");
 writeFileSync(join(outside, "secret.txt"), "secret");
 symlinkSync(join(outside, "secret.txt"), join(library, "daisy/templates/away.html"));
@@ -52,13 +52,13 @@ describe("resolveInLibrary", () => {
   test("bad shapes are refused", async () => {
     for (const p of ["", "/daisy/templates/brb.html", "daisy//templates/brb.html", "daisy/templates/", "daisy\\\\templates", "daisy/\\0"]) await refused(p);
   });
-  test("a staged pack's preview may be read, never written, and nothing else in staging", async () => {
-    expect(await resolveInLibrary(library, `daisy/.viewswitcher/staging/${TOKEN}/preview/brb.html`)).toBe(real(`daisy/.viewswitcher/staging/${TOKEN}/preview/brb.html`));
-    await refused(`daisy/.viewswitcher/staging/${TOKEN}/preview/brb.html`, { forWrite: true });
+  test("a staged pack's covers may be read, never written, and nothing else in staging", async () => {
+    expect(await resolveInLibrary(library, `daisy/.viewswitcher/staging/${TOKEN}/covers/brb.html`)).toBe(real(`daisy/.viewswitcher/staging/${TOKEN}/covers/brb.html`));
+    await refused(`daisy/.viewswitcher/staging/${TOKEN}/covers/brb.html`, { forWrite: true });
     await refused(`daisy/.viewswitcher/staging/${TOKEN}/meta.json`);
-    await refused(`daisy/.viewswitcher/staging/abc/preview/brb.html`);
-    await refused(`daisy/.viewswitcher/staging/${TOKEN}/preview/.hidden`);
-    await refused(`.git/.viewswitcher/staging/${TOKEN}/preview/brb.html`);
+    await refused(`daisy/.viewswitcher/staging/abc/covers/brb.html`);
+    await refused(`daisy/.viewswitcher/staging/${TOKEN}/covers/.hidden`);
+    await refused(`.git/.viewswitcher/staging/${TOKEN}/covers/brb.html`);
   });
 });
 

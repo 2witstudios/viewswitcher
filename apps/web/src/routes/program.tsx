@@ -28,7 +28,7 @@ if (typeof window !== "undefined") {
 const WIPE_HOLD = 90; // a transition page can ask for longer: <meta name="viewswitcher:hold" content="600">
 const LOAD_TIMEOUT = 6000;
 /** A live edit that's neither saved nor refreshed this long (the editor went away) is dropped: the frame reloads. */
-const PREVIEW_BACKSTOP_MS = 5000;
+const LIVE_EDIT_BACKSTOP_MS = 5000;
 
 // Slot reports are numbered per page, so the server applies them in the order they were made (live
 // drag reports go out every 33 ms and can swap on the way).
@@ -187,7 +187,7 @@ export const Route = createFileRoute("/program")({
           // Not if a saved version replaced it, or the operator asked for another scene meanwhile.
           if (!shouldBackstop(program.shown(), program.desired(), job)) return;
           program.request({ url: freshUrl(job.url, ++seq.current), path: job.path });
-        }, PREVIEW_BACKSTOP_MS);
+        }, LIVE_EDIT_BACKSTOP_MS);
       });
       // The bridge answers each live edit; when it moved a camera box, report the slots again (at most
       // ~30 times a second) so OBS follows it.
