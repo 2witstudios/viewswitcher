@@ -11,7 +11,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
-import type { Asset, AssetKind, Library, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
+import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
 import { exists, readOrg } from "../library";
 import { limit } from "../limit";
 import { inside, plainName } from "../paths";
@@ -41,7 +41,7 @@ export class LibraryScanner {
   }
 
   /** One org's content; every returned path starts with the org id. */
-  async scan(orgId: string): Promise<Library> {
+  async scanOrg(orgId: string): Promise<OrgContent> {
     const orgDir = inside(this.libraryRoot, plainName(orgId));
     const prefix = `${orgId}/`; // readOrg's id is the one asked for, so nothing waits for org.json
     const [org, templates, sets, assets, projects, transition] = await Promise.all([

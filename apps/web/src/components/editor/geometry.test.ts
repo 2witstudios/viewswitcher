@@ -44,7 +44,7 @@ describe("resizeTo", () => {
     expect(resizeTo({ corner: "se", start, x0: 500, y0: 300, slot: false }, { x: -900, y: -900 }, false)).toMatchObject({ width: MIN_SIZE, height: MIN_SIZE });
   });
 
-  test("a device box keeps 16:9 unless Shift is held", () => {
+  test("a camera box keeps 16:9 unless Shift is held", () => {
     const slot = { corner: "se" as const, start: { left: 0, top: 0, width: 640, height: 360 }, x0: 640, y0: 360, slot: true };
     const kept = resizeTo(slot, { x: 960, y: 380 }, false);
     expect(kept.width / kept.height).toBeCloseTo(16 / 9);

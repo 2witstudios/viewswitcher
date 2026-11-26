@@ -15,7 +15,7 @@ export function useOpenEditor(): (path: string, opts?: { rename?: boolean; repla
     void navigate({ to: "/$org/edit", params: { org: orgOf(path) }, search: rename ? { path, rename: true } : { path }, replace });
 }
 
-/** The 1920×1080 scene scaled to `el`'s width: 280 px on a desktop, half a phone's width (MAC-27).
+/** The 1920×1080 scene scaled to `el`'s width: 280 px on a desktop, half a phone's width.
  *  Takes the element from a callback ref, so a box that mounts later (the on-air cover once something goes on air) is observed too. */
 function useCoverScale(el: HTMLElement | null) {
   useEffect(() => {
@@ -26,7 +26,7 @@ function useCoverScale(el: HTMLElement | null) {
   }, [el]);
 }
 
-/** Upright on a phone (PHONE-3): what's on air, large, above the scenes. Mounted only there, so the
+/** Upright on a phone: what's on air, large, above the scenes. Mounted only there, so the
  *  Mac, the iPad and the deck don't load and run a hidden copy of the on-air scene. */
 export function OnAirHero() {
   const onAir = useLive((l) => (l.connected ? l.state?.onAir : null));

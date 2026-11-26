@@ -1,5 +1,5 @@
 // Dragging, resizing and nudging boxes, in scene pixels (1920×1080). Pure, so every rule here is
-// tested without a browser: the 8 px grid, snapping to other boxes, 16:9 device boxes, the corners.
+// tested without a browser: the 8 px grid, snapping to other boxes, 16:9 camera boxes, the corners.
 import { SCENE, snapMove } from "@viewswitcher/shared";
 import type { Box, SizeEdit } from "@viewswitcher/shared";
 
@@ -40,11 +40,11 @@ export function dragTo(d: DragStart, p: { x: number; y: number }, threshold: num
   };
 }
 
-export type ResizeStart = { corner: Corner; start: Pos & Size; x0: number; y0: number; /** A device box: keeps 16:9. */ slot: boolean };
+export type ResizeStart = { corner: Corner; start: Pos & Size; x0: number; y0: number; /** A camera box: keeps 16:9. */ slot: boolean };
 
 /**
  * A box resized from one corner with the pointer at scene point `p`. The opposite corner stays put.
- * Device boxes keep 16:9 (the camera's own shape) unless `free` (Shift); sizes go on the grid.
+ * Camera boxes keep 16:9 (the camera's own shape) unless `free` (Shift); sizes go on the grid.
  */
 export function resizeTo(r: ResizeStart, p: { x: number; y: number }, free: boolean): Pos & Size {
   const dx = p.x - r.x0, dy = p.y - r.y0;

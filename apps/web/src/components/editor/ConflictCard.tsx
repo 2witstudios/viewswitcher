@@ -13,13 +13,13 @@ export function ConflictCard({ conflict, firstMark, onApplyAgain, onKeepNew }: {
   onKeepNew: () => void;
 }) {
   return (
-    <div className="conflict" role="alertdialog" aria-label="This scene changed while you were editing"
+    <div className="conflict" role="alertdialog" aria-label="This view changed while you were editing"
       // Low on the stage when the change is in the top half.
       style={firstMark && firstMark.y + firstMark.h / 2 < SCENE_H / 2 ? { top: "auto", bottom: "8%" } : undefined}>
       <div className="head">
         {Icon.changed}
         <div>
-          <b>This scene changed while you were editing</b>
+          <b>This view changed while you were editing</b>
           <p>A newer version was saved. This change didn't make it:</p>
         </div>
       </div>

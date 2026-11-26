@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a web view does with a navigation (MAC-13, MAC-14). Pure, so XCTest covers every case.
+/// What a web view does with a navigation. Pure, so XCTest covers every case.
 public enum NavigationDecision: Equatable, Sendable {
     case allow
     /// Cancel it and open the URL outside: in the default browser (http and https), or Cursor's MCP install link.
@@ -88,7 +88,7 @@ public enum NavigationPolicy {
 
     /// Hosts the iPhone and iPad app may show in its main frame (the Capacitor app's allowNavigation): the
     /// USB-C tunnel on 127.0.0.1, tailscale serve (*.ts.net), Bonjour names (*.local), and a private LAN
-    /// address, which the Mac's pairing QR code carries (PHONE-4). A LAN device could answer as either a
+    /// address, which the Mac's pairing QR code carries. A LAN device could answer as either a
     /// .local name or an address, so the address adds nothing a .local name didn't already allow.
     public static func iPadHostAllowed(_ host: String?) -> Bool {
         guard let h = host?.lowercased(), !h.isEmpty else { return false }

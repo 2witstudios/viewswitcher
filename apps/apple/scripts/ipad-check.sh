@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MAC-20, PHONE-1: checks an exported ViewSwitcher (iPhone and iPad) .ipa for what App Store validation rejects, before upload.
+# Checks an exported ViewSwitcher (iPhone and iPad) .ipa for what App Store validation rejects, before upload.
 # Run by scripts/ipad-release.sh after the export.
 #   bash apps/apple/scripts/ipad-check.sh <ViewSwitcher.ipa> [expected build number]
 set -euo pipefail

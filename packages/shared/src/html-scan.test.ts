@@ -134,7 +134,7 @@ describe("text and entities", () => {
   });
 });
 
-describe("edits (EDIT-2)", () => {
+describe("edits", () => {
   const teaching = readFileSync(join(starter, "teaching.html"), "utf8");
   const title = scanElements(teaching).find((e) => e.leaf && textOf(teaching, e) === "Today's topic")!;
   const notes = el(teaching, "section");
@@ -198,7 +198,7 @@ describe("edits (EDIT-2)", () => {
   });
 });
 
-describe("conflicts (EDIT-8)", () => {
+describe("conflicts", () => {
   const base = `<main><section style="left: 1px; top: 2px"><span>Notes</span><p>Old note</p></section><h2>Title</h2></main>`;
   const theirs = `<main><section style="left: 1px; top: 2px"><span>Notes</span><p>Their note</p></section><h2>Title</h2><p>Added</p></main>`;
 
@@ -293,7 +293,7 @@ describe("tagging a very large scene", () => {
   });
 });
 
-describe("version stamp (PR #1 architecture #1, #2)", () => {
+describe("version stamp", () => {
   test("tagForEdit stamps the hash on <html> only, and untagForEdit removes it", () => {
     const html = `<!doctype html><html lang="en"><body><p>x</p></body></html>`;
     const tagged = tagForEdit(html, "abc123");
@@ -306,7 +306,7 @@ describe("version stamp (PR #1 architecture #1, #2)", () => {
   });
 });
 
-describe("CodeRabbit findings on PR #1", () => {
+describe("edge cases: positions in quoted values and comments, raw text, empty text, swapped text, retargeting", () => {
   const pos = (style: string) => {
     const html = `<div style="${style}"></div>`;
     return positionOf(html, scanElements(html)[0]!);
@@ -349,7 +349,7 @@ describe("CodeRabbit findings on PR #1", () => {
   });
 });
 
-describe("/code-review findings on PR #1", () => {
+describe("entities and unchanged text", () => {
   test("named entities decode (case-sensitive), so an unchanged text is left alone", () => {
     expect(decodeEntities("caf&eacute; &Eacute;t&eacute; 10&nbsp;AM &euro;5 &yuml;")).toBe("café Été 10 AM €5 ÿ");
     const html = `<p>Caf&eacute; at 10&nbsp;AM</p>`;
@@ -359,7 +359,7 @@ describe("/code-review findings on PR #1", () => {
   });
 });
 
-describe("/review round 2 findings on PR #1", () => {
+describe("more edge cases: comments in values, !important, twins, nested panels", () => {
   const pos = (style: string) => {
     const html = `<div style="${style}"></div>`;
     return positionOf(html, scanElements(html)[0]!);
@@ -380,7 +380,7 @@ describe("/review round 2 findings on PR #1", () => {
     // One on each side still works.
     expect(retarget(`<p>Notes</p>`, `<h1>New</h1><p>Notes</p>`, { id: 0, text: "Mine" })).toEqual({ id: 1, text: "Mine" });
   });
-  test("retarget doesn't fall back to another element with the same start tag (round 3)", () => {
+  test("retarget doesn't fall back to another element with the same start tag", () => {
     const prev = `<section><span class="kicker">Notes</span></section><section><span class="kicker">Agenda</span></section>`;
     const next = `<section><span class="kicker">Agenda</span></section>`;
     expect(retarget(prev, next, { id: 1, text: "Mine" })).toBeNull();
@@ -394,14 +394,14 @@ describe("/review round 2 findings on PR #1", () => {
   });
 });
 
-describe("/code-review round 2 on PR #1", () => {
+describe("entities with digits", () => {
   test("names with digits decode (&frac12;, &sup2;)", () => {
     expect(decodeEntities("&frac12; &sup2; &frac34;")).toBe("½ ² ¾");
     expect(setText(`<p>&frac12; cup</p>`, 0, "½ cup")).toBe(`<p>&frac12; cup</p>`);
   });
 });
 
-describe("/code-review round 4 on PR #1", () => {
+describe("non-breaking spaces are text", () => {
   test("leading and trailing non-breaking spaces are text, not whitespace", () => {
     const html = `<p>&nbsp;&nbsp;Indented</p>`;
     expect(textOf(html, scanElements(html)[0]!)).toBe("  Indented");
@@ -412,7 +412,7 @@ describe("/code-review round 4 on PR #1", () => {
   });
 });
 
-describe("round 5 on PR #1", () => {
+describe("empty and whitespace-only text", () => {
   test("text that's only spaces is empty, a lone non-breaking space included", () => {
     expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();
     expect(() => setText(`<h1>x</h1>`, 0, " ")).toThrow();
@@ -448,6 +448,7 @@ describe("readTitle", () => {
     "a title in a quoted attribute": '<head><meta content="<title>Fake</title>"><title>Real</title></head>',
     "a > in the title's own attribute": '<head><title data-x="a>b">Real</title></head>',
     "nested templates": "<head><template><template></template><title>Inner</title></template><title>Real</title></head>",
+    "an SVG's title before the page's": "<head></head><body><svg><title>Logo</title></svg></body><title>Real</title>",
     "a bogus comment": "<head><!x <title>><title>Real</title></head>",
     "a processing instruction": "<head><?x <title>?><title>Real</title></head>",
   };
@@ -456,6 +457,21 @@ describe("readTitle", () => {
   });
   test.each(Object.entries(pages))("agrees with setTitle on which title it is: %s", (_name, html) => {
     expect(readTitle(setTitle(html, "New"))).toBe("New");
+  });
+  test("setTitle never writes into an SVG's or MathML's title, and never removes what's after one", () => {
+    const html = '<head></head><body><svg><title/><rect/></svg><p>Keep me</p><svg><title>Logo</title></svg></body>';
+    const out = setTitle(html, "New");
+    expect(out).toBe('<head><title>New</title></head><body><svg><title/><rect/></svg><p>Keep me</p><svg><title>Logo</title></svg></body>');
+    expect(readTitle(html)).toBeNull();
+    expect(readTitle('<head></head><body><math><title>x</title></math></body>')).toBeNull();
+  });
+  test("setTitle fills a self-closed <title/> by replacing it, so the name lands inside a title", () => {
+    expect(setTitle('<head><title data-x="1"/><meta charset="utf-8"></head>', "New")).toBe('<head><title>New</title><meta charset="utf-8"></head>');
+    expect(readTitle(setTitle("<head><title/></head>", "New"))).toBe("New");
+    // A browser reads <title/>Old</title> as one title holding "Old": the rename replaces all of it.
+    expect(setTitle("<head><title/>Old</title><meta charset=\"utf-8\"></head>", "New")).toBe("<head><title>New</title><meta charset=\"utf-8\"></head>");
+    // An unquoted value ending in "/" isn't a self-closed tag: the title and its attributes stay.
+    expect(setTitle("<head><title data-x=a/>Old</title></head>", "New")).toBe("<head><title data-x=a/>New</title></head>");
   });
   test("an unclosed comment hides everything after it; a title that never closes isn't one", () => {
     expect(readTitle("<head><!-- <title>Old</title> unclosed")).toBeNull();

@@ -1,7 +1,7 @@
 // Places OBS sources into the data-slot boxes of the scene the program page is showing, and recolors
 // the ground for its org.
 //
-// Only sources ViewSwitcher manages are touched: the configured devices (OBS_DEVICES), any source a
+// Only sources ViewSwitcher manages are touched: the configured sources (OBS_SOURCES), any source a
 // scene has ever placed (a Guest or Camera 2 box from the editor; remembered across restarts), and
 // the current scene's slots. Anything else people put in the ViewSwitcher scene by hand (a mic, a
 // music input, a watermark) is never hidden: a hidden audio input is silent on air.
@@ -14,8 +14,9 @@
 import { coverTransform, obsColor } from "@viewswitcher/shared";
 import type { Slot } from "@viewswitcher/shared";
 import type { BatchRequest, BatchResult } from "../obs";
+import type { Log } from "../log";
 
-export type PlacementNames = { scene: string; programSource: string; groundSource: string; /** Sources scenes may place (OBS_DEVICES). */ devices: string[] };
+export type PlacementNames = { obsScene: string; programSource: string; groundSource: string; /** Sources views may place (OBS_SOURCES). */ sources: string[] };
 
 /** What placement needs from OBSClient. */
 export type PlacementObs = {
@@ -40,7 +41,7 @@ const PLACEMENT_TIMEOUT_MS = 2000;
 
 /**
  * The OBS changes for one placement, given the scene's items and the slotted sources' sizes (by item
- * id; 0×0 for a source with no picture yet). Every managed item (a device, or a source some scene
+ * id; 0×0 for a source with no picture yet). Every managed item (a configured source, or one some view
  * placed before: `placed`) that isn't in one of this scene's slots is hidden, so a guest camera from
  * the last scene doesn't stay on top of a BRB. The program, the ground and anything else are left alone.
  */
@@ -50,16 +51,16 @@ export function planPlacement(
   const warnings: string[] = [];
   const hide: BatchRequest[] = [];
   const show: BatchRequest[] = [];
-  const sceneName = names.scene;
+  const sceneName = names.obsScene;
   const inSlots = slotted(items, slots);
   for (const source of new Set(slots.map((s) => s.source))) {
-    if (!items.some((i) => i.sourceName === source)) warnings.push(`This scene has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
+    if (!items.some((i) => i.sourceName === source)) warnings.push(`This view has a "${source}" slot, but OBS scene "${sceneName}" has no source with that name.`);
   }
   for (const item of items) {
     if (item.sourceName === names.programSource || item.sourceName === names.groundSource) continue;
     const slot = inSlots.get(item.sceneItemId);
     if (!slot) {
-      if (!names.devices.includes(item.sourceName) && !placed.has(item.sourceName)) continue; // not ours
+      if (!names.sources.includes(item.sourceName) && !placed.has(item.sourceName)) continue; // not ours
       hide.push({ requestType: "SetSceneItemEnabled", requestData: { sceneName, sceneItemId: item.sceneItemId, sceneItemEnabled: false } });
       continue;
     }
@@ -98,7 +99,7 @@ export type PlacerOptions = {
    */
   placed: { has(source: string): boolean; remember(sources: string[]): void };
   timeoutMs?: number;
-  log?: (line: string) => void;
+  log?: Log;
 };
 
 export type Placer = ReturnType<typeof createPlacer>;
@@ -116,9 +117,9 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
 
   async function sceneItems() {
     if (items) return items;
-    const [list] = await obs.requestBatch([{ requestType: "GetSceneItemList", requestData: { sceneName: names.scene } }], { timeoutMs });
+    const [list] = await obs.requestBatch([{ requestType: "GetSceneItemList", requestData: { sceneName: names.obsScene } }], { timeoutMs });
     if (!list?.requestStatus.result) {
-      if (list?.requestStatus.code === 600) throw new Error(`OBS has no scene "${names.scene}". Press Set up OBS in the switcher.`);
+      if (list?.requestStatus.code === 600) throw new Error(`OBS has no scene "${names.obsScene}". Press Set up OBS in the switcher.`);
       throw fail(list, "GetSceneItemList");
     }
     items = ((list.responseData?.sceneItems ?? []) as SceneItem[]).map(({ sourceName, sceneItemId }) => ({ sourceName, sceneItemId }));
@@ -135,7 +136,7 @@ export function createPlacer({ obs, names, ground, onPlaced, placed, timeoutMs =
     const read = ids.length
       ? await obs.requestBatch([
           { requestType: "GetVideoSettings" },
-          ...ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.scene, sceneItemId } })),
+          ...ids.map((sceneItemId) => ({ requestType: "GetSceneItemTransform", requestData: { sceneName: names.obsScene, sceneItemId } })),
         ], { timeoutMs })
       : [];
     const [video, ...transforms] = read;

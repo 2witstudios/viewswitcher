@@ -1,4 +1,4 @@
-// The iPhone App Store set (PHONE-9), from scripts/frame-shots.ts --phone: four marketing shots, each built from
+// The iPhone App Store set, from scripts/frame-shots.ts --phone: four marketing shots, each built from
 // real captures of the app (raw/, from AppStoreScreenshots.testPhoneShots) in realistic iPhones (frame-shots.ts'
 // rim, bezel and buttons) beside the show itself, rebuilt from the site's template frames and photos.
 //   1-stream    "Run your stream / from your phone."     the church stream big, the phone in front (Sermon on air)

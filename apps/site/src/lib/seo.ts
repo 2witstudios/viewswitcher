@@ -1,4 +1,4 @@
-// schema.org JSON-LD for the site's pages (SITE-20…23). Pure: pages pass in what's on them, and only
+// schema.org JSON-LD for the site's pages. Pure: pages pass in what's on them, and only
 // what the page visibly says goes in (Google wants structured data to match the page).
 
 type Thing = Record<string, unknown>;

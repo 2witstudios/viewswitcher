@@ -26,6 +26,7 @@ import { hostTrusted, type Lan, originAllowed, pageProto } from "../origin";
 import { PackError } from "../packs";
 import { PathError } from "../paths";
 import { SettingsError } from "../settings";
+import type { Log } from "../log";
 
 /** A refusal with its status, from a handler or the checks. */
 export class HttpError extends Error {
@@ -34,8 +35,8 @@ export class HttpError extends Error {
   }
 }
 
-/** A live socket's data: the paired device it belongs to, and whether it came over the Wi-Fi. */
-export type SocketData = { device: string | null; lan: boolean };
+/** A live socket's data: the paired phone or tablet it belongs to, and whether it came over the Wi-Fi. */
+export type SocketData = { remote: string | null; lan: boolean };
 
 /** What a handler gets. */
 export type Ctx = {
@@ -74,15 +75,15 @@ export type DispatchOptions = {
   remoteAccess: () => boolean;
   /** Whether a request came in on the Wi-Fi listener. */
   onLan: (srv: Server<SocketData>) => boolean;
-  /** The paired device a request's token belongs to, or null. */
-  device: (req: Request) => string | null;
-  /** After a paired device's request: a Set-Cookie that renews its pairing, or null. */
-  renew: (device: string, c: Ctx) => string | null;
+  /** The paired phone or tablet a request's token belongs to, or null. */
+  remote: (req: Request) => string | null;
+  /** After a paired phone's or tablet's request: a Set-Cookie that renews its pairing, or null. */
+  renew: (remote: string, c: Ctx) => string | null;
   /** The pairing page, for a stranger's page load. */
   pairPage: (req: Request) => Response;
   /** Takes absolute paths out of error messages (scrub.ts). */
   scrub: (message: string) => string;
-  log?: (line: string) => void;
+  log?: Log;
   /** The USB-C bridge's connections (gate.ts bridgePorts); tests pass their own. */
   bridged?: ReadonlySet<number>;
 };
@@ -124,7 +125,7 @@ function secured(res: Response, path: string): Response {
 }
 
 const REMOTE_OFF = "This Mac isn't letting phones and tablets connect right now. On the Mac, turn on Phones and Tablets in ViewSwitcher.";
-const PAIR_FIRST = "Pair this device first: open ViewSwitcher on the Mac, then Phones and Tablets.";
+const PAIR_FIRST = "Pair this phone or tablet first: open ViewSwitcher on the Mac, then Phones and Tablets.";
 const PLAIN_500 = "Something went wrong on the Mac. Its server log has the details.";
 
 export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<SocketData>) => Promise<Response | undefined> {
@@ -158,7 +159,7 @@ export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<Socke
       const lan = o.onLan(srv);
       // Remote access off: nothing from elsewhere, not even the pairing page, whatever token it has.
       if ((lan || !isMacOrUsb(peer, req.headers)) && !o.remoteAccess()) return json({ error: REMOTE_OFF }, 403);
-      caller = callerOf({ onLan: lan, peer, headers: req.headers, bridged: o.bridged, device: () => o.device(req) });
+      caller = callerOf({ onLan: lan, peer, headers: req.headers, bridged: o.bridged, remote: () => o.remote(req) });
 
       const route = o.routes.find((r) => matches(r, req.method, path)) ?? NOT_FOUND;
       if (!admits(route.audience ?? "mac", caller)) {
@@ -195,7 +196,7 @@ export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<Socke
       };
       const res = await route.handler(c);
       // A device in use gets its cookie again once a day, so it stays paired 400 days from its last use.
-      const cookie = res && caller.kind === "device" ? o.renew(caller.device, c) : null;
+      const cookie = res && caller.kind === "remote" ? o.renew(caller.remote, c) : null;
       return res && cookie ? withHeaders(res, (h) => h.append("set-cookie", cookie)) : res;
     };
 

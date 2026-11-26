@@ -1,5 +1,5 @@
 import type { PackScripts } from "@viewswitcher/shared";
-// What a template pack dropped on the Templates page is (EDIT-24): one .zip, or a folder's files with
+// What a template pack dropped on the Templates page is: one .zip, or a folder's files with
 // their paths inside it. The server checks everything again; this only collects.
 export type DroppedPack = { zip: File } | { files: { path: string; file: File }[] } | null;
 
@@ -46,12 +46,12 @@ export const fromPicker = (list: FileList | null): DroppedPack => {
   return f ? { zip: f } : null;
 };
 
-/** Plain words for what a pack runs (EDIT-26). */
+/** Plain words for what a pack runs. */
 export function describeScripts(s: PackScripts & { standard: boolean }): string[] {
   const out: string[] = [];
   if (!s.files.length && !s.inline.length && !s.remote.length) return ["It runs no scripts."];
   const own = s.files.filter((f) => !(s.standard && f === "_shared/scene.js"));
-  if (s.standard && s.files.includes("_shared/scene.js")) out.push("ViewSwitcher's standard scene script (countdowns, transition effects).");
+  if (s.standard && s.files.includes("_shared/scene.js")) out.push("ViewSwitcher's standard view script (countdowns, transition effects).");
   if (own.length) out.push(`Its own scripts: ${own.join(", ")}.`);
   if (s.inline.length) out.push(`Code written into ${s.inline.map((p) => p.replace(/^templates\//, "")).join(", ")}.`);
   if (s.remote.length) out.push(`Scripts from other sites: ${s.remote.join(", ")}.`);

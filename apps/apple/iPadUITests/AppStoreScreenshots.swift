@@ -1,6 +1,6 @@
 import XCTest
 
-/// The App Store screenshots (MAC-19, PHONE-9): the real app on real-looking shows (the sports podcast and
+/// The App Store screenshots: the real app on real-looking shows (the sports podcast and
 /// the church), OBS connected and live.
 /// Not part of the regular test run: scripts/ipad-shots.sh seeds a scratch server (never the Mac's 7420)
 /// with a fake OBS, runs this, and captures each screen with `simctl io screenshot` (with the clean
@@ -56,7 +56,7 @@ final class AppStoreScreenshots: XCTestCase {
         XCTAssertTrue(pill.waitForExistence(timeout: 10), "\(label) went on air")
     }
 
-    /// The 13-inch iPad set (MAC-19): the sports podcast and the church, nothing else.
+    /// The 13-inch iPad set: the sports podcast and the church, nothing else.
     func testShots() throws {
         guard env["VIEWSWITCHER_SHOTS"] != nil, let fullCount = env["VIEWSWITCHER_FULLCOUNT"], let grace = env["VIEWSWITCHER_GRACE"] else {
             throw XCTSkip("run by scripts/ipad-shots.sh")
@@ -105,7 +105,7 @@ final class AppStoreScreenshots: XCTestCase {
         try shot("5-pastor-landscape", "landscape")
     }
 
-    /// The 6.9-inch iPhone set (PHONE-9): the same app on a phone, switching only.
+    /// The 6.9-inch iPhone set: the same app on a phone, switching only.
     func testPhoneShots() throws {
         guard env["VIEWSWITCHER_SHOTS"] != nil, let fullCount = env["VIEWSWITCHER_FULLCOUNT"], let grace = env["VIEWSWITCHER_GRACE"] else {
             throw XCTSkip("run by scripts/ipad-shots.sh with IPHONE=1")

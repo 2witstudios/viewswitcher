@@ -79,11 +79,11 @@ describe("agentGuard", () => {
       const g = agentGuard({ setting, live: true, onAir, action });
       return g.ok ? "" : g.reason;
     };
-    expect(r(write(onAir.path))).toBe("That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.");
-    expect(r(write("daisy/templates/_shared/transition.html"))).toContain("Wait until the stream ends");
+    expect(r(write(onAir.path))).toBe("That view is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until you're off air (OBS stops streaming and recording).");
+    expect(r(write("daisy/templates/_shared/transition.html"))).toContain("Wait until you're off air");
     expect(r(write("daisy/templates/_shared/theme.css"))).toContain("customize_scene");
     expect(r(write("daisy/assets/logo.svg"))).toContain("uses that file");
     expect(r(go)).toContain("let them put it on air in the switcher");
-    expect(r(go, "never")).toContain("never put scenes on air");
+    expect(r(go, "never")).toContain("never put views on air");
   });
 });

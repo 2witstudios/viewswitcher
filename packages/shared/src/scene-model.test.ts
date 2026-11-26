@@ -41,7 +41,7 @@ describe("reading elements", () => {
     expect(movableAround(b, tag("body"))).toBeNull();
   });
 
-  test("device boxes, slots and the title", () => {
+  test("camera boxes, slots and the title", () => {
     expect(isSlot(b, byAttr("data-slot", "Camera"))).toBe(true);
     expect(isSlot(b, tag("footer"))).toBe(false);
     expect(slotsIn(b)).toEqual(["Screen", "Camera"]);

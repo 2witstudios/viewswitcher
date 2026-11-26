@@ -5,13 +5,13 @@ import { obsReady } from "@viewswitcher/shared";
 import { checkObsSetup, type ObsRequester, programUrl, setupObs } from "./obs-setup";
 
 const names = {
-  scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"],
+  obsScene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"],
   previewScene: "ViewSwitcher Preview", previewSource: "ViewSwitcher Preview Render",
 };
 const PORT = 7433;
 
 /** Bottom to top, as OBS indexes scene items. */
-const order = (obs: ReturnType<typeof fakeObs>) => obs.scenes.get(names.scene)!.map((i) => i.sourceName);
+const order = (obs: ReturnType<typeof fakeObs>) => obs.scenes.get(names.obsScene)!.map((i) => i.sourceName);
 
 describe("setupObs", () => {
   test("an empty OBS gets the scene, the program on top and the ground at the bottom", async () => {
@@ -30,7 +30,7 @@ describe("setupObs", () => {
     const obs = fakeObs();
     await setupObs(obs, names, PORT);
     obs.inputs.get("ViewSwitcher Ground")!.settings.color = 0xff00ff00;
-    for (const d of ["Camera", "Screen"]) await obs.request("CreateInput", { sceneName: names.scene, inputName: d, inputKind: "av_capture_input", inputSettings: {} });
+    for (const d of ["Camera", "Screen"]) await obs.request("CreateInput", { sceneName: names.obsScene, inputName: d, inputKind: "av_capture_input", inputSettings: {} });
     const r = await setupObs(obs, names, PORT);
     expect(r.log.filter((l) => l.startsWith("Created"))).toEqual([]);
     expect(order(obs)).toEqual(["ViewSwitcher Ground", "Camera", "Screen", "ViewSwitcher Program"]);
@@ -130,7 +130,7 @@ describe("setupObs", () => {
   test("a source added above the program covers every scene: setup is needed again, and puts the program back on top", async () => {
     const obs = fakeObs();
     await setupObs(obs, names, PORT);
-    await obs.request("CreateInput", { sceneName: names.scene, inputName: "Camera", inputKind: "av_capture_input", inputSettings: {} });
+    await obs.request("CreateInput", { sceneName: names.obsScene, inputName: "Camera", inputKind: "av_capture_input", inputSettings: {} });
     const above = await checkObsSetup(obs, names, PORT);
     expect(above).toMatchObject({ program: true, ground: true, ordered: false });
     expect(obsReady(above)).toBe(false);
@@ -138,7 +138,7 @@ describe("setupObs", () => {
     expect(order(obs)).toEqual(["ViewSwitcher Ground", "Camera", "ViewSwitcher Program"]);
     expect(await checkObsSetup(obs, names, PORT)).toMatchObject({ ordered: true });
     // And one dragged under the ground hides nothing, but the ground no longer fills the bottom: also out of order.
-    await obs.request("SetSceneItemIndex", { sceneName: names.scene, sceneItemId: obs.scenes.get(names.scene)![1]!.sceneItemId, sceneItemIndex: 0 });
+    await obs.request("SetSceneItemIndex", { sceneName: names.obsScene, sceneItemId: obs.scenes.get(names.obsScene)![1]!.sceneItemId, sceneItemIndex: 0 });
     expect(await checkObsSetup(obs, names, PORT)).toMatchObject({ ordered: false });
   });
 });

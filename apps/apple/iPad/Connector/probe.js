@@ -14,7 +14,7 @@ window.VS = (() => {
 
   const network = () => get(localStorage, NETWORK);
   // Hosts the app shows (ViewSwitcherKit NavigationPolicy.iPadHostAllowed); anything else would open Safari.
-  // A private LAN address too (or carrier-grade NAT, 100.64/10): the Mac's pairing QR code carries one (PHONE-4, PairingLink.isPrivateIPv4).
+  // A private LAN address too (or carrier-grade NAT, 100.64/10): the Mac's pairing QR code carries one (PairingLink.isPrivateIPv4).
   const privateIPv4 = (h) => {
     const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
     if (!m) return false;

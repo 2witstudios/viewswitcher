@@ -12,7 +12,7 @@ const SIDEWAYS: [number, number, boolean][] = [
   [790, 480, true], // the known trade-off: an iPad in 2/3 Split View with the keyboard up
 ];
 
-describe("phone layouts (PHONE-3, PHONE-12)", () => {
+describe("phone layouts", () => {
   test("the queries match styles.css", () => {
     expect(UPRIGHT).toBe("(max-width: 600px)");
     expect(DECK).toBe("(max-height: 500px) and (max-width: 1000px) and (pointer: coarse)");

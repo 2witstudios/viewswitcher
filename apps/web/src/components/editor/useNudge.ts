@@ -13,7 +13,7 @@ export function useNudge(opts: {
   generation: () => number;
   posNow: (id: number) => Pos | null;
   applyDom: (edit: SceneEdit) => void;
-  preview: (edit: SceneEdit, gen?: number) => void;
+  liveEdit: (edit: SceneEdit, gen?: number) => void;
   save: (edits: SceneEdit[], undo: UndoEntry[], madeIn: number) => void;
 }) {
   const o = useRef(opts);
@@ -37,7 +37,7 @@ export function useNudge(opts: {
     clearTimeout(n.timer);
     nudge.current = null;
     o.current.applyDom(n.before);
-    o.current.preview(n.before, n.gen);
+    o.current.liveEdit(n.before, n.gen);
     return true;
   };
 
@@ -58,7 +58,7 @@ export function useNudge(opts: {
     }
     const n = nudge.current;
     o.current.applyDom({ id, ...next });
-    o.current.preview({ id, ...next }, n.gen);
+    o.current.liveEdit({ id, ...next }, n.gen);
     n.last = next;
     clearTimeout(n.timer);
     n.timer = setTimeout(flush, NUDGE_SAVE_MS);

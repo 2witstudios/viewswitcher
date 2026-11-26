@@ -1,4 +1,4 @@
-// EDIT-26: the program page reaches a sandboxed scene only through the bridge's messages.
+// The program page reaches a sandboxed scene only through the bridge's messages.
 // (Moved from apps/web's apply-preview tests: the program page no longer touches the scene's DOM.)
 import { describe, expect, test } from "bun:test";
 import { SCENE_BRIDGE, withBridge } from "./scene-bridge";
@@ -46,7 +46,7 @@ function frame(hash: string | null, els: Record<number, El>, opts: { stampOnFrag
     },
   };
 }
-const preview = (edit: unknown, hash = "v1") => ({ viewswitcher: "frame:preview", id: 7, hash, edit });
+const preview = (edit: unknown, hash = "v1") => ({ viewswitcher: "frame:liveEdit", id: 7, hash, edit });
 
 describe("frame:hello", () => {
   test("answers with the slots, the version and the transition's hold", () => {

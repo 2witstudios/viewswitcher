@@ -1,11 +1,11 @@
-// The scene bridge (EDIT-26). Scenes run in sandboxed frames with an opaque origin, so the switcher's
+// The scene bridge. Scenes run in sandboxed frames with an opaque origin, so the switcher's
 // pages can't reach into their DOM, and a scene's own scripts can't reach the switcher (its /api,
 // its socket, its pages). The program page still needs two things from the scene on air: where its
-// device slots are, and the scene editor's live previews applied in place. This script, added to
+// camera boxes are, and the scene editor's live edits applied in place. This script, added to
 // the scene as the server serves it for the program page (?bridge), does both over postMessage:
 //
 //   page → scene   { viewswitcher: "frame:hello", id }                 → frame:state
-//                  { viewswitcher: "frame:preview", id, hash, edit }   → frame:applied
+//                  { viewswitcher: "frame:liveEdit", id, hash, edit }   → frame:applied
 //   scene → page   { viewswitcher: "frame:state", id, slots, version, hold }
 //                  { viewswitcher: "frame:applied", id, applied, slotMoved, slots, version }
 //
@@ -72,7 +72,7 @@ export const SCENE_BRIDGE = `(function () {
     if (!d || typeof d !== "object") return;
     if (d.viewswitcher === "frame:hello") {
       parent.postMessage({ viewswitcher: "frame:state", id: d.id, slots: slots(), version: version(), hold: hold() }, "*");
-    } else if (d.viewswitcher === "frame:preview") {
+    } else if (d.viewswitcher === "frame:liveEdit") {
       var r = null;
       try { r = apply(d.hash, d.edit); } catch (err) { r = null; }
       parent.postMessage({ viewswitcher: "frame:applied", id: d.id, applied: !!r, slotMoved: !!(r && r.slotMoved), slots: r && r.slotMoved ? slots() : null, version: version() }, "*");

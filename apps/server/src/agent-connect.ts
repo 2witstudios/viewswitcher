@@ -1,4 +1,4 @@
-// How an agent on this Mac connects (the switcher's Edit with AI sheet, MCP-10): which agent apps are
+// How an agent on this Mac connects (the switcher's Edit with AI sheet): which agent apps are
 // installed, the stdio command, the Claude Code command, and the Claude Desktop extension (.mcpb).
 // Everything here can contain absolute paths, so main.ts answers with it only to this Mac (a mac route, gate.ts isMac),
 // and /api/agent/clients turns it into booleans.
@@ -78,9 +78,9 @@ export function mcpbManifest(o: { launch: { command: string; args: string[] }; v
     name: "viewswitcher",
     display_name: "ViewSwitcher",
     version: o.version,
-    description: "Edit your ViewSwitcher scenes and see them rendered, from Claude.",
+    description: "Edit your ViewSwitcher views and see them rendered, from Claude.",
     long_description:
-      "Connects Claude to ViewSwitcher on this Mac: it reads your scene library, edits scenes under the same rules as the switcher, looks at a rendered picture of its work in OBS, and puts a scene on air only when your on-air setting allows it. ViewSwitcher must be open.",
+      "Connects Claude to ViewSwitcher on this Mac: it reads your library, edits views under the same rules as the switcher, looks at a rendered picture of its work in OBS, and puts a view on air only when your on-air setting allows it. ViewSwitcher must be open.",
     author: { name: "ViewSwitcher", url: "https://viewswitcher.com" },
     homepage: "https://viewswitcher.com",
     support: "https://viewswitcher.com/support",

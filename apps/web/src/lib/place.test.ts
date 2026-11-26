@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { Library } from "@viewswitcher/shared";
+import type { OrgContent } from "@viewswitcher/shared";
 import { placeOf } from "./place";
 
-const scene = (path: string, label: string) => ({ path, label }) as Library["templates"][number];
+const scene = (path: string, label: string) => ({ path, label }) as OrgContent["templates"][number];
 const lib = {
   org: { id: "daisy", name: "Bible Study" },
   templates: [scene("daisy/templates/teaching.html", "Teaching")],
@@ -14,7 +14,7 @@ const lib = {
       { name: "extra", date: null, scenes: [scene("daisy/projects/genesis/extra/q.html", "Q&A")] },
     ],
   }],
-} as unknown as Library;
+} as unknown as OrgContent;
 
 describe("placeOf", () => {
   test("names where a scene lives, for the crumb", () => {

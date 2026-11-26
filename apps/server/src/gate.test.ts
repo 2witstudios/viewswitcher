@@ -29,14 +29,14 @@ describe("isMacOrUsb: the socket is loopback, the Host a loopback name, and no p
 });
 
 describe("callerOf: who is asking", () => {
-  const who = (o: { onLan?: boolean; address: string; port?: number; host?: string; device?: string | null; headers?: Record<string, string> }) =>
-    callerOf({ onLan: !!o.onLan, peer: { address: o.address, port: o.port }, headers: h({ host: o.host ?? "127.0.0.1:7420", ...o.headers }), device: () => o.device ?? null, bridged: new Set([51234]) });
+  const who = (o: { onLan?: boolean; address: string; port?: number; host?: string; remote?: string | null; headers?: Record<string, string> }) =>
+    callerOf({ onLan: !!o.onLan, peer: { address: o.address, port: o.port }, headers: h({ host: o.host ?? "127.0.0.1:7420", ...o.headers }), remote: () => o.remote ?? null, bridged: new Set([51234]) });
   test("this Mac, and the USB-C bridge by its marked connection", () => {
     expect(who({ address: "127.0.0.1", port: 50000 })).toEqual({ kind: "mac" });
     expect(who({ address: "127.0.0.1", port: 51234 })).toEqual({ kind: "usb" });
   });
   test("anything else is a paired device by its token, or a stranger", () => {
-    expect(who({ address: "192.168.1.20", host: "192.168.1.68:7420", device: "d1" })).toEqual({ kind: "device", device: "d1" });
+    expect(who({ address: "192.168.1.20", host: "192.168.1.68:7420", remote: "d1" })).toEqual({ kind: "remote", remote: "d1" });
     expect(who({ address: "192.168.1.20", host: "192.168.1.68:7420" })).toEqual({ kind: "stranger" });
     // tailscale serve forwards from 127.0.0.1 with proxy headers: never this Mac.
     expect(who({ address: "127.0.0.1", headers: { "x-forwarded-for": "100.64.0.9" } })).toEqual({ kind: "stranger" });
@@ -46,13 +46,13 @@ describe("callerOf: who is asking", () => {
   });
   test("a device token is only looked at for remote callers", () => {
     let asked = 0;
-    callerOf({ onLan: false, peer: { address: "127.0.0.1" }, headers: h({ host: "localhost:7420" }), device: () => (asked++, "d1") });
+    callerOf({ onLan: false, peer: { address: "127.0.0.1" }, headers: h({ host: "localhost:7420" }), remote: () => (asked++, "d1") });
     expect(asked).toBe(0);
   });
 });
 
 describe("admits: who each audience is for", () => {
-  const callers: Caller[] = [{ kind: "mac" }, { kind: "usb" }, { kind: "device", device: "d1" }, { kind: "stranger" }];
+  const callers: Caller[] = [{ kind: "mac" }, { kind: "usb" }, { kind: "remote", remote: "d1" }, { kind: "stranger" }];
   const table = (a: Audience) => callers.map((c) => admits(a, c));
   test("mac, macOrUsb, paired, public", () => {
     expect(table("mac")).toEqual([true, false, false, false]);

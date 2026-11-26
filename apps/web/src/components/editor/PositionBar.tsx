@@ -42,7 +42,7 @@ export function PositionBar({ name, pos, size, canPutBack, onSet, onSize, onPutB
     const l = Number(x), t = Number(y);
     if (!Number.isFinite(l) || !Number.isFinite(t) || x.trim() === "" || y.trim() === "") return reset();
     if (Math.abs(l) > 100_000 || Math.abs(t) > 100_000) {
-      toast("That's far outside the scene (1920 × 1080)");
+      toast("That's far outside the view (1920 × 1080)");
       return reset();
     }
     if (l !== pos.left || t !== pos.top) onSet(l, t);

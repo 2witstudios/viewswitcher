@@ -1,6 +1,6 @@
 import XCTest
 
-/// MAC-13a, MAC-19 and PHONE-9 screenshots of the app on iPad or iPhone in each orientation. Not part of
+/// Safe-area screenshots of the app on iPad or iPhone in each orientation. Not part of
 /// the regular test run: scripts/ipad-shots.sh runs it with a scratch server on 7445 (never the Mac's 7420).
 /// VIEWSWITCHER_SHOTS_PATH opens a page of that server (the iPhone shots use a stream: the deck).
 ///   TEST_RUNNER_VIEWSWITCHER_SERVER=http://127.0.0.1:7445 TEST_RUNNER_VIEWSWITCHER_SHOTS=<dir> xcodebuild test …
@@ -38,7 +38,7 @@ final class SafeAreaScreenshots: XCTestCase {
         }
     }
 
-    /// The demo (MAC-18), with a view taken so the program and tally have moved.
+    /// The demo, with a view taken so the program and tally have moved.
     func testDemo() throws {
         let env = ProcessInfo.processInfo.environment
         guard let dir = env["VIEWSWITCHER_SHOTS"], env["VIEWSWITCHER_WEB_WIDTH"] == nil else { throw XCTSkip("needs VIEWSWITCHER_SHOTS, full width") }

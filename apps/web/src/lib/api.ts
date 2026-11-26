@@ -1,12 +1,12 @@
 import { libraryUrl } from "@viewswitcher/shared";
-import type { AgentClients, AgentOnAir, BuiltinPack, Library, LiveState, Org, SceneEdit, StagedPack } from "@viewswitcher/shared";
+import type { AgentClients, AgentOnAir, BuiltinPack, OrgContent, LiveState, Org, SceneEdit, StagedPack } from "@viewswitcher/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryClient } from "./live";
 
-/** Preview order, per editor page: `session` tells editors apart (clocks on two devices needn't agree). */
-const previewSession = Math.random().toString(36).slice(2);
-let previewSeq = 0;
-const nextPreviewSeq = () => ++previewSeq;
+/** Live edit order, per editor page: `session` tells editors apart (clocks on two phones or tablets needn't agree). */
+const liveEditSession = Math.random().toString(36).slice(2);
+let liveEditSeq = 0;
+const nextLiveEditSeq = () => ++liveEditSeq;
 
 /** The scene editor saving against a version of the file that isn't the latest any more. */
 export class SceneConflict extends Error {}
@@ -39,7 +39,7 @@ const change = <T = unknown>(path: string, body?: unknown) => refreshed(post<T>(
 async function rename(path: string, hash: string, name: string): Promise<{ hash: string; path: string }> {
   const res = await fetch("/api/scene/rename", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, name }) });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+  if (res.status === 409) throw new SceneConflict(data.error ?? "This view changed");
   if (!res.ok) throw new Error(data.error ?? res.statusText);
   return data;
 }
@@ -56,7 +56,7 @@ async function upload(org: string, files: FileList | File[]): Promise<{ saved: {
 export const api = {
   orgs: async (): Promise<Org[]> => (await fetch("/api/orgs")).json(),
   createOrg: (name: string, accent?: string) => change<{ orgId: string }>("/api/orgs", { name, accent }),
-  library: async (org: string): Promise<Library> => {
+  library: async (org: string): Promise<OrgContent> => {
     const res = await fetch(`/api/library?org=${encodeURIComponent(org)}`);
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
     return res.json();
@@ -80,26 +80,26 @@ export const api = {
   /** The scene tagged with data-vs ids, and the hash of the file it came from. */
   sceneForEdit: async (path: string): Promise<{ html: string; hash: string }> => {
     const res = await fetch(`${libraryUrl(path)}?edit`, { cache: "no-store" });
-    if (!res.ok) throw new Error(res.status === 404 ? "This scene doesn't exist any more" : res.statusText);
+    if (!res.ok) throw new Error(res.status === 404 ? "This view doesn't exist any more" : res.statusText);
     const hash = res.headers.get("x-scene-hash");
-    if (!hash) throw new Error("This scene can't be edited here. Open the file instead.");
+    if (!hash) throw new Error("This view can't be edited here. Open the file instead.");
     return { html: await res.text(), hash };
   },
   /** Save edits made against the version `hash`. Throws SceneConflict if the file changed since. */
   editScene: async (path: string, hash: string, edits: SceneEdit[]): Promise<{ hash: string }> => {
     const res = await fetch("/api/scene/edit", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path, hash, edits }) });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 409) throw new SceneConflict(data.error ?? "This scene changed");
+    if (res.status === 409) throw new SceneConflict(data.error ?? "This view changed");
     if (!res.ok) throw new Error(data.error ?? res.statusText);
     return data;
   },
   /** Rename a scene (its title, and a stream scene's file). Throws SceneConflict if the file changed since `hash`. */
   renameScene: (path: string, hash: string, name: string) => refreshed(rename(path, hash, name)),
   /** Show an edit live on the program page; `hash` is the file version its id belongs to. */
-  previewScene: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/preview", { path, hash, edit, session: previewSession, seq: nextPreviewSeq() }),
+  liveEdit: (path: string, hash: string, edit: SceneEdit) => post("/api/scene/live-edit", { path, hash, edit, session: liveEditSession, seq: nextLiveEditSeq() }),
   /** The same, from a page that's going away (survives pagehide). */
-  previewSceneBeacon: (path: string, hash: string, edit: SceneEdit) =>
-    navigator.sendBeacon?.("/api/scene/preview", new Blob([JSON.stringify({ path, hash, edit, session: previewSession, seq: nextPreviewSeq() })], { type: "application/json" })),
+  liveEditBeacon: (path: string, hash: string, edit: SceneEdit) =>
+    navigator.sendBeacon?.("/api/scene/live-edit", new Blob([JSON.stringify({ path, hash, edit, session: liveEditSession, seq: nextLiveEditSeq() })], { type: "application/json" })),
   open: (path: string) => post("/api/open", { path }),
 
   /** What agents connected over MCP may put on air (Edit with AI). */
@@ -115,7 +115,7 @@ export const api = {
     return res?.ok ? res.json() : null;
   },
 
-  /** Create the ViewSwitcher scene and sources in OBS (MAC-3). */
+  /** Create the ViewSwitcher scene and sources in OBS. */
   setupObs: () => post<{ log: string[]; missing: string[]; switched: boolean; warnings?: string[] }>("/api/obs/setup"),
   toggleRecord: () => post("/api/obs/record"),
   toggleStream: () => post("/api/obs/stream"),
@@ -146,10 +146,10 @@ export const packs = {
     }
     return form<StagedPack>("/api/packs/stage", body);
   },
-  install: (org: string, token: string) => change<{ set: string }>("/api/packs/install", { org, token }),
+  install: (org: string, token: string) => change<{ set: string }>("/api/sets/install", { org, token }),
   cancel: (org: string, token: string) => post("/api/packs/cancel", { org, token }),
   removeSet: (org: string, set: string) => change<{ kept: number }>("/api/sets/remove", { org, set }),
-  /** The built-in template packs (EDIT-29): the starter and the site's six shows. */
+  /** The built-in template packs: the starter and the site's six shows. */
   builtin: async (): Promise<BuiltinPack[]> => {
     const r = await fetch("/api/packs/builtin");
     if (!r.ok) throw new Error("Couldn't list the built-in templates");

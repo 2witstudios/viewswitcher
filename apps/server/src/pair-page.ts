@@ -1,4 +1,4 @@
-// The one page an unpaired phone or tablet gets (MAC-24): enter (or scan) the code the Mac shows, name
+// The one page an unpaired phone or tablet gets: enter (or scan) the code the Mac shows, name
 // the device, and land in the switcher. Self-contained, so nothing else (assets, the SPA) is served to
 // a device that isn't paired.
 
@@ -41,7 +41,7 @@ export function pairPage({ name }: { name: string }): string {
   <form id="pair" autocomplete="off">
     <label for="code">Code</label>
     <input id="code" name="code" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="XXXX-XXXX" required>
-    <label for="name">Name this device</label>
+    <label for="name">Name this phone or tablet</label>
     <input id="name" name="name" maxlength="40" value="${esc(name)}">
     <button id="go" type="submit">Pair</button>
     <div id="error" role="alert"></div>

@@ -112,7 +112,7 @@ export function usePictureDrop(opts: {
     const b = o.current.base();
     if (!alive.current) return false;
     if (!edit || !b) {
-      toast("The scene changed meanwhile, so the image wasn't replaced. Try again.");
+      toast("The view changed meanwhile, so the image wasn't replaced. Try again.");
       return false;
     }
     // Undo puts back what the file has (Replace is offered only when that's a library picture).
@@ -149,7 +149,7 @@ export function usePictureDrop(opts: {
         return;
       }
       if (!(await whenFree())) {
-        if (alive.current) toast("The scene changed meanwhile, so the picture wasn't added. Try again.");
+        if (alive.current) toast("The view changed meanwhile, so the picture wasn't added. Try again.");
         return;
       }
       o.current.add({ src, width: size.width || 1, height: size.height || 1 }, at);

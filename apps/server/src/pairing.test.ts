@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CODE_ALPHABET, CODE_LENGTH, CODE_TTL_MS, COOKIE, deviceName, guessName, MAX_CODE_FAILURES, MAX_PEER_FAILURES, normalizeCode, Pairing, PEER_WINDOW_MS, sha3, tokenCookie, tokenFromCookie } from "./pairing";
+import { CODE_ALPHABET, CODE_LENGTH, CODE_TTL_MS, COOKIE, remoteName, guessName, MAX_CODE_FAILURES, MAX_PEER_FAILURES, normalizeCode, Pairing, PEER_WINDOW_MS, sha3, tokenCookie, tokenFromCookie } from "./pairing";
 
 const clock = () => {
   let t = 1_000_000;
@@ -109,8 +109,8 @@ describe("device tokens", () => {
     const r = p.pair(p.newCode().code, "Jono's iPhone", "192.168.1.20");
     if (!r.ok) throw new Error("pairing failed");
     expect(Buffer.from(r.token, "base64url")).toHaveLength(32);
-    expect(JSON.stringify([...(p as any).devices.values()])).not.toContain(r.token);
-    expect(p.check(r.token)).toMatchObject({ id: r.device.id, name: "Jono's iPhone" });
+    expect(JSON.stringify([...(p as any).remotes.values()])).not.toContain(r.token);
+    expect(p.check(r.token)).toMatchObject({ id: r.remote.id, name: "Jono's iPhone" });
     expect(p.list()[0]).not.toHaveProperty("tokenHash");
   });
   test("a missing, wrong or almost-right token is refused", () => {
@@ -126,10 +126,10 @@ describe("device tokens", () => {
     const a = p.pair(p.newCode().code, "a", "192.168.1.20");
     const b = p.pair(p.newCode().code, "b", "192.168.1.21");
     if (!a.ok || !b.ok) throw new Error("pairing failed");
-    expect(await p.remove(a.device.id)).toBe(true);
+    expect(await p.remove(a.remote.id)).toBe(true);
     expect(p.check(a.token)).toBeNull();
     expect(p.check(b.token)).not.toBeNull();
-    expect(removed).toEqual([a.device.id]);
+    expect(removed).toEqual([a.remote.id]);
     expect(await p.remove("no-such-id")).toBe(false);
   });
   test("the cookie is sent again at most once a day while the device is used", () => {
@@ -137,10 +137,10 @@ describe("device tokens", () => {
     const p = new Pairing({ file: null, now: c.now });
     const r = p.pair(p.newCode().code, "a", "192.168.1.20");
     if (!r.ok) throw new Error("pairing failed");
-    expect(p.renew(r.device.id)).toBe(false); // just set by pairing
+    expect(p.renew(r.remote.id)).toBe(false); // just set by pairing
     c.tick(24 * 3600_000);
-    expect(p.renew(r.device.id)).toBe(true);
-    expect(p.renew(r.device.id)).toBe(false);
+    expect(p.renew(r.remote.id)).toBe(true);
+    expect(p.renew(r.remote.id)).toBe(false);
   });
   test("last seen follows the device", () => {
     const c = clock();
@@ -154,7 +154,7 @@ describe("device tokens", () => {
     const p = new Pairing({ file: "/dev/null/nope/devices.json" });
     const r = p.pair(p.newCode().code, "a", "192.168.1.20");
     if (!r.ok) throw new Error("pairing failed");
-    await expect(p.remove(r.device.id)).rejects.toThrow("couldn't save");
+    await expect(p.remove(r.remote.id)).rejects.toThrow("couldn't save");
     expect(p.check(r.token)).toBeNull(); // still refused now
   });
   test("devices.json keeps hashes only (0600) and survives a restart", async () => {
@@ -169,7 +169,7 @@ describe("device tokens", () => {
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const again = await new Pairing({ file }).load();
     expect(again.check(r.token)?.name).toBe("iPad");
-    await again.remove(r.device.id); // written before it returns: no flush needed
+    await again.remove(r.remote.id); // written before it returns: no flush needed
     expect((await new Pairing({ file }).load()).check(r.token)).toBeNull();
   });
 });
@@ -188,12 +188,12 @@ describe("cookie and names", () => {
     expect(tokenFromCookie(`x${COOKIE}=nope`)).toBeNull();
   });
   test("device names: one clean line, or a guess from the browser", () => {
-    expect(deviceName("  Jono's\n iPhone  ")).toBe("Jono's iPhone");
-    expect(deviceName("<script>x</script>")).toBe("scriptx/script");
-    expect(deviceName("x".repeat(80))).toHaveLength(40);
-    expect(deviceName("", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("iPhone");
+    expect(remoteName("  Jono's\n iPhone  ")).toBe("Jono's iPhone");
+    expect(remoteName("<script>x</script>")).toBe("scriptx/script");
+    expect(remoteName("x".repeat(80))).toHaveLength(40);
+    expect(remoteName("", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("iPhone");
     expect(guessName("Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile Safari")).toBe("Android phone");
     expect(guessName("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit Version/18.0 Mobile/15E148 Safari")).toBe("iPad");
-    expect(guessName("curl/8")).toBe("Device");
+    expect(guessName("curl/8")).toBe("Phone or tablet");
   });
 });

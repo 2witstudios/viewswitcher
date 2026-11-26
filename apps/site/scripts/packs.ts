@@ -1,9 +1,9 @@
-// The template packs the site serves (SITE-26): one .zip per example show at /packs/<id>.zip.
+// The template packs the site serves: one .zip per example show at /packs/<id>.zip.
 //
 //   bun scripts/packs.ts            (runs before astro build; see package.json)
 //
-// Built from the same source as the app's export, `bun run packs:export` (@viewswitcher/packs,
-// EDIT-27): this only calls it. Each zip is then read back and checked again with the shared validator
+// Built from the same source as the app's export, `bun run packs:export` (@viewswitcher/packs):
+// This only calls it. Each zip is then read back and checked again with the shared validator
 // (the one installs use), so a pack that wouldn't install fails the site build instead of someone's Mac.
 // The zips are build output: public/packs/ is gitignored.
 import { mkdir, rm, writeFile } from "node:fs/promises";

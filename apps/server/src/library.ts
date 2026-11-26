@@ -18,26 +18,26 @@ import { inside, PathError, plainName } from "./paths";
 
 const ORG_DEFAULTS = { accent: "#8b7bff", ground: "#0e0f13" };
 
-export async function readOrg(root: string, id: string): Promise<Org> {
-  const dir = inside(root, plainName(id));
+export async function readOrg(libraryRoot: string, id: string): Promise<Org> {
+  const dir = inside(libraryRoot, plainName(id));
   const meta = await readJson(join(dir, "org.json"), { name: id, ...ORG_DEFAULTS });
   return { id, name: meta.name, accent: meta.accent, ground: meta.ground };
 }
 
-export async function listOrgs(root: string): Promise<Org[]> {
+export async function listOrgs(libraryRoot: string): Promise<Org[]> {
   const ids = [];
-  for (const id of await dirs(root)) if (await exists(join(root, id, "org.json"))) ids.push(id);
-  const orgs = await Promise.all(ids.map((id) => readOrg(root, id)));
+  for (const id of await dirs(libraryRoot)) if (await exists(join(libraryRoot, id, "org.json"))) ids.push(id);
+  const orgs = await Promise.all(ids.map((id) => readOrg(libraryRoot, id)));
   return orgs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** A new org from the starter kit: neutral templates that use the org's own name and colors. */
-export async function createOrg(root: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
-  if (!name?.trim()) throw new PathError("An org needs a name");
+export async function createOrg(libraryRoot: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
+  if (!name?.trim()) throw new PathError("A show needs a name");
   const base = slugify(name);
   let id = base, n = 2;
-  while (await exists(join(root, id))) id = `${base}-${n++}`;
-  const dir = join(root, id);
+  while (await exists(join(libraryRoot, id))) id = `${base}-${n++}`;
+  const dir = join(libraryRoot, id);
   await cp(starter, dir, { recursive: true });
   const vars = placeholderVars({ id, name, accent, ground });
   await Promise.all(
@@ -59,12 +59,12 @@ export async function createOrg(root: string, starter: string, name: string, acc
  * The file of a template, by its name: "teaching" is the org's own (templates/teaching.html),
  * "neon/teaching" is in the set "neon" (templates/neon/teaching.html).
  */
-export function templateFile(root: string, template: string): { file: string; name: string } {
+export function templateFile(orgDir: string, template: string): { file: string; name: string } {
   const t = parseTemplateId(template);
   if (!t) throw new PathError(`Bad template: ${template}`);
   const name = plainName(t.name);
   const set = t.set === null ? null : plainName(t.set);
-  return { file: inside(root, set ? `templates/${set}/${name}.html` : `templates/${name}.html`), name };
+  return { file: inside(orgDir, set ? `templates/${set}/${name}.html` : `templates/${name}.html`), name };
 }
 
 // ---------------------------------------------------------------- transitions
@@ -79,20 +79,20 @@ export async function resolveTransition(libraryRoot: string, scenePath: string):
 }
 
 /** Give a project its own transition, starting from the org's. */
-export async function customizeTransition(root: string, projectId: string) {
-  const dest = join(projectDir(root, projectId), TRANSITION);
+export async function customizeTransition(orgDir: string, projectId: string) {
+  const dest = join(projectDir(orgDir, projectId), TRANSITION);
   if (await exists(dest)) return;
-  const src = join(root, ORG_TRANSITION);
-  if (!(await exists(src))) throw new PathError("This org has no transition to start from yet");
-  await contained(root, src);
-  await contained(root, dest);
+  const src = join(orgDir, ORG_TRANSITION);
+  if (!(await exists(src))) throw new PathError("This show has no transition to start from yet");
+  await contained(orgDir, src);
+  await contained(orgDir, dest);
   await copyNew(src, dest);
 }
 
 /** Back to the org's transition: deletes the project's own. */
-export async function revertTransition(root: string, projectId: string) {
-  const file = join(projectDir(root, projectId), TRANSITION);
-  await contained(root, file);
+export async function revertTransition(orgDir: string, projectId: string) {
+  const file = join(projectDir(orgDir, projectId), TRANSITION);
+  await contained(orgDir, file);
   await rm(file, { force: true });
 }
 
@@ -108,12 +108,12 @@ export async function isFile(path: string) {
 }
 
 /**
- * Refuses (PathError) when `abs`, a file or folder in the org folder `root`, is really somewhere
+ * Refuses (PathError) when `abs`, a file or folder in the org folder `orgDir`, is really somewhere
  * outside the library through a link, or in a dot-folder (library/contain.ts, the rule every read and
  * write follows; the library is the org folder's parent). Links that stay in the library are fine.
  * Every change here that makes a file or folder calls this for where it writes and what it reads.
  */
-const contained = (root: string, abs: string) => resolveInLibrary(dirname(root), relative(dirname(root), abs), { forWrite: true });
+const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgDir), relative(dirname(orgDir), abs), { forWrite: true });
 
 /** Copy to a new file only: never through a link already at `dest` (a dangling one could point outside the library). */
 async function copyNew(src: string, dest: string) {
@@ -156,25 +156,25 @@ export async function writeFresh(dir: string, base: string, ext: string, data: s
   }
 }
 
-function projectDir(root: string, projectId: string) {
-  return inside(root, `projects/${plainName(projectId)}`);
+function projectDir(orgDir: string, projectId: string) {
+  return inside(orgDir, `projects/${plainName(projectId)}`);
 }
 
-function streamDir(root: string, projectId: string, streamId: string) {
-  return inside(root, `projects/${plainName(projectId)}/streams/${plainName(streamId)}`);
+function streamDir(orgDir: string, projectId: string, streamId: string) {
+  return inside(orgDir, `projects/${plainName(projectId)}/streams/${plainName(streamId)}`);
 }
 
-export async function createProject(root: string, name: string, templates: string[], check?: BeforeCreate) {
+export async function createProject(orgDir: string, name: string, templates: string[], check?: BeforeCreate) {
   if (!name?.trim()) throw new PathError("A project needs a name");
   const base = slugify(name);
-  const parent = inside(root, "projects");
-  await contained(root, parent);
+  const parent = inside(orgDir, "projects");
+  await contained(orgDir, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
   while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
   const dir = join(parent, id);
-  const sources = templates.map((t) => templateFile(root, t));
-  for (const { file } of sources) if (await exists(file)) await contained(root, file);
+  const sources = templates.map((t) => templateFile(orgDir, t));
+  for (const { file } of sources) if (await exists(file)) await contained(orgDir, file);
   await mkdir(join(dir, "scenes"), { recursive: true });
   await mkdir(join(dir, "streams"), { recursive: true });
   // Templates from sets ("neon/teaching") become scenes named by their view ("teaching", "teaching-2"…).
@@ -187,12 +187,12 @@ export async function createProject(root: string, name: string, templates: strin
   return { projectId: id };
 }
 
-export async function createStream(root: string, projectId: string, name: string, date: string) {
+export async function createStream(orgDir: string, projectId: string, name: string, date: string) {
   if (!name?.trim()) throw new PathError("A stream needs a name");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new PathError("Date must be YYYY-MM-DD");
   const base = `${date.slice(5, 7)}-${date.slice(8, 10)}-${slugify(name)}`;
-  const parent = join(projectDir(root, projectId), "streams");
-  await contained(root, parent);
+  const parent = join(projectDir(orgDir, projectId), "streams");
+  await contained(orgDir, parent);
   await mkdir(parent, { recursive: true });
   let id = base, n = 2;
   while (await lstat(join(parent, id)).then(() => true, () => false)) id = `${base}-${n++}`;
@@ -202,38 +202,38 @@ export async function createStream(root: string, projectId: string, name: string
 }
 
 /** Copy a template into a project's shared scenes, or into one stream. */
-export async function addFromTemplate(root: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
-  const { file: src, name: view } = templateFile(root, template);
-  const dir = streamId ? streamDir(root, projectId, streamId) : join(projectDir(root, projectId), "scenes");
-  await contained(root, src);
-  await contained(root, dir);
+export async function addFromTemplate(orgDir: string, template: string, projectId: string, streamId?: string, check?: BeforeCreate) {
+  const { file: src, name: view } = templateFile(orgDir, template);
+  const dir = streamId ? streamDir(orgDir, projectId, streamId) : join(projectDir(orgDir, projectId), "scenes");
+  await contained(orgDir, src);
+  await contained(orgDir, dir);
   await mkdir(dir, { recursive: true });
   return { name: await writeFresh(dir, view, ".html", await readFile(src, "utf8"), check) };
 }
 
 /** Copy a project scene into a stream so the stream can change it on its own. */
-export async function customize(root: string, projectId: string, streamId: string, name: string) {
-  const src = join(projectDir(root, projectId), "scenes", `${plainName(name)}.html`);
-  const dest = join(streamDir(root, projectId, streamId), `${name}.html`);
+export async function customize(orgDir: string, projectId: string, streamId: string, name: string) {
+  const src = join(projectDir(orgDir, projectId), "scenes", `${plainName(name)}.html`);
+  const dest = join(streamDir(orgDir, projectId, streamId), `${name}.html`);
   if (await exists(dest)) return { name };
-  await contained(root, src);
-  await contained(root, dirname(dest));
+  await contained(orgDir, src);
+  await contained(orgDir, dirname(dest));
   await copyNew(src, dest);
   return { name };
 }
 
 /** Delete a stream's override so the project version shows again. */
-export async function revert(root: string, projectId: string, streamId: string, name: string) {
-  const projectScene = join(projectDir(root, projectId), "scenes", `${plainName(name)}.html`);
-  if (!(await exists(projectScene))) throw new PathError("Only an override can go back to the project version");
-  const copy = join(streamDir(root, projectId, streamId), `${name}.html`);
-  await contained(root, copy);
+export async function revert(orgDir: string, projectId: string, streamId: string, name: string) {
+  const projectScene = join(projectDir(orgDir, projectId), "scenes", `${plainName(name)}.html`);
+  if (!(await exists(projectScene))) throw new PathError("Only a stream's own copy can go back to the project version");
+  const copy = join(streamDir(orgDir, projectId, streamId), `${name}.html`);
+  await contained(orgDir, copy);
   await rm(copy);
 }
 
-export async function duplicate(root: string, path: string, check?: BeforeCreate) {
-  if (!path.endsWith(".html")) throw new PathError("Only scenes can be duplicated");
-  const src = inside(root, path);
+export async function duplicate(libraryRoot: string, path: string, check?: BeforeCreate) {
+  if (!path.endsWith(".html")) throw new PathError("Only views can be duplicated");
+  const src = inside(libraryRoot, path);
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
   const html = await readFile(src, "utf8");
@@ -253,9 +253,9 @@ export function titledCopy(html: string): string {
   return setTitle(html, `${kept.trimEnd()} copy`);
 }
 
-export async function saveAsset(root: string, file: File, check?: BeforeCreate) {
-  const dir = inside(root, "assets");
-  await contained(root, dir);
+export async function saveAsset(orgDir: string, file: File, check?: BeforeCreate) {
+  const dir = inside(orgDir, "assets");
+  await contained(orgDir, dir);
   await mkdir(dir, { recursive: true });
   const clean = file.name.replace(/[^A-Za-z0-9._ -]/g, "-").replace(/^[.\-]+/, "") || "upload";
   const ext = extname(clean);

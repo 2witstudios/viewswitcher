@@ -1,6 +1,6 @@
 // The scene file the editor works on: the version it last read or saved (the base), the generation
 // that every element id is checked against, the save queue, conflicts, and reading the file again
-// when it changes somewhere else (an agent, another device).
+// when it changes somewhere else (an agent, another phone or tablet).
 import { applyEdits, changedElements, isStructural, scanElements, toBase } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -106,7 +106,7 @@ export function useSceneDocument(path: string, opts: {
       // With a scene already open, a failed reload is a message, not the end of the editor.
       if (baseRef.current) {
         o.current.onStuck();
-        setStuck(`Couldn't read the scene again: ${(e as Error).message}`);
+        setStuck(`Couldn't read the view again: ${(e as Error).message}`);
       } else setLoadError((e as Error).message);
       return null;
     }
@@ -141,7 +141,7 @@ export function useSceneDocument(path: string, opts: {
       onStale: (edits) => {
         if (mode.now().kind === "conflict") mode.dispatch({ t: "conflict:edits", edits });
         else if (pendingConflict.current) pendingConflict.current.edits.push(...edits);
-        else toast("The scene reloaded, so your last change didn't save");
+        else toast("The view reloaded, so your last change didn't save");
       },
       onError: async (e) => {
         toast(`Couldn't save: ${(e as Error).message}`);

@@ -67,7 +67,7 @@ describe("DNS rebinding (evil.example → 127.0.0.1)", () => {
   });
 });
 
-describe("Wi-Fi (MAC-25): this Mac's .local name and LAN addresses", () => {
+describe("Wi-Fi: this Mac's .local name and LAN addresses", () => {
   const lan = { localName: "studio-mac.local", addresses: ["192.168.1.68", "10.0.0.4"] };
   test("are trusted only while the Wi-Fi listener is on", () => {
     for (const h of ["studio-mac.local:7420", "STUDIO-MAC.local", "192.168.1.68:7420", "10.0.0.4"]) {

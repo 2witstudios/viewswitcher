@@ -96,12 +96,12 @@ ViewSwitcher is a one-click scene switcher for OBS. Set up your views once: a "s
 Made for anyone running a recurring live show without a crew: a cooking show, a weekly class, a church service, a podcast.
 
 ON YOUR IPHONE AND IPAD
-• One tap switches the scene: every view is a big cover you can hit without looking twice
+• One tap switches the view: every view is a big cover you can hit without looking twice
 • On iPhone, turn it sideways and your views fill the screen like a deck
 • The view on air marked in red, so you always know what people see
 • Go live, record, and see that OBS is connected
 • Plug into the Mac with a USB-C cable: no Wi-Fi, no setup
-• Or pair over Wi-Fi in seconds: scan the code your Mac shows with the app's own camera, or type it in. Only devices you pair can switch scenes
+• Or pair over Wi-Fi in seconds: scan the code your Mac shows with the app's own camera, or type it in. Only phones and tablets you pair can switch views
 • Portrait or landscape; on iPad, Split View and Stage Manager too
 • One purchase for iPhone and iPad
 • The screen stays awake while you run the show
@@ -162,7 +162,7 @@ WITH A MAC (OPTIONAL)
    a. On the Mac, click ViewSwitcher in the menu bar and turn on "Let Phones and Tablets on This Wi-Fi Connect", then choose "Phones and Tablets…". The window shows a QR code and a one-time code (like K7PQ-2MXA, valid for 5 minutes).
    b. In the app, tap "Connect your Mac" if the demo is showing, then "Scan the code" and point the camera at the QR code. The app asks for the camera only for this, and for Local Network access to reach the Mac.
    c. Or tap "Enter code": the app finds the Mac on the Wi-Fi and shows "Pair with ViewSwitcher". Enter the code and tap Pair.
-   The switcher opens, and the device appears under "Paired devices" on the Mac, where Remove disconnects it at once.
+   The switcher opens, and the phone appears under "Paired phones and tablets" on the Mac, where Remove disconnects it at once.
 
 The app has no accounts, in-app purchases, ads or analytics, and collects no data.
 ```

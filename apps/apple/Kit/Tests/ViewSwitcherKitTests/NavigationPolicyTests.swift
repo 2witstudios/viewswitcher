@@ -45,7 +45,7 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(NavigationPolicy.mac(u("http://127.0.0.1:7435/program"), server: server, mainFrame: true, newWindow: true), .openInBrowser(u("http://127.0.0.1:7435/program")))
     }
 
-    /// MCP-10: Add to Cursor opens Cursor's install link, and no other cursor: URL or app scheme.
+    /// Add to Cursor opens Cursor's install link, and no other cursor: URL or app scheme.
     func testMacOpensCursorsMcpInstallLinkOnly() {
         let install = u("cursor://anysphere.cursor-deeplink/mcp/install?name=viewswitcher&config=eyJ1cmwiOiJodHRwOi8vMTI3LjAuMC4xOjc0MjAvbWNwIn0%3D")
         XCTAssertTrue(NavigationPolicy.isCursorInstall(install))
@@ -83,7 +83,7 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertFalse(started(nil, true), "unknown source")
     }
 
-    /// MCP-10: Add to Claude Desktop is the one download, from the server only.
+    /// Add to Claude Desktop is the one download, from the server only.
     func testOnlyTheServersExtensionDownloads() {
         XCTAssertTrue(NavigationPolicy.isExtensionDownload(u("http://127.0.0.1:7435/api/agent/viewswitcher.mcpb"), server: server))
         XCTAssertFalse(NavigationPolicy.isExtensionDownload(u("http://127.0.0.1:7420/api/agent/viewswitcher.mcpb"), server: server))
@@ -103,7 +103,7 @@ final class NavigationPolicyTests: XCTestCase {
     }
 
     func testIPadAllowedHosts() {
-        // A private LAN address too: the Mac's pairing QR code carries one (PHONE-4), and once paired that's the switcher's address.
+        // A private LAN address too: the Mac's pairing QR code carries one, and once paired that's the switcher's address.
         for s in ["viewswitcher://connector/", "http://127.0.0.1:7420/", "https://mac.tail1.ts.net/", "http://studio-mac.local:7420/", "http://192.168.1.20:7420/pair?code=AB"] {
             XCTAssertEqual(NavigationPolicy.iPad(u(s), mainFrame: true), .allow, s)
         }
@@ -119,7 +119,7 @@ final class NavigationPolicyTests: XCTestCase {
         XCTAssertEqual(NavigationPolicy.mac(u("capacitor://localhost/migrate"), server: server, mainFrame: true), .deny)
     }
 
-    /// PHONE-4/5: the scanner and Bonjour answer only the bundled connector in the main frame.
+    /// Pairing by scan and by Bonjour: the scanner and Bonjour answer only the bundled connector in the main frame.
     func testConnectorBridgeOnlyForTheConnector() {
         XCTAssertTrue(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "viewswitcher"))
         XCTAssertTrue(NavigationPolicy.connectorBridgeAllowed(isMainFrame: true, scheme: "ViewSwitcher"))

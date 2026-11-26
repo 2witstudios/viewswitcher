@@ -233,17 +233,20 @@ const escapeText = (text: string) => escapeHtml(text, { quotes: false }).replace
 export const collapseHtmlSpace = (t: string) => t.replace(/[ \t\n\r\f]+/g, " ").replace(/^ | $/g, "");
 
 /**
- * The page's <title> element: the first closed one that isn't inside a <template> (the browser
- * never shows that one). The one readTitle reads and setTitle writes, so the two can't disagree.
+ * The page's <title> element: the first closed one that isn't inside a <template>, an <svg> or
+ * <math>. An SVG or MathML title is one document.title ignores; the rare HTML title inside an SVG
+ * foreignObject is skipped too, which is harmless: a rename adds a head <title>, which comes first. The one readTitle reads and setTitle writes, so the two can't disagree.
  */
 function titleElement(els: ScannedElement[]): ScannedElement | undefined {
   // One forward pass: a parent always comes before its children in `els`, so each element's answer is
-  // its parent's, known already (no walk up the tree per title, which nesting made quadratic).
-  const inTemplate = new Uint8Array(els.length);
+  // its parent's, known already (no walk up the tree per title, which nesting made quadratic). A
+  // title in a <template>, an <svg> or <math> isn't taken: an SVG <title/> really is self-closed, so
+  // writing the page's name there would be wrong.
+  const outside = new Uint8Array(els.length);
   for (const e of els) {
     const p = e.parent === null ? null : els[e.parent]!;
-    inTemplate[e.id] = p !== null && (p.tag === "template" || inTemplate[p.id] === 1) ? 1 : 0;
-    if (e.tag === "title" && e.closed && !inTemplate[e.id]) return e;
+    outside[e.id] = p !== null && (p.tag === "template" || p.tag === "svg" || p.tag === "math" || outside[p.id] === 1) ? 1 : 0;
+    if (e.tag === "title" && e.closed && !outside[e.id]) return e;
   }
   return undefined;
 }
@@ -445,7 +448,7 @@ const subtreeSize = (els: ScannedElement[], el: ScannedElement) => {
  */
 function insertPatch(html: string, els: ScannedElement[], edit: InsertEdit, check = true): Patch {
   const into = els[edit.id];
-  if (!into || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!into || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this view`);
   if (!into.closed || VOID.has(into.tag) || RAW.has(into.tag) || into.tag === "html") throw new EditError(`Nothing can go inside <${into.tag}>`);
   const why = check ? checkInsert(edit.insert) : null;
   if (why) throw new EditError(why);
@@ -474,7 +477,7 @@ function insertPatch(html: string, els: ScannedElement[], edit: InsertEdit, chec
 
 function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch[] {
   const el = els[edit.id];
-  if (!el || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!el || !Number.isInteger(edit.id)) throw new EditError(`No element ${edit.id} in this view`);
   switch (editKind(edit)) {
     case "text": {
       const { text: raw } = edit as TextEdit;
@@ -528,7 +531,7 @@ function patchesFor(html: string, els: ScannedElement[], edit: SceneEdit): Patch
       if (el.tag !== "img") throw new EditError(`<${el.tag}> isn't an image`);
       // With srcset the browser picks from that list, so a new src alone wouldn't show.
       if (el.attrs.some((x) => x.name === "srcset")) throw new EditError("This image has several sizes (srcset): ask your agent to change it");
-      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the scene can show");
+      if (!isLibraryUrl(src) || checkInsert(`<img src="${src}">`)) throw new EditError("That isn't an image the view can show");
       const a = el.attrs.find((x) => x.name === "src" && x.valueStart >= 0);
       if (!a) throw new EditError("This image has no src to replace");
       return html.slice(a.valueStart, a.valueEnd) === src ? [] : [{ from: a.valueStart, to: a.valueEnd, text: src }];
@@ -551,7 +554,7 @@ export function applyEdits(html: string, edits: SceneEdit[]): string {
   const els = scanElements(html);
   const patches = edits.flatMap((e) => patchesFor(html, els, e)).sort((a, b) => b.from - a.from);
   for (let k = 1; k < patches.length; k++) {
-    if (patches[k]!.to > patches[k - 1]!.from) throw new EditError("Two edits change the same part of the scene");
+    if (patches[k]!.to > patches[k - 1]!.from) throw new EditError("Two edits change the same part of the view");
   }
   let out = html;
   for (const p of patches) out = out.slice(0, p.from) + p.text + out.slice(p.to);
@@ -581,7 +584,7 @@ export function idsAfter(html: string, edit: InsertEdit | RemoveEdit): { map: (i
     return { map: (id) => (id < n ? id : id + count), added: n };
   }
   const el = els[edit.id];
-  if (!el) throw new EditError(`No element ${edit.id} in this scene`);
+  if (!el) throw new EditError(`No element ${edit.id} in this view`);
   const count = subtreeSize(els, el);
   return { map: (id) => (id < el.id ? id : id < el.id + count ? null : id - count), added: null };
 }
@@ -628,14 +631,24 @@ export function sceneRoot(html: string): number | null {
 /** The scene's <title> set to `name` (added at the top of <head> when there's none). */
 export function setTitle(html: string, name: string): string {
   const clean = collapseHtmlSpace(String(name ?? "").replace(/[\r\n]+/g, " "));
-  if (!clean.trim()) throw new EditError("A scene needs a name");
+  if (!clean.trim()) throw new EditError("A view needs a name");
   if (clean.length > 120) throw new EditError("That name is too long");
   const els = scanElements(html);
   const title = titleElement(els);
   const text = escapeText(clean);
+  // A <title/> the scanner reads as self-closed (end === openEnd) has no content to fill. A browser
+  // ignores that "/" and takes everything up to the next </title> as the title, so that whole stretch
+  // is replaced (or just the tag, when no </title> follows): the name lands inside a title, and no
+  // old text is left behind it to show on air.
+  if (title && title.end === title.openEnd) {
+    const close = /<\/title[\s/>]/i.exec(html.slice(title.openEnd));
+    const closeEnd = close ? html.indexOf(">", title.openEnd + close.index) : -1;
+    const to = closeEnd === -1 ? title.end : closeEnd + 1;
+    return html.slice(0, title.start) + `<title>${text}</title>` + html.slice(to);
+  }
   if (title) return html.slice(0, title.innerStart) + text + html.slice(title.innerEnd);
   const head = els.find((e) => e.tag === "head" && e.closed);
-  if (!head) throw new EditError("This scene has no <head> for a title: ask your agent to rename it");
+  if (!head) throw new EditError("This view has no <head> for a title: ask your agent to rename it");
   const first = els.find((e) => e.parent === head.id);
   const p = insertPatch(html, els, first ? { id: head.id, insert: `<title>${text}</title>`, before: first.id } : { id: head.id, insert: `<title>${text}</title>` }, false);
   return html.slice(0, p.from) + p.text + html.slice(p.to);

@@ -77,7 +77,7 @@ export const textShown = (d: Document | null, id: number) => nodeOf(d, id)?.text
 const EDITOR_STYLE = "[contenteditable]{outline:none;caret-color:currentColor;cursor:text}[contenteditable]::selection{background:rgba(244,245,247,.28)}";
 /** Editor-only touches inside a freshly loaded frame (never saved). */
 export function prepareFrame(d: Document) {
-  // What scene.js does for ?preview (it doesn't run here): the ground and device slot labels.
+  // What scene.js does for ?preview (it doesn't run here): the ground and camera box labels.
   d.documentElement.classList.add("preview");
   // While typing, the scene itself is under the pointer: a file dropped there mustn't open in it.
   for (const t of ["dragover", "drop"]) d.addEventListener(t, (e) => (e as DragEvent).dataTransfer?.types.includes("Files") && e.preventDefault());

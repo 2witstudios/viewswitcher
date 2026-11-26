@@ -1,6 +1,6 @@
 import Foundation
 
-/// Where Sparkle finds updates (MAC-15): the appcast is an asset of the latest GitHub release, next
+/// Where Sparkle finds updates: the appcast is an asset of the latest GitHub release, next
 /// to ViewSwitcher.dmg (the site's download link). A draft release isn't "latest", so nobody sees
 /// an update until a person publishes it.
 public enum UpdateFeed {

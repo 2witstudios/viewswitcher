@@ -160,7 +160,7 @@ struct RemotesView: View {
                     if model.status?.enabled == true {
                         Text("Scan with the phone's camera, or open the address and enter the code.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("Turn on Wi-Fi connections for a QR code, or enter this code on a device already connected.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Text("Turn on Wi-Fi connections for a QR code, or enter this code on a phone or tablet already connected.").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Text(RemoteText.code(code)).font(.system(size: 34, weight: .semibold, design: .monospaced)).textSelection(.enabled)
                     Text(RemoteText.expiry(expires, now: model.now)).foregroundStyle(.secondary).monospacedDigit()
@@ -180,10 +180,10 @@ struct RemotesView: View {
     }
 
     @ViewBuilder var devices: some View {
-        Text("Paired devices").font(.headline)
+        Text("Paired phones and tablets").font(.headline)
         let list = model.status?.devices ?? []
         if list.isEmpty {
-            Text("No devices paired yet.").foregroundStyle(.secondary)
+            Text("No phones or tablets paired yet.").foregroundStyle(.secondary)
         } else {
             VStack(spacing: 0) {
                 ForEach(list) { d in

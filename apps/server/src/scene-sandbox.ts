@@ -1,5 +1,5 @@
 import { posix } from "node:path";
-// How library files are served (EDIT-26). Scenes are HTML that anyone may have written: an agent, a
+// How library files are served. Scenes are HTML that anyone may have written: an agent, a
 // template pack from a stranger. Served plainly from /library/, a scene would be same-origin with the
 // switcher, so its scripts could call /api (go on air, edit files, upload), open the live socket,
 // or reach into the page that frames it.
@@ -35,8 +35,8 @@ import { posix } from "node:path";
 // image or a stylesheet does nothing.
 /** Library files a scene loads in CORS mode (module scripts, @font-face): code, styles and fonts. Never documents or JSON. */
 const CORS_OK = /\.(woff2?|ttf|otf|js|mjs|css)$/i;
-/** Pictures and media of templates (`<org>/templates/…`, and a staged pack's preview copy): design files, sent with CORS. */
-const TEMPLATE_MEDIA = /^[^/]+\/(templates|\.viewswitcher\/staging\/[0-9a-f]+\/preview)\/.+\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
+/** Pictures and media of templates (`<org>/templates/…`, and a staged pack's covers copy): design files, sent with CORS. */
+const TEMPLATE_MEDIA = /^[^/]+\/(templates|\.viewswitcher\/staging\/[0-9a-f]+\/covers)\/.+\.(png|jpe?g|gif|webp|avif|svg|mp4|webm|mov|m4v|mp3|wav|m4a|aac|ogg)$/i;
 
 export const SCENE_CSP = "sandbox allow-scripts; connect-src https: wss:; object-src 'none'; base-uri 'none'; form-action 'none'";
 export const INERT_CSP = "sandbox allow-same-origin allow-scripts; script-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'";

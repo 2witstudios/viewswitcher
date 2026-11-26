@@ -115,11 +115,11 @@ describe("initialize", () => {
   test("instructions say what ViewSwitcher is, get_guide first, preview after changes, org-prefixed paths", () => {
     const i = client.getInstructions() ?? "";
     expect(i).toBe(INSTRUCTIONS);
-    expect(i).toContain("live-stream scene switcher for OBS");
-    expect(i).toContain("Call get_guide before creating or editing scenes");
+    expect(i).toContain("live-stream switcher for OBS");
+    expect(i).toContain("Call get_guide before creating or editing views");
     expect(i).toContain("preview_scene after every visual change");
     expect(i).toContain("fix what you see");
-    expect(i).toContain("Every path starts with the org id");
+    expect(i).toContain("Every path starts with the show's id");
   });
   test("see_program isn't read-only: clients ask before it sends camera frames", async () => {
     const { tools } = await client.listTools();
@@ -162,7 +162,7 @@ describe("read tools", () => {
     expect(l.org.id).toBe(ORG);
     expect(l.templates.map((t: { path: string }) => t.path)).toContain(`${ORG}/templates/brb.html`);
     for (const t of l.templates) expect(t.path.startsWith(`${ORG}/`)).toBe(true);
-    expect((await call("scan_library", { org: "nope" })).text).toContain("There's no org \"nope\"");
+    expect((await call("scan_library", { org: "nope" })).text).toContain("There's no show \"nope\"");
     expect((await call("scan_library", { org: "../etc" })).isError).toBe(true);
   });
   test("scan_library marks a stream's overrides and the project scenes it shares", async () => {
@@ -247,7 +247,7 @@ describe("look tools", () => {
     expect(r.text).toContain("1920×1080");
   });
   test("preview_scene of something that isn't a scene is refused", async () => {
-    expect((await call("preview_scene", { path: `${ORG}/templates/nope.html` })).text).toContain("There's no scene");
+    expect((await call("preview_scene", { path: `${ORG}/templates/nope.html` })).text).toContain("There's no view");
     expect((await call("preview_scene", { path: `${ORG}/org.json` })).isError).toBe(true);
   });
 });
@@ -286,10 +286,10 @@ describe("write_file", () => {
     const refused = async (path: string) => (await call("write_file", { path, text: "<title>X</title>" })).text;
     expect(await refused(`${ORG}/templates/loud.HTML`)).toContain("lower-case .html");
     expect(await refused(`${ORG}/templates/Big Title.html`)).toContain('"big-title.html"');
-    expect(await refused(`${ORG}/assets/page.html`)).toContain("isn't where scenes go");
-    expect(await refused(`${ORG}/templates/_shared/extra.html`)).toContain("isn't where scenes go");
-    expect(await refused(`${ORG}/page.html`)).toContain("isn't where scenes go");
-    expect(await refused(`${ORG}/projects/p/page.html`)).toContain("isn't where scenes go");
+    expect(await refused(`${ORG}/assets/page.html`)).toContain("isn't where views go");
+    expect(await refused(`${ORG}/templates/_shared/extra.html`)).toContain("isn't where views go");
+    expect(await refused(`${ORG}/page.html`)).toContain("isn't where views go");
+    expect(await refused(`${ORG}/projects/p/page.html`)).toContain("isn't where views go");
     expect(await stat(join(root, ORG, "assets/page.html")).catch(() => null)).toBeNull();
     // A folder in templates/ without a pack.json isn't a set: the switcher wouldn't list the scene.
     expect(await refused(`${ORG}/templates/lower-thirds/intro.html`)).toContain("isn't a template set");
@@ -332,7 +332,7 @@ describe("structural tools", () => {
     expect(await data("revert_scene", { org: ORG, projectId, streamId, name: "teaching" })).toEqual({ ok: true });
     expect(await stat(join(root, ORG, "projects/live-demo/streams/12-04-first/teaching.html")).catch(() => null)).toBeNull();
     await data("scene_from_template", { org: ORG, template: "ending", projectId, streamId });
-    expect((await call("revert_scene", { org: ORG, projectId, streamId, name: "ending" })).text).toContain("Only an override");
+    expect((await call("revert_scene", { org: ORG, projectId, streamId, name: "ending" })).text).toContain("Only a stream's own copy");
     expect((await call("scene_from_template", { org: ORG, template: "nope", projectId })).text).toContain("no template");
     expect((await call("create_stream", { org: ORG, projectId: "nope", name: "x" })).text).toContain("no project");
     expect((await call("customize_scene", { org: ORG, projectId, streamId: "nope", name: "teaching" })).text).toContain("no stream");
@@ -377,10 +377,10 @@ describe("structural tools", () => {
     expect((await data("add_asset", { org: ORG, name: "photo.png", base64: Buffer.from(png).toString("base64") })).path).toBe(`${ORG}/assets/photo-2.png`);
     expect((await call("add_asset", { org: ORG, name: "big.png", base64: "A".repeat(21 * 1024 * 1024) })).text).toContain("over 15 MB");
     expect((await call("add_asset", { org: ORG, name: "x.png", base64: "" })).isError).toBe(true);
-    expect((await call("add_asset", { org: "nope", name: "x.png", base64: "AAAA" })).text).toContain("no org");
+    expect((await call("add_asset", { org: "nope", name: "x.png", base64: "AAAA" })).text).toContain("no show");
   });
   test("structural tools never make a new org", async () => {
-    expect((await call("create_project", { org: "brand-new", name: "X" })).text).toContain("no org");
+    expect((await call("create_project", { org: "brand-new", name: "X" })).text).toContain("no show");
     expect(await stat(join(root, "brand-new")).catch(() => null)).toBeNull();
   });
 });
@@ -404,7 +404,7 @@ describe("go_on_air and the agent guard", () => {
   });
   test("never: always refused; always: allowed while live", async () => {
     state.agent.onAir = "never";
-    expect((await call("go_on_air", { path: brb })).text).toContain("never put scenes on air");
+    expect((await call("go_on_air", { path: brb })).text).toContain("never put views on air");
     state.agent.onAir = "always";
     live();
     expect((await call("go_on_air", { path: brb })).isError).toBe(false);
@@ -412,7 +412,7 @@ describe("go_on_air and the agent guard", () => {
   test("only scenes in the library's scene folders go on air", async () => {
     expect((await call("go_on_air", { path: `${ORG}/templates/nope.html` })).isError).toBe(true);
     await writeFile(join(root, ORG, "assets", "page.html"), "<title>x</title>");
-    expect((await call("go_on_air", { path: `${ORG}/assets/page.html` })).text).toContain("Only an org's templates");
+    expect((await call("go_on_air", { path: `${ORG}/assets/page.html` })).text).toContain("Only a show's templates");
   });
   test("while live, writes to the on-air scene, its transitions and _shared are refused with a way around", async () => {
     const { projectId } = await data("create_project", { org: ORG, name: "Guarded", templates: ["teaching"] });
@@ -434,8 +434,8 @@ describe("go_on_air and the agent guard", () => {
     await symlink(join(root, copy.path), join(root, ORG, "templates", "alias.html"));
     refusals.push(await call("write_file", { path: copy.path.replace("teaching", "Teaching"), text: "x", hash }));
     refusals.push(await call("write_file", { path: `${ORG}/templates/alias.html`, text: "x", hash }));
-    for (const r of refusals) expect({ err: r.isError, why: /you're live/.test(r.text), instead: /customize_scene|Wait until the stream ends|wait until the stream ends/.test(r.text) }).toEqual({ err: true, why: true, instead: true });
-    expect(refusals[0]!.text).toBe("That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.");
+    for (const r of refusals) expect({ err: r.isError, why: /you're live/.test(r.text), instead: /customize_scene|Wait until you're off air|wait until you're off air (OBS stops streaming and recording)/.test(r.text) }).toEqual({ err: true, why: true, instead: true });
+    expect(refusals[0]!.text).toBe("That view is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until you're off air (OBS stops streaming and recording).");
     expect(await readFile(join(root, copy.path), "utf8")).not.toBe("x");
     expect(await stat(join(root, ORG, `projects/${projectId}/transition.html`)).catch(() => null)).toBeNull();
     // Everything else is fine while live.
@@ -589,7 +589,7 @@ describe("the guard covers what the scene on air loads, and is checked again as 
     live();
     for (const [path, hash] of [[`${ORG}/assets/live-logo.svg`, logo], [`${ORG}/assets/live.css`, css], [`${ORG}/assets/tex.svg`, tex]] as const) {
       const r = await call("write_file", { path, text: "<svg>new</svg>", hash });
-      expect({ path, err: r.isError, text: r.text }).toEqual({ path, err: true, text: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends." });
+      expect({ path, err: r.isError, text: r.text }).toEqual({ path, err: true, text: "The view on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the view (customize_scene), or wait until you're off air (OBS stops streaming and recording)." });
     }
     expect(await readFile(join(root, ORG, "assets/live-logo.svg"), "utf8")).toBe("<svg/>");
     // A picture the scene asks for but that isn't there yet would show the moment it's created.
@@ -609,7 +609,7 @@ describe("the guard covers what the scene on air loads, and is checked again as 
   });
   test("go_on_air: the setting changed to never in the meantime stops it", async () => {
     beforeCommit = () => (state.agent.onAir = "never");
-    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("never put scenes on air");
+    expect((await call("go_on_air", { path: `${ORG}/templates/brb.html` })).text).toContain("never put views on air");
     expect(state.onAir).toBeNull();
   });
   test("writeText runs beforeWrite in turn, after the hash check and before writing; a throw writes nothing", async () => {
@@ -680,7 +680,7 @@ describe("the guard at the commit instant", () => {
     atCommit = live; // OBS goes live at the commit instant, after the in-turn check passed while idle
     const r = await call("write_file", { path: `${ORG}/assets/race.css`, text: ".a{color:blue}", hash });
     expect(r.isError).toBe(true);
-    expect(r.text).toContain("The scene on air uses that file");
+    expect(r.text).toContain("The view on air uses that file");
     expect(await readFile(join(root, ORG, "assets/race.css"), "utf8")).toBe(".a{}");
   });
   test("write_file: at the commit, while live, a change to what's on air, to the on-air scene's text, or to the setting refuses the write", async () => {
@@ -719,7 +719,7 @@ describe("the guard at the commit instant", () => {
     await symlink(join(root, ORG, "templates/brb.html"), join(outside, "escape", "back.html"));
     await expect(duplicateScene(root, `${ORG}/templates/escape/back.html`)).rejects.toThrow("outside the library");
     expect((await readdir(join(outside, "escape"))).sort()).toEqual(["back.html"]);
-    await expect(duplicateScene(root, `/${ORG}/templates/brb.html`)).rejects.toThrow("Paths start with the org id");
+    await expect(duplicateScene(root, `/${ORG}/templates/brb.html`)).rejects.toThrow("Paths start with the show's id");
   });
 });
 
@@ -814,7 +814,7 @@ describe("the guard sees the file really made, a changed dependency, a cut-short
     const b64 = Buffer.from("png").toString("base64");
     const r = await call("add_asset", { org: ORG, name: "pick.png", base64: b64 });
     expect(r.isError).toBe(true);
-    expect(r.text).toContain("The scene on air uses that file");
+    expect(r.text).toContain("The view on air uses that file");
     expect(await stat(join(root, ORG, "assets/pick-2.png")).catch(() => null)).toBeNull();
     expect((await data("add_asset", { org: ORG, name: "other.png", base64: b64 })).path).toBe(`${ORG}/assets/other.png`);
   });
@@ -824,8 +824,8 @@ describe("the guard sees the file really made, a changed dependency, a cut-short
     await writeFile(join(root, ORG, "templates/intro-copy.html"), "<title>I copy</title>");
     await onAirWith("asks-copies", `<title>C</title><iframe src="/library/${ORG}/projects/${projectId}/scenes/brb-2.html"></iframe><iframe src="intro-copy-2.html"></iframe>`);
     live();
-    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).text).toContain("The scene on air uses that file");
-    expect((await call("duplicate_scene", { path: `${ORG}/templates/intro.html` })).text).toContain("The scene on air uses that file");
+    expect((await call("scene_from_template", { org: ORG, template: "brb", projectId })).text).toContain("The view on air uses that file");
+    expect((await call("duplicate_scene", { path: `${ORG}/templates/intro.html` })).text).toContain("The view on air uses that file");
     expect(await stat(join(root, ORG, `projects/${projectId}/scenes/brb-2.html`)).catch(() => null)).toBeNull();
     expect(await stat(join(root, ORG, "templates/intro-copy-2.html")).catch(() => null)).toBeNull();
   });

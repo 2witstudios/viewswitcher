@@ -62,7 +62,7 @@ afterEach(async () => {
   for (const c of cleanup.splice(0).reverse()) await c();
 });
 
-describe("usb bridge status (MAC-4)", () => {
+describe("usb bridge status", () => {
   test("reports the iPad attached and the app connected, then each going away", async () => {
     const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
@@ -92,7 +92,7 @@ describe("usb bridge status (MAC-4)", () => {
     expect(now()).toEqual({ attached: false, connected: false });
   });
 
-  test("names an iPhone plugged in (PHONE-8)", async () => {
+  test("names an iPhone plugged in", async () => {
     const dir = await mkdtemp(join(tmpdir(), "vs-usb-"));
     cleanup.push(() => rm(dir, { recursive: true, force: true }));
     const { fake, close } = await fakeUsbmuxd(join(dir, "usbmuxd"));

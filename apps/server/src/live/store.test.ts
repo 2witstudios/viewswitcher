@@ -74,8 +74,8 @@ describe("going on air", () => {
   test("a scene that isn't there is refused, and what's on air stays", async () => {
     const store = await open();
     await store.goOnAir({ path: `${ORG}/templates/a.html`, label: "A" });
-    await expect(store.goOnAir({ path: `${ORG}/templates/gone.html`, label: "Gone" })).rejects.toThrow("There's no scene at show/templates/gone.html");
-    await expect(store.goOnAir({ path: `${ORG}/templates`, label: "A folder" })).rejects.toThrow("There's no scene at");
+    await expect(store.goOnAir({ path: `${ORG}/templates/gone.html`, label: "Gone" })).rejects.toThrow("There's no view at show/templates/gone.html");
+    await expect(store.goOnAir({ path: `${ORG}/templates`, label: "A folder" })).rejects.toThrow("There's no view at");
     expect(store.state.onAir?.label).toBe("A");
     expect((await saved()).label).toBe("A");
     // And a refused one doesn't hold up the next.

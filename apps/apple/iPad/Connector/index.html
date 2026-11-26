@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ViewSwitcher</title>
 <!-- Connector: finds the ViewSwitcher server (USB-C first, then the network) and opens the switcher it serves.
-     With no Mac it offers to pair: Scan reads the Mac's QR code with the app's own camera (PHONE-4), Enter code
-     finds the Mac on the Wi-Fi by Bonjour and opens its pair page (PHONE-5). With no Mac at all it offers the demo
-     (demo/, MAC-18), and opens it by itself until a Mac has been connected once. Same page on iPhone and iPad. -->
+     With no Mac it offers to pair: Scan reads the Mac's QR code with the app's own camera, Enter code
+     finds the Mac on the Wi-Fi by Bonjour and opens its pair page. With no Mac at all it offers the demo
+     (demo/), and opens it by itself until a Mac has been connected once. Same page on iPhone and iPad. -->
 <style>
   :root { --bg: #0b0c0f; --raised: #16181e; --line: #343846; --muted: #a3a8b5; --soft: #c4c8d2; --text: #f4f5f7; --live: #ff4d4f; }
   * { box-sizing: border-box; }
@@ -90,7 +90,7 @@
   net.value = VS.network();
 
   // touched: someone started pairing (scan, Enter code, an address). From then on the connector never
-  // swaps itself for the demo; an untouched first launch still opens the demo by itself (MAC-18).
+  // swaps itself for the demo; an untouched first launch still opens the demo by itself.
   let busy = false, leaving = false, browsing = false, scanning = false, touched = false;
   // Every navigation away goes through leave(). If the page is still here 10 s later, the navigation was
   // cancelled or is stuck (the app refused it, or the Mac's old address doesn't answer): stop it, so it can't
@@ -102,7 +102,7 @@
   };
   const go = (url) => leave(() => location.replace(url));
 
-  // Scan (PHONE-4): the link opens in this web view, so the device token lands in the app. `scanning` holds
+  // Scan: the link opens in this web view, so the device token lands in the app. `scanning` holds
   // from the tap until the page leaves (or the scan comes back empty), so no other flow starts or navigates meanwhile.
   $("scan").addEventListener("click", async () => {
     if (scanning || leaving) return;
@@ -129,7 +129,7 @@
     go(link);
   });
 
-  // Enter code (PHONE-5): the Mac's own pair page takes the code; this finds the Mac for it.
+  // Enter code: the Mac's own pair page takes the code; this finds the Mac for it.
   $("enter").addEventListener("click", async () => {
     if (browsing || scanning || leaving) return;
     browsing = touched = true;

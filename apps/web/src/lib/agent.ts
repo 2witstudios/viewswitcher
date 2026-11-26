@@ -1,4 +1,4 @@
-// Edit with AI (MCP-10, MCP-11): what the sheet says and offers, apart from React.
+// Edit with AI: what the sheet says and offers, apart from React.
 import type { AgentClients, AgentOnAir, AgentStatus } from "@viewswitcher/shared";
 import type { ClientKind } from "./client-kind";
 
@@ -72,7 +72,7 @@ export function sheetParts(kind: ClientKind) {
   return { waysIn: !ipad, connectOnMac: ipad, onAirSetting: !ipad, setupGuide: !ipad };
 }
 
-/** The setup guide on the site (MCP-11): how to connect each agent, step by step. */
+/** The setup guide on the site: how to connect each agent, step by step. */
 export const SETUP_GUIDE_URL = "https://viewswitcher.com/ai";
 
 // What agents may do to the show (apps/server/src/agent-guard.ts); people in the switcher are never limited.
@@ -98,7 +98,7 @@ export type PendingEvent =
   | { t: "answered"; id: number; ok: boolean }
   /** The switcher's state said this (it comes over the live socket, maybe after the HTTP answer). */
   | { t: "published"; value: AgentOnAir | undefined }
-  /** A while after its answer: give up waiting (another device may have changed it meanwhile). */
+  /** A while after its answer: give up waiting (another phone or tablet may have changed it meanwhile). */
   | { t: "expire"; id: number };
 
 /**
@@ -128,9 +128,9 @@ export const shownChoice = (p: PendingChoice, published: AgentOnAir | undefined)
 export const ON_AIR_SCOPE = "This applies to agents working through ViewSwitcher's tools. An agent that edits the library's files directly isn't held to it.";
 
 export const ON_AIR_CHOICES: { value: AgentOnAir; label: string; hint: string }[] = [
-  { value: "never", label: "Never", hint: "Agents never put scenes on air, and can't change what's on air while you're live." },
-  { value: "not-live", label: "When not live", hint: "Agents put scenes on air only while OBS isn't streaming or recording." },
-  { value: "always", label: "Always", hint: "Agents may put scenes on air and change them at any time, even while you're live." },
+  { value: "never", label: "Never", hint: "Agents never put views on air, and can't change what's on air while you're live." },
+  { value: "not-live", label: "When not live", hint: "Agents put views on air only while OBS isn't streaming or recording." },
+  { value: "always", label: "Always", hint: "Agents may put views on air and change them at any time, even while you're live." },
 ];
 
 /** The sheet opens on its own for /?ai or #ai: the Mac app's Edit with AI… menu item. */

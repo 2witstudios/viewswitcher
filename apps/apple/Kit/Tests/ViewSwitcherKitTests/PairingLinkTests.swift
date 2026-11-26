@@ -1,7 +1,7 @@
 import XCTest
 @testable import ViewSwitcherKit
 
-/// PHONE-4: the app's own scanner pairs the app, so it accepts only a ViewSwitcher pairing link on the
+/// the app's own scanner pairs the app, so it accepts only a ViewSwitcher pairing link on the
 /// local network: http(s), this Mac's .local name or a private LAN address, /pair, and a code.
 final class PairingLinkTests: XCTestCase {
     func testAcceptsTheMacsPairingLinks() {

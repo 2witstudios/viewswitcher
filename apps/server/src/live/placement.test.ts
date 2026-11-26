@@ -6,7 +6,7 @@ import { fakeObs, type FakeObsInit, serveFakeObs } from "../fake-obs";
 import { OBSClient } from "../obs";
 import { createPlacer, type PlacementObs } from "./placement";
 
-const names = { scene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", devices: ["Camera", "Screen", "iPad"] };
+const names = { obsScene: "ViewSwitcher", programSource: "ViewSwitcher Program", groundSource: "ViewSwitcher Ground", sources: ["Camera", "Screen", "iPad"] };
 // Guest and Camera 2 are boxes from the editor, not configured devices; Mic and Logo were added in OBS by hand.
 const SCENE_ITEMS = ["ViewSwitcher Ground", "Camera", "Screen", "Guest", "Camera 2", "Mic", "Logo", "ViewSwitcher Program"];
 const input = (kind: string) => ({ kind, settings: {} });
@@ -185,7 +185,7 @@ describe("placement", () => {
     const { placer, placed, shown } = setup({ inputs: { ...INPUTS, Camera: { ...input("av_capture_input"), size: { width: 0, height: 0 } } } });
     await placer.report("org/x.html", [camera, { ...camera, source: "Phone" }, { ...camera, source: "Phone", y: 9 }]);
     expect(placed.at(-1)).toEqual([
-      `This scene has a "Phone" slot, but OBS scene "ViewSwitcher" has no source with that name.`,
+      `This view has a "Phone" slot, but OBS scene "ViewSwitcher" has no source with that name.`,
       `OBS source "Camera" has no picture yet, so it can't be fitted to its slot.`,
     ]);
     expect(shown().Screen).toBe(false);

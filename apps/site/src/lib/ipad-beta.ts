@@ -1,4 +1,4 @@
-// The iPad beta signup (SITE-27): an email into a Resend segment, for TestFlight invites.
+// The iPad beta signup: an email into a Resend segment, for TestFlight invites.
 // api/ipad-beta.ts is the Vercel function; this is the whole of it, with fetch and the env passed
 // in so the tests can fake Resend.
 //

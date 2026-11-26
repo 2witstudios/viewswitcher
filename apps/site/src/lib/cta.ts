@@ -4,7 +4,7 @@ export type Ctas = { state: "soon" | "download"; primary: Link };
 
 /**
  * Before the Mac app ships there is nothing to download, so the honest, least technical step is
- * to follow its releases (GitHub emails a watcher when one is published). After MAC-8 it's the dmg.
+ * to follow its releases (GitHub emails a watcher when one is published). Once the Mac app is released, it's the dmg.
  */
 export function ctas(opts: { macAppReleased: boolean; repo: string; dmgUrl: string }): Ctas {
   const releases = `https://github.com/${opts.repo}/releases`;

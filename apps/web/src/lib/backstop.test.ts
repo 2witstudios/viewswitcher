@@ -1,4 +1,4 @@
-// PR #1 round 5: the backstop's decision, tested apart from the route.
+// The backstop's decision, tested apart from the route.
 import { describe, expect, test } from "bun:test";
 import { freshUrl, shouldBackstop } from "./backstop";
 
@@ -7,7 +7,7 @@ const b = { url: "/library/x/b.html?edit&v=1.0", path: "x/b.html" };
 const a2 = { url: "/library/x/a.html?edit&v=2.0", path: "x/a.html" };
 
 describe("shouldBackstop", () => {
-  test("fires when the previewed scene is still shown and nothing newer was asked for", () => {
+  test("fires when the live-edited view is still shown and nothing newer was asked for", () => {
     expect(shouldBackstop(a, a, a)).toBe(true);
   });
   test("bails when a saved version replaced it", () => {

@@ -1,4 +1,4 @@
-// EDIT-16 · EDIT-17 · EDIT-18 · EDIT-19: adding, deleting and resizing elements, swapping an image and
+// Adding, deleting and resizing elements, swapping an image and
 // renaming, each as a source patch that leaves every other byte of the file identical.
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ function onlyInserted(a: string, b: string, inserted: string) {
   expect(b.slice(0, at) + b.slice(at + inserted.length)).toBe(a);
 }
 
-describe("insertElement (EDIT-16)", () => {
+describe("insertElement", () => {
   for (const t of templates) {
     test(`${t.name}: every kind goes in as one element at the end of the scene, and nothing else changes`, () => {
       const root = sceneRoot(t.html)!;
@@ -92,7 +92,7 @@ describe("insertElement (EDIT-16)", () => {
     expect(add("image")).toContain("width: 600px; height: 300px"); // keeps the picture's shape
   });
 
-  test("a dropped picture (EDIT-22) lands centred where it was dropped, inside the scene, never blown up", () => {
+  test("a dropped picture lands centred where it was dropped, inside the scene, never blown up", () => {
     const img = (width: number, height: number, at: { x: number; y: number }) => markupFor("image", { image: { src: "/library/org/assets/p.jpg", width, height }, at });
     expect(img(4000, 3000, { x: 500, y: 400 })).toContain("left: 200px; top: 175px; width: 600px; height: 450px");
     expect(img(200, 100, { x: 500, y: 400 })).toContain("left: 400px; top: 350px; width: 200px; height: 100px");
@@ -111,7 +111,7 @@ describe("insertElement (EDIT-16)", () => {
   });
 });
 
-describe("removeElement (EDIT-17)", () => {
+describe("removeElement", () => {
   for (const t of templates) {
     test(`${t.name}: each element removes cleanly and its restore puts back the same bytes`, () => {
       const els = scanElements(t.html);
@@ -163,7 +163,7 @@ describe("removeElement (EDIT-17)", () => {
   });
 });
 
-describe("setSize (EDIT-17)", () => {
+describe("setSize", () => {
   const teaching = templates.find((t) => t.name === "teaching.html")!.html;
   const camera = scanElements(teaching).find((e) => teaching.slice(e.start, e.openEnd).includes(`data-slot="Camera"`))!;
   test("changes only width and height (and left/top from another corner)", () => {
@@ -180,7 +180,7 @@ describe("setSize (EDIT-17)", () => {
   });
 });
 
-describe("image src (EDIT-18)", () => {
+describe("image src", () => {
   test("replaces only the src value", () => {
     const html = `<img class="abs" src="/library/o/assets/a.png" alt="" style="left: 1px">`;
     expect(applyEdits(html, [{ id: 0, src: "/library/o/assets/b%20c.png" }])).toBe(`<img class="abs" src="/library/o/assets/b%20c.png" alt="" style="left: 1px">`);
@@ -190,7 +190,7 @@ describe("image src (EDIT-18)", () => {
   });
 });
 
-describe("setTitle (EDIT-19)", () => {
+describe("setTitle", () => {
   test("sets the <title> text, or adds one at the top of <head>", () => {
     expect(setTitle(`<head>\n<title>Old</title>\n</head>`, "New & <b>")).toBe(`<head>\n<title>New &amp; &lt;b&gt;</title>\n</head>`);
     expect(setTitle(`<head>\n<meta charset="utf-8">\n</head>`, "Hi")).toBe(`<head>\n<title>Hi</title>\n<meta charset="utf-8">\n</head>`);

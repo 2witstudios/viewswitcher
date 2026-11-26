@@ -1,4 +1,4 @@
-// Phones and tablets over the Wi-Fi (MAC-23 … MAC-26), end to end: the real server (from source, OBS
+// Phones and tablets over the Wi-Fi, end to end: the real server (from source, OBS
 // offline, no USB, a temp library) with its Wi-Fi listener bound to this Mac's LAN address, and requests
 // that really arrive from that address, so the server sees a non-loopback peer like a phone's.
 // Skipped on a machine with no LAN address.
@@ -261,7 +261,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     }
   });
 
-  test("a paired phone still can't reach the agents' /mcp, /api/info, /api/agent/clients or the .mcpb (MCP-2)", async () => {
+  test("a paired phone still can't reach the agents' /mcp, /api/info, /api/agent/clients or the .mcpb", async () => {
     const { code } = (await admin("/api/remote/code", {})) as { code: { code: string } };
     const cookie = cookieOf(await pairWith(code.code));
     expect((await lan("/api/state", { headers: { cookie } })).status).toBe(200); // paired: the switcher works

@@ -1,4 +1,4 @@
-// PR #1 architecture #4: every on-air scene is served through the scanner (?edit). With
+// Every on-air view is served through the scanner (?edit). With
 // VIEWSWITCHER_LIBRARY set, check every scene in that library tags and untags byte for byte and
 // closes every element, so a scanner change can't silently blank a show.
 import { describe, expect, test } from "bun:test";

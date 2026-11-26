@@ -59,7 +59,7 @@ export function useRename(opts: {
         toast(`Renamed: ${clean}`);
       } catch (e) {
         if (!(e instanceof SceneConflict)) throw e;
-        toast("The scene changed meanwhile, so it wasn't renamed. Try again.");
+        toast("The view changed meanwhile, so it wasn't renamed. Try again.");
         await o.current.load();
       } finally {
         mode.dispatch({ t: "end", kind: "saving-structure" });

@@ -40,18 +40,18 @@ function onStream(onAir: NonNullable<GuardInput["onAir"]>, path: string): "scene
 }
 
 const REASONS = {
-  scene: "That scene is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until the stream ends.",
-  transition: "That is the transition for the scene on air, and you're live. Wait until the stream ends to change it.",
-  shared: "Files in templates/_shared/ (and a template set's own _shared/) style the scene on air, and you're live. Wait until the stream ends, or put the change in a stream copy of the scene (customize_scene).",
-  tooMany: "The scene on air loads more files than ViewSwitcher checks, so while you're live agents can't change library files. Wait until the stream ends.",
-  loaded: "The scene on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the scene (customize_scene), or wait until the stream ends.",
+  scene: "That view is on air and you're live. Make a stream copy with customize_scene (or duplicate_scene) and change that, or wait until you're off air (OBS stops streaming and recording).",
+  transition: "That is the transition for the view on air, and you're live. Wait until you're off air to change it.",
+  shared: "Files in templates/_shared/ (and a template set's own _shared/) shape the view on air, and you're live. Wait until you're off air, or put the change in a stream copy of the view (customize_scene).",
+  tooMany: "The view on air loads more files than ViewSwitcher checks, so while you're live agents can't change library files. Wait until you're off air.",
+  loaded: "The view on air uses that file, and you're live. Save your version under a new name and use it in a stream copy of the view (customize_scene), or wait until you're off air (OBS stops streaming and recording).",
 };
 
 export function agentGuard({ setting, live, onAir, action }: GuardInput): GuardResult {
   if (setting === "always") return { ok: true };
   if (action.kind === "go_on_air") {
-    if (setting === "never") return { ok: false, reason: "ViewSwitcher is set so agents never put scenes on air. Tell the user the scene is ready to put on air in the switcher (or they can change the agent setting in Edit with AI)." };
-    if (live) return { ok: false, reason: "OBS is streaming or recording, so agents can't put scenes on air. Tell the user the scene is ready and let them put it on air in the switcher, or wait until the stream ends." };
+    if (setting === "never") return { ok: false, reason: "ViewSwitcher is set so agents never put views on air. Tell the user the view is ready to put on air in the switcher (or they can change the agent setting in Edit with AI)." };
+    if (live) return { ok: false, reason: "OBS is streaming or recording, so agents can't put views on air. Tell the user the view is ready and let them put it on air in the switcher, or wait until you're off air (OBS stops streaming and recording)." };
     return { ok: true };
   }
   if (!live || !onAir) return { ok: true };

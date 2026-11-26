@@ -18,7 +18,7 @@
   --display: "Space Grotesk", "Helvetica Neue", sans-serif;
   --text: "Instrument Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
-  /* Safe zones (MAC-13a). The iPad app's web view runs edge to edge (viewport-fit=cover), so the
+  /* Safe zones. The iPad app's web view runs edge to edge (viewport-fit=cover), so the
      notch-free but rounded corners, the home indicator and Stage Manager's window controls come in
      as env(safe-area-inset-*); a browser reports 0. */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -99,7 +99,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .page-head .titles { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
 .crumb { font-size: 14px; color: var(--sage); }
 .title { margin: 0; font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.05; letter-spacing: -0.02em; }
-/* Phones only (PHONE-3, PHONE-12): the title opens the library, the on-air scene sits on top upright, and a
+/* Phones only: the title opens the library, the on-air scene sits on top upright, and a
    scrim closes the library sideways. Hidden everywhere else. */
 .stream-pick, .onair-hero, .deck-library { display: none; }
 .deck-library { position: fixed; z-index: 20; top: calc(10px + var(--safe-top)); left: calc(16px + var(--safe-left)); width: 44px; height: 44px; padding: 0; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--raised); }
@@ -182,7 +182,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .text-link { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .text-link:hover { color: var(--cream); text-decoration-color: currentColor; }
 
-/* ---------------------------------------------------------------- Edit with AI (MCP-10) */
+/* ---------------------------------------------------------------- Edit with AI */
 .out-btn.ai-btn { color: var(--cream); }
 .modal.agent-sheet { width: min(600px, 100%); max-height: calc(100dvh - 48px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; gap: 16px; }
 .agent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -307,7 +307,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .conflict.stuck { top: auto; bottom: 6%; }
 .conflict.stuck .actions, .conflict.stuck .head p { margin-left: 0; }
 
-/* ---------------------------------------------------------------- scene editor, phase 2 (EDIT-14…19) */
+/* ---------------------------------------------------------------- view editor: add, delete, resize, images */
 .more.edit { color: var(--ink-muted); }
 .out-btn.edit-onair { color: var(--cream); }
 .title-btn { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 30px; padding: 0 6px; margin-left: -6px; border: 0; border-radius: 8px; background: transparent; color: var(--cream); text-align: left; cursor: text; }
@@ -340,7 +340,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 .picker-item:hover img, .picker-item:focus-visible img { outline-color: var(--cream); }
 .picker-item span { font-size: 12px; color: var(--sage); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------------------------------------------------------------- template packs and sets (EDIT-22 · EDIT-24 · EDIT-25) */
+/* ---------------------------------------------------------------- template packs and sets */
 .menu-heading { padding: 10px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
 .checks-head { flex-basis: 100%; margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sage-deep); }
 .drop-page { position: relative; flex: 1; display: flex; flex-direction: column; gap: 28px; }
@@ -384,7 +384,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
 
 @keyframes library-in { from { transform: translateX(-100%); } }
 
-/* ---------------------------------------------------------------- phone: the switcher as a remote (MAC-27)
+/* ---------------------------------------------------------------- phone: the switcher as a remote
    Up to 600 px wide: the library folds into a top bar, the scenes come first in two columns of
    covers you can hit with a thumb, and what's on air (with REC and GO LIVE) stays at the bottom
    of the screen, above the home indicator. Wider layouts are untouched. */
@@ -466,7 +466,7 @@ html[data-shell="mac"]:not(.shell-fullscreen) .shell-drag { display: block; posi
   .livebar .ai-btn { display: none; }
 }
 
-/* ---------------------------------------------------------------- the deck: a phone held sideways (PHONE-12)
+/* ---------------------------------------------------------------- the deck: a phone held sideways
    About 844×390: wider than the phone layout above, so it keys on a short, touch screen no wider than a phone
    (a short iPad window keeps its editing). The scenes fill
    the screen four across under one slim bar; the library slides in from the title. Switching only: adding

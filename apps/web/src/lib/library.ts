@@ -1,4 +1,4 @@
-import type { Library, Scene, TemplateSet } from "@viewswitcher/shared";
+import type { OrgContent, Scene, TemplateSet } from "@viewswitcher/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { api } from "./api";
@@ -32,7 +32,7 @@ export const lastOrg = {
   },
 };
 
-/** Templates by set (EDIT-25): the org's own first, then each installed template pack. */
-export function templateGroups(lib: Library): { set: TemplateSet | null; name: string; templates: Scene[] }[] {
+/** Templates by set: the org's own first, then each installed template pack. */
+export function templateGroups(lib: OrgContent): { set: TemplateSet | null; name: string; templates: Scene[] }[] {
   return [{ set: null, name: lib.org.name, templates: lib.templates }, ...lib.sets.map((s) => ({ set: s, name: s.name, templates: s.templates }))];
 }

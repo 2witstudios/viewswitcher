@@ -1,4 +1,4 @@
-// EDIT-24 · EDIT-25 · EDIT-27 · EDIT-29: staging, installing and removing template packs on a real (temporary)
+// Staging, installing and removing template packs on a real (temporary)
 // library, with the starter kit exported as a pack, and hostile packs that must leave nothing behind.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
@@ -11,7 +11,7 @@ import { cancelPack, installPack, PackError, removeSet, stagePack } from "./pack
 import { SHOWS, SHOWS_DIR, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
 
 const starter = resolve(import.meta.dir, "../starter");
-const scanLibrary = (root: string, org: string) => new LibraryScanner(root).scan(org);
+const scanOrg = (root: string, org: string) => new LibraryScanner(root).scanOrg(org);
 let root = "";
 let org = "";
 let starterZip: Uint8Array;
@@ -35,7 +35,7 @@ beforeEach(async () => {
 });
 afterEach(() => rm(root, { recursive: true, force: true }));
 
-describe("the starter kit as a pack (EDIT-27)", () => {
+describe("the starter kit as a pack", () => {
   test("stages with covers filled in for the org, and says what it runs", async () => {
     const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
     expect(s.set).toBe("starter");
@@ -45,16 +45,16 @@ describe("the starter kit as a pack (EDIT-27)", () => {
     expect(s.warnings).toEqual([]);
     const cover = await readFile(join(root, s.views[1]!.path), "utf8");
     expect(s.views[1]!.path.startsWith(`${org}/.viewswitcher/staging/`)).toBe(true); // library paths start with the org id
-    expect(cover).toContain(`href="/library/${org}/.viewswitcher/staging/${s.token}/preview/_shared/theme.css"`);
+    expect(cover).toContain(`href="/library/${org}/.viewswitcher/staging/${s.token}/covers/_shared/theme.css"`);
     expect(cover).toContain("Daisy Debate");
     // Staged, not installed: the org has no set yet.
-    expect((await scanLibrary(root, org)).sets).toEqual([]);
+    expect((await scanOrg(root, org)).sets).toEqual([]);
   });
 
   test("installs as its own set, filled from org.json; New scene and New project can use it", async () => {
     const s = await stagePack(root, org, { zip: starterZip }, await starterJs());
     expect(await installPack(root, org, s.token)).toEqual({ set: "starter" });
-    const lib = await scanLibrary(root, org);
+    const lib = await scanOrg(root, org);
     expect(lib.templates.map((t) => t.name)).toEqual(["starting-soon", "teaching", "whiteboard", "brb", "ending"]); // the org's own, unchanged
     expect(lib.sets).toHaveLength(1);
     expect(lib.sets[0]).toMatchObject({ id: "starter", name: "Starter", version: "1.0.0", transition: null });
@@ -75,7 +75,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
 
   test("installing it again makes a second set beside the first", async () => {
     for (const _ of [1, 2]) await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
-    expect((await scanLibrary(root, org)).sets.map((s) => s.id)).toEqual(["starter", "starter-2"]);
+    expect((await scanOrg(root, org)).sets.map((s) => s.id)).toEqual(["starter", "starter-2"]);
   });
 
   test("a dropped folder installs the same way (and a wrapping folder is fine)", async () => {
@@ -83,7 +83,7 @@ describe("the starter kit as a pack (EDIT-27)", () => {
     const s = await stagePack(root, org, { files }, null);
     expect(s.scripts.standard).toBe(false); // no starter script given to compare with
     await installPack(root, org, s.token);
-    expect((await scanLibrary(root, org)).sets[0]!.templates).toHaveLength(5);
+    expect((await scanOrg(root, org)).sets[0]!.templates).toHaveLength(5);
   });
 
   test("cancel clears staging; a used or made-up token installs nothing", async () => {
@@ -97,8 +97,8 @@ describe("the starter kit as a pack (EDIT-27)", () => {
   test("a pack staged for one org can't be installed into another", async () => {
     const other = (await createOrg(root, starter, "Personal")).orgId;
     const s = await stagePack(root, org, { zip: starterZip }, null);
-    await expect(installPack(root, other, s.token)).rejects.toThrow(/isn't ready|another org/);
-    expect((await scanLibrary(root, other)).sets).toEqual([]);
+    await expect(installPack(root, other, s.token)).rejects.toThrow(/isn't ready|another show/);
+    expect((await scanOrg(root, other)).sets).toEqual([]);
   });
 });
 
@@ -116,7 +116,7 @@ test("an org whose name has HTML characters: its new templates and an added set 
   }
   expect(await readFile(join(root, id, "templates/_shared/brand/mark.svg"), "utf8")).toContain(">R</text>");
   expect(JSON.parse(await readFile(join(root, id, "org.json"), "utf8")).name).toBe(name); // org.json stays valid JSON
-  expect((await scanLibrary(root, id)).org.name).toBe(name);
+  expect((await scanOrg(root, id)).org.name).toBe(name);
 });
 
 test("a pack's cover captions are its views' titles filled in for the org, as the covers show them", async () => {
@@ -136,7 +136,7 @@ test("the site's six example shows each install as a set", async () => {
     expect(s.warnings).toEqual([]);
     await installPack(root, org, s.token);
   }
-  const sets = (await scanLibrary(root, org)).sets;
+  const sets = (await scanOrg(root, org)).sets;
   expect(sets.map((s) => s.templates.length)).toEqual([5, 5, 5, 5, 5, 5]);
   expect(await readFile(join(root, org, "templates/nova/main.html"), "utf8")).toContain(`/library/${org}/templates/nova/_shared/theme.css`);
 });
@@ -177,7 +177,7 @@ describe("built-in template packs", () => {
       expect(theme).toContain("#ff5a36");
       if (p.id !== "starter") expect(texts.join("")).toContain("Daisy Debate");
     }
-    expect((await scanLibrary(root, org)).sets.map((s) => s.id).sort()).toEqual(["fullcount", "grace", "kitchen", "nova", "remi", "riverside", "starter"]);
+    expect((await scanOrg(root, org)).sets.map((s) => s.id).sort()).toEqual(["fullcount", "grace", "kitchen", "nova", "remi", "riverside", "starter"]);
   });
 
   test("prebuilt (the Mac app's Resources/packs) reads the same as built from source", async () => {
@@ -194,7 +194,7 @@ describe("built-in template packs", () => {
   });
 });
 
-describe("removing a set (EDIT-25)", () => {
+describe("removing a set", () => {
   test("goes entirely when no scene uses it", async () => {
     await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
     expect(await removeSet(root, org, "starter")).toEqual({ kept: 0 });
@@ -207,7 +207,7 @@ describe("removing a set (EDIT-25)", () => {
     const scene = join(root, org, "projects", projectId, "scenes/teaching.html");
     const before = await readFile(scene, "utf8");
     expect(await removeSet(root, org, "starter")).toEqual({ kept: 1 });
-    expect((await scanLibrary(root, org)).sets).toEqual([]);
+    expect((await scanOrg(root, org)).sets).toEqual([]);
     expect(await readFile(scene, "utf8")).toBe(before);
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
@@ -230,7 +230,7 @@ describe("removing a set (EDIT-25)", () => {
   });
 });
 
-describe("hostile and broken packs change nothing (EDIT-24 · EDIT-26)", () => {
+describe("hostile and broken packs change nothing", () => {
   const good = async () => (await starterPack(starter)).map((f) => ({ name: `p/${f.path}`, data: f.data }));
   const cases: [string, () => Promise<Uint8Array>, RegExp][] = [
     ["zip-slip", async () => writeZip([...(await good()), { name: "p/../../../evil.html", data: "<script>x</script>" }]), /outside the pack/],
@@ -286,7 +286,7 @@ describe("hostile and broken packs change nothing (EDIT-24 · EDIT-26)", () => {
 
 test("an existing library without sets reads as before", async () => {
   await cp(join(root, org), join(root, "copy"), { recursive: true });
-  const lib = await scanLibrary(root, "copy");
+  const lib = await scanOrg(root, "copy");
   expect(lib.sets).toEqual([]);
   expect(lib.templates).toHaveLength(5);
 });

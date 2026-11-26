@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds ViewSwitcher.app (MAC-15): build/ViewSwitcher.dmg, universal (arm64 + x86_64).
+# Builds ViewSwitcher.app: build/ViewSwitcher.dmg, universal (arm64 + x86_64).
 #
 #   bun run mac:build                 signed with the Developer ID for $TEAM if it's in the keychain, else ad hoc
 #   bun run mac:build --unsigned      ad hoc signature only
@@ -80,7 +80,7 @@ if [ "$UNSIGNED" = 0 ]; then
     echo "No Developer ID certificate for $TEAM found: building with an ad hoc signature." >&2
   fi
 fi
-# Notarizing (MAC-17): the notarytool keychain profile if it exists (MAC-7a), else the App Store Connect
+# Notarizing: the notarytool keychain profile if it exists, else the App Store Connect
 # API key (scripts/release-env.sh: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH from env or .release.env).
 NOTARY=()
 if [ "$RELEASE" = 1 ]; then

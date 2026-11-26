@@ -1,17 +1,17 @@
 // Live changes on stream while the scene is on air: typing, dragging and nudging show as they happen
-// (about one preview per frame), an unsaved one is resent as a heartbeat so the program page knows
+// (about one liveEdit per frame), an unsaved one is resent as a heartbeat so the program page knows
 // the editor is still here, and leaving mid-change puts the on-air scene back the way the file has it.
 import { editKind, isStructural } from "@viewswitcher/shared";
 import type { SceneBase, SceneEdit } from "@viewswitcher/shared";
 import { useEffect, useRef } from "react";
 import { api } from "../../lib/api";
 
-const PREVIEW_MS = 33;
+const LIVE_EDIT_MS = 33;
 const HEARTBEAT_MS = 2000;
 
 type Change = { edit: SceneEdit; gen: number };
 
-export function useLivePreview(opts: {
+export function useLiveEdit(opts: {
   path: string;
   onAir: () => boolean;
   base: () => SceneBase | null;
@@ -33,7 +33,7 @@ export function useLivePreview(opts: {
    * nudge started). After a reload the ids may name other elements, so an older one is never sent:
    * the hash it would carry is the new version's, which the program page would accept.
    */
-  const preview = (edit: SceneEdit, gen = o.current.generation()) => {
+  const liveEdit = (edit: SceneEdit, gen = o.current.generation()) => {
     if (gen !== o.current.generation()) return;
     unsaved.current = { edit, gen };
     if (!o.current.onAir()) return;
@@ -49,8 +49,8 @@ export function useLivePreview(opts: {
         return;
       }
       const hash = o.current.base()?.hash ?? "";
-      for (const p of items) api.previewScene(o.current.path, hash, p.edit).catch(() => {});
-      timer.current = setTimeout(flush, PREVIEW_MS);
+      for (const p of items) api.liveEdit(o.current.path, hash, p.edit).catch(() => {});
+      timer.current = setTimeout(flush, LIVE_EDIT_MS);
     };
     flush();
   };
@@ -66,14 +66,14 @@ export function useLivePreview(opts: {
       const b = o.current.base();
       const back = o.current.unfinished();
       // A change from before a reload was never shown on this version, so there's nothing to put back.
-      if (o.current.onAir() && b && back && back.gen === o.current.generation()) api.previewSceneBeacon(path, b.hash, back.edit);
+      if (o.current.onAir() && b && back && back.gen === o.current.generation()) api.liveEditBeacon(path, b.hash, back.edit);
     };
     window.addEventListener("pagehide", revert);
     // The program page drops a live change that goes quiet.
     const beat = setInterval(() => {
       const u = unsaved.current;
       const b = o.current.base();
-      if (u && b && u.gen === o.current.generation() && o.current.onAir() && o.current.unfinished()) api.previewScene(path, b.hash, u.edit).catch(() => {});
+      if (u && b && u.gen === o.current.generation() && o.current.onAir() && o.current.unfinished()) api.liveEdit(path, b.hash, u.edit).catch(() => {});
     }, HEARTBEAT_MS);
     return () => {
       window.removeEventListener("pagehide", revert);
@@ -84,5 +84,5 @@ export function useLivePreview(opts: {
     };
   }, [opts.path]);
 
-  return { preview, saved };
+  return { liveEdit, saved };
 }

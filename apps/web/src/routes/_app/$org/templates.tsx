@@ -1,5 +1,5 @@
 import { libraryUrl, templateId } from "@viewswitcher/shared";
-import type { Library, Scene, StagedPack, TemplateSet } from "@viewswitcher/shared";
+import type { OrgContent, Scene, StagedPack, TemplateSet } from "@viewswitcher/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { AskAgent } from "../../../components/AgentSheet";
 import { type DragEvent, useEffect, useRef, useState } from "react";
@@ -51,14 +51,14 @@ export const Route = createFileRoute("/_app/$org/templates")({
     }, []);
 
     const removeSet = async (set: TemplateSet) => {
-      if (!confirm(`Remove ${set.name} from Templates? Scenes already made from it stay as they are.`)) return;
+      if (!confirm(`Remove ${set.name} from Templates? Views already made from it stay as they are.`)) return;
       await attempt(async () => {
         await packs.removeSet(org, set.id);
         toast(`Removed ${set.name}`);
       });
     };
 
-    const tile = (lib: Library, t: Scene) => {
+    const tile = (lib: OrgContent, t: Scene) => {
       const menu: MenuItem[] = [
         ...lib.projects.flatMap((p): MenuItem[] => [{
           label: `Add to ${p.name}`,
@@ -137,12 +137,12 @@ export const Route = createFileRoute("/_app/$org/templates")({
                 { label: "Copy path", hint: data.transition, run: () => void copy(data.transition!) },
               ]} />
             ) : (
-              <p className="empty">None. Scenes fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
+              <p className="empty">None. Views fade through the ground color. <AskAgent>Design one with AI</AskAgent></p>
             )}
           </div>
         </section>
 
-        {over && <div className="drop-hint" aria-hidden="true"><span>Drop to preview pack</span></div>}
+        {over && <div className="drop-hint" aria-hidden="true"><span>Drop to see the pack</span></div>}
         {adding && data && (
           <TemplatePicker
             org={org}
@@ -156,7 +156,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
           />
         )}
         {staged && data && (
-          <PackPreview
+          <PackCovers
             pack={staged}
             onCancel={() => {
               void packs.cancel(org, staged.token).catch(() => {});
@@ -174,7 +174,7 @@ export const Route = createFileRoute("/_app/$org/templates")({
   },
 });
 
-function PackPreview({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel: () => void; onInstall: () => Promise<void> }) {
+function PackCovers({ pack, onCancel, onInstall }: { pack: StagedPack; onCancel: () => void; onInstall: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const m = pack.manifest;

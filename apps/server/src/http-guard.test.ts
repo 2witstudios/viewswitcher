@@ -113,7 +113,7 @@ describe("cross-site POST: Origin from another site", () => {
   test("a sandboxed scene (Origin: null) can't change anything", async () => {
     expect((await onAir({ origin: "null" })).status).toBe(403);
     expect((await request("/api/scene/edit", { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
-    expect((await request("/api/packs/install", { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
+    for (const path of ["/api/sets/install", "/api/packs/install"]) expect((await request(path, { method: "POST", headers: { origin: "null", "content-type": "text/plain" }, body: "{}" })).status).toBe(403);
     expect(JSON.parse((await request("/api/state")).body).onAir).toBeNull();
   });
   test("a scene can't turn the agent on-air setting off either (the MCP preview path)", async () => {
@@ -228,13 +228,13 @@ describe("library paths obey the real-path rule, for reads as for writes", () =>
       expect({ p, status: r.status }).toEqual({ p, status: 404 });
     }
   });
-  test("a staged pack's preview still loads, and nothing else in staging does", async () => {
+  test("a staged pack's covers still load, and nothing else in staging does", async () => {
     const token = "0a1b2c3d4e5f60718293a4b5";
-    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/view.html`), "<title>Cover</title>");
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/covers/view.html`), "<title>Cover</title>");
     await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/meta.json`), "{}");
-    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/preview/.hidden`), "x");
-    expect((await request(`/library/my-channel/.viewswitcher/staging/${token}/preview/view.html`)).status).toBe(200);
-    for (const p of [`${token}/meta.json`, `${token}/preview/.hidden`, `${token}/raw/view.html`, "not-a-token/preview/view.html"]) {
+    await Bun.write(join(library, `my-channel/.viewswitcher/staging/${token}/covers/.hidden`), "x");
+    expect((await request(`/library/my-channel/.viewswitcher/staging/${token}/covers/view.html`)).status).toBe(200);
+    for (const p of [`${token}/meta.json`, `${token}/covers/.hidden`, `${token}/raw/view.html`, "not-a-token/covers/view.html"]) {
       expect({ p, status: (await request(`/library/my-channel/.viewswitcher/staging/${p}`)).status }).toEqual({ p, status: 404 });
     }
   });
@@ -310,7 +310,7 @@ describe("unpacking a template pack never blocks the server", () => {
   }, 60_000);
 });
 
-describe("scenes are served sandboxed (EDIT-26)", () => {
+describe("scenes are served sandboxed", () => {
   const ws = WS;
   test("every library page has an opaque origin, its scripts kept off plain http and ws", async () => {
     for (const q of ["", "?preview", "?edit", "?edit&bridge"]) {
@@ -357,8 +357,8 @@ describe("scenes are served sandboxed (EDIT-26)", () => {
     expect((await request("/library/my-channel/assets/photo.jpg")).status).toBe(200);
     expect((await request("/library/my-channel/assets/photo.jpg")).headers["access-control-allow-origin"]).toBeUndefined();
     // A staged pack's preview copy is a template pack's design files too (covers before installing).
-    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg"), "<svg/>");
-    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/preview/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
+    await Bun.write(join(library, "my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/covers/_shared/brand/m.svg"), "<svg/>");
+    expect((await request("/library/my-channel/.viewswitcher/staging/0a1b2c3d4e5f60718293a4b5/covers/_shared/brand/m.svg")).headers["access-control-allow-origin"]).toBe("*");
     const sneaky = await request("/library/my-channel/templates/%2e%2e/assets/photo.jpg");
     expect(sneaky.headers["access-control-allow-origin"]).toBeUndefined();
   });

@@ -16,7 +16,7 @@ export function TitleField({ value, onDone }: { value: string; onDone: (v: strin
     onDone(out === null || !out.trim() || out.trim() === value.trim() ? null : out);
   };
   return (
-    <input ref={ref} className="title-input" aria-label="Scene name" value={v} maxLength={120} enterKeyHint="done"
+    <input ref={ref} className="title-input" aria-label="View name" value={v} maxLength={120} enterKeyHint="done"
       onChange={(e) => setV(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") finish(v);

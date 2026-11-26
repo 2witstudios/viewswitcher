@@ -1,4 +1,4 @@
-// Edit with AI (MCP-10, MCP-11): connect the agent people already use, see whether one is connected,
+// Edit with AI: connect the agent people already use, see whether one is connected,
 // and choose what agents may put on air. Opened from the header, "ask your agent" hints, and the Mac
 // app's Edit with AI… menu item (/?ai or #ai).
 import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
@@ -126,14 +126,14 @@ function Sheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <p className={`agent-status${connected ? " on" : ""}`} role="status"><span className="dot" />{agentStatusText(agent, now)}</p>
-        <p className="agent-lede">Connect the AI agent you already use. It reads your library, adds template sets, makes scenes from your templates and edits them, looks at each one rendered in OBS and fixes what it sees.</p>
+        <p className="agent-lede">Connect the AI agent you already use. It reads your library, adds template sets, makes views from your templates and edits them, looks at each one rendered in OBS and fixes what it sees.</p>
 
         {parts.connectOnMac && <p className="agent-note">Connect an agent on your Mac: open Edit with AI there.</p>}
         {parts.waysIn && <WaysIn info={info} clients={clients} />}
 
         {parts.onAirSetting && (
           <fieldset className="agent-onair">
-            <legend>Agents put scenes on air</legend>
+            <legend>Agents put views on air</legend>
             {ON_AIR_CHOICES.map((c) => (
               <label key={c.value} className="agent-choice">
                 <input type="radio" name="agent-onair" value={c.value} checked={shown === c.value} disabled={!agent} onChange={() => setOnAir(c.value)} />

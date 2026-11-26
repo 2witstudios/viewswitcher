@@ -12,7 +12,7 @@ export function useConflictActions(opts: {
   current: () => SceneBase | null;
   /** Change an element now: on screen, live, saved, undoable against `before`. */
   change: (edit: SceneEdit, before: SceneEdit | null) => void;
-  preview: (edit: SceneEdit, gen?: number) => void;
+  liveEdit: (edit: SceneEdit, gen?: number) => void;
   structural: (edit: InsertEdit | RemoveEdit) => Promise<unknown>;
 }) {
   const o = useRef(opts);
@@ -26,10 +26,10 @@ export function useConflictActions(opts: {
     const latest = k.current() ?? c.latest; // the newest version, if it moved on again
     const pairs = edits.map((e) => ({ e, m: retarget(prev.source, latest.source, e) }));
     k.mode.dispatch({ t: "end", kind: "conflict" });
-    // The ones that can be placed go through; the others are said so. (Their earlier live previews
+    // The ones that can be placed go through; the others are said so. (Their earlier live edits
     // were on the old version, which the stream already replaced.)
     const lost = pairs.filter((p) => p.m === null).length;
-    if (lost) toast(lost === pairs.length ? "That part of the scene isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
+    if (lost) toast(lost === pairs.length ? "That part of the view isn't in the new version, so your change can't go there" : "Some of your changes can't go anywhere in the new version, so only the others were saved");
     // Several lost changes of one kind to one element (a drag, then a nudge) become its last one.
     // Each goes as its own save: a move and a resize of one box both change its left.
     const last = new Map<string, SceneEdit>();
@@ -56,11 +56,11 @@ export function useConflictActions(opts: {
     const k = o.current;
     const c = k.mode.now();
     if (c.kind !== "conflict") return;
-    // The stream may still show the preview of the change that didn't save: put the latest back.
+    // The stream may still show the live edit of the change that didn't save: put the latest back.
     for (const e of c.edits) {
       const m = retarget(c.prev.source, c.latest.source, e);
       const v = m && valueIn(c.latest, m);
-      if (v) k.preview(v);
+      if (v) k.liveEdit(v);
     }
     k.mode.dispatch({ t: "end", kind: "conflict" });
   };

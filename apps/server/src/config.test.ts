@@ -11,7 +11,7 @@ function configWith(env: Record<string, string>) {
   return JSON.parse(p.stdout.toString());
 }
 
-describe("config paths (MAC-1)", () => {
+describe("config paths", () => {
   test("default to the repo", () => {
     const c = configWith({});
     expect(c.starter).toBe(resolve(import.meta.dir, "../starter"));

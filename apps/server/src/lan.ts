@@ -1,4 +1,4 @@
-// This Mac on the local network (MAC-23): its IPv4 addresses and its Bonjour name (<name>.local), for
+// This Mac on the local network: its IPv4 addresses and its Bonjour name (<name>.local), for
 // the host guard (origin.ts) and the addresses the pairing QR code points at. Both can change while
 // the server runs (a new Wi-Fi network, a renamed Mac), so they are read again every few seconds.
 import { networkInterfaces } from "node:os";
@@ -8,7 +8,7 @@ const vpn = (name: string) => /^(utun|ipsec|ppp)\d*$/.test(name);
 
 /** IPv4 addresses on this Mac's network interfaces, apart from loopback and link-local (169.254/16).
  *  VPN interfaces come last, so the pairing QR code never prefers a Tailscale 100.x address over a Wi-Fi
- *  one in the same range (a hotspot or campus network is 100.64/10 too, PHONE-4). */
+ *  one in the same range (a hotspot or campus network is 100.64/10 too). */
 export function lanAddresses(ifaces = networkInterfaces()): string[] {
   const out = new Set<string>();
   const names = Object.keys(ifaces).sort((a, b) => Number(vpn(a)) - Number(vpn(b)));
@@ -29,7 +29,7 @@ export function vpnAddresses(ifaces = networkInterfaces()): string[] {
 const local = (ip: string) =>
   /^(192\.168|10)\./.test(ip) || /^172\.(1[6-9]|2\d|3[01])\./.test(ip) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip);
 
-/** The order the pairing QR code picks from (PHONE-4): Wi-Fi and Ethernet in local ranges, then other
+/** The order the pairing QR code picks from: Wi-Fi and Ethernet in local ranges, then other
  *  Wi-Fi and Ethernet addresses, then VPN addresses, whatever their range, since a phone on the Wi-Fi
  *  can't reach a VPN's (a Tailscale 100.x or a corporate IPsec 10.x). Stable within each group. */
 export function pairingOrder(addresses: string[], vpns: string[]): string[] {
