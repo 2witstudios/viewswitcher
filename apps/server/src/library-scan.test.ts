@@ -6,7 +6,8 @@ import { mkdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titledCopy } from "./library";
-import { LibraryScanner, readNoFollow } from "./library/scanner";
+import { LibraryScanner, noLinkFiles, readNoFollow } from "./library/scanner";
+import { createSceneTitles } from "./scene-titles";
 
 /**
  * One scanner per test, as the server has one: its title cache carries from scan to scan. It keeps
@@ -229,6 +230,17 @@ describe("links out of the library are never read", () => {
     if (process.platform === "darwin") await expect(readNoFollow(join(await realpath(away), "swapped/x.html"))).rejects.toThrow();
     await symlink(real, join(away, "file-link.html"));
     await expect(readNoFollow(join(await realpath(away), "file-link.html"))).rejects.toThrow();
+  });
+
+  test.skipIf(process.platform !== "darwin")("a folder swapped for a link after a title was kept: the kept title isn't returned (a cache hit), nor read again", async () => {
+    const titles = createSceneTitles(noLinkFiles);
+    const folder = join(await realpath(root), ORG, "projects/p/scenes");
+    const file = join(folder, "intro.html");
+    expect(await titles.titleOf(file)).toBe("Intro");
+    // Moved out of the library whole (same files, same inodes), and a link left where it was.
+    await rename(folder, join(away, "scenes"));
+    await symlink(join(away, "scenes"), folder);
+    expect(await titles.titleOf(file)).toBe("");
   });
 
   test("an org folder that is a link outside the library lists nothing from there", async () => {

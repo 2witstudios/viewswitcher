@@ -21,7 +21,7 @@
 // test makes its own and shares nothing with another.
 import type { Dirent } from "node:fs";
 import { constants, realpathSync } from "node:fs";
-import { lstat, open, readdir, readFile, stat } from "node:fs/promises";
+import { type FileHandle, open, readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, relative, sep } from "node:path";
 import { isViewFile, ORG_TRANSITION, readManifest, TRANSITION_FILE as TRANSITION } from "@viewswitcher/shared";
 import type { Asset, AssetKind, OrgContent, Project, Scene, SceneOrigin, Stream, TemplateSet } from "@viewswitcher/shared";
@@ -45,15 +45,24 @@ const KINDS: Record<string, AssetKind> = {
  */
 export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
 
-/** A file's text, read only when no part of `abs` is a link (NO_LINKS): `abs` must be a real path. */
-export async function readNoFollow(abs: string): Promise<string> {
+/** `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS): `abs` must be a real path. */
+async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
   const f = await open(abs, constants.O_RDONLY | NO_LINKS);
   try {
-    return await f.readFile("utf8");
+    return await use(f);
   } finally {
     await f.close();
   }
 }
+
+/** A file's text, read only when no part of `abs` is a link. */
+export const readNoFollow = (abs: string) => withNoLinks(abs, (f) => f.readFile("utf8"));
+
+/**
+ * The scene-title cache's file access: the stamp and the text both through a no-link open, so a title
+ * kept from before (a cache hit) is never returned for a path that has since become a link.
+ */
+export const noLinkFiles = { stat: (abs: string) => withNoLinks(abs, (f) => f.stat()), read: readNoFollow };
 
 /** How long a finished scan answers later requests for its org, unless a change drops it first. */
 export const KEEP_MS = 2_000;
@@ -85,7 +94,7 @@ export class LibraryScanner {
     // Titles are read from the real path the scan checked (scenesIn: a plain file in its folder's real
     // path, or a link's real target), never through a link: a file or a folder swapped for one after the
     // check reads as no title (readNoFollow).
-    this.titles = createSceneTitles({ stat: (abs) => io(() => lstat(abs)), read: (abs) => io(() => readNoFollow(abs)) });
+    this.titles = createSceneTitles({ stat: (abs) => io(() => noLinkFiles.stat(abs)), read: (abs) => io(() => noLinkFiles.read(abs)) });
   }
 
   /**
