@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { join, resolve } from "node:path";
 
 /** config.ts read in a fresh process with `env`, so each case sees its own environment. */
-function configWith(env: Record<string, string>) {
+function configWith(env: Record<string, string>, { state = "/tmp/vs-config-test-state" }: { state?: string | null } = {}) {
   const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("VIEWSWITCHER_")));
+  if (state) clean.VIEWSWITCHER_STATE = state;
   const p = Bun.spawnSync(["bun", "-e", `const { config } = await import(${JSON.stringify(join(import.meta.dir, "config.ts"))}); console.log(JSON.stringify(config))`], {
     env: { ...clean, ...env },
   });
@@ -24,5 +25,16 @@ describe("config paths", () => {
     expect(c.webDist).toBe("/app/Resources/web");
     expect(c.libraryKit).toBe("/app/Resources/library-kit");
     expect(c.port).toBe(7433);
+  });
+});
+
+describe("this Mac's state for the library (machineState)", () => {
+  test("lives under VIEWSWITCHER_STATE, one folder per library, never in the library", () => {
+    const c = configWith({ VIEWSWITCHER_LIBRARY: "/nowhere/My Library" });
+    expect(c.machineState).toMatch(/^\/tmp\/vs-config-test-state\/libraries\/[0-9a-f]{16}$/);
+    expect(c.machineState.startsWith(c.library)).toBe(false);
+  });
+  test("a server a test starts without VIEWSWITCHER_STATE refuses, rather than touch this Mac's real state", () => {
+    expect(() => configWith({ VIEWSWITCHER_LIBRARY: "/nowhere/My Library" }, { state: null })).toThrow("VIEWSWITCHER_STATE must be set under bun test");
   });
 });

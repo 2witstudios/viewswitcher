@@ -26,6 +26,9 @@ export const config = {
    * the root (tests and e2e use a temp folder).
    */
   get machineState() {
+    // A server a test starts (NODE_ENV=test, which bun test sets and children inherit) must name its
+    // own state root: it may never fall back to this Mac's real pairings and setting.
+    if (!env.VIEWSWITCHER_STATE && env.NODE_ENV === "test") throw new Error("VIEWSWITCHER_STATE must be set under bun test (test-server.ts TEST_STATE_ROOT), so a test never touches this Mac's real state");
     return machineStateDir(env.VIEWSWITCHER_STATE ?? join(homedir(), "Library/Application Support/ViewSwitcher"), this.library);
   },
   // The next three default to the repo; the Mac app's compiled server (where import.meta.dir is

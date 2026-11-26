@@ -13,6 +13,13 @@ function library(files: Record<string, string>) {
 }
 
 describe("machineStateDir", () => {
+  test("another spelling of the same library (through a link) is the same folder", () => {
+    const real = scratch();
+    const link = join(scratch(), "via-link");
+    require("node:fs").symlinkSync(real, link);
+    expect(machineStateDir("/state", link)).toBe(machineStateDir("/state", real));
+  });
+
   test("one folder per library path, under the state root, outside the library", () => {
     const a = machineStateDir("/state", "/Users/me/ViewSwitcher Library");
     expect(a).toMatch(/^\/state\/libraries\/[0-9a-f]{16}$/);
@@ -43,11 +50,22 @@ describe("migrateMachineState", () => {
     expect(existsSync(join(always, ".viewswitcher", "settings.json"))).toBe(false);
   });
 
+  test("read as settings.ts reads it: an unreadable file or a bad value meant never and carries over; no setting yet is the default", async () => {
+    for (const text of ["{ nope", "[]", JSON.stringify({ agentOnAir: "sometimes" })]) {
+      const d = scratch();
+      expect((await migrateMachineState(library({ "settings.json": text }), d)).settings).toBe("kept-never");
+      expect(JSON.parse(readFileSync(join(d, "settings.json"), "utf8"))).toEqual({ agentOnAir: "never" });
+    }
+    const d = scratch();
+    expect((await migrateMachineState(library({ "settings.json": JSON.stringify({ other: 1 }) }), d)).settings).toBe("dropped");
+    expect(existsSync(join(d, "settings.json"))).toBe(false);
+  });
+
   test("this Mac's own setting is never overwritten by one in the library", async () => {
     const lib = library({ "settings.json": JSON.stringify({ agentOnAir: "never" }) });
     const dir = scratch();
     writeFileSync(join(dir, "settings.json"), JSON.stringify({ agentOnAir: "always" }));
-    await migrateMachineState(lib, dir);
+    expect((await migrateMachineState(lib, dir)).settings).toBe("dropped"); // nothing was carried over
     expect(JSON.parse(readFileSync(join(dir, "settings.json"), "utf8"))).toEqual({ agentOnAir: "always" });
   });
 

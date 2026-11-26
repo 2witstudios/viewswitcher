@@ -35,13 +35,13 @@ import { startUsbBridge, usbAvailable } from "./usb-bridge";
 // A new library gets the agent skill, CLAUDE.md, a git repo and a first org; an existing one is left as it is.
 // The state folder must be a plain folder before anything writes state or pairings into it (contain.ts).
 await plainStateFolder(config.library);
-// This Mac's pairings and agent setting, outside the library (machine-state.ts); the old copies in the library go.
+const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
+// After the library exists, so it's keyed by its real path. This Mac's pairings and agent setting, outside the library (machine-state.ts); the old copies in the library go.
 const machineState = config.machineState;
 await mkdir(machineState, { recursive: true });
 const migrated = await migrateMachineState(config.library, machineState);
 if (migrated.devices) console.log("[pairing] paired phones and tablets now belong to this Mac, not the library: pair them again from Phones and Tablets");
 if (migrated.settings === "dropped") console.log("[settings] the agent setting now belongs to this Mac, not the library: it's back to the default (When not live); set it again in Edit with AI if you'd changed it");
-const firstRun = await ensureLibrary(config.library, { kit: config.libraryKit, starter: config.starter });
 if (firstRun.copied.length || firstRun.updated.length || firstRun.org) {
   const did = [
     firstRun.copied.length && `added ${firstRun.copied.join(", ")}`,
