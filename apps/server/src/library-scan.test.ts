@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { titledCopy } from "./library";
 import { LibraryScanner } from "./library/scanner";
 
 /** One scanner per test, as the server has one: its title cache carries from scan to scan. */
@@ -97,5 +98,19 @@ describe("LibraryScanner", () => {
       expect(l.projects[0]!.streams).toHaveLength(42);
       expect(l.projects[0]!.streams.find((s) => s.id === "s39")!.scenes.map((v) => v.label)).toEqual(["a 39", "b 39", "c 39", "d 39", "e 39"]);
     }
+  });
+});
+
+describe("titledCopy (Duplicate)", () => {
+  test("adds \" copy\" to the title, decoded and escaped again", () => {
+    expect(titledCopy("<head><title>R&amp;B night</title></head>")).toBe("<head><title>R&amp;B night copy</title></head>");
+  });
+  test("a title near the limit is shortened to fit, never refused", () => {
+    const out = titledCopy(`<head><title>${"x".repeat(120)}</title></head>`);
+    expect(out).toBe(`<head><title>${"x".repeat(115)} copy</title></head>`);
+  });
+  test("a page without a title, or with an empty one, is copied as it is", () => {
+    expect(titledCopy("<main></main>")).toBe("<main></main>");
+    expect(titledCopy("<head><title> </title></head>")).toBe("<head><title> </title></head>");
   });
 });

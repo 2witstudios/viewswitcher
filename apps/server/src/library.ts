@@ -236,8 +236,13 @@ export async function duplicate(root: string, path: string, check?: BeforeCreate
   const dir = src.slice(0, src.lastIndexOf("/"));
   const base = src.slice(dir.length + 1, -5);
   const html = await readFile(src, "utf8");
+  return { name: await writeFresh(dir, `${base}-copy`, ".html", titledCopy(html), check) };
+}
+
+/** A copy's page: its <title> with " copy" after it, kept within a title's 120 characters; as it was when it has none. */
+export function titledCopy(html: string): string {
   const title = readTitle(html);
-  return { name: await writeFresh(dir, `${base}-copy`, ".html", title ? setTitle(html, `${title} copy`) : html, check) };
+  return title ? setTitle(html, `${title.slice(0, 120 - " copy".length).trimEnd()} copy`) : html;
 }
 
 export async function saveAsset(root: string, file: File, check?: BeforeCreate) {
