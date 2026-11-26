@@ -69,13 +69,21 @@ export async function resolveInLibrary(libraryRoot: string, clientPath: unknown,
  * be a link at all: a pack is written there and anything older than an hour deleted, so a link would
  * aim both at wherever it points. Folders that aren't there yet are made by whoever writes.
  */
-export async function stagingIn(libraryRoot: string, orgId: string): Promise<string> {
-  let at = await resolveInLibrary(libraryRoot, orgId, { forWrite: true });
+export const stagingIn = async (libraryRoot: string, orgId: string): Promise<string> => plainStaging(await resolveInLibrary(libraryRoot, orgId, { forWrite: true }));
+
+/**
+ * The library's own staging folder (<library>/.viewswitcher/staging), where a new org is filled in
+ * before it's renamed into place; the same rule as an org's (no links), or a PathError.
+ */
+export const libraryStaging = (libraryRoot: string): Promise<string> => plainStaging(libraryRoot);
+
+async function plainStaging(dir: string): Promise<string> {
+  let at = dir;
   for (const part of STAGING.split("/")) {
     at = join(at, part);
     const s = await lstat(at).catch(() => null);
     // A link or a file where a folder should be: never followed, never replaced.
-    if (s && !s.isDirectory()) throw new PathError("The show's staging folder is a link or a file; packs are only unpacked into a plain folder in the library");
+    if (s && !s.isDirectory()) throw new PathError("A staging folder (.viewswitcher/staging) is a link or a file; the switcher only stages into a plain folder in the library");
   }
   return at;
 }

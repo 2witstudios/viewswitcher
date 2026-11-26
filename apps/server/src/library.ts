@@ -1,11 +1,12 @@
 import { constants as fsConstants } from "node:fs";
-import { copyFile, cp, lstat, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { copyFile, cp, lstat, mkdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
-import { resolveInLibrary } from "./library/contain";
+import { libraryStaging, resolveInLibrary } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
 
@@ -33,26 +34,57 @@ export async function listOrgs(libraryRoot: string): Promise<Org[]> {
   return orgs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** A new org from the starter kit: neutral templates that use the org's own name and colors. */
+/**
+ * A new org from the starter kit: neutral templates that use the org's own name and colors. It's
+ * filled in a staging folder and renamed into place, so the watcher and a client scanning meanwhile
+ * never see raw {{ORG_NAME}} placeholders or half an org; a create that fails leaves nothing behind.
+ */
 export async function createOrg(libraryRoot: string, starter: string, name: string, accent = ORG_DEFAULTS.accent, ground = ORG_DEFAULTS.ground) {
   if (!name?.trim()) throw new PathError("A show needs a name");
   const base = slugify(name);
-  let id = base, n = 2;
-  while (await exists(join(libraryRoot, id))) id = `${base}-${n++}`;
-  const dir = join(libraryRoot, id);
-  await cp(starter, dir, { recursive: true });
-  const vars = placeholderVars({ id, name, accent, ground });
+  const staging = await libraryStaging(libraryRoot);
+  await mkdir(staging, { recursive: true });
+  const work = join(staging, randomBytes(12).toString("hex"));
+  try {
+    for (let n = 1; ; n++) {
+      const id = n === 1 ? base : `${base}-${n}`;
+      const dir = join(libraryRoot, id);
+      if (await taken(dir)) continue; // a dangling link counts: copying through it could land anywhere
+      // The org id goes into its files ({{ORG_ID}}), so an id taken meanwhile is filled again for the next.
+      await rm(work, { recursive: true, force: true });
+      await fillStarter(starter, work, placeholderVars({ id, name, accent, ground }));
+      // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
+      // creates at once, an agent), where rename alone would quietly replace an empty one.
+      try {
+        await mkdir(dir);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "EEXIST") continue;
+        throw e;
+      }
+      await rename(work, dir).catch(async (e) => {
+        await rmdir(dir).catch(() => {}); // only if still empty: never someone else's files
+        throw e;
+      });
+      return { orgId: id };
+    }
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+}
+
+/** The starter kit copied to `dest` with every text file filled in, plus the empty folders an org has. */
+async function fillStarter(starter: string, dest: string, vars: ReturnType<typeof placeholderVars>) {
+  await cp(starter, dest, { recursive: true });
   await Promise.all(
-    (await walkFiles(dir)).filter(isTextFile).map(async (rel) => {
-      const p = join(dir, rel);
+    (await walkFiles(dest)).filter(isTextFile).map(async (rel) => {
+      const p = join(dest, rel);
       const text = await readFile(p, "utf8");
       const filled = fillPlaceholders(rel, text, vars);
-      if (filled !== text) await writeAtomic(p, filled);
+      if (filled !== text) await writeFile(p, filled);
     }),
   );
-  await mkdir(join(dir, "assets"), { recursive: true });
-  await mkdir(join(dir, "projects"), { recursive: true });
-  return { orgId: id };
+  await mkdir(join(dest, "assets"), { recursive: true });
+  await mkdir(join(dest, "projects"), { recursive: true });
 }
 
 // ---------------------------------------------------------------- templates

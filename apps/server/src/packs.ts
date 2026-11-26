@@ -15,7 +15,7 @@ import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PAC
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
 import { exists, readOrg } from "./library";
-import { resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
+import { libraryStaging, resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
 import { limit } from "./limit";
 import { inside, PathError, plainName } from "./paths";
 import { listZip, readZipEntry, walkFiles, ZipError } from "@viewswitcher/packs";
@@ -62,13 +62,14 @@ async function fillCopy(raw: string, dest: string, files: string[], vars: Return
   }
 }
 
-/** Clear staged packs older than an hour (a closed tab never cancels its own). */
+/** Clear staged packs (and new orgs) older than an hour: a closed tab never cancels its own, a crash never finishes. */
 export async function sweepStaging(libraryRoot: string) {
   const now = Date.now();
-  for (const org of await readdir(libraryRoot).catch(() => [] as string[])) {
-    if (org.startsWith(".")) continue;
-    // An org (or its staging folder) that leads outside the library is left alone: nothing there is ours to delete.
-    const dir = await stagingIn(libraryRoot, org).catch(() => null);
+  const orgs = (await readdir(libraryRoot).catch(() => [] as string[])).filter((org) => !org.startsWith("."));
+  // Each org's, and the library's own (a new org being filled in, library.ts createOrg). One that
+  // leads outside the library is left alone: nothing there is ours to delete.
+  const folders = [libraryStaging(libraryRoot), ...orgs.map((org) => stagingIn(libraryRoot, org))];
+  for (const dir of await Promise.all(folders.map((f) => f.catch(() => null)))) {
     if (!dir) continue;
     for (const name of await readdir(dir).catch(() => [] as string[])) {
       // lstat: a link in staging is judged (and removed) as the link, never followed.
