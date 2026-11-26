@@ -100,7 +100,7 @@ The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRAR
 | `VIEWSWITCHER_ADMIN_TOKEN` | set by the Mac app at each launch: the secret for the pairing endpoints (`/api/remote…`); unset, they answer 404 |
 | `OBS_URL` / `OBS_PASSWORD` | `ws://127.0.0.1:4455` / read from OBS's own settings on this Mac |
 | `OBS_SCENE` / `OBS_PROGRAM_SOURCE` / `OBS_GROUND_SOURCE` | `ViewSwitcher` / `ViewSwitcher Program` / `ViewSwitcher Ground` |
-| `OBS_DEVICES` | `Camera,Screen,iPad` (sources a scene can place; others stay untouched) |
+| `OBS_DEVICES` | `Camera,Screen,iPad`: sources a scene can place. A view hides each of these that it has no slot for, and also any other source a view has ever placed (a Guest or Camera 2 box; remembered in `.viewswitcher/state.json`). Every other item in the scene (a mic, music, a watermark) and the program and ground sources are never touched. |
 | `VIEWSWITCHER_EDITOR` | app for "Open the file", e.g. `Cursor` (default: your text editor) |
 | `VIEWSWITCHER_LOG` | `1` prints requests, placements and OBS-browser errors |
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
