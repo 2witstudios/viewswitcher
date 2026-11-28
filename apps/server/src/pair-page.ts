@@ -4,6 +4,8 @@
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+import { COMPUTER } from "./platform-dirs";
+
 export const PAIR_PAGE_CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
 export function pairPage({ name }: { name: string }): string {
@@ -37,7 +39,7 @@ export function pairPage({ name }: { name: string }): string {
 <body>
 <main>
   <h1>Pair with ViewSwitcher</h1>
-  <p>On the Mac: Phones and Tablets.</p>
+  <p>On the ${COMPUTER}: Phones and Tablets in ViewSwitcher.</p>
   <form id="pair" autocomplete="off">
     <label for="code">Code</label>
     <input id="code" name="code" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="XXXX-XXXX" required>

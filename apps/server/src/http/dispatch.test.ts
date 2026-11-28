@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Server } from "bun";
 import { type DispatchOptions, dispatcher, HttpError, type Route, type SocketData } from "./dispatch";
+import { COMPUTER } from "../platform-dirs";
 
 const LIBRARY = "/Users/someone/ViewSwitcher Library";
 const MAC = { address: "127.0.0.1", port: 50000 };
@@ -128,7 +129,7 @@ describe("the response wrapper", () => {
     for (const [req, peer] of [[local("/boom"), USB], [fromPhone("/boom"), PHONE]] as const) {
       const r = (await d(req, srv(peer)))!;
       expect(r.status).toBe(500);
-      expect(((await r.json()) as { error: string }).error).toBe("Something went wrong on the Mac. Its server log has the details.");
+      expect(((await r.json()) as { error: string }).error).toBe(`Something went wrong on the ${COMPUTER}. Its server log has the details.`);
     }
   });
   test("a refusal from a handler keeps its status, scrubbed, for anyone", async () => {

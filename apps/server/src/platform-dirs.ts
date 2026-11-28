@@ -15,3 +15,6 @@ export const obsWebsocketConfig = (dir = appSupport()) => join(dir, "obs-studio"
 
 /** This computer's ViewSwitcher state root (machine-state.ts), unless VIEWSWITCHER_STATE moves it. */
 export const stateRoot = (dir = appSupport()) => join(dir, "ViewSwitcher");
+
+/** What people call the computer the server runs on, in what phones and agents are told: "Mac" or "PC". */
+export const COMPUTER: "Mac" | "PC" = process.platform === "win32" ? "PC" : "Mac";

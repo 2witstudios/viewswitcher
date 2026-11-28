@@ -113,6 +113,7 @@ const store = await LiveStore.open({
     obsSetup: null,
     usb: { enabled: false, attached: false, connected: false },
     agent: { onAir: (await readSettings(machineState)).agentOnAir, lastSeen: null, client: null },
+    host: process.platform === "win32" ? "windows" : "mac",
   },
 });
 const state = store.state;
