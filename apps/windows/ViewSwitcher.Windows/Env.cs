@@ -68,13 +68,13 @@ public static class Env
             env["VIEWSWITCHER_STARTER"] = Path.Combine(res, "starter");
             env["VIEWSWITCHER_LIBRARY_KIT"] = Path.Combine(res, "library-kit");
             env["VIEWSWITCHER_PACKS"] = Path.Combine(res, "packs"); // the built-in template packs
-            return new Launch(Sidecar, [], env, LogFile);
+            return new Launch(Sidecar, Array.Empty<string>(), env, LogFile);
         }
         var repo = Var("VIEWSWITCHER_REPO");
         var bun = Var("BUN") is { Length: > 0 } b ? b : Which("bun.exe");
         if (repo is null || bun is null)
             throw new ServerException(ServerError.StartFailed("This build has no server inside it. Run it with bun run win:dev, or build it with bun run win:build."));
-        return new Launch(bun, [Path.Combine(repo, "apps", "server", "src", "index.ts")], env, LogFile);
+        return new Launch(bun, new[] { Path.Combine(repo, "apps", "server", "src", "index.ts") }, env, LogFile);
     }
 
     public static string? Which(string name)

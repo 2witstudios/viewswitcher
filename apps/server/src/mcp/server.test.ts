@@ -21,7 +21,7 @@ import { createMcpServer, INSTRUCTIONS } from "./server";
 import { fileLinks } from "../../../../test-links";
 
 const root = mkdtempSync(join(tmpdir(), "vs-mcp-"));
-const realRoot = realpathSync(root);
+const realRoot = realpathSync.native(root);
 const outside = mkdtempSync(join(tmpdir(), "vs-mcp-outside-"));
 const ORG = "my-channel";
 const PORT = 7433;

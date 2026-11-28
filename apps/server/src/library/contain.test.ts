@@ -16,7 +16,7 @@ const put = (rel: string, text = "x") => {
   mkdirSync(join(library, rel, ".."), { recursive: true });
   writeFileSync(join(library, rel), text);
 };
-const real = (rel: string) => join(realpathSync(library), rel);
+const real = (rel: string) => join(realpathSync.native(library), rel);
 const TOKEN = "0123456789abcdef01234567";
 put("daisy/templates/brb.html");
 put("daisy/.git/config");
@@ -134,6 +134,6 @@ describe("the no-link read (withNoLinks)", () => {
     const { readNoFollow } = await import("./contain");
     symlinkSync(join(library, "daisy/templates"), join(library, "daisy/via-folder-link"));
     expect(await readNoFollow(real("daisy/templates/brb.html"))).toBe("x");
-    await expect(readNoFollow(join(realpathSync(library), "daisy/via-folder-link/brb.html"))).rejects.toThrow("outside the library");
+    await expect(readNoFollow(join(realpathSync.native(library), "daisy/via-folder-link/brb.html"))).rejects.toThrow("outside the library");
   });
 });

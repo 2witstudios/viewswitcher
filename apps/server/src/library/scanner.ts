@@ -86,7 +86,7 @@ export class LibraryScanner {
     // Titles are kept by real path (readNoFollow), so under the library's real root too when it differs.
     const real = (() => {
       try {
-        return realpathSync(this.libraryRoot);
+        return realpathSync.native(this.libraryRoot);
       } catch {
         return this.libraryRoot;
       }

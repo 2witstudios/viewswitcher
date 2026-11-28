@@ -168,14 +168,14 @@ export const plainStateFolder = (libraryRoot: string, now = new Date()) => plain
  */
 export function realLibraryPath(libraryRoot: string, path: string): string {
   try {
-    const realRoot = realpathSync(libraryRoot);
+    const realRoot = realpathSync.native(libraryRoot);
     let probe = inside(libraryRoot, path);
     let rest = "";
     while (!existsSync(probe)) {
       rest = `/${basename(probe)}${rest}`;
       probe = dirname(probe);
     }
-    const back = relative(realRoot, realpathSync(probe)).split(sep).join("/") + rest;
+    const back = relative(realRoot, realpathSync.native(probe)).split(sep).join("/") + rest;
     return back.startsWith("..") || isAbsolute(back) ? path : back;
   } catch {
     return path;
@@ -190,21 +190,28 @@ export function realLibraryPath(libraryRoot: string, path: string): string {
 export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : (constants.O_NOFOLLOW ?? 0);
 
 /**
- * Windows has no no-follow open at all (O_NOFOLLOW is undefined there), so the same rule is checked
- * before the open: `abs` itself isn't a link (a symlink or a junction), and its real path is `abs`, so
- * no folder on the way is one either. Throws ELOOP like the open would. The instant between this check
- * and the open is the race the Decisions page (2026-11-26, library containment) leaves undefended.
+ * Windows has no no-follow open at all (O_NOFOLLOW is undefined there), so macOS's rule (no link
+ * anywhere in the path) is checked before the open: neither `abs` nor any folder above it is a link (a
+ * symlink or a junction: lstat says so for both). One lstat per folder, not a realpath comparison,
+ * because Windows spells one folder two ways (C:\PROGRA~1 and C:\Program Files) and neither is a link.
+ * Throws ELOOP like the open would. The instant between this check and the open is the race the
+ * Decisions page (2026-11-26, library containment) leaves undefended.
  */
 const WINDOWS = process.platform === "win32";
-const samePath = (a: string, b: string) => a.replace(/[\\/]+$/, "").toLowerCase() === b.replace(/[\\/]+$/, "").toLowerCase();
 const loop = () => Object.assign(new Error("ELOOP: a link on the way"), { code: "ELOOP" });
 async function noLinksOnWindows(abs: string) {
   if (!WINDOWS) return;
-  if ((await lstat(abs)).isSymbolicLink() || !samePath(await realpath(abs), abs)) throw loop();
+  for (let at = abs; ; at = dirname(at)) {
+    if ((await lstat(at)).isSymbolicLink()) throw loop();
+    if (dirname(at) === at) return;
+  }
 }
 function noLinksOnWindowsSync(abs: string) {
   if (!WINDOWS) return;
-  if (lstatSync(abs).isSymbolicLink() || !samePath(realpathSync(abs), abs)) throw loop();
+  for (let at = abs; ; at = dirname(at)) {
+    if (lstatSync(at).isSymbolicLink()) throw loop();
+    if (dirname(at) === at) return;
+  }
 }
 
 /**

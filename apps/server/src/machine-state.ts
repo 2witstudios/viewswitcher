@@ -16,7 +16,7 @@ export function machineStateDir(stateRoot: string, library: string): string {
   // is the same library; its resolved path before the first run creates it.
   let at = resolve(library);
   try {
-    at = realpathSync(at);
+    at = realpathSync.native(at);
   } catch {}
   const key = createHash("sha256").update(at).digest("hex").slice(0, 16);
   return join(resolve(stateRoot), "libraries", key);

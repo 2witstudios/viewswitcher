@@ -11,7 +11,7 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 export function pathScrub(root: string, win = process.platform === "win32"): (message: string) => string {
   const real = (() => {
     try {
-      return realpathSync(root);
+      return realpathSync.native(root);
     } catch {
       return root;
     }

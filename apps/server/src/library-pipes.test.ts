@@ -16,7 +16,7 @@ import { loadedFiles } from "./scene-refs";
 import { posix } from "../../../test-links";
 
 const root = mkdtempSync(join(tmpdir(), "vs-pipes-"));
-const realRoot = realpathSync(root);
+const realRoot = realpathSync.native(root);
 const away = mkdtempSync(join(tmpdir(), "vs-pipes-away-"));
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
