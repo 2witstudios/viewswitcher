@@ -124,7 +124,7 @@ describe("relayStdio", () => {
       { jsonrpc: "2.0", id: 1, error: { code: -32000, message: NOT_RUNNING } },
       { jsonrpc: "2.0", id: 2, error: { code: -32000, message: NOT_RUNNING } },
     ]);
-    expect(NOT_RUNNING).toContain("Open ViewSwitcher on this Mac");
+    expect(NOT_RUNNING).toContain(process.platform === "win32" ? "Open ViewSwitcher on this PC" : "Open ViewSwitcher on this Mac");
   });
   test("a call that reached the server is never sent twice: a dropped connection is answered, not retried", async () => {
     // A switcher that reads the request, then drops the connection before answering (Restart Server mid-call).

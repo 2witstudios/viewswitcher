@@ -27,7 +27,7 @@ export function agentRoutes(d: RouteDeps): Route[] {
       // Which agent apps this Mac has, so Edit with AI lists them first. Booleans only.
       method: "GET",
       path: "/api/agent/clients",
-      handler: () => json(detectClients({ home: homedir(), path: process.env.PATH ?? "", exists: existsSync })),
+      handler: () => json(detectClients({ home: homedir(), path: process.env.PATH ?? "", exists: existsSync, localAppData: process.env.LOCALAPPDATA, programFiles: process.env.ProgramFiles, appData: process.env.APPDATA })),
     },
     {
       // Add to Claude Desktop: an extension made for this install, whose command is this server's own executable.

@@ -175,7 +175,15 @@ export type LiveState = {
   usb: UsbStatus;
   warnings: string[];
   agent: AgentStatus;
+  /** The computer the server runs on, for the words the switcher uses ("this Mac", "this PC"). Absent from older servers: a Mac. */
+  host?: HostKind;
 };
+
+/** The kind of computer ViewSwitcher's server runs on. */
+export type HostKind = "mac" | "windows";
+
+/** What people call that computer: "Mac" or "PC". */
+export const hostName = (host: HostKind | undefined) => (host === "windows" ? "PC" : "Mac");
 
 /** Server → client WebSocket messages. */
 export type ServerMessage =

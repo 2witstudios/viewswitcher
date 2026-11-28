@@ -9,6 +9,7 @@ import { addFromTemplate, createOrg, createProject } from "./library";
 import { LibraryScanner } from "./library/scanner";
 import { cancelPack, installPack, PackError, removeSet, stagePack, sweepStaging } from "./packs";
 import { SHOWS, SHOWS_DIR, showPacks, starterPack, writeZip, zipPack } from "@viewswitcher/packs";
+import { fileLinks } from "../../../test-links";
 
 const starter = resolve(import.meta.dir, "../starter");
 const scanOrg = (root: string, org: string) => new LibraryScanner(root).scanOrg(org);
@@ -212,7 +213,7 @@ describe("removing a set", () => {
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
 
-  test("counts a scene that is a link to one made from it (the set's files stay)", async () => {
+  test.skipIf(!fileLinks)("counts a scene that is a link to one made from it (the set's files stay)", async () => {
     await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
     const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
     const real = join(root, org, "projects", projectId, "scenes/teaching.html");
@@ -222,7 +223,7 @@ describe("removing a set", () => {
     expect(await readFile(join(root, org, "templates/starter/_shared/theme.css"), "utf8")).toContain("--accent");
   });
 
-  test("a scene that is a link outside the library isn't read to count it", async () => {
+  test.skipIf(!fileLinks)("a scene that is a link outside the library isn't read to count it", async () => {
     await installPack(root, org, (await stagePack(root, org, { zip: starterZip }, null)).token);
     const { projectId } = await createProject(join(root, org), "Show", ["starter/teaching"]);
     const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
@@ -415,7 +416,7 @@ describe("an org's .viewswitcher/ or staging/ linked outside the library", () =>
     }
   });
 
-  test("a staged file swapped for a link (a file outside the library): install refuses and copies nothing", async () => {
+  test.skipIf(!fileLinks)("a staged file swapped for a link (a file outside the library): install refuses and copies nothing", async () => {
     const away = await mkdtemp(join(tmpdir(), "vs-packs-away-"));
     try {
       await writeFile(join(away, "secret.css"), "outside secret");

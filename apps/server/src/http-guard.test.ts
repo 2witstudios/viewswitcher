@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { starterPack, zipPack } from "@viewswitcher/packs";
 import { SERVER_START_MS, TEST_STATE_ROOT, freePort, startServer } from "./test-server";
+import { fileLinks } from "../../../test-links";
 
 let port = 0;
 let proc: Subprocess;
@@ -202,7 +203,7 @@ describe("framing: nobody but the switcher's own pages can frame it", () => {
 });
 
 describe("library paths obey the real-path rule, for reads as for writes", () => {
-  test("a link out of the library, plain or ?edit or ?bridge, is a 404; a link inside it works", async () => {
+  test.skipIf(!fileLinks)("a link out of the library, plain or ?edit or ?bridge, is a 404; a link inside it works", async () => {
     writeFileSync(join(outside, "secret.html"), "<title>Outside</title>secret");
     symlinkSync(join(outside, "secret.html"), join(library, "my-channel/templates/away.html"));
     symlinkSync(outside, join(library, "my-channel/assets-away"));

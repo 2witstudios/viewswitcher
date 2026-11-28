@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { machineStateDir, migrateMachineState } from "./machine-state";
 
 const scratch = () => mkdtempSync(join(tmpdir(), "vs-ms-"));
@@ -22,7 +22,8 @@ describe("machineStateDir", () => {
 
   test("one folder per library path, under the state root, outside the library", () => {
     const a = machineStateDir("/state", "/Users/me/ViewSwitcher Library");
-    expect(a).toMatch(/^\/state\/libraries\/[0-9a-f]{16}$/);
+    expect(dirname(a)).toBe(join(resolve("/state"), "libraries"));
+    expect(basename(a)).toMatch(/^[0-9a-f]{16}$/);
     expect(machineStateDir("/state", "/Users/me/ViewSwitcher Library/")).toBe(a); // the same path, written another way
     expect(machineStateDir("/state", "/Users/me/Other Library")).not.toBe(a);
   });

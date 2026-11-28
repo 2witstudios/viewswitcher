@@ -4,7 +4,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { ServerMessage } from "@viewswitcher/shared";
 import type { Server, ServerWebSocket } from "bun";
-import { stdioLaunch } from "./agent-connect";
+import { compiled, stdioLaunch } from "./agent-connect";
 import { type BuiltinPackFiles, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { config } from "./config";
 import { createLog } from "./log";
@@ -12,7 +12,8 @@ import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
-import { appParent, watchParent } from "./parent-watch";
+import { type LanListeners, lanListeners } from "./lan-listen";
+import { appParent, stopsOnStdinEnd, watchParent } from "./parent-watch";
 import { plainStateFolder } from "./library/contain";
 import { LibraryScanner } from "./library/scanner";
 import { migrateMachineState } from "./machine-state";
@@ -87,8 +88,9 @@ pairing.onRemoved = (id) => {
 
 /** The main listener on 127.0.0.1, from the end of startup on. */
 let server: Server<Socket["data"]> | undefined;
-/** The Wi-Fi listener, while "Let phones and tablets on this Wi-Fi connect" is on. */
-let lanServer: Server<Socket["data"]> | null = null;
+/** The Wi-Fi listener(s), while "Let phones and tablets on this Wi-Fi connect" is on (lan-listen.ts: one per address on Windows). */
+let lan: LanListeners<Server<Socket["data"]>> | null = null;
+const lanOn = () => !!lan?.on;
 
 // ---------------------------------------------------------------- live state
 
@@ -96,7 +98,7 @@ let lanServer: Server<Socket["data"]> | null = null;
 function publish(msg: ServerMessage) {
   const text = JSON.stringify(msg);
   server?.publish("all", text);
-  lanServer?.publish("all", text);
+  lan?.publish("all", text);
 }
 const log = createLog(config.verbose);
 
@@ -113,6 +115,7 @@ const store = await LiveStore.open({
     obsSetup: null,
     usb: { enabled: false, attached: false, connected: false },
     agent: { onAir: (await readSettings(machineState)).agentOnAir, lastSeen: null, client: null },
+    host: process.platform === "win32" ? "windows" : "mac",
   },
 });
 const state = store.state;
@@ -218,7 +221,7 @@ watch(config.library, { recursive: true }, (_event, filename) => {
 // ---------------------------------------------------------------- phones and tablets
 
 /** This Mac's .local name and LAN addresses, while something can reach us over the network; null otherwise (origin.ts). */
-const lanNames = () => (lanServer ? thisMac() : null);
+const lanNames = () => (lanOn() ? thisMac() : null);
 
 function remoteStatus() {
   const mac = thisMac();
@@ -226,10 +229,10 @@ function remoteStatus() {
   const connected = new Map<string, number>();
   for (const ws of sockets) if (ws.data.remote) connected.set(ws.data.remote, (connected.get(ws.data.remote) ?? 0) + 1);
   return {
-    enabled: !!lanServer,
+    enabled: lanOn(),
     port: config.port,
     localName: mac.localName,
-    urls: lanServer ? [...(mac.localName ? [mac.localName] : []), ...addresses].map((h) => `http://${h}:${config.port}/`) : [],
+    urls: lanOn() ? [...(mac.localName ? [mac.localName] : []), ...addresses].map((h) => `http://${h}:${config.port}/`) : [],
     code: pairing.codeExpiresAt() ? { expiresAt: pairing.codeExpiresAt() } : null,
     /** The last code was cancelled by wrong guesses: someone on the network is guessing. */
     codeGuessed: pairing.codeGuessed,
@@ -238,22 +241,26 @@ function remoteStatus() {
 }
 
 function setLan(on: boolean): string | null {
-  if (on && !lanServer) {
-    try {
-      lanServer = Bun.serve({ hostname: config.lanHost, port: config.port, fetch: handle, websocket });
-      console.log(`[wifi] phones and tablets may connect: http://${thisMac().localName ?? config.lanHost}:${config.port}`);
-    } catch (e) {
-      console.error("[wifi] couldn't listen on the network:", (e as Error).message);
-      return `Couldn't listen on the network: ${(e as Error).message}`;
+  if (on && !lanOn()) {
+    lan ??= lanListeners({
+      host: config.lanHost,
+      // Every address this computer has, VPNs' included, as 0.0.0.0 would be (Tailscale reaches it too).
+      addresses: () => thisMac().addresses,
+      serve: (hostname) => Bun.serve({ hostname, port: config.port, fetch: handle, websocket }),
+    });
+    const error = lan.start();
+    if (error) {
+      console.error("[wifi] couldn't listen on the network:", error);
+      return `Couldn't listen on the network: ${error}`;
     }
+    console.log(`[wifi] phones and tablets may connect: http://${thisMac().localName ?? config.lanHost}:${config.port}`);
   }
-  if (!on && lanServer) {
-    const s = lanServer;
-    lanServer = null;
+  if (!on && lanOn()) {
+    const s = lan!;
     // Off means off: the port closes and every paired phone or tablet is cut off now, on the Wi-Fi or through
     // tailscale serve (they stay paired). Only this Mac's and the USB-C device's sockets have no remote.
     for (const ws of sockets) if (ws.data.lan || ws.data.remote) ws.close(1001, "Wi-Fi connections were turned off");
-    s.stop(true);
+    s.stop();
     console.log("[wifi] network listener closed; 127.0.0.1 only");
   }
   return null;
@@ -263,11 +270,11 @@ function setLan(on: boolean): string | null {
 const adminSecret = config.adminToken.length >= 32 ? sha3(config.adminToken) : null;
 const isAdmin = (req: Request) => adminSecret !== null && sha3(req.headers.get("x-viewswitcher-admin") ?? "") === adminSecret; // digests, not raw secrets (pairing.ts)
 
-// What an agent runs to connect over stdio: this executable with --mcp-stdio. In the Mac app's compiled
-// sidecar, import.meta.dir is inside the binary (/$bunfs/…); from source, bun runs index.ts.
+// What an agent runs to connect over stdio: this executable with --mcp-stdio. In the apps' compiled
+// server, import.meta.dir is inside the binary (agent-connect.ts compiled()); from source, bun runs index.ts.
 /** The Mac app passes its version (MCPB wants semver; a source checkout has none). */
 const extensionVersion = /^\d+\.\d+\.\d+$/.test(process.env.VIEWSWITCHER_VERSION ?? "") ? process.env.VIEWSWITCHER_VERSION! : "1.0.0";
-const ownStdio = (port: number) => stdioLaunch(process.execPath, import.meta.dir.startsWith("/$bunfs") ? null : join(import.meta.dir, "index.ts"), port);
+const ownStdio = (port: number) => stdioLaunch(process.execPath, compiled(import.meta.dir) ? null : join(import.meta.dir, "index.ts"), port);
 
 // The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
 const mcp: McpDeps = {
@@ -320,8 +327,8 @@ const handle = dispatcher({
   allowedOrigins: config.allowedOrigins,
   lan: lanNames,
   // One setting for everything not from this Mac or the USB-C bridge: the Wi-Fi listener and tailscale serve.
-  remoteAccess: () => !!lanServer,
-  onLan: (srv) => srv === lanServer,
+  remoteAccess: lanOn,
+  onLan: (srv) => !!lan?.has(srv),
   remote: (req) => pairing.check(tokenFromCookie(req.headers.get("cookie")))?.id ?? null,
   renew: (remote, c) => {
     const token = tokenFromCookie(c.req.headers.get("cookie"));
@@ -358,13 +365,26 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
 }
 
-// Started by the Mac app: exit if the app goes away without stopping us (parent-watch.ts).
+// Started by the Mac or Windows app: exit if the app goes away without stopping us (parent-watch.ts).
 const parent = appParent();
 if (parent) {
   watchParent(parent, () => {
-    console.log("[viewswitcher] the Mac app is gone; stopping");
+    console.log("[viewswitcher] the app that started this server is gone; stopping");
     void pairing.flush().finally(() => process.exit(0));
   });
+}
+
+// Windows has no SIGTERM: the Windows app holds a pipe on stdin and closes it to stop the server, which
+// then writes paired phones and tablets first, as on SIGTERM. Opt-in, since a server started with no
+// stdin at all (the Mac app's /dev/null) would read that as the end at once.
+if (stopsOnStdinEnd()) {
+  const stop = () => {
+    console.log("[viewswitcher] the app closed stdin; stopping");
+    void pairing.flush().finally(() => process.exit(0));
+  };
+  process.stdin.on("end", stop);
+  process.stdin.on("close", stop);
+  process.stdin.resume();
 }
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).

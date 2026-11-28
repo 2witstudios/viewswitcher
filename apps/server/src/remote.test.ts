@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { lanAddresses, pairingOrder, vpnAddresses } from "./lan";
 import { freePort, SERVER_START_MS, startServer } from "./test-server";
+import { COMPUTER } from "./platform-dirs";
 
 // The address the server puts in the QR code (its own pairingOrder), and the one this test connects to.
 const advertised = pairingOrder(lanAddresses(), vpnAddresses())[0];
@@ -219,7 +220,7 @@ describe.skipIf(!ip)(`over the Wi-Fi (${ip})`, () => {
     const broken = { path: "my-channel/templates/gone.html" };
     const phone = await lan("/api/scenes/duplicate", { method: "POST", headers: own, body: JSON.stringify(broken) });
     expect(phone.status).toBe(500);
-    expect(JSON.parse(phone.body).error).toBe("Something went wrong on the Mac. Its server log has the details.");
+    expect(JSON.parse(phone.body).error).toBe(`Something went wrong on the ${COMPUTER}. Its server log has the details.`);
     const here = await mac("/api/scenes/duplicate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(broken) });
     expect(JSON.parse(here.body).error).toContain("ENOENT");
     // The switcher's frame rule reaches phones too.

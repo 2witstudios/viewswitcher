@@ -1,10 +1,18 @@
-// This Mac on the local network: its IPv4 addresses and its Bonjour name (<name>.local), for
+// This computer on the local network: its IPv4 addresses and its mDNS name (<name>.local), for
 // the host guard (origin.ts) and the addresses the pairing QR code points at. Both can change while
-// the server runs (a new Wi-Fi network, a renamed Mac), so they are read again every few seconds.
-import { networkInterfaces } from "node:os";
+// the server runs (a new Wi-Fi network, a renamed computer), so they are read again every few seconds.
+import { hostname, networkInterfaces } from "node:os";
 
-/** A VPN's interface (utun: Tailscale and most VPNs; ipsec, ppp): a phone on the Wi-Fi can't reach it. */
-const vpn = (name: string) => /^(utun|ipsec|ppp)\d*$/.test(name);
+/**
+ * An interface a phone on the Wi-Fi can't reach: a VPN's (utun: Tailscale and most VPNs on macOS; ipsec,
+ * ppp), and on Windows, where adapters go by name, Tailscale, ZeroTier, WireGuard, OpenVPN and TAP
+ * adapters, and the virtual switches of WSL, Hyper-V, VMware and VirtualBox.
+ */
+export const vpn = (name: string) =>
+  /^(utun|ipsec|ppp)\d*$/.test(name) || /^(tailscale|zerotier|wireguard|openvpn|nordlynx|proton|mullvad|tap|tun|vethernet|vmware|virtualbox|vboxnet|hyper-v)\b/i.test(name);
+
+/** "<name>.local" for a computer name that can be one (letters, digits and hyphens), else null. */
+export const localNameFrom = (name: string) => (/^[A-Za-z0-9-]{1,63}$/.test(name) ? `${name}.local`.toLowerCase() : null);
 
 /** IPv4 addresses on this Mac's network interfaces, apart from loopback and link-local (169.254/16).
  *  VPN interfaces come last, so the pairing QR code never prefers a Tailscale 100.x address over a Wi-Fi
@@ -41,6 +49,8 @@ export function pairingOrder(addresses: string[], vpns: string[]): string[] {
 function readLocalName(): string | null {
   const forced = process.env.VIEWSWITCHER_LOCAL_NAME;
   if (forced !== undefined) return forced ? `${forced.replace(/\.local$/i, "")}.local`.toLowerCase() : null;
+  // Windows 10 and later answer mDNS for their own computer name.
+  if (process.platform === "win32") return localNameFrom(hostname());
   if (process.platform !== "darwin") return null;
   try {
     const p = Bun.spawnSync(["/usr/sbin/scutil", "--get", "LocalHostName"], { stdout: "pipe", stderr: "ignore" });

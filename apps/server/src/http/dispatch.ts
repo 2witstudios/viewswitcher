@@ -19,6 +19,7 @@
 // /library/ keeps its own headers (scene-sandbox.ts), with no frame-ancestors: a scene has nothing
 // to click, framing one gives a page nothing it can read, and a sandboxed document's 'self' is an
 // opaque origin in some engines, which would blank every scene tile in the switcher.
+import { COMPUTER } from "../platform-dirs";
 import { EditError } from "@viewswitcher/shared";
 import type { Server } from "bun";
 import { admits, type Audience, type Caller, callerOf, isMacOrUsb, pageLoad, type Peer } from "../gate";
@@ -124,9 +125,9 @@ function secured(res: Response, path: string): Response {
   });
 }
 
-const REMOTE_OFF = "This Mac isn't letting phones and tablets connect right now. On the Mac, turn on Phones and Tablets in ViewSwitcher.";
-const PAIR_FIRST = "Pair this phone or tablet first: open ViewSwitcher on the Mac, then Phones and Tablets.";
-const PLAIN_500 = "Something went wrong on the Mac. Its server log has the details.";
+const REMOTE_OFF = `This ${COMPUTER} isn't letting phones and tablets connect right now. On the ${COMPUTER}, turn on Phones and Tablets in ViewSwitcher.`;
+const PAIR_FIRST = `Pair this phone or tablet first: open ViewSwitcher on the ${COMPUTER}, then Phones and Tablets.`;
+const PLAIN_500 = `Something went wrong on the ${COMPUTER}. Its server log has the details.`;
 
 export function dispatcher(o: DispatchOptions): (req: Request, srv: Server<SocketData>) => Promise<Response | undefined> {
   /** An error as a response: the message scrubbed, and a 500's only for this Mac. */

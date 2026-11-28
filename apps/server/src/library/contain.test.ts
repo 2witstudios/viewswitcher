@@ -4,6 +4,7 @@ import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { plainStateFolder, realLibraryPath, resolveInLibrary } from "./contain";
+import { fileLinks, posix } from "../../../../test-links";
 
 const library = mkdtempSync(join(tmpdir(), "vs-contain-"));
 const outside = mkdtempSync(join(tmpdir(), "vs-contain-out-"));
@@ -15,7 +16,7 @@ const put = (rel: string, text = "x") => {
   mkdirSync(join(library, rel, ".."), { recursive: true });
   writeFileSync(join(library, rel), text);
 };
-const real = (rel: string) => join(realpathSync(library), rel);
+const real = (rel: string) => join(realpathSync.native(library), rel);
 const TOKEN = "0123456789abcdef01234567";
 put("daisy/templates/brb.html");
 put("daisy/.git/config");
@@ -24,10 +25,13 @@ put(".viewswitcher/settings.json", "{}");
 put(`daisy/.viewswitcher/staging/${TOKEN}/covers/brb.html`);
 put(`daisy/.viewswitcher/staging/${TOKEN}/meta.json`, "{}");
 writeFileSync(join(outside, "secret.txt"), "secret");
-symlinkSync(join(outside, "secret.txt"), join(library, "daisy/templates/away.html"));
+// Links to files need symlink rights on Windows (test-links.ts); the tests that use them skip without.
+if (fileLinks) {
+  symlinkSync(join(outside, "secret.txt"), join(library, "daisy/templates/away.html"));
+  symlinkSync(join(library, "daisy/templates/brb.html"), join(library, "daisy/templates/alias.html"));
+  symlinkSync(join(library, ".viewswitcher/settings.json"), join(library, "daisy/settings.json"));
+}
 symlinkSync(outside, join(library, "daisy/away"));
-symlinkSync(join(library, "daisy/templates/brb.html"), join(library, "daisy/templates/alias.html"));
-symlinkSync(join(library, ".viewswitcher/settings.json"), join(library, "daisy/settings.json"));
 symlinkSync(join(outside, "nothing-yet.html"), join(library, "daisy/templates/dangling.html"));
 
 const refused = (p: string, o?: { forWrite?: boolean }) => expect(resolveInLibrary(library, p, o)).rejects.toThrow();
@@ -37,16 +41,16 @@ describe("resolveInLibrary", () => {
     expect(await resolveInLibrary(library, "daisy/templates/brb.html")).toBe(real("daisy/templates/brb.html"));
     expect(await resolveInLibrary(library, "daisy/projects/new/scenes/x.html", { forWrite: true })).toBe(real("daisy/projects/new/scenes/x.html"));
   });
-  test("a link that stays in the library is followed", async () => {
+  test.skipIf(!fileLinks)("a link that stays in the library is followed", async () => {
     expect(await resolveInLibrary(library, "daisy/templates/alias.html")).toBe(real("daisy/templates/brb.html"));
   });
-  test("a link out of the library, a folder linked out, and a link to nowhere are refused", async () => {
+  test.skipIf(!fileLinks)("a link out of the library, a folder linked out, and a link to nowhere are refused", async () => {
     await refused("daisy/templates/away.html");
     await refused("daisy/away/secret.txt");
     await refused("daisy/away/new.html", { forWrite: true });
     await refused("daisy/templates/dangling.html", { forWrite: true });
   });
-  test("dot-folders and dot-files are refused, also through a link", async () => {
+  test.skipIf(!fileLinks)("dot-folders and dot-files are refused, also through a link", async () => {
     for (const p of ["daisy/.git/config", ".viewswitcher/settings.json", "daisy/.env", "daisy/settings.json", ".git", "daisy/templates/../.env", "daisy/./templates/brb.html"]) await refused(p);
   });
   test("bad shapes are refused", async () => {
@@ -63,7 +67,7 @@ describe("resolveInLibrary", () => {
 });
 
 describe("realLibraryPath", () => {
-  test("where a path really is, as a library path", () => {
+  test.skipIf(!fileLinks)("where a path really is, as a library path", () => {
     expect(realLibraryPath(library, "daisy/templates/alias.html")).toBe("daisy/templates/brb.html");
     expect(realLibraryPath(library, "daisy/templates/new.html")).toBe("daisy/templates/new.html");
     expect(realLibraryPath(library, "daisy/templates/away.html")).toBe("daisy/templates/away.html");
@@ -71,7 +75,7 @@ describe("realLibraryPath", () => {
 });
 
 describe("a path that can't be read", () => {
-  test("a file or a folder with no permission is refused as that, not as a link", async () => {
+  test.skipIf(!posix)("a file or a folder with no permission is refused as that, not as a link", async () => {
     put("daisy/locked/x.css");
     put("daisy/assets/sealed.png");
     chmodSync(join(library, "daisy/assets/sealed.png"), 0o000);
@@ -120,5 +124,16 @@ describe("plainStateFolder", () => {
     const aside = await plainStateFolder(root, at);
     expect(readFileSync(aside!, "utf8")).toBe("not a folder");
     expect(existsSync(join(root, ".viewswitcher"))).toBe(false);
+  });
+});
+
+describe("the no-link read (withNoLinks)", () => {
+  // macOS refuses a link anywhere in the path at the open (O_NOFOLLOW_ANY); Windows has no such open, so
+  // contain.ts checks the path's real form first. Linux's O_NOFOLLOW checks only the last segment.
+  test.skipIf(process.platform === "linux")("a file read through a folder that is a link (a junction on Windows) is refused", async () => {
+    const { readNoFollow } = await import("./contain");
+    symlinkSync(join(library, "daisy/templates"), join(library, "daisy/via-folder-link"));
+    expect(await readNoFollow(real("daisy/templates/brb.html"))).toBe("x");
+    await expect(readNoFollow(join(realpathSync.native(library), "daisy/via-folder-link/brb.html"))).rejects.toThrow("outside the library");
   });
 });

@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ViewSwitcher.Core.Tests/ViewSwitcher.Core.Tests.csproj" />
+  <Project Path="ViewSwitcher.Core/ViewSwitcher.Core.csproj" />
+</Solution>

@@ -10,7 +10,7 @@
 //   folder that isn't there yet will be made inside.
 //
 // Paths still go through inside() and plainName() (paths.ts) first; this adds what the real files say.
-import { closeSync, constants, existsSync, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { type FileHandle, lstat, open, realpath, rename } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { inside, PathError } from "../paths";
@@ -168,14 +168,14 @@ export const plainStateFolder = (libraryRoot: string, now = new Date()) => plain
  */
 export function realLibraryPath(libraryRoot: string, path: string): string {
   try {
-    const realRoot = realpathSync(libraryRoot);
+    const realRoot = realpathSync.native(libraryRoot);
     let probe = inside(libraryRoot, path);
     let rest = "";
     while (!existsSync(probe)) {
       rest = `/${basename(probe)}${rest}`;
       probe = dirname(probe);
     }
-    const back = relative(realRoot, realpathSync(probe)) + rest;
+    const back = relative(realRoot, realpathSync.native(probe)).split(sep).join("/") + rest;
     return back.startsWith("..") || isAbsolute(back) ? path : back;
   } catch {
     return path;
@@ -187,7 +187,32 @@ export function realLibraryPath(libraryRoot: string, path: string): string {
  * folder swapped for a link after the scan checked it gives ELOOP too. Elsewhere, the last segment only.
  * (Together with O_NOFOLLOW, macOS refuses the open with EINVAL.)
  */
-export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O_NOFOLLOW;
+export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : (constants.O_NOFOLLOW ?? 0);
+
+/**
+ * Windows has no no-follow open at all (O_NOFOLLOW is undefined there), so macOS's rule (no link
+ * anywhere in the path) is checked before the open: neither `abs` nor any folder above it is a link (a
+ * symlink or a junction: lstat says so for both). One lstat per folder, not a realpath comparison,
+ * because Windows spells one folder two ways (C:\PROGRA~1 and C:\Program Files) and neither is a link.
+ * Throws ELOOP like the open would. The instant between this check and the open is the race the
+ * Decisions page (2026-11-26, library containment) leaves undefended.
+ */
+const WINDOWS = process.platform === "win32";
+const loop = () => Object.assign(new Error("ELOOP: a link on the way"), { code: "ELOOP" });
+async function noLinksOnWindows(abs: string) {
+  if (!WINDOWS) return;
+  for (let at = abs; ; at = dirname(at)) {
+    if ((await lstat(at)).isSymbolicLink()) throw loop();
+    if (dirname(at) === at) return;
+  }
+}
+function noLinksOnWindowsSync(abs: string) {
+  if (!WINDOWS) return;
+  for (let at = abs; ; at = dirname(at)) {
+    if (lstatSync(at).isSymbolicLink()) throw loop();
+    if (dirname(at) === at) return;
+  }
+}
 
 /**
  * `use` on the file at `abs`, opened only when no part of `abs` is a link (NO_LINKS) and it's a plain
@@ -196,7 +221,7 @@ export const NO_LINKS = process.platform === "darwin" ? 0x20000000 : constants.O
  * file the switcher reads in full on its own (titles, hashes, the editor's copy, a pack install) uses this.
  */
 export async function withNoLinks<T>(abs: string, use: (f: FileHandle) => Promise<T>): Promise<T> {
-  const f = await open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS).catch((e) => {
+  const f = await noLinksOnWindows(abs).then(() => open(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS)).catch((e) => {
     // A path that became a link since it was checked is refused like one that was a link then (a 400, not a 500).
     throw (e as NodeJS.ErrnoException).code === "ELOOP" ? outside() : e;
   });
@@ -225,6 +250,7 @@ export async function readPlainText(abs: string): Promise<string> {
 
 /** readNoFollow at one instant (the agents' on-air guard checks at a commit): the same open, synchronously. */
 export function readNoFollowSync(abs: string): string {
+  noLinksOnWindowsSync(abs);
   const fd = openSync(abs, constants.O_RDONLY | constants.O_NONBLOCK | NO_LINKS);
   try {
     if (!fstatSync(fd).isFile()) throw new PathError("That isn't a plain file (a folder, a named pipe or a device?)");

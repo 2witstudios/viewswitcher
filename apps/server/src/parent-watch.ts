@@ -2,11 +2,14 @@
 // quit), so the port is never left held by an orphan. The app passes its pid in
 // VIEWSWITCHER_PARENT_PID; a server started any other way (bun run dev) has none and is never watched.
 
-/** The Mac app that started this server, or null when something else did. */
+/** The Mac or Windows app that started this server, or null when something else did. */
 export function appParent(env: Record<string, string | undefined> = process.env): number | null {
   const pid = Number(env.VIEWSWITCHER_PARENT_PID);
   return Number.isInteger(pid) && pid > 1 ? pid : null;
 }
+
+/** Whether the app that started this server stops it by closing stdin (the Windows app: no SIGTERM there). */
+export const stopsOnStdinEnd = (env: Record<string, string | undefined> = process.env) => env.VIEWSWITCHER_STOP_ON_STDIN === "1";
 
 /** Whether a process with this pid exists. EPERM means it does, under another user. */
 export function alive(pid: number): boolean {

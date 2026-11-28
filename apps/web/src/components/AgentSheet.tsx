@@ -1,14 +1,14 @@
 // Edit with AI: connect the agent people already use, see whether one is connected,
 // and choose what agents may put on air. Opened from the header, "ask your agent" hints, and the Mac
 // app's Edit with AI… menu item (/?ai or #ai).
-import type { AgentClients, AgentOnAir } from "@viewswitcher/shared";
+import { type AgentClients, type AgentOnAir, hostName } from "@viewswitcher/shared";
 import { type ReactNode, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { type AgentInfo, api, copy, MCPB_URL } from "../lib/api";
 import {
   agentStatusText, codexToml, CONNECTED_FOR_MS, cursorDeeplink, DEFAULT_CLAUDE_CODE, defaultStdio, mcpUrl, inOrder, ON_AIR_CHOICES, ON_AIR_SCOPE, otherPortNote, pendingChoice, shownChoice, SETUP_GUIDE_URL, sheetParts, type Way, waysIn,
   wantsAgentSheet, withoutAgentSheet,
 } from "../lib/agent";
-import { clientKind } from "../lib/client-kind";
+import { clientKind, inDesktopApp } from "../lib/client-kind";
 import { useLive } from "../lib/live";
 import { Overlay, toast } from "./ui";
 import { trapTab } from "../lib/modal";
@@ -49,7 +49,7 @@ export const SparkleIcon = () => (
 /** One settings request at a time, in the order they're made (lib/agent.ts inOrder). */
 const settingsInOrder = inOrder();
 const kind = typeof navigator !== "undefined" ? clientKind(navigator.userAgent) : "browser";
-const inMacApp = kind === "mac";
+const inApp = inDesktopApp(kind);
 
 export function AgentSheet() {
   const isOpen = useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => open);
@@ -58,9 +58,11 @@ export function AgentSheet() {
 
 function Sheet({ onClose }: { onClose: () => void }) {
   const agent = useLive((l) => l.state?.agent);
+  /** "Mac" or "PC": the computer the server runs on (LiveState.host). */
+  const computer = hostName(useLive((l) => l.state?.host));
   const parts = sheetParts(kind);
   const [now, setNow] = useState(Date.now);
-  // undefined while asking; null when this isn't the Mac running ViewSwitcher (another machine).
+  // undefined while asking; null when this isn't the computer running ViewSwitcher (another machine).
   const [info, setInfo] = useState<AgentInfo | null | undefined>(undefined);
   const [clients, setClients] = useState<AgentClients | null>(null);
 
@@ -128,8 +130,8 @@ function Sheet({ onClose }: { onClose: () => void }) {
         <p className={`agent-status${connected ? " on" : ""}`} role="status"><span className="dot" />{agentStatusText(agent, now)}</p>
         <p className="agent-lede">Connect the AI agent you already use. It reads your library, adds template sets, makes views from your templates and edits them, looks at each one rendered in OBS and fixes what it sees.</p>
 
-        {parts.connectOnMac && <p className="agent-note">Connect an agent on your Mac: open Edit with AI there.</p>}
-        {parts.waysIn && <WaysIn info={info} clients={clients} />}
+        {parts.connectOnMac && <p className="agent-note">Connect an agent on your {computer}: open Edit with AI there.</p>}
+        {parts.waysIn && <WaysIn info={info} clients={clients} computer={computer} />}
 
         {parts.onAirSetting && (
           <fieldset className="agent-onair">
@@ -154,7 +156,7 @@ function Sheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** `pending`: the text isn't known yet (this Mac's details are still on their way): shown as such, not copyable. */
+/** `pending`: the text isn't known yet (this computer's details are still on their way): shown as such, not copyable. */
 function Copyable({ label, text, multiline = false, pending = false }: { label: string; text: string; multiline?: boolean; pending?: boolean }) {
   return (
     <div className="agent-copy">
@@ -166,7 +168,8 @@ function Copyable({ label, text, multiline = false, pending = false }: { label: 
 
 const TITLES: Record<Way, string> = { "claude-code": "Claude Code", "claude-desktop": "Claude Desktop", cursor: "Cursor", others: "Codex, VS Code and other agents" };
 
-function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients: AgentClients | null }) {
+function WaysIn({ info, clients, computer }: { info: AgentInfo | null | undefined; clients: AgentClients | null; computer: string }) {
+  const windows = computer === "PC";
   const port = info?.port ?? (location.port || 7420);
   const url = mcpUrl(port);
   const elsewhere = info === null;
@@ -178,17 +181,17 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
       case "claude-code":
         return (
           <>
-            <p>In Terminal, start Claude Code in your library folder. The library's <code>.mcp.json</code> connects it to ViewSwitcher; the first time, Claude Code asks you once to allow the <b>viewswitcher</b> server.</p>
+            <p>In {windows ? "Windows Terminal (PowerShell)" : "Terminal"}, start Claude Code in your library folder. The library's <code>.mcp.json</code> connects it to ViewSwitcher; the first time, Claude Code asks you once to allow the <b>viewswitcher</b> server.</p>
             <Copyable label="Claude Code command" text={info?.claudeCode ?? DEFAULT_CLAUDE_CODE} pending={info === undefined} />
             {portNote && <p className="agent-note">{portNote}</p>}
           </>
         );
       case "claude-desktop":
         return elsewhere ? (
-          <p>Open Edit with AI on the Mac that runs ViewSwitcher to add it there.</p>
+          <p>Open Edit with AI on the {computer} that runs ViewSwitcher to add it there.</p>
         ) : (
           <>
-            <p>Adds ViewSwitcher to Claude Desktop as an extension made for this Mac. {inMacApp ? "Claude Desktop opens and asks you to install it." : "Open the downloaded file and Claude Desktop asks you to install it."}</p>
+            <p>Adds ViewSwitcher to Claude Desktop as an extension made for this {computer}. {inApp ? "Claude Desktop opens and asks you to install it." : "Open the downloaded file and Claude Desktop asks you to install it."}</p>
             <div className="agent-actions">
               <a className="btn small primary" href={MCPB_URL} download="ViewSwitcher.mcpb">Add to Claude Desktop</a>
             </div>
@@ -206,10 +209,10 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
       case "others":
         return (
           <>
-            <p>Any MCP client on this Mac: the Streamable HTTP address, or the stdio command.</p>
+            <p>Any MCP client on this {computer}: the Streamable HTTP address, or the stdio command.</p>
             <Copyable label="MCP address" text={url} />
             <Copyable label="stdio command" text={stdio} pending={info === undefined} />
-            <p>Codex: add this to <code>~/.codex/config.toml</code>.</p>
+            <p>Codex: add this to <code>{windows ? "%USERPROFILE%\\.codex\\config.toml" : "~/.codex/config.toml"}</code>.</p>
             <Copyable label="Codex config" text={codexToml(url)} multiline />
           </>
         );
@@ -218,10 +221,10 @@ function WaysIn({ info, clients }: { info: AgentInfo | null | undefined; clients
 
   return (
     <div className="agent-ways">
-      {elsewhere && <p className="agent-note">These connect an agent on the Mac that runs ViewSwitcher; the switcher only lets agents in from that Mac.</p>}
+      {elsewhere && <p className="agent-note">These connect an agent on the {computer} that runs ViewSwitcher; the switcher only lets agents in from that {computer}.</p>}
       {waysIn(clients).map(({ way, installed }) => (
         <section key={way} className="agent-way" aria-label={TITLES[way]}>
-          <h3>{TITLES[way]}{installed && <span className="agent-here">On this Mac</span>}</h3>
+          <h3>{TITLES[way]}{installed && <span className="agent-here">On this {computer}</span>}</h3>
           {body(way)}
         </section>
       ))}

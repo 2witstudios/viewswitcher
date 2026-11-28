@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { checkPack, fillPlaceholders, installedPath, isTextFile, libraryUrl, PACK_LIMITS, placeholderVars, planPack, readTitle } from "@viewswitcher/shared";
 import type { PackEntry, PackFile, PackManifest, StagedPack } from "@viewswitcher/shared";
 import { writeAtomic } from "./atomic";
+import { claimRename } from "./fsx";
 import { exists, readOrg } from "./library";
 import { libraryStaging, readNoFollow, readNoFollowBytes, resolveInLibrary, STAGING, STAGING_TOKEN, stagingIn } from "./library/contain";
 import { limit } from "./limit";
@@ -198,20 +199,15 @@ export async function installPack(libraryRoot: string, orgId: string, token: unk
     await rm(final, { recursive: true, force: true });
     await fillCopy(join(dir, "raw"), final, meta.files, await varsFor(libraryRoot, orgId, libraryUrl(`${orgId}/templates/${set}`)));
     await mkdir(join(orgDir, "templates"), { recursive: true });
-    // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
-    // installs at once, an agent), where rename alone would quietly replace an empty one.
+    // The one step that fills the org: atomic, and only onto a name nobody has (fsx.ts), so a set that
+    // appeared meanwhile (two installs at once, an agent) is never replaced.
     const target = inside(orgDir, `templates/${set}`);
     try {
-      await mkdir(target);
+      await claimRename(final, target);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "EEXIST") throw new PackError("A set with that name just appeared. Drop the pack again.");
       throw plainFsError(e, "Installing it");
     }
-    // The one step that fills the org: atomic, onto the empty folder just claimed.
-    await rename(final, target).catch(async (e) => {
-      await rmdir(target).catch(() => {}); // only if still empty: never someone else's files
-      throw e;
-    });
     return { set };
   } catch (e) {
     throw plainFsError(e, "Installing it");

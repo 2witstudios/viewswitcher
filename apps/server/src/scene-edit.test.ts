@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { scanElements, textOf, untagForEdit } from "@viewswitcher/shared";
 import { PathError } from "./paths";
 import { editScene, HASHED_CHANGES, readForEdit, sceneHash, viewHashes } from "./scene-edit";
+import { fileLinks, posix } from "../../../test-links";
 
 const starter = join(import.meta.dir, "../starter");
 const SCENE = "acme/templates/teaching.html";
@@ -50,7 +51,7 @@ describe("viewHashes (sent with a library change)", () => {
     expect(await viewHashes(root, [copy])).toEqual({ [copy]: r.hash });
     await rm(join(root, copy));
   });
-  test("a named pipe named like a view gives no hash and never hangs (the watcher's flush waits on this)", async () => {
+  test.skipIf(!posix)("a named pipe named like a view gives no hash and never hangs (the watcher's flush waits on this)", async () => {
     const pipe = "acme/templates/pipe.html";
     expect(Bun.spawnSync(["mkfifo", join(root, pipe)]).exitCode).toBe(0);
     try {
@@ -65,7 +66,7 @@ describe("viewHashes (sent with a library change)", () => {
     }
   });
 
-  test("only views and transitions it can read inside the library; a big batch only up to its limit", async () => {
+  test.skipIf(!fileLinks)("only views and transitions it can read inside the library; a big batch only up to its limit", async () => {
     const away = await mkdtemp(join(tmpdir(), "vs-edit-away-"));
     try {
       await writeFile(join(away, "x.html"), "<title>outside</title>");
@@ -112,7 +113,7 @@ describe("editScene", () => {
 });
 
 describe("saving keeps the file what it was", () => {
-  test("permissions survive a save", async () => {
+  test.skipIf(!posix)("permissions survive a save", async () => {
     const abs = join(root, "acme/templates/brb.html");
     await chmod(abs, 0o664);
     const text = await readFile(abs, "utf8");
@@ -120,7 +121,7 @@ describe("saving keeps the file what it was", () => {
     expect((await editScene(root, "acme/templates/brb.html", sceneHash(text), [{ id, text: "Back soon" }])).ok).toBe(true);
     expect((await stat(abs)).mode & 0o777).toBe(0o664);
   });
-  test("a linked scene stays a link and its target changes", async () => {
+  test.skipIf(!fileLinks)("a linked scene stays a link and its target changes", async () => {
     const target = join(root, "acme/templates/ending.html");
     const link = join(root, "acme/templates/ending-link.html");
     await symlink(target, link);
@@ -130,7 +131,7 @@ describe("saving keeps the file what it was", () => {
     expect((await lstat(link)).isSymbolicLink()).toBe(true);
     expect(await readFile(target, "utf8")).toContain(">Thanks!<");
   });
-  test("a link to a file outside the library is refused", async () => {
+  test.skipIf(!fileLinks)("a link to a file outside the library is refused", async () => {
     const outside = join(root, "..", `vs-outside-${process.pid}.html`);
     await writeFile(outside, "<p>outside</p>");
     await symlink(outside, join(root, "acme/templates/out.html"));

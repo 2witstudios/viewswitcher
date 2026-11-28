@@ -156,7 +156,7 @@ export function createMcpServer(deps: McpDeps): McpServer {
     Object.entries(loads.read).every(([p, h]) => {
       try {
         // Non-blocking and plain files only: this runs on the event loop, where a named pipe would stop the server.
-        return textHash(readNoFollowSync(realpathSync(inside(root, p)))) === h;
+        return textHash(readNoFollowSync(realpathSync.native(inside(root, p)))) === h;
       } catch {
         return false;
       }

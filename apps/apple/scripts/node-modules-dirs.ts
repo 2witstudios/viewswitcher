@@ -3,7 +3,7 @@
 //   bun apps/apple/scripts/node-modules-dirs.ts <repo>   prints one path per line, relative to <repo>
 // It exits non-zero rather than print a short list, so build.sh never skips a folder in silence.
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 
 export function nodeModulesDirs(repo: string): string[] {
   const { workspaces } = JSON.parse(readFileSync(join(repo, "package.json"), "utf8"));
@@ -15,9 +15,10 @@ export function nodeModulesDirs(repo: string): string[] {
       throw new Error(`can't clean for workspace pattern ${JSON.stringify(pattern)}`);
     }
     // A workspace is a folder with a package.json; Bun.Glob skips dot folders (.git, .pu/worktrees).
-    for (const file of new Bun.Glob(`${pattern.replace(/\/+$/, "")}/package.json`).scanSync({ cwd: repo })) {
+    for (const found of new Bun.Glob(`${pattern.replace(/\/+$/, "")}/package.json`).scanSync({ cwd: repo })) {
+      const file = found.split("\\").join("/"); // Glob answers with backslashes on Windows
       if (file.split("/").includes("node_modules")) continue;
-      dirs.add(join(file, "..", "node_modules"));
+      dirs.add(posix.join(file, "..", "node_modules"));
     }
   }
   return [...dirs].sort();

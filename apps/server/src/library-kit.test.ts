@@ -3,6 +3,7 @@ import { lstat, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureLibrary, findGit, FIRST_ORG, KIT_FILES } from "./library-kit";
+import { fileLinks, posix } from "../../../test-links";
 
 const kit = join(import.meta.dir, "../library-kit");
 const starter = join(import.meta.dir, "../starter");
@@ -49,7 +50,7 @@ describe("ensureLibrary", () => {
     expect(await readFile(join(root, ".gitignore"), "utf8")).toContain(".viewswitcher/");
   });
 
-  test("a kit file that's there but can't be read (a folder, a named pipe) is the person's: left alone, and the start settles", async () => {
+  test.skipIf(!posix)("a kit file that's there but can't be read (a folder, a named pipe) is the person's: left alone, and the start settles", async () => {
     const root = await tempDir();
     await mkdir(join(root, "CLAUDE.md"));
     expect(Bun.spawnSync(["mkfifo", join(root, "AGENTS.md")]).exitCode).toBe(0);
@@ -105,7 +106,7 @@ describe("ensureLibrary", () => {
     expect(r.git).toBe(false);
   });
 
-  test("a kit file someone made a link stays a link, even when the kit has a newer version", async () => {
+  test.skipIf(!fileLinks)("a kit file someone made a link stays a link, even when the kit has a newer version", async () => {
     const root = await tempDir();
     const oldKit = await tempDir();
     for (const { from } of KIT_FILES) {

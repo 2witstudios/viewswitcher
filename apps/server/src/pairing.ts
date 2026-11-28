@@ -11,6 +11,7 @@
 // Secrets are compared by hashing both sides with SHA3-256 and comparing the digests (the
 // aidd-timing-safe-compare rule). Don't "fix" this to a raw === or crypto.timingSafeEqual: a digest
 // has no prefix structure to guess one character at a time, and the raw secret never reaches a log.
+import { COMPUTER } from "./platform-dirs";
 import { readFile } from "node:fs/promises";
 import { writeAtomic } from "./atomic";
 
@@ -138,13 +139,13 @@ export class Pairing {
     if (recent.length) this.peers.set(peer, recent);
     else this.peers.delete(peer);
     if (recent.length >= MAX_PEER_FAILURES) {
-      return { ok: false, reason: "limited", error: "Too many tries. Wait a few minutes, then ask the Mac for a new code." };
+      return { ok: false, reason: "limited", error: `Too many tries. Wait a few minutes, then ask the ${COMPUTER} for a new code.` };
     }
     const code = this.code;
     // An old code (a QR code scanned again) isn't a guess: it doesn't count against anyone.
     if (!code || code.expiresAt <= t) {
       this.code = null;
-      return { ok: false, reason: "expired", error: "That code has expired. Ask the Mac for a new one (Phones and Tablets in its menu)." };
+      return { ok: false, reason: "expired", error: `That code has expired. Ask the ${COMPUTER} for a new one (Phones and Tablets in ViewSwitcher).` };
     }
     // Hash both sides, compare digests (see the top of this file).
     if (sha3(normalizeCode(candidate)) !== code.hash) {
@@ -153,7 +154,7 @@ export class Pairing {
         this.code = null;
         this.codeGuessed = true;
       }
-      return { ok: false, reason: "wrong", error: "That code isn't right. Check it on the Mac and try again." };
+      return { ok: false, reason: "wrong", error: `That code isn't right. Check it on the ${COMPUTER} and try again.` };
     }
     this.code = null; // single use
     const token = randomToken();

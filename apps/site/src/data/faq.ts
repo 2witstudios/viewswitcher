@@ -15,5 +15,8 @@ export const FAQS: Faq[] = [
     ? `Yes, with ViewSwitcher for iPhone and iPad (${IPAD_PRICE} once, one purchase for both). Held sideways, your views fill the phone like a deck. On the Mac, in ViewSwitcher's menu bar, turn on Let Phones and Tablets on This Wi-Fi Connect, then tap Scan the code in the app. Only phones and tablets you pair can switch scenes. Use it on Wi-Fi you trust, like home or church Wi-Fi.`
     : `Yes. ViewSwitcher for iPhone and iPad is coming to the App Store (${IPAD_PRICE} once, one purchase for both). Held sideways, your views fill the phone like a deck, and you pair it by scanning the code the Mac shows. Until then, any phone can switch from its browser: in ViewSwitcher's menu bar, turn on Let Phones and Tablets on This Wi-Fi Connect and scan the QR code with the phone's camera. Only phones and tablets you pair can switch scenes. Use it on Wi-Fi you trust, like home or church Wi-Fi.`,
     more: { href: "/ipad", label: "ViewSwitcher for iPhone and iPad" } },
-  { q: "Windows?", a: "Not yet. ViewSwitcher is Mac only for now. If you'd use it on Windows, tell us on GitHub." },
+  { q: "Windows?", a: site.windowsAppReleased
+    ? "Yes. ViewSwitcher for Windows 10 and 11 is free too: download the installer, run it, and ViewSwitcher sets up OBS for you the first time. Phones and tablets connect over the Wi-Fi the same way, and it keeps itself up to date."
+    : "Coming soon. ViewSwitcher for Windows 10 and 11 is on its way, with everything the Mac app does: OBS set up for you, phones and tablets over the Wi-Fi, and Edit with AI.",
+    ...(site.windowsAppReleased ? { more: { href: site.windowsSetupUrl, label: "Download for Windows" } } : {}) },
 ];
