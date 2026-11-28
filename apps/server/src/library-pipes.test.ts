@@ -13,6 +13,7 @@ import { readGuide } from "./mcp/server";
 import { PathError } from "./paths";
 import { readText, writeText } from "./library-files";
 import { loadedFiles } from "./scene-refs";
+import { posix } from "../../../test-links";
 
 const root = mkdtempSync(join(tmpdir(), "vs-pipes-"));
 const realRoot = realpathSync(root);
@@ -26,6 +27,7 @@ const fifo = (rel: string) => expect(Bun.spawnSync(["mkfifo", join(root, rel)]).
 const settled = <T>(p: Promise<T>) => Promise.race([p.then((v) => ({ v }), (e: Error) => ({ e: e.message })), Bun.sleep(3000).then(() => "hung" as const)]);
 
 beforeAll(async () => {
+  if (!posix) return; // no named pipes on Windows
   await mkdir(join(root, "daisy/templates/_shared"), { recursive: true });
   await writeFile(join(root, "daisy/org.json"), JSON.stringify({ name: "Daisy" }));
   await writeFile(join(root, "daisy/templates/brb.html"), `<title>BRB</title><link rel="stylesheet" href="/library/daisy/templates/_shared/theme.css">`);
@@ -35,7 +37,7 @@ beforeAll(async () => {
   await symlink(join(away, "secret.html"), join(root, "daisy/templates/linked.html"));
 });
 
-describe("a named pipe in the library", () => {
+describe.skipIf(!posix)("a named pipe in the library", () => {
   test("read_file refuses it", async () => {
     const r = await settled(readText(root, "daisy/templates/pipe.html", 7420));
     expect(r).not.toBe("hung");
@@ -113,12 +115,12 @@ describe("a named pipe in the library", () => {
   });
 });
 
-test("duplicating a view that is a link outside the library is refused, and nothing is copied in", async () => {
+test.skipIf(!posix)("duplicating a view that is a link outside the library is refused, and nothing is copied in", async () => {
   await expect(duplicate(root, "daisy/templates/linked.html")).rejects.toThrow("outside the library");
   expect((await readdir(join(root, "daisy/templates"))).filter((f) => f.includes("copy"))).toEqual([]);
 });
 
-test("a stream's copy of a view keeps the view's permissions, through the umask as cp gives them", async () => {
+test.skipIf(!posix)("a stream's copy of a view keeps the view's permissions, through the umask as cp gives them", async () => {
   await mkdir(join(root, "daisy/projects/q/scenes"), { recursive: true });
   await mkdir(join(root, "daisy/projects/q/streams/s"), { recursive: true });
   // A mode the umask changes (0o666): the copy has it through the umask, as cp gives it, never looser.

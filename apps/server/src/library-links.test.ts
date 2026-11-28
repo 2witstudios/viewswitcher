@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as lib from "./library";
+import { fileLinks } from "../../../test-links";
 
 const library = mkdtempSync(join(tmpdir(), "vs-links-"));
 const outside = mkdtempSync(join(tmpdir(), "vs-links-out-"));
@@ -38,7 +39,7 @@ describe("library changes through a folder linked outside", () => {
     await expect(lib.createProject(o, "Show", [])).rejects.toThrow(OUTSIDE);
     empty(d);
   });
-  test("New project from a template that links outside: refused", async () => {
+  test.skipIf(!fileLinks)("New project from a template that links outside: refused", async () => {
     put(join(outside, "tpl.html"), "<title>Outside</title>");
     symlinkSync(join(outside, "tpl.html"), join(org, "templates/linked.html"));
     await expect(lib.createProject(org, "From linked", ["linked"])).rejects.toThrow(OUTSIDE);
@@ -86,7 +87,7 @@ describe("library changes through a folder linked outside", () => {
 });
 
 describe("deletions through a folder linked outside", () => {
-  test("Revert (a stream's own copy) and Revert transition never delete outside the library", async () => {
+  test.skipIf(!fileLinks)("Revert (a stream's own copy) and Revert transition never delete outside the library", async () => {
     const { projectId } = await lib.createProject(org, "Del", ["brb"]);
     const { streamId } = await lib.createStream(org, projectId, "Del", "2026-12-08");
     // The stream's folder links outside, where a file has the copy's name.
@@ -106,7 +107,7 @@ describe("deletions through a folder linked outside", () => {
 });
 
 describe("links that stay in the library still work", () => {
-  test("assets/ linked to another org's assets, and a template linked to another template", async () => {
+  test.skipIf(!fileLinks)("assets/ linked to another org's assets, and a template linked to another template", async () => {
     const o = join(library, "o3");
     put(join(o, "org.json"), "{}");
     put(join(o, "templates/brb.html"));

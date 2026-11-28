@@ -5,6 +5,7 @@ import { chmod, lstat, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { applyEdits, canRemove, EditError, isLibraryUrl, isViewPath, orgOf, parseLibraryPath, projectViewOf, readTitle, setTitle, slugify, tagForEdit } from "@viewswitcher/shared";
 import type { SceneEdit } from "@viewswitcher/shared";
+import { renameOver } from "./fsx";
 import { readNoFollow, resolveInLibrary } from "./library/contain";
 import { inside, PathError, plainName } from "./paths";
 
@@ -134,7 +135,7 @@ export async function replaceChecked(real: string, read: Stats, current: string,
       return { ok: false as const, hash: sceneHash(latest) };
     }
     hooks.atRename?.(); // synchronously, in the same tick as the rename: a last refusal (the MCP guard)
-    await rename(tmp, real);
+    await renameOver(tmp, real);
     replaced = true;
     return { ok: true as const };
   } finally {

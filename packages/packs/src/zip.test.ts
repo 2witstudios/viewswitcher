@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, listZip, readZipEntry, readZipEntrySync, storedZip, writeZip, ZipError } from "./zip";
+
+const WINDOWS = process.platform === "win32";
 
 describe("storedZip", () => {
   test("crc32 matches the standard check value", () => {
@@ -20,15 +22,27 @@ describe("storedZip", () => {
         { name: "empty.txt", data: "" },
         { name: "run", data: "#!/bin/sh\n", executable: true },
       ]));
-      const test = Bun.spawnSync(["unzip", "-t", join(dir, "a.zip")]);
-      expect(test.exitCode).toBe(0);
-      expect(test.stdout.toString()).toContain("No errors detected");
-      expect(Bun.spawnSync(["unzip", "-q", join(dir, "a.zip"), "-d", join(dir, "out")]).exitCode).toBe(0);
+      if (WINDOWS) {
+        // Windows has no unzip; its tar (bsdtar) reads zips. And no permission bits to check.
+        mkdirSync(join(dir, "out"));
+        // Windows' own tar.exe: a Git Bash GNU tar earlier on PATH can't read zips.
+        const tar = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe");
+        const out = Bun.spawnSync([tar, "-xf", join(dir, "a.zip"), "-C", join(dir, "out")]);
+        expect(out.stderr.toString()).toBe("");
+        expect(out.exitCode).toBe(0);
+      } else {
+        const test = Bun.spawnSync(["unzip", "-t", join(dir, "a.zip")]);
+        expect(test.exitCode).toBe(0);
+        expect(test.stdout.toString()).toContain("No errors detected");
+        expect(Bun.spawnSync(["unzip", "-q", join(dir, "a.zip"), "-d", join(dir, "out")]).exitCode).toBe(0);
+      }
       expect(readFileSync(join(dir, "out/manifest.json"), "utf8")).toBe('{"name":"viewswitcher"}');
       expect(new Uint8Array(readFileSync(join(dir, "out/icons/ünï.bin")))).toEqual(binary);
       expect(readFileSync(join(dir, "out/empty.txt"), "utf8")).toBe("");
-      expect(statSync(join(dir, "out/run")).mode & 0o777).toBe(0o755);
-      expect(statSync(join(dir, "out/manifest.json")).mode & 0o111).toBe(0);
+      if (!WINDOWS) {
+        expect(statSync(join(dir, "out/run")).mode & 0o777).toBe(0o755);
+        expect(statSync(join(dir, "out/manifest.json")).mode & 0o111).toBe(0);
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

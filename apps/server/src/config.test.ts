@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 /** config.ts read in a fresh process with `env`, so each case sees its own environment. */
 function configWith(env: Record<string, string>, { state = "/tmp/vs-config-test-state" }: { state?: string | null } = {}) {
@@ -21,9 +21,9 @@ describe("config paths", () => {
   });
   test("follow the env overrides the Mac app passes", () => {
     const c = configWith({ VIEWSWITCHER_STARTER: "/app/Resources/starter", VIEWSWITCHER_WEB_DIST: "/app/Resources/web", VIEWSWITCHER_LIBRARY_KIT: "/app/Resources/library-kit", PORT: "7433" });
-    expect(c.starter).toBe("/app/Resources/starter");
-    expect(c.webDist).toBe("/app/Resources/web");
-    expect(c.libraryKit).toBe("/app/Resources/library-kit");
+    expect(c.starter).toBe(resolve("/app/Resources/starter"));
+    expect(c.webDist).toBe(resolve("/app/Resources/web"));
+    expect(c.libraryKit).toBe(resolve("/app/Resources/library-kit"));
     expect(c.port).toBe(7433);
   });
 });
@@ -31,7 +31,8 @@ describe("config paths", () => {
 describe("this Mac's state for the library (machineState)", () => {
   test("lives under VIEWSWITCHER_STATE, one folder per library, never in the library", () => {
     const c = configWith({ VIEWSWITCHER_LIBRARY: "/nowhere/My Library" });
-    expect(c.machineState).toMatch(/^\/tmp\/vs-config-test-state\/libraries\/[0-9a-f]{16}$/);
+    expect(dirname(c.machineState)).toBe(join(resolve("/tmp/vs-config-test-state"), "libraries"));
+    expect(basename(c.machineState)).toMatch(/^[0-9a-f]{16}$/);
     expect(c.machineState.startsWith(c.library)).toBe(false);
   });
   test("a server a test starts without VIEWSWITCHER_STATE refuses, rather than touch this Mac's real state", () => {

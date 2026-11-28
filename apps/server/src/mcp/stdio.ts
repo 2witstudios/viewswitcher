@@ -7,7 +7,7 @@
 // to what the relay itself needs.
 
 export const MAC_APP_ID = "com.twowitstudios.viewswitcher.mac";
-export const NOT_RUNNING = "ViewSwitcher isn't running. Open ViewSwitcher on this Mac, then try again.";
+export const NOT_RUNNING = `ViewSwitcher isn't running. Open ViewSwitcher on this ${process.platform === "win32" ? "PC" : "Mac"}, then try again.`;
 export const DROPPED = "The connection to ViewSwitcher dropped before it answered, so this may or may not have happened. Check with get_state or read_file before you try it again.";
 export const DEFAULT_PORT = 7420;
 
@@ -56,6 +56,29 @@ type Message = { jsonrpc?: string; id?: string | number | null; method?: string;
 
 const openMacApp = () => Bun.spawn(["open", "-b", MAC_APP_ID], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).exited;
 
+/**
+ * The Windows app beside this server: ViewSwitcher.exe, one folder above Helpers\viewswitcher-server.exe
+ * (apps/windows), or null when this server isn't the installed one (a source run has no app to open).
+ */
+export function windowsAppFor(execPath: string, exists: (p: string) => boolean = (p) => require("node:fs").existsSync(p)): string | null {
+  const helpers = execPath.replace(/[\\/][^\\/]+$/, "");
+  if (!/[\\/]Helpers$/i.test(helpers)) return null;
+  const app = `${helpers.replace(/[\\/]Helpers$/i, "")}\\ViewSwitcher.exe`;
+  return exists(app) ? app : null;
+}
+
+/**
+ * Started through Explorer, not as this relay's child: an agent may run the relay in a job that ends
+ * everything it started when the relay ends, and the app has to outlive it.
+ */
+const openWindowsApp = async () => {
+  const app = windowsAppFor(process.execPath);
+  if (!app) throw new Error("this server isn't the installed ViewSwitcher, so there's no app beside it to open");
+  await Bun.spawn(["explorer.exe", app], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).exited;
+};
+
+const openApp = () => (process.platform === "win32" ? openWindowsApp() : openMacApp());
+
 /** The ids of the requests in a message or batch (notifications and responses have none to answer). */
 const requestIds = (body: unknown): (string | number)[] =>
   (Array.isArray(body) ? body : [body]).flatMap((m: Message) => (m && typeof m.method === "string" && (typeof m.id === "string" || typeof m.id === "number") ? [m.id] : []));
@@ -80,7 +103,7 @@ export async function relayStdio(opts: RelayOptions): Promise<void> {
         if (opened) return false;
         opened = true;
         log("[mcp] ViewSwitcher isn't answering; opening it");
-        await (opts.openApp ?? openMacApp)().catch((e) => log(`[mcp] couldn't open ViewSwitcher: ${(e as Error).message}`));
+        await (opts.openApp ?? openApp)().catch((e) => log(`[mcp] couldn't open ViewSwitcher: ${(e as Error).message}`));
         for (const end = Date.now() + waitMs; Date.now() < end; await Bun.sleep(pollMs)) if (await up()) return true;
         return false;
       } finally {

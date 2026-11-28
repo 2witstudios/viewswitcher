@@ -4,7 +4,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { ServerMessage } from "@viewswitcher/shared";
 import type { Server, ServerWebSocket } from "bun";
-import { stdioLaunch } from "./agent-connect";
+import { compiled, stdioLaunch } from "./agent-connect";
 import { type BuiltinPackFiles, buildBuiltins, readBuiltins } from "./builtin-packs";
 import { config } from "./config";
 import { createLog } from "./log";
@@ -12,7 +12,7 @@ import { loopbackAddress } from "./gate";
 import { dispatcher, type SocketData } from "./http/dispatch";
 import { pairPageResponse, routes, secure } from "./http/routes";
 import { pairingOrder, thisMac } from "./lan";
-import { appParent, watchParent } from "./parent-watch";
+import { appParent, stopsOnStdinEnd, watchParent } from "./parent-watch";
 import { plainStateFolder } from "./library/contain";
 import { LibraryScanner } from "./library/scanner";
 import { migrateMachineState } from "./machine-state";
@@ -263,11 +263,11 @@ function setLan(on: boolean): string | null {
 const adminSecret = config.adminToken.length >= 32 ? sha3(config.adminToken) : null;
 const isAdmin = (req: Request) => adminSecret !== null && sha3(req.headers.get("x-viewswitcher-admin") ?? "") === adminSecret; // digests, not raw secrets (pairing.ts)
 
-// What an agent runs to connect over stdio: this executable with --mcp-stdio. In the Mac app's compiled
-// sidecar, import.meta.dir is inside the binary (/$bunfs/…); from source, bun runs index.ts.
+// What an agent runs to connect over stdio: this executable with --mcp-stdio. In the apps' compiled
+// server, import.meta.dir is inside the binary (agent-connect.ts compiled()); from source, bun runs index.ts.
 /** The Mac app passes its version (MCPB wants semver; a source checkout has none). */
 const extensionVersion = /^\d+\.\d+\.\d+$/.test(process.env.VIEWSWITCHER_VERSION ?? "") ? process.env.VIEWSWITCHER_VERSION! : "1.0.0";
-const ownStdio = (port: number) => stdioLaunch(process.execPath, import.meta.dir.startsWith("/$bunfs") ? null : join(import.meta.dir, "index.ts"), port);
+const ownStdio = (port: number) => stdioLaunch(process.execPath, compiled(import.meta.dir) ? null : join(import.meta.dir, "index.ts"), port);
 
 // The MCP server for agents on this Mac (mcp/). It shares the switcher's state and its way of going on air.
 const mcp: McpDeps = {
@@ -358,13 +358,26 @@ for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => void pairing.flush().finally(() => process.exit(0)));
 }
 
-// Started by the Mac app: exit if the app goes away without stopping us (parent-watch.ts).
+// Started by the Mac or Windows app: exit if the app goes away without stopping us (parent-watch.ts).
 const parent = appParent();
 if (parent) {
   watchParent(parent, () => {
-    console.log("[viewswitcher] the Mac app is gone; stopping");
+    console.log("[viewswitcher] the app that started this server is gone; stopping");
     void pairing.flush().finally(() => process.exit(0));
   });
+}
+
+// Windows has no SIGTERM: the Windows app holds a pipe on stdin and closes it to stop the server, which
+// then writes paired phones and tablets first, as on SIGTERM. Opt-in, since a server started with no
+// stdin at all (the Mac app's /dev/null) would read that as the end at once.
+if (stopsOnStdinEnd()) {
+  const stop = () => {
+    console.log("[viewswitcher] the app closed stdin; stopping");
+    void pairing.flush().finally(() => process.exit(0));
+  };
+  process.stdin.on("end", stop);
+  process.stdin.on("close", stop);
+  process.stdin.resume();
 }
 
 // USB-C link for the ViewSwitcher iPad app (see usb-bridge.ts).

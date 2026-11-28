@@ -9,6 +9,7 @@ import { titledCopy } from "./library";
 import { readNoFollow } from "./library/contain";
 import { LibraryScanner, noLinkFiles } from "./library/scanner";
 import { createSceneTitles } from "./scene-titles";
+import { fileLinks, posix } from "../../../test-links";
 
 /**
  * One scanner per test, as the server has one: its title cache carries from scan to scan. It keeps
@@ -186,7 +187,7 @@ describe("links out of the library are never read", () => {
   });
   const everything = async () => JSON.stringify(await scanner.scanOrg(ORG));
 
-  test("a view that is a link to a file outside is left out, and its title isn't read", async () => {
+  test.skipIf(!fileLinks)("a view that is a link to a file outside is left out, and its title isn't read", async () => {
     await symlink(join(away, "secret.html"), join(root, ORG, "projects/p/scenes/leak.html"));
     await symlink(join(away, "secret.html"), join(root, ORG, "templates/leak.html"));
     const l = await scanner.scanOrg(ORG);
@@ -195,12 +196,12 @@ describe("links out of the library are never read", () => {
     expect(await everything()).not.toContain("Outside");
   });
 
-  test("a view that is a link to another view in the library is listed with its title", async () => {
+  test.skipIf(!fileLinks)("a view that is a link to another view in the library is listed with its title", async () => {
     await symlink(join(root, ORG, "templates/title.html"), join(root, ORG, "projects/p/scenes/again.html"));
     expect(await labels()).toContain("p/scenes/again.html=Title");
   });
 
-  test("folders, JSON files and pictures linked outside are left out too", async () => {
+  test.skipIf(!fileLinks)("folders, JSON files and pictures linked outside are left out too", async () => {
     await symlink(join(away, "folder"), join(root, ORG, "projects/p/streams/a-linked"));
     await rm(join(root, ORG, "projects/p/scenes"), { recursive: true });
     await symlink(join(away, "folder"), join(root, ORG, "projects/p/scenes"));
@@ -221,7 +222,7 @@ describe("links out of the library are never read", () => {
     expect(await everything()).not.toContain("Outside");
   });
 
-  test("a title is read only through a path with no link in it: a folder swapped for a link after the check reads as no title", async () => {
+  test.skipIf(!fileLinks)("a title is read only through a path with no link in it: a folder swapped for a link after the check reads as no title", async () => {
     await mkdir(join(away, "real"), { recursive: true });
     await writeFile(join(away, "real/x.html"), view("Outside"));
     await symlink(join(away, "real"), join(away, "swapped"));
@@ -244,7 +245,7 @@ describe("links out of the library are never read", () => {
     expect(await titles.titleOf(file)).toBe("");
   });
 
-  test("a named pipe named like a view can't hang the scan: it lists with no title", async () => {
+  test.skipIf(!posix)("a named pipe named like a view can't hang the scan: it lists with no title", async () => {
     const fifo = join(root, ORG, "projects/p/scenes/pipe.html");
     expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
     const l = await Promise.race([scanner.scanOrg(ORG), Bun.sleep(3000).then(() => null)]);
@@ -252,7 +253,7 @@ describe("links out of the library are never read", () => {
     expect(l!.projects[0]!.scenes.find((s) => s.name === "pipe")?.label).toBe("pipe");
   });
 
-  test("a named pipe where a JSON file goes (project.json) can't hang the scan: it reads as missing", async () => {
+  test.skipIf(!posix)("a named pipe where a JSON file goes (project.json) can't hang the scan: it reads as missing", async () => {
     await rm(join(root, ORG, "projects/p/project.json"));
     expect(Bun.spawnSync(["mkfifo", join(root, ORG, "projects/p/project.json")]).exitCode).toBe(0);
     const l = await Promise.race([scanner.scanOrg(ORG), Bun.sleep(3000).then(() => null)]);

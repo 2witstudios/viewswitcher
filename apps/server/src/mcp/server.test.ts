@@ -18,6 +18,7 @@ import { ensureLibrary } from "../library-kit";
 import type { PreviewResult } from "../preview-types";
 import { readForEdit, sceneHash } from "../scene-edit";
 import { createMcpServer, INSTRUCTIONS } from "./server";
+import { fileLinks } from "../../../../test-links";
 
 const root = mkdtempSync(join(tmpdir(), "vs-mcp-"));
 const realRoot = realpathSync(root);
@@ -197,7 +198,7 @@ describe("read tools", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toContain(`/library/${ORG}/assets/logo.png`);
   });
-  test("read_file refuses dot-folders, other orgs' escapes and links out of the library", async () => {
+  test.skipIf(!fileLinks)("read_file refuses dot-folders, other orgs' escapes and links out of the library", async () => {
     await writeFile(join(outside, "secret.md"), "secret");
     await symlink(join(outside, "secret.md"), join(root, ORG, "link.md"));
     for (const path of [".viewswitcher/state.json", ".claude/skills/viewswitcher-scenes/SKILL.md", `${ORG}/../CLAUDE.md`, `${ORG}/link.md`, `${ORG}/.git/config`]) {
@@ -414,7 +415,7 @@ describe("go_on_air and the agent guard", () => {
     await writeFile(join(root, ORG, "assets", "page.html"), "<title>x</title>");
     expect((await call("go_on_air", { path: `${ORG}/assets/page.html` })).text).toContain("Only a show's templates");
   });
-  test("while live, writes to the on-air scene, its transitions and _shared are refused with a way around", async () => {
+  test.skipIf(!fileLinks)("while live, writes to the on-air scene, its transitions and _shared are refused with a way around", async () => {
     const { projectId } = await data("create_project", { org: ORG, name: "Guarded", templates: ["teaching"] });
     const { streamId } = await data("create_stream", { org: ORG, projectId, name: "Live", date: "2026-12-06" });
     const copy = await data("customize_scene", { org: ORG, projectId, streamId, name: "teaching" });
@@ -448,7 +449,7 @@ describe("go_on_air and the agent guard", () => {
 });
 
 describe("structural tools stay inside the library", () => {
-  test("duplicate_scene of a link to a file outside is refused; a link inside still copies", async () => {
+  test.skipIf(!fileLinks)("duplicate_scene of a link to a file outside is refused; a link inside still copies", async () => {
     await writeFile(join(outside, "elsewhere.html"), "<title>Secret</title>");
     await symlink(join(outside, "elsewhere.html"), join(root, ORG, "templates", "linked-out.html"));
     const r = await call("duplicate_scene", { path: `${ORG}/templates/linked-out.html` });
@@ -468,7 +469,7 @@ describe("structural tools stay inside the library", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toContain("outside the library");
   });
-  test("create_project won't copy a template linked outside; add_asset won't write into an assets folder linked outside", async () => {
+  test.skipIf(!fileLinks)("create_project won't copy a template linked outside; add_asset won't write into an assets folder linked outside", async () => {
     await writeFile(join(outside, "tpl.html"), "<title>Outside</title>");
     await symlink(join(outside, "tpl.html"), join(root, ORG, "templates", "linked-tpl.html"));
     const r = await call("create_project", { org: ORG, name: "From linked", templates: ["linked-tpl"] });
@@ -484,7 +485,7 @@ describe("structural tools stay inside the library", () => {
     expect(a.isError).toBe(true);
     expect((await readdir(outside)).length).toBe(before);
   });
-  test("the switcher's own Duplicate (library-actions) won't copy a scene linked outside either", async () => {
+  test.skipIf(!fileLinks)("the switcher's own Duplicate (library-actions) won't copy a scene linked outside either", async () => {
     const { duplicateScene } = await import("../library-actions");
     await expect(duplicateScene(root, `${ORG}/templates/linked-out.html`)).rejects.toThrow("outside the library");
   });
@@ -710,7 +711,7 @@ describe("the guard at the commit instant", () => {
     state.agent.onAir = "always";
     expect((await write()).isError).toBe(false);
   });
-  test("the switcher's Duplicate: a copy never lands in a folder linked outside, and a leading slash is refused", async () => {
+  test.skipIf(!fileLinks)("the switcher's Duplicate: a copy never lands in a folder linked outside, and a leading slash is refused", async () => {
     const { duplicateScene } = await import("../library-actions");
     const { mkdir } = await import("node:fs/promises");
     // A folder that links outside, holding a link back to a scene inside the library.
@@ -749,7 +750,7 @@ describe("dangling links where a new file would go", () => {
 });
 
 describe("destination folders linked outside, with a name that links back in", () => {
-  test("add_asset, scene_from_template and create_project refuse; nothing is written outside", async () => {
+  test.skipIf(!fileLinks)("add_asset, scene_from_template and create_project refuse; nothing is written outside", async () => {
     const { mkdir } = await import("node:fs/promises");
     const away = join(outside, "away");
     await mkdir(join(away, "assets"), { recursive: true });
@@ -790,7 +791,7 @@ describe("destination folders linked outside, with a name that links back in", (
     expect((await call("create_stream", { org: ORG, projectId, name: "Out", date: "2026-12-10" })).isError).toBe(true);
     expect(await readdir(awayStreams)).toEqual([]);
   });
-  test("a template set's template linked outside the library isn't copied", async () => {
+  test.skipIf(!fileLinks)("a template set's template linked outside the library isn't copied", async () => {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(root, ORG, "templates", "far"), { recursive: true });
     await writeFile(join(root, ORG, "templates/far/pack.json"), JSON.stringify({ format: 1, id: "far", name: "Far", version: "1.0.0", description: "x", views: ["v"] }));

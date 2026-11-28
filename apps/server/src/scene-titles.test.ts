@@ -1,6 +1,10 @@
 // The title cache against a filesystem the test controls: what's read again and what isn't.
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 import { createSceneTitles, type FileStamp } from "./scene-titles";
+
+/** The test's paths ("/lib/o/a.html") as this platform writes them (C:liboa.html on Windows), as the server's are. */
+const P = (p: string) => resolve(p);
 
 /** Files by absolute path, each with its text and stamp; `reads` counts the reads of each. */
 function disk() {
@@ -9,7 +13,7 @@ function disk() {
   /** Paths whose next read fails (EACCES, EMFILE under load) though their stat works. */
   const failNextRead = new Set<string>();
   let ino = 1;
-  const titles = createSceneTitles({
+  const cache = createSceneTitles({
     stat: async (abs) => {
       const f = files.get(abs);
       if (!f) throw new Error("ENOENT");
@@ -23,17 +27,18 @@ function disk() {
       return f.text;
     },
   });
+  const titles = { titleOf: (abs: string) => cache.titleOf(P(abs)), forget: (root: string, paths: string[]) => cache.forget(P(root), paths) };
   return {
     titles,
     put: (abs: string, title: string, stamp: Partial<FileStamp> = {}) =>
-      files.set(abs, { text: `<title>${title}</title>`, stamp: { size: 100, mtimeMs: 1000, ctimeMs: 1000, ino: ino++, ...stamp } }),
+      files.set(P(abs), { text: `<title>${title}</title>`, stamp: { size: 100, mtimeMs: 1000, ctimeMs: 1000, ino: ino++, ...stamp } }),
     /** Change the text, keeping the stamp but for `change`. */
     rewrite: (abs: string, title: string, change: Partial<FileStamp> = {}) => {
-      const f = files.get(abs)!;
-      files.set(abs, { text: `<title>${title}</title>`, stamp: { ...f.stamp, ...change } });
+      const f = files.get(P(abs))!;
+      files.set(P(abs), { text: `<title>${title}</title>`, stamp: { ...f.stamp, ...change } });
     },
-    reads: (abs: string) => reads.get(abs) ?? 0,
-    failNextRead: (abs: string) => failNextRead.add(abs),
+    reads: (abs: string) => reads.get(P(abs)) ?? 0,
+    failNextRead: (abs: string) => failNextRead.add(P(abs)),
   };
 }
 

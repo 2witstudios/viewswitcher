@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { chmod, cp, lstat, mkdir, readdir, readFile, rename, rm, rmdir, stat, writeFile } from "node:fs/promises";
-import { dirname, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { fillPlaceholders, graphemes, isTextFile, ORG_TRANSITION, parseTemplateId, placeholderVars, readTitle, setTitle, slugify, TRANSITION_FILE as TRANSITION, transitionCandidates } from "@viewswitcher/shared";
 import type { Org } from "@viewswitcher/shared";
 import { walkFiles } from "@viewswitcher/packs";
 import { writeAtomic } from "./atomic";
+import { claimRename } from "./fsx";
 import { libraryStaging, readNoFollow, resolveInLibrary, withNoLinks } from "./library/contain";
 import { dirs, readJson } from "./library/read";
 import { inside, PathError, plainName } from "./paths";
@@ -52,18 +53,13 @@ export async function createOrg(libraryRoot: string, starter: string, name: stri
       // The org id goes into its files ({{ORG_ID}}), so an id taken meanwhile is filled again for the next.
       await rm(work, { recursive: true, force: true });
       await fillStarter(starter, work, placeholderVars({ id, name, accent, ground }));
-      // Claim the name first: mkdir without recursive fails if the folder appeared meanwhile (two
-      // creates at once, an agent), where rename alone would quietly replace an empty one.
+      // Claimed atomically (fsx.ts): a folder that appeared meanwhile (two creates at once, an agent) takes the next name.
       try {
-        await mkdir(dir);
+        await claimRename(work, dir);
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code === "EEXIST") continue;
         throw e;
       }
-      await rename(work, dir).catch(async (e) => {
-        await rmdir(dir).catch(() => {}); // only if still empty: never someone else's files
-        throw e;
-      });
       return { orgId: id };
     }
   } finally {
@@ -155,7 +151,7 @@ export async function isFile(path: string) {
  * write follows; the library is the org folder's parent). Links that stay in the library are fine.
  * Every change here that makes a file or folder calls this for where it writes and what it reads.
  */
-const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgDir), relative(dirname(orgDir), abs), { forWrite: true });
+const contained = (orgDir: string, abs: string) => resolveInLibrary(dirname(orgDir), relative(dirname(orgDir), abs).split(sep).join("/"), { forWrite: true });
 
 /**
  * Copy `real` (a real path, as contained() gives) to a new file only: read through the no-link open (so a
@@ -285,8 +281,8 @@ export async function revert(orgDir: string, projectId: string, streamId: string
 export async function duplicate(libraryRoot: string, path: string, check?: BeforeCreate) {
   if (!path.endsWith(".html")) throw new PathError("Only views can be duplicated");
   const src = inside(libraryRoot, path);
-  const dir = src.slice(0, src.lastIndexOf("/"));
-  const base = src.slice(dir.length + 1, -5);
+  const dir = dirname(src);
+  const base = basename(src, ".html");
   // What it copies must really be in the library: a view that is a link outside isn't read (contain.ts).
   const html = await readNoFollow(await resolveInLibrary(libraryRoot, path));
   return { name: await writeFresh(dir, `${base}-copy`, ".html", titledCopy(html), check) };

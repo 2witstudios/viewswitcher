@@ -2,14 +2,14 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { machineStateDir } from "./machine-state";
 import { join, resolve } from "node:path";
+import { obsWebsocketConfig, stateRoot } from "./platform-dirs";
 
 const env = process.env;
 
-/** On this Mac, read the obs-websocket password from OBS's own settings when OBS_PASSWORD isn't set. */
+/** On this computer, read the obs-websocket password from OBS's own settings when OBS_PASSWORD isn't set. */
 function localObsPassword(): string | undefined {
   try {
-    const file = join(homedir(), "Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json");
-    const c = JSON.parse(readFileSync(file, "utf8"));
+    const c = JSON.parse(readFileSync(obsWebsocketConfig(), "utf8"));
     return c.auth_required && c.server_password ? c.server_password : undefined;
   } catch {
     return undefined;
@@ -29,7 +29,7 @@ export const config = {
     // A server a test starts (NODE_ENV=test, which bun test sets and children inherit) must name its
     // own state root: it may never fall back to this Mac's real pairings and setting.
     if (!env.VIEWSWITCHER_STATE && env.NODE_ENV === "test") throw new Error("VIEWSWITCHER_STATE must be set under bun test (test-server.ts TEST_STATE_ROOT), so a test never touches this Mac's real state");
-    return machineStateDir(env.VIEWSWITCHER_STATE ?? join(homedir(), "Library/Application Support/ViewSwitcher"), this.library);
+    return machineStateDir(env.VIEWSWITCHER_STATE ?? stateRoot(), this.library);
   },
   // The next three default to the repo; the Mac app's compiled server (where import.meta.dir is
   // inside the binary) passes the copies in its Resources folder.

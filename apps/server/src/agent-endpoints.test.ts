@@ -2,11 +2,17 @@
 // /api/info's commands, /api/agent/clients and the Claude Desktop extension answer only this Mac.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Subprocess } from "bun";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { listZip, readZipEntrySync } from "@viewswitcher/packs";
+import { commandLine } from "./agent-connect";
 import { freePort, SERVER_START_MS, startServer } from "./test-server";
+
+const WINDOWS = process.platform === "win32";
+/** The same text, ignoring case on Windows, whose paths are case-insensitive. */
+const same = (a: string, b: string) => (WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b);
 
 let port = 0;
 let proc: Subprocess;
@@ -42,10 +48,10 @@ describe("from this Mac", () => {
   test("/api/info has the Claude Code and stdio commands for this install", async () => {
     const info = JSON.parse(new TextDecoder().decode((await request("/api/info")).body));
     expect(info.library).toBe(library);
-    expect(info.claudeCode).toEndWith(" && claude");
-    expect(info.claudeCode).toContain(library.split("/").pop()!);
-    // From source: bun with index.ts.
-    expect(info.stdio).toBe(`${process.execPath} ${join(import.meta.dir, "index.ts")} --mcp-stdio --port ${port}`);
+    expect(info.claudeCode).toEndWith(WINDOWS ? "; claude" : " && claude");
+    expect(info.claudeCode).toContain(basename(library));
+    // From source: bun with index.ts. (Windows paths match whatever their case: the server may see C:\Users\x\Dev where this test sees dev.)
+    expect(same(info.stdio, commandLine({ command: process.execPath, args: [join(import.meta.dir, "index.ts"), "--mcp-stdio", "--port", String(port)] }))).toBe(true);
   });
 
   test("/api/info says whether the Mac app started this server, and which process it is", async () => {
@@ -67,9 +73,11 @@ describe("from this Mac", () => {
     expect(r.status).toBe(200);
     expect(r.disposition).toContain('filename="ViewSwitcher.mcpb"');
     writeFileSync(join(scratch, "v.mcpb"), r.body);
-    expect(Bun.spawnSync(["unzip", "-q", join(scratch, "v.mcpb"), "-d", join(scratch, "out")]).exitCode).toBe(0);
-    const manifest = JSON.parse(readFileSync(join(scratch, "out/manifest.json"), "utf8"));
-    expect(manifest.server.mcp_config).toEqual({ command: process.execPath, args: [join(import.meta.dir, "index.ts"), "--mcp-stdio", "--port", String(port)] });
+    const zip = new Uint8Array(r.body);
+    const entry = listZip(zip).find((e) => e.name === "manifest.json")!;
+    const manifest = JSON.parse(new TextDecoder().decode(readZipEntrySync(zip, entry)));
+    expect(same(JSON.stringify(manifest.server.mcp_config), JSON.stringify({ command: process.execPath, args: [join(import.meta.dir, "index.ts"), "--mcp-stdio", "--port", String(port)] }))).toBe(true);
+    expect(manifest.compatibility.platforms).toEqual([WINDOWS ? "win32" : "darwin"]);
   });
 });
 

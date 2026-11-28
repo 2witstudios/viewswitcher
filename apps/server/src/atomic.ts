@@ -3,8 +3,9 @@
 // a full disk or two writers at once never leave half a file for the next start to misread.
 // (A scene the editor saves goes through scene-edit.ts replaceChecked, which also checks the file is
 // still the version that was read; a new file that claims its name is an exclusive create instead.)
-import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { renameOver } from "./fsx";
 import { plainFolder } from "./library/contain";
 
 /**
@@ -22,7 +23,7 @@ export async function writeAtomic(file: string, data: string | Uint8Array, { mod
   try {
     await writeFile(tmp, data, { mode });
     if (mode !== undefined) await chmod(tmp, mode); // past the umask
-    await rename(tmp, file);
+    await renameOver(tmp, file);
   } catch (e) {
     await rm(tmp, { force: true }).catch(() => {});
     throw e;

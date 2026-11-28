@@ -3,6 +3,7 @@
 import * as lib from "../../library";
 import { customizeScene, duplicateScene, orgDir, sceneFromTemplate } from "../../library-actions";
 import { resolveInLibrary } from "../../library/contain";
+import { editorCommand } from "../../open-file";
 import { plainName } from "../../paths";
 import { editScene, parseEdit, renameScene, scenePath } from "../../scene-edit";
 import { Audience } from "../../gate";
@@ -54,8 +55,7 @@ export function libraryRoutes(d: RouteDeps): Route[] {
     post("/api/open", async (b) => {
       // Opens the file in an editor on this Mac: a link to somewhere outside the library opens nothing.
       const abs = await resolveInLibrary(root, b.path);
-      const app = process.env.VIEWSWITCHER_EDITOR;
-      Bun.spawn(app ? ["open", "-a", app, abs] : ["open", "-t", abs], { stdout: "ignore", stderr: "ignore" });
+      Bun.spawn(editorCommand(abs), { stdout: "ignore", stderr: "ignore" });
       return { ok: true };
     }),
     // Scene editor: patch the file (409 when it changed since the editor loaded it), or show a change

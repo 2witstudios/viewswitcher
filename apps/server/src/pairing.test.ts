@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CODE_ALPHABET, CODE_LENGTH, CODE_TTL_MS, COOKIE, remoteName, guessName, MAX_CODE_FAILURES, MAX_PEER_FAILURES, normalizeCode, Pairing, PEER_WINDOW_MS, sha3, tokenCookie, tokenFromCookie } from "./pairing";
+import { posix } from "../../../test-links";
 
 const clock = () => {
   let t = 1_000_000;
@@ -150,14 +151,14 @@ describe("device tokens", () => {
     c.tick(90_000);
     expect(p.check(r.token)?.lastSeen).toBe(c.now());
   });
-  test("a removal that can't be written says so (it would come back after a restart)", async () => {
+  test.skipIf(!posix)("a removal that can't be written says so (it would come back after a restart)", async () => {
     const p = new Pairing({ file: "/dev/null/nope/devices.json" });
     const r = p.pair(p.newCode().code, "a", "192.168.1.20");
     if (!r.ok) throw new Error("pairing failed");
     await expect(p.remove(r.remote.id)).rejects.toThrow("couldn't save");
     expect(p.check(r.token)).toBeNull(); // still refused now
   });
-  test("devices.json keeps hashes only (0600) and survives a restart", async () => {
+  test.skipIf(!posix)("devices.json keeps hashes only (0600) and survives a restart", async () => {
     const file = join(dir, "devices.json");
     const p = await new Pairing({ file }).load();
     const r = p.pair(p.newCode().code, "iPad", "192.168.1.20");
