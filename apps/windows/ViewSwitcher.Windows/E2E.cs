@@ -115,12 +115,29 @@ public sealed class E2E
             case "restart-server": app.Perform(StatusMenu.Action.RestartServer); return null;
             case "edit-with-ai": app.Perform(StatusMenu.Action.EditWithAI); return null;
             case "quit": app.Quit(); return null;
+            // A pairing code, as Phones and Tablets shows it (the script pairs a pretend phone with it).
+            case "pair-code":
+                var s = await Env.Api.NewPairingCode();
+                await File.WriteAllTextAsync(Path.Combine(dir, "code.txt"), s.Code?.Code ?? "");
+                return null;
             // Pictures of the app's own windows, without a screenshot of the desktop.
             case "capture-switcher":
-                if (app.Switcher?.Web.CoreWebView2 is not { } core) return "no switcher window";
-                using (var f = File.Create(Path.Combine(dir, "switcher.png")))
-                    await core.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, f.AsRandomAccessStream());
-                return null;
+                // The page may still be loading: a few tries.
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        if (app.Switcher?.Web.CoreWebView2 is not { } core) throw new InvalidOperationException("no switcher window");
+                        using var mem = new MemoryStream();
+                        await core.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, mem.AsRandomAccessStream());
+                        await File.WriteAllBytesAsync(Path.Combine(dir, "switcher.png"), mem.ToArray());
+                        return null;
+                    }
+                    catch (Exception) when (attempt < 10)
+                    {
+                        await Task.Delay(500);
+                    }
+                }
             case "capture-remotes":
                 if (app.Remotes?.Window.Content is not Microsoft.UI.Xaml.UIElement root) return "no Phones and Tablets window";
                 await Capture(root, Path.Combine(dir, "remotes.png"));

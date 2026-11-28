@@ -19,6 +19,10 @@ const TEMPLATE_DOWNLOADS_URL: string | null = "/templates";
 // Null: the template pages say installing packs comes with the next update. Set (e.g. "1.1.0"): "Needs ViewSwitcher 1.1.0 or later."
 const PACK_INSTALL_VERSION: string | null = "1.1.0";
 
+// THE WINDOWS SWITCH: true once a release carries ViewSwitcher-win-Setup.exe (bun run win:release --publish).
+// Before: "Windows? Coming soon". After: the FAQ answers with the download. A build can override it with SITE_WINDOWS_APP=1 or 0.
+const WINDOWS_APP_RELEASED = false;
+
 // THE AI SWITCH: true once Edit with AI (MCP) ships, in v1.2.0. How it works step 1 then says
 // you can connect your favorite AI in one click, with the Edit with AI sheet as its picture, and /download
 // gets a line. False: today's step 1. A build can override it with SITE_AI_CONNECT_RELEASED=1 or 0.
@@ -30,6 +34,9 @@ export const site = {
   repo: "2witstudios/viewswitcher",
   /** The Mac release must publish an asset with exactly this name for this link to resolve. */
   dmgUrl: "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher.dmg",
+  /** The Windows release's installer (apps/windows/scripts/build.ts, Velopack): this exact asset name. */
+  windowsSetupUrl: "https://github.com/2witstudios/viewswitcher/releases/latest/download/ViewSwitcher-win-Setup.exe",
+  windowsAppReleased: flag("SITE_WINDOWS_APP", WINDOWS_APP_RELEASED, process.env.SITE_WINDOWS_APP),
   /** The Mac app's current release. Update with each release: the version that /download and the structured data state. */
   mac: { version: "1.2.0", minOS: "14", minOSName: "macOS 14 Sonoma" },
   /** Drop the demo recording here (public/demo/viewswitcher-demo.mp4) and the hero plays it. */

@@ -85,7 +85,10 @@ bun run start            # builds the switcher, serves everything on http://loca
 # or, while working on the app itself:
 bun run dev              # server on :7420 (watch) + Vite on http://localhost:5173
 bun run mac:dev          # builds the Mac app (Debug) and runs it, attached to the server above (or starting one from source)
+bun run win:dev          # on Windows: builds the Windows app (Debug) and runs it, the same way
 ```
+
+The server runs on macOS and Windows. The Windows app (a WinUI 3 shell, the same server compiled for Windows, the switcher in WebView2, phones and tablets over the Wi-Fi) is in [apps/windows](apps/windows/README.md); it needs the .NET 10 SDK to build.
 
 Vite's dev server proxies `/api`, `/library` and `/ws` to the server and keeps the browser's Host (`apps/web/vite.config.ts`), so the dev page at `http://localhost:5173` is the server's own origin and its changes are accepted; no extra setting is needed. Another dev host needs its origin in `VIEWSWITCHER_ORIGINS`.
 
@@ -97,16 +100,17 @@ The library (your shows) is `~/ViewSwitcher Library` unless `VIEWSWITCHER_LIBRAR
 | var | default |
 |---|---|
 | `VIEWSWITCHER_LIBRARY` | `~/ViewSwitcher Library` |
-| `VIEWSWITCHER_STATE` | `~/Library/Application Support/ViewSwitcher`: this Mac's own state for each library (paired phones and tablets, the agent on-air setting), kept outside the library so nothing cloned, pulled or synced with it can carry them |
+| `VIEWSWITCHER_STATE` | `~/Library/Application Support/ViewSwitcher` (on Windows `%APPDATA%\ViewSwitcher`): this computer's own state for each library (paired phones and tablets, the agent on-air setting), kept outside the library so nothing cloned, pulled or synced with it can carry them |
 | `PORT` | `7420` |
 | `HOST` | `127.0.0.1`. Loopback only: the server refuses to start with another address; the Wi-Fi setting is the way onto the network (below) |
 | `VIEWSWITCHER_LAN` | `1` also listens on the Wi-Fi from the start (the Mac app passes its "Let Phones and Tablets on This Wi-Fi Connect" setting) |
 | `VIEWSWITCHER_LAN_HOST` | `0.0.0.0`: the address the Wi-Fi listener binds (tests bind this Mac's LAN IP) |
 | `VIEWSWITCHER_ADMIN_TOKEN` | set by the Mac app at each launch: the secret for the pairing endpoints (`/api/remote…`); unset, they answer 404 |
-| `OBS_URL` / `OBS_PASSWORD` | `ws://127.0.0.1:4455` / read from OBS's own settings on this Mac |
+| `OBS_URL` / `OBS_PASSWORD` | `ws://127.0.0.1:4455` / read from OBS's own settings on this computer (`~/Library/Application Support/obs-studio`, on Windows `%APPDATA%\obs-studio`) |
 | `OBS_SCENE` / `OBS_PROGRAM_SOURCE` / `OBS_GROUND_SOURCE` | `ViewSwitcher` / `ViewSwitcher Program` / `ViewSwitcher Ground` |
 | `OBS_SOURCES` (or the older `OBS_DEVICES`) | `Camera,Screen,iPad`: the OBS sources a view can place in its camera boxes. A view hides each of these that it has no camera box for, and also any other source a view has ever placed (a Guest or Camera 2 box; remembered in `.viewswitcher/state.json`). Every other item in the ViewSwitcher scene (a mic, music, a watermark) and the program and ground sources are never touched. |
-| `VIEWSWITCHER_EDITOR` | app for "Open the file", e.g. `Cursor` (default: your text editor) |
+| `VIEWSWITCHER_EDITOR` | app for "Open the file", e.g. `Cursor` (on Windows, the editor's .exe; default: your text editor, or Notepad) |
+| `VIEWSWITCHER_STOP_ON_STDIN` | Windows app: `1` stops the server, saving paired devices first, when its stdin closes (Windows has no SIGTERM) |
 | `VIEWSWITCHER_LOG` | `1` prints requests, placements and OBS-browser errors |
 | `VIEWSWITCHER_USB` | `0` turns off the USB-C bridge |
 | `VIEWSWITCHER_WEB_DIST` / `VIEWSWITCHER_STARTER` / `VIEWSWITCHER_LIBRARY_KIT` | `apps/web/dist` / `apps/server/starter` / `apps/server/library-kit` (the Mac app points these into its Resources) |

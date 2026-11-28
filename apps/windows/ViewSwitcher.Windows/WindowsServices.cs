@@ -35,12 +35,22 @@ public static class WindowsNetwork
 {
     public const string RuleName = "ViewSwitcher (phones and tablets)";
 
-    /// <summary>Whether the firewall rule is there (netsh answers 0 when it finds it).</summary>
-    public static async Task<bool> RuleExists()
+    /// <summary>
+    /// The kinds of network ("Private", "Public", "Domain", or "Any") on which Windows Firewall lets
+    /// phones reach <paramref name="exe"/>: every enabled inbound Allow rule for it, ours or the one
+    /// Windows made when someone chose Allow in its own prompt.
+    /// </summary>
+    public static async Task<HashSet<string>> AllowedProfiles(string exe)
     {
-        var r = await Run("netsh", ["advfirewall", "firewall", "show", "rule", $"name={RuleName}"]);
-        return r.Code == 0;
+        static string Q(string s) => "'" + s.Replace("'", "''") + "'";
+        var script = $"Get-NetFirewallApplicationFilter -Program {Q(exe)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object {{ $_.Enabled -eq 'True' -and $_.Action -eq 'Allow' -and $_.Direction -eq 'Inbound' }} | ForEach-Object {{ \"$($_.Profile)\" }}";
+        var r = await Run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
+        return r.Out.Split(['\n', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>Whether a network of this kind (Get-NetConnectionProfile's category) is covered by those profiles.</summary>
+    public static bool Covers(HashSet<string> profiles, string category) =>
+        profiles.Contains("Any") || profiles.Contains(category) || (category == "DomainAuthenticated" && profiles.Contains("Domain"));
 
     public sealed record Connection(string Alias, string Category);
 

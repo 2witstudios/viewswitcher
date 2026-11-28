@@ -19,7 +19,7 @@ Statuses on the board: To Do, In Progress, In Review, Blocked, Done.
 
 ## Workstreams
 
-Scene editor (EDIT) first and landing page (SITE) in parallel; Mac app (MAC) after EDIT merges. The Product map holds the order.
+Scene editor (EDIT) first and landing page (SITE) in parallel; Mac app (MAC) after EDIT merges; Windows app (WIN) after that. The Product map holds the order.
 
 ## Task codes
 
@@ -28,6 +28,7 @@ Scene editor (EDIT) first and landing page (SITE) in parallel; Mac app (MAC) aft
 - `MAC`: Mac app (plan `gz7zkvlaofixz6ljsljdj6sh`)
 - `MCP`: agent connection, the MCP server and Edit with AI (plan `q47xu7oithlmzpkeshfn5bdh`)
 - `PHONE`: iPhone app, one universal app with the iPad's (plan `yxec9dlaej36ib1ytknvdoq7`)
+- `WIN`: Windows app: the server on Windows and the WinUI 3 shell (plan `krx65gign63m8v3pb27jnpep`)
 - `HARD`: hardening: CI and repo hygiene, the live path, the trust boundary, the Mac and iOS shells, vocabulary (plan `giqaj703oqbthlkfknwewy9h`)
 - `ISSUE`: bugs, debt and loose ends found outside a slice
 
@@ -52,10 +53,17 @@ Bun workspaces monorepo: a live-stream switcher that drives OBS (`apps/`, `packa
 - `packages/shared` holds the wire types and pure logic, whichever app uses it: `resolveStream` and `parseLibraryPath` (server and switcher), the HTML scanner (`scanElements`, the editor), the pack validator (server, `packages/packs`, the site), and the OBS math only the server uses (`coverTransform`, `obsColor`, in `apps/server/src/live/placement.ts`). Keep it dependency-free and tested (`bun test`).
 - `apps/web` must stay a static SPA (no SSR or server functions). The iPad app (`apps/apple`, target ViewSwitcher iPad) loads it from the server over its USB-C tunnel; deploy with `bun run ipad:deploy`. Safe areas come from the shells: `env(safe-area-inset-*)` on the iPad, `--shell-*` variables and `data-shell` from the Mac app (MAC-13a).
 - `apps/apple` is one Xcode project generated from `project.yml` (XcodeGen; the .xcodeproj is gitignored): ViewSwitcher.app for macOS around the server compiled with `bun build --compile` (Contents/Helpers), the iPad app, and the shared ViewSwitcherKit package. The server must keep running as that binary (no repo-relative paths without an env override, see `apps/server/src/config.ts`). Build with `bun run mac:build`, check with `bun run mac:e2e` (never on port 7420), test with `xcodebuild test` (apps/apple/README.md).
+- `apps/windows` is the Windows app: a WinUI 3 shell (.NET 10, Windows App SDK, unpackaged) around the same server compiled for Windows (`Helpers\viewswitcher-server.exe`) and the switcher in WebView2; `ViewSwitcher.Core` ports Kit's logic with its tests (apps/windows/README.md). Build with `bun run win:build`, check with `bun run win:e2e` (never on port 7420), test with `bun run win:test`. The page in its window gets no host objects or web messages.
+- The server runs on macOS and Windows:
+  - a path from `relative()` becomes a library path with `/` (`split(sep).join("/")`), never with a backslash;
+  - per-user folders come from `platform-dirs.ts`;
+  - a folder is claimed with `fsx.ts` `claimRename` (Windows never renames over a folder), and a file replaced with `renameOver`;
+  - what phones and agents are told names the computer through `COMPUTER` ("Mac" or "PC").
+  Tests that need a file symlink, a named pipe or POSIX permissions use `test.skipIf(!fileLinks)` / `test.skipIf(!posix)` (`test-links.ts`); folder links work on Windows through junctions. Checkouts are LF (`.gitattributes`).
 - Scenes are untrusted code (agents, template packs from anyone): `/library/` pages are served with a CSP sandbox (`apps/server/src/scene-sandbox.ts`) and every scene frame is sandboxed (`apps/web/src/lib/scene-frame.ts`). Never give a scene frame `allow-same-origin` together with `allow-scripts`, except the editor's, which only ever loads `?inert` (served with `script-src 'none'`); never reach into a scene frame with contentDocument except that one; the program page talks to scenes through the bridge (`scene-bridge.ts`). Template packs: docs/template-packs.md.
 - Routes live in one table, `apps/server/src/http/routes.ts`, and `http/dispatch.ts` is the only way in: host guard, audience, exact Origin for non-GET (and WebSocket upgrades), JSON body (multipart for the two upload routes), then the handler, with `frame-ancestors 'self'` and nosniff on everything outside `/library/`. Every route declares its audience (`mac`, `macOrUsb`, `paired`, `public`; gate.ts); undeclared is Mac-only, and so is a path no route has. With the Wi-Fi setting off, nothing but this Mac and the USB-C device is served (tailscale serve included).
 - No absolute filesystem paths in API responses, except `GET /api/info` (the library folder and Edit with AI's commands, for the Mac app's Open Library Folder and the sheet) and `GET /api/agent/viewswitcher.mcpb` (the Claude Desktop extension, whose command is this install's server), which are `mac` routes: `isMac` in `apps/server/src/gate.ts` (loopback peer and Host, no proxy headers, not the Wi-Fi listener, and not the USB-C iPad, whose bridge sockets are marked). Phones paired over Wi-Fi never get these, nor `/mcp`. Errors go through `scrub.ts`, and only `mac` sees a 500's message.
 - Every library path a client sends, read or write, goes through `resolveInLibrary` (`apps/server/src/library/contain.ts`): real-path containment through links, and no dot segments except a staged pack's preview, which may only be read.
 - `/mcp` (agents, `apps/server/src/mcp/`) is a `mac` route, refuses any `Origin` that `originAllowed` rejects, and sits under `hostTrusted`. The agent on-air guard (`agent-guard.ts`) limits MCP tools only, never the switcher's own routes.
 - The agent skill and library CLAUDE.md that new libraries get live in `apps/server/library-kit/`; change the skill there.
-- Typecheck: `bun run typecheck` (apps/web and its tests, apps/server, packages/shared with its tests). CI (`.github/workflows/ci.yml`) runs it with `bun test`, `astro check`, the switcher build and Kit's `swift test` on every PR; keep it green. Bun is pinned in `.bun-version`.
+- Typecheck: `bun run typecheck` (apps/web and its tests, apps/server, packages/shared with its tests). CI (`.github/workflows/ci.yml`) runs it with `bun test`, `astro check`, the switcher build and Kit's `swift test` on macOS, and `bun test`, the typecheck, `dotnet test` and the Windows app's build on Windows, on every PR; keep it green. Bun is pinned in `.bun-version`.

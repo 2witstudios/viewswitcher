@@ -13,7 +13,8 @@
     <ApplicationIcon>Assets\ViewSwitcher.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <UseWinUI>true</UseWinUI>
-    <EnableMsixTooling>false</EnableMsixTooling>
+    <!-- Unpackaged, but the MSIX tooling is what puts ViewSwitcher.pri (XAML resources) in a published build. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>

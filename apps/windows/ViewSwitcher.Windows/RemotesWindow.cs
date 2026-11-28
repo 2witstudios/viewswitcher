@@ -275,23 +275,39 @@ public sealed class RemotesWindow
         qr.Source = bmp;
     }
 
-    /// <summary>What Windows needs for phones to reach the server: the firewall rule, and no public Wi-Fi in the way.</summary>
+    static string ServerExe => Env.Dev ? Env.Which("bun.exe") ?? "" : Env.Sidecar;
+
+    /// <summary>
+    /// What Windows needs for phones to reach the server: Windows Firewall letting the server in on the
+    /// kind of network each Wi-Fi or Ethernet connection is (whoever's rule it is), and when the Wi-Fi is
+    /// public and nothing lets the server in there, the network made private (or a rule for public ones).
+    /// </summary>
     async Task CheckWindows()
     {
         if (Env.E2E) return;
-        var rule = await WindowsNetwork.RuleExists();
-        var nets = await WindowsNetwork.Connections();
-        publicNets = nets.Where(n => n.Category == "Public" && !n.Alias.StartsWith("Tailscale", StringComparison.OrdinalIgnoreCase) && !n.Alias.StartsWith("vEthernet", StringComparison.OrdinalIgnoreCase)).ToList();
+        var allowed = await WindowsNetwork.AllowedProfiles(ServerExe);
+        var nets = (await WindowsNetwork.Connections())
+            .Where(n => !n.Alias.StartsWith("Tailscale", StringComparison.OrdinalIgnoreCase) && !n.Alias.StartsWith("vEthernet", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var blocked = nets.Where(n => !WindowsNetwork.Covers(allowed, n.Category)).ToList();
+        publicNets = blocked.Where(n => n.Category == "Public").ToList();
+        if (blocked.Count == 0)
+        {
+            network.Message = "";
+            network.IsOpen = false;
+            return;
+        }
         var parts = new List<string>();
-        if (publicNets.Count > 0) parts.Add($"Windows treats {string.Join(" and ", publicNets.Select(n => $"\"{n.Alias}\""))} as a public network, where it lets no phone in.");
-        if (!rule) parts.Add("Windows Firewall has no rule for ViewSwitcher yet.");
-        network.Message = parts.Count == 0 ? "" : string.Join(" ", parts) + " Set Up Windows for Phones asks Windows once (an admin prompt) to allow ViewSwitcher on private networks" + (publicNets.Count > 0 ? " and to make this network private. Only do that on a network you trust, like home or church Wi-Fi." : ".");
-        network.IsOpen = last is { Enabled: true } && parts.Count > 0;
+        if (publicNets.Count > 0) parts.Add($"Windows treats {string.Join(" and ", publicNets.Select(n => $"\"{n.Alias}\""))} as a public network, where it lets no phone reach ViewSwitcher.");
+        if (blocked.Count > publicNets.Count) parts.Add("Windows Firewall doesn't let phones reach ViewSwitcher yet.");
+        network.Severity = InfoBarSeverity.Warning;
+        network.Message = string.Join(" ", parts) + " Set Up Windows for Phones asks Windows once (an admin prompt) to let ViewSwitcher in on private networks" + (publicNets.Count > 0 ? " and to make this network private. Only do that on a network you trust, like home or church Wi-Fi." : ".");
+        network.IsOpen = last is { Enabled: true };
     }
 
     async Task SetUpWindows()
     {
-        var exe = Env.Dev ? Env.Which("bun.exe") ?? "" : Env.Sidecar;
+        var exe = ServerExe;
         var ok = await WindowsNetwork.SetUp(exe, int.Parse(Env.Port), publicNets.Select(n => n.Alias));
         await CheckWindows();
         if (!ok && network.IsOpen) network.Severity = InfoBarSeverity.Error;
